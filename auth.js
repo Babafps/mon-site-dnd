@@ -1,10 +1,9 @@
 // =====================================================
 // auth.js — Supabase Auth & Sync (email/password)
-// !! Remplace les deux valeurs ci-dessous !!
 // =====================================================
 
-const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co';   // ex: https://xxxx.supabase.co
-const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ'; // clé publique anon
+const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co'; // URL corrigée
+const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -186,6 +185,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const screens = ['loading-screen', 'login-screen', 'home-screen', 'app-screen'];
 
     function showScreen(id) {
+        // CORRECTION : Intercepter la redirection si un perso est déjà actif en mémoire locale
+        if (id === 'home-screen' && localStorage.getItem('dnd-active-char')) {
+            id = 'app-screen';
+        }
+
         screens.forEach(s => {
             const el = document.getElementById(s);
             if (el) el.classList.toggle('hidden', s !== id);
