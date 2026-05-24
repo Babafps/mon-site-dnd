@@ -6,8 +6,65 @@
     <title>Fiche D&D Interactive</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Supabase JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+
+<!-- =================== ÉCRAN DE CHARGEMENT =================== -->
+<div id="loading-screen" class="auth-fullscreen">
+    <div class="auth-card" style="text-align:center;">
+        <div class="auth-logo">⚔️</div>
+        <h2 style="font-family:'Cinzel',serif; color:var(--primary-color); margin-bottom:20px;">Chargement…</h2>
+        <div class="auth-spinner"></div>
+    </div>
+</div>
+
+<!-- =================== PAGE DE CONNEXION =================== -->
+<div id="login-screen" class="auth-fullscreen hidden">
+    <div class="auth-card">
+        <div class="auth-logo">⚔️</div>
+        <h1 class="auth-title">Fiche D&amp;D</h1>
+        <p class="auth-subtitle">Connecte-toi pour accéder à tes personnages</p>
+
+        <div id="auth-message" class="auth-message hidden"></div>
+
+        <div class="auth-tabs">
+            <button id="auth-tab-login" class="auth-tab active">Se connecter</button>
+            <button id="auth-tab-register" class="auth-tab">S'inscrire</button>
+        </div>
+
+        <!-- Formulaire connexion -->
+        <div id="auth-form-login">
+            <div class="auth-field">
+                <label>Email</label>
+                <input type="email" id="signin-email" placeholder="ton@email.com" autocomplete="email">
+            </div>
+            <div class="auth-field">
+                <label>Mot de passe</label>
+                <input type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button id="btn-signin" class="auth-btn-primary">Se connecter</button>
+        </div>
+
+        <!-- Formulaire inscription -->
+        <div id="auth-form-register" class="hidden">
+            <div class="auth-field">
+                <label>Email</label>
+                <input type="email" id="signup-email" placeholder="ton@email.com" autocomplete="email">
+            </div>
+            <div class="auth-field">
+                <label>Mot de passe</label>
+                <input type="password" id="signup-password" placeholder="6 caractères minimum" autocomplete="new-password">
+            </div>
+            <div class="auth-field">
+                <label>Confirmer le mot de passe</label>
+                <input type="password" id="signup-password2" placeholder="••••••••" autocomplete="new-password">
+            </div>
+            <button id="btn-signup" class="auth-btn-primary">S'inscrire</button>
+        </div>
+    </div>
+</div>
 
 <div id="concentration-glow" class="hidden no-print"></div>
 
@@ -61,6 +118,9 @@
         <label class="toggle-label" style="font-size:0.85rem; color:#555;">
             <input type="checkbox" id="toggle-floating-dice" checked> Bouton dés volant
         </label>
+        <hr>
+        <div id="auth-user-display" style="font-size:0.75rem; color:#888; text-align:center; padding:4px 0; font-style:italic;"></div>
+        <button id="btn-signout" class="btn-menu-item" style="color:#e74c3c;">🚪 Se déconnecter</button>
     </div>
 </div>
 
@@ -655,6 +715,7 @@
 </div></div>
 <div id="quick-roll-toast" class="hidden"></div>
 
+<script src="auth.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

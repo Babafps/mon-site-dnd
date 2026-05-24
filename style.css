@@ -176,12 +176,6 @@ h1 { font-family: 'Cinzel', serif; color: var(--primary-color); text-align: cent
 .skill-row input[type="checkbox"] { cursor: pointer; transform: scale(1.1); accent-color: var(--primary-color);}
 .skill-mod { font-weight: bold; width: 25px; text-align: right; color: var(--primary-color);}
 
-/* Bouton de maîtrise / expertise (cycle 3 états) */
-.skill-prof-btn { background: none; border: 2px solid #bbb; border-radius: 50%; width: 20px; height: 20px; font-size: 0.75rem; line-height: 1; padding: 0; cursor: pointer; color: #bbb; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-.skill-prof-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
-.skill-prof-btn.prof-active { background: var(--primary-color); border-color: var(--primary-color); color: white; }
-.skill-prof-btn.exp-active { background: var(--accent-color); border-color: #a07820; color: #3e2000; font-size: 0.8rem; }
-
 /* Entraînements */
 .training-module { font-size: 0.9rem; }
 .training-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; border-bottom: 1px solid rgba(196,180,135,0.5); padding-bottom: 5px;}
@@ -414,3 +408,201 @@ h1 { font-family: 'Cinzel', serif; color: var(--primary-color); text-align: cent
 
 /* Impression PDF */
 @media print { .no-print, .item-controls, .dynamic-box form, .dynamic-box .add-form, .tabs-nav, .settings-container { display: none !important; } body { padding: 0; background: white; } .sheet-container { box-shadow: none; border: none; } .tab-content { display: block !important; } input, textarea, select { border-bottom: 1px solid black; } textarea.auto-expand { height: auto !important; } }
+/* =====================================================
+   PAGE DE CONNEXION — Auth Screens
+   ===================================================== */
+
+/* Plein écran partagé par loading + login */
+.auth-fullscreen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--sheet-bg-color, #FAF3E0);
+    background-image: radial-gradient(ellipse at top, rgba(122,40,40,0.08) 0%, transparent 60%);
+    z-index: 9999;
+    font-family: 'Lora', serif;
+}
+
+/* Carte centrale */
+.auth-card {
+    background: white;
+    border: 2px solid var(--primary-color, #7A2828);
+    border-radius: 16px;
+    padding: 40px 36px 32px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(122,40,40,0.15), 0 4px 16px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.auth-logo {
+    font-size: 2.8rem;
+    text-align: center;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.auth-title {
+    font-family: 'Cinzel', serif;
+    color: var(--primary-color, #7A2828);
+    text-align: center;
+    font-size: 1.8rem;
+    margin: 0 0 4px;
+    letter-spacing: 0.05em;
+}
+
+.auth-subtitle {
+    color: #888;
+    font-size: 0.85rem;
+    text-align: center;
+    margin: 0 0 20px;
+    font-style: italic;
+}
+
+/* Onglets */
+.auth-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid rgba(122,40,40,0.15);
+    margin-bottom: 20px;
+}
+
+.auth-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 10px 0;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    color: #aaa;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.auth-tab.active {
+    color: var(--primary-color, #7A2828);
+    border-bottom-color: var(--primary-color, #7A2828);
+}
+
+.auth-tab:hover:not(.active) { color: #666; }
+
+/* Champs */
+.auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 14px;
+}
+
+.auth-field label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.auth-field input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: 'Lora', serif;
+    background: #fafafa;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.auth-field input:focus {
+    border-color: var(--primary-color, #7A2828);
+    box-shadow: 0 0 0 3px rgba(122,40,40,0.1);
+    background: white;
+}
+
+/* Bouton principal */
+.auth-btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary-color, #7A2828);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    margin-top: 4px;
+    box-shadow: 0 3px 12px rgba(122,40,40,0.25);
+}
+
+.auth-btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover, #9e3535);
+    box-shadow: 0 5px 16px rgba(122,40,40,0.35);
+    transform: translateY(-1px);
+}
+
+.auth-btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+.auth-btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Messages d'erreur / succès */
+.auth-message {
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+    margin-bottom: 14px;
+    line-height: 1.4;
+}
+
+.auth-message--error {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+}
+
+.auth-message--success {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    color: #166534;
+}
+
+/* Spinner chargement */
+.auth-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(122,40,40,0.15);
+    border-top-color: var(--primary-color, #7A2828);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 12px auto 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Email affiché dans le menu */
+#auth-user-display {
+    font-size: 0.75rem;
+    color: #888;
+    text-align: center;
+    padding: 2px 0 6px;
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Responsive mobile */
+@media (max-width: 480px) {
+    .auth-card { padding: 28px 20px 24px; margin: 12px; max-width: 100%; }
+    .auth-title { font-size: 1.4rem; }
+}

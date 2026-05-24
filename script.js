@@ -3,9 +3,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 1. BASE DE DONNÉES ET GESTIONNAIRE D'ÉTAT
     // ==========================================
+    // DB = localStorage (lecture/écriture immédiate) + sync Supabase en arrière-plan
     const DB = {
         get: function(key) { try { return localStorage.getItem(key); } catch(e) { return null; } },
-        set: function(key, val) { try { localStorage.setItem(key, val); } catch(e) { console.warn("Erreur sauvegarde : Mémoire pleine."); } },
+        set: function(key, val) { 
+            try { localStorage.setItem(key, val); } catch(e) { console.warn("Erreur sauvegarde locale."); }
+            // Sync Supabase pour les données de fiche (clés commençant par un char_id)
+            if (window.SupaAuth?.currentUser && window.SyncQueue && ACTIVE_CHAR_ID && key.startsWith(ACTIVE_CHAR_ID + '_')) {
+                const subKey = key.slice(ACTIVE_CHAR_ID.length + 1);
+                // Ne pas sync les préférences globales dans character_data
+                if (!key.startsWith('dnd-theme-') && !key.startsWith('dnd-custom-background')) {
+                    window.SyncQueue.push(ACTIVE_CHAR_ID, subKey, val);
+                }
+            }
+        },
         remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} },
         keys: function() { try { return Object.keys(localStorage); } catch(e) { return []; } }
     };
@@ -151,14 +162,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnCreateChar = document.getElementById('btn-create-char');
     if(btnCreateChar) {
-        btnCreateChar.addEventListener('click', () => {
+        btnCreateChar.addEventListener('click', async () => {
             const inputName = document.getElementById('new-char-name');
             if(!inputName) return;
             const name = inputName.value.trim();
             if(name) { 
-                const newId = 'char_' + Date.now(); 
-                charactersList.push({ id: newId, name: name, level: 1, class: '' }); 
-                DB.set('dnd-character-list', JSON.stringify(charactersList)); 
+                let newId, newChar;
+                if(window.SupaAuth?.currentUser) {
+                    // Créer dans Supabase (retourne un UUID)
+                    newChar = await window.SupaAuth.createCharacter(name);
+                    if(!newChar) { alert("Erreur lors de la création. Réessaie."); return; }
+                    newId = newChar.id;
+                    charactersList.push({ id: newId, name: name, level: 1, class: '' });
+                    DB.set('dnd-character-list', JSON.stringify(charactersList));
+                } else {
+                    newId = 'char_' + Date.now();
+                    charactersList.push({ id: newId, name: name, level: 1, class: '' }); 
+                    DB.set('dnd-character-list', JSON.stringify(charactersList));
+                }
                 DB.set(`${newId}_dnd-sheet-char-name`, name); 
                 DB.set('dnd-active-char', newId); 
                 location.reload(); 
@@ -189,11 +210,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     let card = document.createElement('div'); card.className = 'char-card';
                     let info = document.createElement('div'); info.className = 'char-info';
                     info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1} ${c.class || ''})</span>`;
-                    info.onclick = () => { DB.set('dnd-active-char', c.id); location.reload(); };
+                    info.onclick = async () => { 
+                        DB.set('dnd-active-char', c.id);
+                        // Charger les données depuis Supabase avant de recharger
+                        if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) {
+                            await window.loadCharacterDataIntoLocalStorage(c.id);
+                        }
+                        location.reload(); 
+                    };
                     let delBtn = document.createElement('button'); delBtn.className = 'btn-delete-char'; delBtn.innerHTML = '✖';
-                    delBtn.onclick = (e) => { 
+                    delBtn.onclick = async (e) => { 
                         e.stopPropagation(); 
-                        if(confirm(`Supprimer définitivement ${c.name} ?`)) { 
+                        if(confirm(`Supprimer définitivement ${c.name} ?`)) {
+                            // Supprimer dans Supabase (cascade supprime character_data)
+                            if(window.SupaAuth?.currentUser) {
+                                await window.SupaAuth.deleteCharacter(c.id);
+                            }
                             charactersList = charactersList.filter(char => char.id !== c.id); 
                             DB.set('dnd-character-list', JSON.stringify(charactersList)); 
                             DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); });
