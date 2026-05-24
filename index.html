@@ -304,26 +304,53 @@
 
             <div id="widget-traits" class="draggable-widget widget-full">
                 <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Traits, Dons & Historique</label><span class="collapse-icon no-print">▼</span></div>
+                    <div class="section-title-row collapsible-header">
+                        <label class="section-title">Capacités & Dons</label>
+                        <div style="display:flex; gap:10px;">
+                            <button id="btn-open-trait-modal" class="btn-icon no-print">➕ Ajouter</button>
+                            <span class="collapse-icon no-print">▼</span>
+                        </div>
+                    </div>
                     <div class="collapsible-content">
-                        <div style="margin-top:5px;"><label style="font-weight:bold; color:#555;">Capacités de classe</label><textarea id="traits-class" class="auto-expand" placeholder="Rage, Action Surge..."></textarea></div>
-                        <div style="margin-top:10px;"><label style="font-weight:bold; color:#555;">Traits d'espèce</label><textarea id="traits-race" class="auto-expand" placeholder="Vision dans le noir..."></textarea></div>
-                        <div style="margin-top:10px;"><label style="font-weight:bold; color:#555;">Don & Historique</label><textarea id="traits-bg" class="auto-expand" placeholder="Criminel, Tireur d'élite..."></textarea></div>
+                        <h4 class="trait-section-title">🛡️ Capacités de classe</h4>
+                        <div id="traits-list-class" class="trait-sub-list"></div>
+                        
+                        <h4 class="trait-section-title">🧬 Traits d'espèce</h4>
+                        <div id="traits-list-race" class="trait-sub-list"></div>
+                        
+                        <h4 class="trait-section-title">📜 Dons & Historique</h4>
+                        <div id="traits-list-feat" class="trait-sub-list"></div>
                     </div>
                 </div>
             </div>
 
             <div id="widget-attacks" class="draggable-widget widget-full">
                 <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Armes & Attaques</label><div style="display:flex; gap:10px;"><button id="btn-open-attack-modal" class="btn-icon no-print">➕ Ajouter</button><span class="collapse-icon no-print">▼</span></div></div>
-                    <div class="collapsible-content" id="attacks-list"></div>
+                    <div class="section-title-row collapsible-header">
+                        <label class="section-title">Équipement (Attaques)</label>
+                        <div style="display:flex; gap:10px;">
+                            <button id="btn-open-attack-modal" class="btn-icon no-print">➕ Ajouter</button>
+                            <span class="collapse-icon no-print">▼</span>
+                        </div>
+                    </div>
+                    <div class="collapsible-content">
+                        <div id="atk-tabs-container" class="category-tabs no-print"></div>
+                        <div id="attacks-list"></div>
+                    </div>
                 </div>
             </div>
 
             <div id="widget-inventory" class="draggable-widget widget-full">
                 <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Sac à dos</label><div style="display:flex; gap:10px;"><button id="btn-open-inventory" class="btn-icon no-print">🎒 Ouvrir</button><span class="collapse-icon no-print">▼</span></div></div>
+                    <div class="section-title-row collapsible-header">
+                        <label class="section-title">Sac à dos</label>
+                        <div style="display:flex; gap:10px;">
+                            <button id="btn-open-inventory" class="btn-icon no-print">🎒 Ouvrir</button>
+                            <span class="collapse-icon no-print">▼</span>
+                        </div>
+                    </div>
                     <div class="collapsible-content" id="pinned-inventory-wrapper">
+                        <div id="inv-tabs-container-pinned" class="category-tabs no-print"></div>
                         <div id="pinned-inventory-list"></div>
                         <div class="inventory-weight-total no-print">
                             <strong>Poids Total : <span id="inv-total-weight">0</span></strong>
@@ -519,11 +546,87 @@
         </div>
     </div>
 </div>
-<div id="inventory-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2>🎒 Sac à Dos</h2><button class="btn-close-modal" id="btn-close-inventory">X</button></div><div class="add-form"><input type="text" id="inv-name" placeholder="Objet" style="flex:2;"><input type="number" id="inv-qty" placeholder="Qté" style="flex:0.5;"><input type="text" id="inv-weight" placeholder="Poids" style="flex:0.5;"><button id="btn-add-inventory" class="btn-small">Ajouter</button></div><div id="inventory-full-list" class="modal-list"></div></div></div>
-<div id="edit-inventory-modal" class="modal-overlay hidden no-print" style="z-index: 1010;"><div class="modal-box"><div class="modal-header"><h2>Modifier l'objet</h2><button class="btn-close-modal" id="btn-close-edit-inv">X</button></div><div class="add-form"><input type="text" id="edit-inv-name" placeholder="Objet" style="flex:2;"><input type="number" id="edit-inv-qty" placeholder="Qté" style="flex:0.5;"><input type="text" id="edit-inv-weight" placeholder="Poids" style="flex:0.5;"><button id="btn-save-edit-inv" class="btn-small">Enregistrer</button></div></div></div>
+
+<div id="inventory-modal" class="modal-overlay hidden no-print">
+    <div class="modal-box">
+        <div class="modal-header"><h2>🎒 Sac à Dos</h2><button class="btn-close-modal" id="btn-close-inventory">X</button></div>
+        <div class="add-form" style="display:flex; flex-wrap:wrap; gap:5px;">
+            <input type="text" id="inv-name" placeholder="Objet" style="flex:2; min-width:150px;">
+            <input type="number" id="inv-qty" placeholder="Qté" style="flex:0.5; min-width:50px;">
+            <input type="text" id="inv-weight" placeholder="Poids" style="flex:0.5; min-width:60px;">
+            <select id="inv-category" style="flex:1; min-width:120px; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold;"></select>
+            <button id="btn-add-inventory" class="btn-small">Ajouter</button>
+        </div>
+        <div id="inv-tabs-container-modal" class="category-tabs" style="margin-top:10px;"></div>
+        <div id="inventory-full-list" class="modal-list"></div>
+    </div>
+</div>
+
+<div id="edit-inventory-modal" class="modal-overlay hidden no-print" style="z-index: 1010;">
+    <div class="modal-box">
+        <div class="modal-header"><h2>Modifier l'objet</h2><button class="btn-close-modal" id="btn-close-edit-inv">X</button></div>
+        <div class="add-form" style="display:flex; flex-wrap:wrap; gap:5px;">
+            <input type="text" id="edit-inv-name" placeholder="Objet" style="flex:2; min-width:150px;">
+            <input type="number" id="edit-inv-qty" placeholder="Qté" style="flex:0.5; min-width:50px;">
+            <input type="text" id="edit-inv-weight" placeholder="Poids" style="flex:0.5; min-width:60px;">
+            <select id="edit-inv-category" style="flex:1; min-width:120px; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold;"></select>
+            <button id="btn-save-edit-inv" class="btn-small" style="width:100%; margin-top:5px;">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<div id="attack-form-modal" class="modal-overlay hidden no-print">
+    <div class="modal-box">
+        <div class="modal-header"><h2>Forger une Arme/Attaque</h2><button class="btn-close-modal" id="btn-close-attack-form">X</button></div>
+        <div class="spell-form">
+            <input type="text" id="new-atk-name" placeholder="Nom de l'arme/attaque">
+            <input type="text" id="new-atk-bonus" placeholder="Bonus Attaque ou DD">
+            <input type="text" id="new-atk-dmg" placeholder="Dégâts & Type (ex: 1d8+3 Tranchant)">
+            <select id="new-atk-category" style="width:100%; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold; margin-bottom:5px;"></select>
+            <input type="text" id="new-atk-notes" placeholder="Notes (ex: Finesse)">
+            <label style="margin-top:10px; cursor:pointer;"><input type="checkbox" id="new-atk-req-attune"> Nécessite liaison</label>
+            <button id="btn-save-atk" class="btn" style="margin-top:15px; width:100%;">Ajouter / Sauvegarder</button>
+        </div>
+    </div>
+</div>
+
+<div id="trait-form-modal" class="modal-overlay hidden no-print" style="z-index: 1010;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h2 id="trait-modal-title">Ajouter une Capacité</h2>
+            <button class="btn-close-modal" id="btn-close-trait-form">X</button>
+        </div>
+        <div class="spell-form">
+            <input type="text" id="new-trait-name" placeholder="Nom de la capacité / don">
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <select id="new-trait-type" style="flex:2; padding:8px; border:1px solid #c4b487; border-radius:5px; font-weight:bold;">
+                    <option value="class">Capacité de classe</option>
+                    <option value="race">Trait d'espèce</option>
+                    <option value="feat">Don / Historique</option>
+                </select>
+                <input type="number" id="new-trait-level" placeholder="Niveau" style="flex:1;">
+            </div>
+            <textarea id="new-trait-desc" class="auto-expand" placeholder="Description de la capacité..." style="margin-top:10px; min-height:100px;"></textarea>
+            <label style="margin-top:10px; cursor:pointer; display:block; font-weight:bold;">
+                <input type="checkbox" id="new-trait-pinned"> 📍 Épingler pour l'afficher développée
+            </label>
+            <button id="btn-save-trait" class="btn" style="margin-top:15px; width:100%;">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<div id="category-manager-modal" class="modal-overlay hidden no-print" style="z-index: 1020;">
+    <div class="modal-box" style="max-width: 500px;">
+        <div class="modal-header">
+            <h2 id="cat-manager-title">Gérer les Onglets</h2>
+            <button class="btn-close-modal" id="btn-close-cat-manager">X</button>
+        </div>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:15px; font-style:italic;">Renommez ou supprimez vos onglets. Si vous supprimez un onglet, son contenu retournera dans "Général".</p>
+        <div id="cat-manager-list" class="modal-list"></div>
+    </div>
+</div>
 
 <div id="spell-form-modal" class="modal-overlay hidden no-print" style="z-index: 1010;"><div class="modal-box"><div class="modal-header"><h2 id="spell-modal-title">Inscrire un Sort</h2><button class="btn-close-modal" id="btn-close-spell-form">X</button></div><div class="spell-form"><div style="display:flex; gap:5px; margin-bottom: 10px;"><input type="text" id="new-spell-name" placeholder="Nom du sort" style="flex:2;"><input type="number" id="new-spell-level" placeholder="Niv" min="0" max="9" style="flex:1;"></div><input type="text" id="new-spell-time" placeholder="Temps (ex: 1 action)"><input type="text" id="new-spell-range" placeholder="Portée (ex: 18m)"><input type="text" id="new-spell-res" placeholder="Ressources (V, S, M)"><textarea id="new-spell-desc" placeholder="Description du sort" style="margin: 10px 0; min-height:100px;"></textarea><input type="text" id="new-spell-notes" placeholder="Notes (ex: 8d6 feu)"><div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;"><button id="btn-add-spell" class="btn">Sauvegarder</button><label style="cursor:pointer;"><input type="checkbox" id="new-spell-pinned" checked> Épingler</label></div></div></div></div>
-<div id="attack-form-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2>Forger une Arme/Attaque</h2><button class="btn-close-modal" id="btn-close-attack-form">X</button></div><div class="spell-form"><input type="text" id="new-atk-name" placeholder="Nom de l'arme/attaque"><input type="text" id="new-atk-bonus" placeholder="Bonus Attaque ou DD"><input type="text" id="new-atk-dmg" placeholder="Dégâts & Type (ex: 1d8+3 Tranchant)"><input type="text" id="new-atk-notes" placeholder="Notes (ex: Finesse)"><label style="margin-top:10px; cursor:pointer;"><input type="checkbox" id="new-atk-req-attune"> Nécessite liaison</label><button id="btn-save-atk" class="btn" style="margin-top:15px;">Ajouter</button></div></div></div>
 <div id="ability-form-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2>Capacité Limitée</h2><button class="btn-close-modal" id="btn-close-ability-form">X</button></div><div class="spell-form"><input type="text" id="new-ability-name" placeholder="Nom" style="width:100%; margin-bottom:10px;"><input type="number" id="new-ability-max" placeholder="Utilisations Max" min="1" style="width:100%; margin-bottom:15px;"><div style="text-align:left; border-top:2px dashed var(--primary-color); padding-top:15px;"><label style="font-weight:bold; display:block; margin-bottom:10px; font-family:'Cinzel', serif;">Régénération :</label><select id="ab-regen-mode" style="width:100%; margin-bottom:15px; font-weight:bold;"><option value="long">Repos Long uniquement</option><option value="short_long">Repos Court ET Repos Long</option></select><div id="ab-short-rest-block" class="regen-block hidden"><label style="color:#4a6b53; font-weight:bold;">▶ Repos Court :</label><select id="ab-short-type" style="width:100%; margin-bottom:5px;"><option value="all">Récupère TOUT</option><option value="fixed">Récupère une partie</option></select><input type="number" id="ab-short-amount" placeholder="Combien ?" min="1" class="hidden" style="width:100%; margin-bottom:10px;"></div><div id="ab-long-rest-block" class="regen-block"><label style="color:#2c3e50; font-weight:bold;">▶ Repos Long :</label><select id="ab-long-type" style="width:100%; margin-bottom:5px;"><option value="all">Récupère TOUT</option><option value="fixed">Récupère une partie</option></select><input type="number" id="ab-long-amount" placeholder="Combien ?" min="1" class="hidden" style="width:100%; margin-bottom:10px;"></div></div><button id="btn-save-ability" class="btn" style="margin-top:20px; width:100%;">Enregistrer</button></div></div></div>
 <div id="spell-slots-modal" class="modal-overlay hidden no-print"><div class="modal-box spell-slots-modal-box"><div class="modal-header"><h2>Emplacements de Sorts</h2><button class="btn-close-modal" id="btn-close-spell-slots">X</button></div><p class="spell-slots-helper">Options de récupération apparaissent uniquement pour les niveaux utilisés.</p><div id="spell-slots-config-list" class="spell-slots-config-list"></div><button id="btn-save-spell-slots-config" class="btn spell-slots-save-btn">Enregistrer les emplacements</button></div></div>
 <div id="rest-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2 id="rest-modal-title">Repos</h2><button class="btn-close-modal" id="btn-close-rest">X</button></div>
