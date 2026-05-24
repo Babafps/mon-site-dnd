@@ -2,14 +2,11 @@
 // auth.js — Supabase Auth & Sync (email/password)
 // =====================================================
 
-const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co'; // URL corrigée
+const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// =====================================================
-// OBJET AUTH — toutes les opérations Supabase
-// =====================================================
 window.SupaAuth = {
     client: _supabase,
     currentUser: null,
@@ -37,7 +34,6 @@ window.SupaAuth = {
     async signOut() {
         await _supabase.auth.signOut();
         this.currentUser = null;
-        // Vider le cache local (sauf préférences visuelles)
         Object.keys(localStorage).forEach(k => {
             if (!k.startsWith('dnd-theme-') && !k.startsWith('dnd-custom-background')) {
                 localStorage.removeItem(k);
@@ -45,7 +41,6 @@ window.SupaAuth = {
         });
     },
 
-    // --- Personnages ---
     async loadCharacters() {
         if (!this.currentUser) return [];
         const { data, error } = await _supabase
@@ -80,7 +75,6 @@ window.SupaAuth = {
             .delete().eq('id', charId).eq('user_id', this.currentUser.id);
     },
 
-    // --- Données de fiche (clé-valeur) ---
     async loadCharacterData(charId) {
         if (!this.currentUser) return {};
         const { data, error } = await _supabase
@@ -106,21 +100,12 @@ window.SupaAuth = {
         const { error } = await _supabase
             .from('character_data')
             .upsert(rows, { onConflict: 'character_id,key' });
-        if (error) console.warn('saveKeys:', error);
-    },
-
-    async deleteKey(charId, key) {
-        if (!this.currentUser || !charId) return;
-        await _supabase.from('character_data')
-            .delete()
-            .eq('character_id', charId)
-            .eq('key', key)
-            .eq('user_id', this.currentUser.id);
+        if (error) throw error; // Lance l'erreur pour afficher le toast rouge
     }
 };
 
 // =====================================================
-// QUEUE DE SYNC — regroupe les écritures (debounce 1s)
+// QUEUE DE SYNC — regroupe les écritures
 // =====================================================
 window.SyncQueue = {
     pending: new Map(),
@@ -131,15 +116,37 @@ window.SyncQueue = {
         this.charId = charId;
         this.pending.set(key, value);
         clearTimeout(this.timer);
-        this.timer = setTimeout(() => this.flush(), 1000);
+        this.timer = setTimeout(() => this.flush(), 800); // Délai réduit à 800ms
     },
 
     async flush() {
         if (!this.pending.size || !this.charId) return;
         const entries = [...this.pending.entries()].map(([key, value]) => ({ key, value }));
         this.pending.clear();
-        try { await window.SupaAuth.saveKeys(this.charId, entries); }
-        catch (e) { console.warn('SyncQueue.flush:', e); }
+        
+        // Ajout de l'indicateur visuel
+        let toast = document.getElementById('sync-toast');
+        if(!toast) {
+            toast = document.createElement('div');
+            toast.id = 'sync-toast';
+            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#f39c12; color:white; padding:8px 15px; border-radius:8px; font-size:0.9rem; font-weight:bold; z-index:9999; transition:0.3s; font-family:"Cinzel",serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3);';
+            document.body.appendChild(toast);
+        }
+        toast.style.background = '#f39c12';
+        toast.textContent = '⏳ Sauvegarde...';
+        toast.style.opacity = '1';
+
+        try { 
+            await window.SupaAuth.saveKeys(this.charId, entries); 
+            toast.style.background = '#27ae60';
+            toast.textContent = '✅ Sauvegardé';
+            setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+        }
+        catch (e) { 
+            console.error('Erreur Supabase:', e); 
+            toast.style.background = '#c0392b';
+            toast.textContent = '❌ Erreur de sauvegarde';
+        }
     }
 };
 
@@ -165,13 +172,10 @@ async function loadCharacterDataIntoLocalStorage(charId) {
 window.loadUserDataIntoLocalStorage      = loadUserDataIntoLocalStorage;
 window.loadCharacterDataIntoLocalStorage = loadCharacterDataIntoLocalStorage;
 
-// =====================================================
-// TRADUCTION DES ERREURS SUPABASE
-// =====================================================
 function translateAuthError(msg) {
     if (!msg) return 'Une erreur est survenue.';
     if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) return 'Email ou mot de passe incorrect.';
-    if (msg.includes('already registered') || msg.includes('already been registered')) return 'Cet email est déjà utilisé.';
+    if (msg.includes('already registered')) return 'Cet email est déjà utilisé.';
     if (msg.includes('Email not confirmed')) return 'Confirme ton email avant de te connecter.';
     if (msg.includes('Password should') || msg.includes('password')) return 'Mot de passe trop court (6 caractères min).';
     if (msg.includes('Unable to validate')) return 'Session expirée, recharge la page.';
@@ -185,35 +189,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const screens = ['loading-screen', 'login-screen', 'home-screen', 'app-screen'];
 
     function showScreen(id) {
-        // CORRECTION : Intercepter la redirection si un perso est déjà actif en mémoire locale
         if (id === 'home-screen' && localStorage.getItem('dnd-active-char')) {
             id = 'app-screen';
         }
-
         screens.forEach(s => {
             const el = document.getElementById(s);
             if (el) el.classList.toggle('hidden', s !== id);
         });
     }
 
-    // 1. Afficher le chargement le temps de vérifier la session Supabase
     showScreen('loading-screen');
 
     const user = await SupaAuth.getUser();
     if (user) {
-        // Afficher l'email dans le menu
         const emailEl = document.getElementById('auth-user-display');
         if (emailEl) emailEl.textContent = user.email;
 
         await loadUserDataIntoLocalStorage(user.id);
         showScreen('home-screen');
-        // Lancer l'app principale (définie dans script.js)
         if (typeof window.initDndApp === 'function') window.initDndApp();
     } else {
         showScreen('login-screen');
     }
 
-    // Écouter les changements (ex : confirmation email en arrière-plan)
     _supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
             SupaAuth.currentUser = session.user;
@@ -228,7 +226,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // ---- Onglets login / inscription ----
     const tabLogin    = document.getElementById('auth-tab-login');
     const tabRegister = document.getElementById('auth-tab-register');
     const formLogin   = document.getElementById('auth-form-login');
@@ -256,7 +253,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearMsg();
     });
 
-    // ---- Connexion ----
     const btnSignIn = document.getElementById('btn-signin');
     if (btnSignIn) btnSignIn.addEventListener('click', async () => {
         const email    = document.getElementById('signin-email').value.trim();
@@ -277,13 +273,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Soumettre avec Entrée depuis les champs
     ['signin-email', 'signin-password'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') btnSignIn?.click(); });
     });
 
-    // ---- Inscription ----
     const btnSignUp = document.getElementById('btn-signup');
     if (btnSignUp) btnSignUp.addEventListener('click', async () => {
         const email    = document.getElementById('signup-email').value.trim();
@@ -295,7 +289,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnSignUp.disabled = true; btnSignUp.textContent = 'Inscription…';
         try {
             const data = await SupaAuth.signUpEmail(email, password);
-            // Si email de confirmation activé dans Supabase
             if (data.user && !data.session) {
                 showMsg('✅ Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse.', 'success');
             } else if (data.user) {
@@ -312,15 +305,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // ---- Déconnexion ----
     const btnSignOut = document.getElementById('btn-signout');
     if (btnSignOut) btnSignOut.addEventListener('click', async () => {
         if (!confirm('Te déconnecter ?')) return;
-        await SyncQueue.flush(); // Vider la queue avant de partir
+        await SyncQueue.flush();
         await SupaAuth.signOut();
         location.reload();
     });
 
-    // Sauvegarder avant de quitter la page
     window.addEventListener('beforeunload', () => { SyncQueue.flush(); });
 });
