@@ -3,7 +3,7 @@
 // !! Remplace les deux valeurs ci-dessous !!
 // =====================================================
 
-const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co/rest/v1/';   // ex: https://xxxx.supabase.co
+const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co';   // ex: https://xxxx.supabase.co
 const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ'; // clé publique anon
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
