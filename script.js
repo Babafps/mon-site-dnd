@@ -199,20 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // AFFICHER L'ACCUEIL
         if(homeScreen) homeScreen.classList.remove('hidden'); 
         if(appScreen) appScreen.classList.add('hidden'); 
-
-        // Rendu de la liste — appelable depuis auth.js après login
-        function renderHomeScreen() {
-            // Relire charactersList depuis localStorage (peut avoir été mis à jour par auth.js)
-            try {
-                let raw = DB.get('dnd-character-list');
-                if(raw && raw !== 'undefined') {
-                    let parsed = JSON.parse(raw);
-                    if(Array.isArray(parsed)) charactersList = parsed;
-                }
-            } catch(e) {}
-
-            const listDiv = document.getElementById('character-list'); 
-            if(!listDiv) return;
+        
+        const listDiv = document.getElementById('character-list'); 
+        if(listDiv) {
             listDiv.innerHTML = '';
             if(charactersList.length === 0) { 
                 listDiv.innerHTML = "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>"; 
@@ -220,9 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 charactersList.forEach(c => {
                     let card = document.createElement('div'); card.className = 'char-card';
                     let info = document.createElement('div'); info.className = 'char-info';
-                    info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1}${c.class ? ' ' + c.class : ''})</span>`;
+                    info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1} ${c.class || ''})</span>`;
                     info.onclick = async () => { 
                         DB.set('dnd-active-char', c.id);
+                        // Charger les données depuis Supabase avant de recharger
                         if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) {
                             await window.loadCharacterDataIntoLocalStorage(c.id);
                         }
@@ -232,22 +222,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     delBtn.onclick = async (e) => { 
                         e.stopPropagation(); 
                         if(confirm(`Supprimer définitivement ${c.name} ?`)) {
+                            // Supprimer dans Supabase (cascade supprime character_data)
                             if(window.SupaAuth?.currentUser) {
                                 await window.SupaAuth.deleteCharacter(c.id);
                             }
                             charactersList = charactersList.filter(char => char.id !== c.id); 
                             DB.set('dnd-character-list', JSON.stringify(charactersList)); 
                             DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); });
-                            renderHomeScreen(); // Re-render sans reload
+                            location.reload();
                         } 
                     };
                     card.appendChild(info); card.appendChild(delBtn); listDiv.appendChild(card);
                 });
             }
         }
-        renderHomeScreen();
-        // Exposer pour que auth.js puisse re-rendre après login
-        window.renderHomeScreen = renderHomeScreen;
     } 
     else { 
         // AFFICHER LA FICHE DE PERSONNAGE
@@ -260,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); 
         });
 
-        const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic-stats', 'widget-abilities', 'widget-spells', 'widget-macros', 'widget-initiative', 'widget-notes', 'widget-calculator'];
+        const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic-stats', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-macros', 'widget-initiative', 'widget-notes', 'widget-calculator'];
         
         function safeStoreAllWidgets() {
             const storage = document.getElementById('widget-storage');
@@ -501,10 +489,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const el = e.target.closest('.rollable');
             if(el) {
                 let name = el.getAttribute('data-name'); let targetId = el.getAttribute('data-target'); let mod = 0; if(targetId !== "none") { let targetEl = document.getElementById(targetId); if(targetEl) mod = parseInt(targetEl.textContent || targetEl.value) || 0; }
-                let advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal'; let roll1 = Math.floor(Math.random() * 20) + 1; let finalRoll = roll1; let modeText = "";
-                if(advMode === 'adv') { let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.max(roll1, roll2); modeText = ` <span style="font-size:0.8rem; color:#aaa;">(Avantage)</span>`; } else if (advMode === 'dis') { let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.min(roll1, roll2); modeText = ` <span style="font-size:0.8rem; color:#aaa;">(Désavantage)</span>`; }
+                let advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal'; let roll1 = Math.floor(Math.random() * 20) + 1; let finalRoll = roll1; let modeText = ""; let secondDieHTML = '';
+                if(advMode === 'adv') { 
+                    let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.max(roll1, roll2); 
+                    const kept = roll1 >= roll2 ? roll1 : roll2; const dropped = roll1 >= roll2 ? roll2 : roll1;
+                    secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#f1c40f; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Avantage)</span></div>`;
+                } else if (advMode === 'dis') { 
+                    let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.min(roll1, roll2); 
+                    const kept = roll1 <= roll2 ? roll1 : roll2; const dropped = roll1 <= roll2 ? roll2 : roll1;
+                    secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#e67e22; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Désavantage)</span></div>`;
+                }
                 let total = finalRoll + mod; let critText = finalRoll === 20 ? " 🟢 CRIT" : (finalRoll === 1 ? " 🔴 ÉCHEC" : ""); let modStr = mod >= 0 ? `+${mod}` : mod;
-                if(quickToast) { quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${modeText}`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4000); } return;
+                if(quickToast) { quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4000); } return;
             }
             const macroBtn = e.target.closest('.macro-btn');
             if(macroBtn) {
@@ -553,23 +549,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const levelInput = document.getElementById('char-level'); const profInput = document.getElementById('prof-bonus'); const initInput = document.getElementById('initiative');
 
-        // Synchronise nom, niveau et classe entre la fiche et la liste d'accueil
+        // Fonction pour synchroniser niveau et classe dans la liste des personnages (menu d'accueil)
         function syncCharMeta() {
-            const lvl = parseInt(document.getElementById('char-level')?.value) || 1;
-            const cls = document.getElementById('char-class')?.value || '';
-            const charName = document.getElementById('char-name')?.value || '';
+            const lvl = parseInt(document.getElementById('char-level').value) || 1;
+            const cls = document.getElementById('char-class').value || '';
             const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID);
             if(idx !== -1) {
                 charactersList[idx].level = lvl;
                 charactersList[idx].class = cls;
-                if(charName) charactersList[idx].name = charName;
                 DB.set('dnd-character-list', JSON.stringify(charactersList));
-                // Mettre à jour aussi dans Supabase
-                if(window.SupaAuth?.currentUser) {
-                    const fields = { level: lvl, class: cls };
-                    if(charName) fields.name = charName;
-                    window.SupaAuth.updateCharacterMeta(ACTIVE_CHAR_ID, fields);
-                }
             }
         }
 
@@ -585,8 +573,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const classInput = document.getElementById('char-class');
         if(classInput) { classInput.addEventListener('input', () => { syncCharMeta(); }); }
-        const charNameInput = document.getElementById('char-name');
-        if(charNameInput) { charNameInput.addEventListener('input', () => { syncCharMeta(); }); }
 
         const skillsMap = [{ id: 'str', name: 'Force', skills: [{id: 'save-str', name: 'Sauvegarde', type: 'save'}, {id: 'athletics', name: 'Athlétisme'}] }, { id: 'dex', name: 'Dextérité', skills: [{id: 'save-dex', name: 'Sauvegarde', type: 'save'}, {id: 'acrobatics', name: 'Acrobaties'}, {id: 'sleight', name: 'Escamotage'}, {id: 'stealth', name: 'Discrétion'}] }, { id: 'con', name: 'Constitution', skills: [{id: 'save-con', name: 'Sauvegarde', type: 'save'}] }, { id: 'int', name: 'Intelligence', skills: [{id: 'save-int', name: 'Sauvegarde', type: 'save'}, {id: 'arcana', name: 'Arcanes'}, {id: 'history', name: 'Histoire'}, {id: 'investigation', name: 'Investigation'}, {id: 'nature', name: 'Nature'}, {id: 'religion', name: 'Religion'}] }, { id: 'wis', name: 'Sagesse', skills: [{id: 'save-wis', name: 'Sauvegarde', type: 'save'}, {id: 'animal', name: 'Dressage'}, {id: 'insight', name: 'Intuition'}, {id: 'medicine', name: 'Médecine'}, {id: 'perception', name: 'Perception'}, {id: 'survival', name: 'Survie'}] }, { id: 'cha', name: 'Charisme', skills: [{id: 'save-cha', name: 'Sauvegarde', type: 'save'}, {id: 'deception', name: 'Tromperie'}, {id: 'intimidation', name: 'Intimidation'}, {id: 'performance', name: 'Représentation'}, {id: 'persuasion', name: 'Persuasion'}] }];
         const attributesContainer = document.getElementById('attributes-list');
@@ -931,5 +917,191 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', () => { applyLayout('classic'); window.print(); });
+        // ==========================================
+        // EFFETS VISUELS DES ÉTATS (CONDITIONS)
+        // ==========================================
+        const STATUS_EFFECTS = {
+            'cond-blind':  { label: 'Aveuglé',      css: 'fx-blind',   desc: 'Aveuglé : désavantage à vos attaques, avantage pour vous attaquer.' },
+            'cond-charm':  { label: 'Charmé',        css: 'fx-charm',   desc: 'Charmé : vous ne pouvez pas attaquer la créature qui vous charme.' },
+            'cond-deaf':   { label: 'Assourdi',      css: 'fx-deaf',    desc: 'Assourdi : vous ne pouvez entendre.' },
+            'cond-fright': { label: 'Effrayé',       css: 'fx-fright',  desc: 'Effrayé : désavantage tant que la source de peur est visible.' },
+            'cond-grap':   { label: 'Empoigné',      css: 'fx-grap',    desc: 'Empoigné : vitesse réduite à 0.' },
+            'cond-pois':   { label: 'Empoisonné',    css: 'fx-poison',  desc: 'Empoisonné : désavantage aux jets d\'attaque et de caractéristique.' },
+            'cond-prone':  { label: 'À terre',       css: 'fx-prone',   desc: 'À terre : désavantage à vos attaques, avantage à moins de 1,5 m.' },
+            'cond-restr':  { label: 'Entravé',       css: 'fx-restrain',desc: 'Entravé : vitesse 0, désavantage attaques & jets DEX.' },
+            'cond-stun':   { label: 'Étourdi',       css: 'fx-stun',    desc: 'Étourdi : ne peut rien faire, jets FOR & DEX ratés auto.' },
+            'cond-uncon':  { label: 'Inconscient',   css: 'fx-uncon',   desc: 'Inconscient : à terre, coups critiques à moins de 1,5 m.' },
+        };
+
+        const statusOverlay = document.getElementById('status-fx-overlay');
+        function updateStatusFx() {
+            if(!statusOverlay) return;
+            const activeEffects = [];
+            document.body.classList.remove(...Object.values(STATUS_EFFECTS).map(e => 'body-' + e.css));
+            statusOverlay.className = 'status-fx-overlay';
+
+            Object.entries(STATUS_EFFECTS).forEach(([id, fx]) => {
+                const cb = document.getElementById(id);
+                if(cb && cb.checked) {
+                    activeEffects.push(fx);
+                    document.body.classList.add('body-' + fx.css);
+                    statusOverlay.classList.add(fx.css);
+                }
+            });
+            // Gérer les conditions personnalisées actives
+            customConditions.forEach(cond => {
+                if(cond.active) activeEffects.push({ label: cond.name });
+            });
+            if(activeEffects.length > 0) {
+                statusOverlay.classList.remove('hidden');
+                let labels = document.getElementById('status-fx-labels');
+                if(!labels) { labels = document.createElement('div'); labels.id = 'status-fx-labels'; labels.className = 'status-fx-labels'; statusOverlay.appendChild(labels); }
+                labels.innerHTML = activeEffects.map(e => `<span class="status-fx-badge">${e.label}</span>`).join('');
+            } else {
+                statusOverlay.classList.add('hidden');
+            }
+        }
+
+        // Écouter les changements de conditions
+        Object.keys(STATUS_EFFECTS).forEach(id => {
+            const cb = document.getElementById(id);
+            if(cb) cb.addEventListener('change', updateStatusFx);
+        });
+        // Mise à jour quand les conditions perso changent
+        const origToggleCustomCond = window.toggleCustomCond;
+        window.toggleCustomCond = (i) => { origToggleCustomCond(i); updateStatusFx(); };
+        updateStatusFx(); // init au chargement
+
+        // ==========================================
+        // MODULE SORTS PRÉPARÉS
+        // ==========================================
+        let preparedSpells = getStore('dnd-prepared-spells') || []; // tableau d'indices de sorts préparés
+
+        function renderPreparedSpells() {
+            const list = document.getElementById('prepared-spells-list');
+            const countEl = document.getElementById('prepared-spell-count');
+            if(!list) return;
+            const prepared = spells.filter((sp, i) => preparedSpells.includes(i));
+            if(countEl) countEl.textContent = `${prepared.length} sort${prepared.length !== 1 ? 's' : ''} préparé${prepared.length !== 1 ? 's' : ''}`;
+            if(prepared.length === 0) { list.innerHTML = `<span style="font-size:0.85rem; color:#888; font-style:italic;">Aucun sort préparé. Cliquez sur ⚙️ Gérer pour en sélectionner.</span>`; return; }
+            // Grouper par niveau
+            const byLevel = {};
+            prepared.forEach((sp, _) => { const lvl = parseInt(sp.level) || 0; if(!byLevel[lvl]) byLevel[lvl] = []; byLevel[lvl].push(sp); });
+            list.innerHTML = Object.keys(byLevel).sort((a,b)=>a-b).map(lvl => `
+                <div class="prepared-level-group">
+                    <div class="prepared-level-header">Niveau ${lvl}${lvl=='0' ? ' — Tours de magie' : ''}</div>
+                    ${byLevel[lvl].map(sp => `<div class="prepared-spell-row">
+                        <span class="prepared-spell-name">${sp.name}</span>
+                        <span class="prepared-spell-meta">⏱️ ${sp.time || '—'} · 📏 ${sp.range || '—'}</span>
+                    </div>`).join('')}
+                </div>`).join('');
+        }
+
+        function renderPrepareChecklist() {
+            const list = document.getElementById('prepare-spells-checklist');
+            if(!list) return;
+            const search = (document.getElementById('prepare-search')?.value || '').toLowerCase();
+            const filterLvl = document.getElementById('prepare-filter-level')?.value || '';
+            const filtered = spells.map((sp, i) => ({...sp, idx: i}))
+                .filter(sp => (!search || sp.name.toLowerCase().includes(search)) && (filterLvl === '' || String(sp.level) === filterLvl));
+            if(filtered.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun sort trouvé.</p>`; return; }
+            const byLevel = {};
+            filtered.forEach(sp => { const lvl = parseInt(sp.level)||0; if(!byLevel[lvl]) byLevel[lvl]=[]; byLevel[lvl].push(sp); });
+            list.innerHTML = Object.keys(byLevel).sort((a,b)=>a-b).map(lvl => `
+                <div style="margin-bottom:10px;">
+                    <div style="font-weight:bold; color:var(--primary-color); font-family:'Cinzel',serif; font-size:0.85rem; padding:4px 0; border-bottom:1px solid rgba(122,40,40,0.2); margin-bottom:6px;">Niveau ${lvl}${lvl=='0'?' — Tours de magie':''}</div>
+                    ${byLevel[lvl].map(sp => `
+                    <label class="prepare-spell-row" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; cursor:pointer; transition:background 0.15s; margin-bottom:3px;">
+                        <input type="checkbox" class="prepare-cb" data-idx="${sp.idx}" ${preparedSpells.includes(sp.idx)?'checked':''} style="transform:scale(1.3); cursor:pointer; accent-color:var(--primary-color);">
+                        <span style="flex:1; font-weight:${preparedSpells.includes(sp.idx)?'bold':'normal'}; color:var(--text-color);">${sp.name}</span>
+                        <span style="font-size:0.75rem; color:#aaa;">⏱️ ${sp.time||'—'}</span>
+                    </label>`).join('')}
+                </div>`).join('');
+            list.querySelectorAll('.prepare-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.idx);
+                    if(e.target.checked) { if(!preparedSpells.includes(idx)) preparedSpells.push(idx); }
+                    else { preparedSpells = preparedSpells.filter(i => i !== idx); }
+                    setStore('dnd-prepared-spells', preparedSpells);
+                    renderPreparedSpells();
+                    e.target.closest('label').style.fontWeight = e.target.checked ? 'bold' : 'normal';
+                });
+            });
+        }
+
+        document.body.addEventListener('click', (e) => {
+            if(e.target.id === 'btn-open-prepare-spells') {
+                renderPrepareChecklist();
+                document.getElementById('prepare-spells-modal').classList.remove('hidden');
+            }
+            if(e.target.id === 'btn-close-prepare-spells') {
+                document.getElementById('prepare-spells-modal').classList.add('hidden');
+            }
+        });
+        document.getElementById('prepare-search')?.addEventListener('input', renderPrepareChecklist);
+        document.getElementById('prepare-filter-level')?.addEventListener('change', renderPrepareChecklist);
+        renderPreparedSpells();
+
+        // ==========================================
+        // RACCOURCIS CLAVIER
+        // ==========================================
+        const DEFAULT_SHORTCUTS = [
+            { id: 'roll-adv',     label: 'Mode Avantage',        key: 'a', action: () => { const r = document.querySelector('input[name="roll-mode"][value="adv"]'); if(r){r.checked=true;} } },
+            { id: 'roll-dis',     label: 'Mode Désavantage',     key: 'd', action: () => { const r = document.querySelector('input[name="roll-mode"][value="dis"]'); if(r){r.checked=true;} } },
+            { id: 'roll-normal',  label: 'Mode Normal',          key: 'n', action: () => { const r = document.querySelector('input[name="roll-mode"][value="normal"]'); if(r){r.checked=true;} } },
+            { id: 'open-dice',    label: 'Ouvrir plateau de dés', key: 'r', action: () => { const dd = document.getElementById('dice-drawer'); if(dd) dd.classList.toggle('open'); } },
+            { id: 'roll-init',    label: 'Lancer Initiative',    key: 'i', action: () => { const el = document.querySelector('[data-name="Initiative"]'); if(el) el.click(); } },
+            { id: 'short-rest',   label: 'Repos Court',          key: 's', action: () => { document.getElementById('btn-short-rest')?.click(); } },
+            { id: 'long-rest',    label: 'Repos Long',           key: 'l', action: () => { document.getElementById('btn-long-rest')?.click(); } },
+            { id: 'go-home',      label: 'Retour Accueil',       key: 'h', action: () => { document.getElementById('btn-go-home')?.click(); } },
+        ];
+
+        let savedShortcutKeys = {};
+        try { savedShortcutKeys = JSON.parse(DB.get('dnd-shortcuts') || '{}'); } catch(e) {}
+        const shortcuts = DEFAULT_SHORTCUTS.map(s => ({ ...s, key: savedShortcutKeys[s.id] ?? s.key }));
+
+        function renderShortcutsConfig() {
+            const container = document.getElementById('shortcuts-config-list');
+            if(!container) return;
+            container.innerHTML = '';
+            shortcuts.forEach((sc, i) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.78rem;';
+                row.innerHTML = `<span style="color:#555; flex:1;">${sc.label}</span>
+                    <button class="shortcut-key-btn" data-i="${i}" title="Cliquer pour changer" style="font-family:monospace; font-weight:bold; background:var(--primary-color); color:white; border:none; border-radius:4px; padding:3px 8px; cursor:pointer; min-width:28px; font-size:0.85rem;">${sc.key ? sc.key.toUpperCase() : '—'}</button>`;
+                container.appendChild(row);
+            });
+            container.querySelectorAll('.shortcut-key-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const i = parseInt(btn.dataset.i);
+                    btn.textContent = '⏳';
+                    btn.style.background = '#e67e22';
+                    const handler = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        let key = e.key.toLowerCase();
+                        if(key === 'escape') key = '';
+                        shortcuts[i].key = key;
+                        savedShortcutKeys[shortcuts[i].id] = key;
+                        DB.set('dnd-shortcuts', JSON.stringify(savedShortcutKeys));
+                        renderShortcutsConfig();
+                        window.removeEventListener('keydown', handler, true);
+                    };
+                    window.addEventListener('keydown', handler, true);
+                });
+            });
+        }
+        renderShortcutsConfig();
+
+        // Écouter les raccourcis — ignorer si on est dans un input/textarea/select
+        window.addEventListener('keydown', (e) => {
+            const tag = document.activeElement?.tagName;
+            if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+            if(e.ctrlKey || e.metaKey || e.altKey) return;
+            const key = e.key.toLowerCase();
+            const sc = shortcuts.find(s => s.key && s.key === key);
+            if(sc) { e.preventDefault(); sc.action(); }
+        });
+
     }
 });

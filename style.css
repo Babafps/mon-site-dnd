@@ -606,3 +606,203 @@ h1 { font-family: 'Cinzel', serif; color: var(--primary-color); text-align: cent
     .auth-card { padding: 28px 20px 24px; margin: 12px; max-width: 100%; }
     .auth-title { font-size: 1.4rem; }
 }
+
+/* =====================================================
+   SKILL PROF BUTTON — 3 états visuels améliorés
+   ===================================================== */
+.skill-prof-btn {
+    background: none;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    width: 22px; height: 22px;
+    font-size: 0.72rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    color: #ccc;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.18s cubic-bezier(0.34,1.56,0.64,1);
+    position: relative;
+}
+.skill-prof-btn:hover { border-color: var(--primary-color); color: var(--primary-color); transform: scale(1.15); }
+
+/* Maîtrise */
+.skill-prof-btn.prof-active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 0 0 3px rgba(122,40,40,0.18), 0 2px 6px rgba(122,40,40,0.25);
+    transform: scale(1.1);
+}
+/* Expertise */
+.skill-prof-btn.exp-active {
+    background: linear-gradient(135deg, #c9a227, #e8c84a);
+    border-color: #a07820;
+    color: #3e2000;
+    box-shadow: 0 0 0 3px rgba(200,162,39,0.25), 0 2px 8px rgba(200,162,39,0.4);
+    font-size: 0.85rem;
+    transform: scale(1.15);
+    animation: expertise-pulse 2s infinite ease-in-out;
+}
+@keyframes expertise-pulse {
+    0%,100% { box-shadow: 0 0 0 3px rgba(200,162,39,0.25), 0 2px 8px rgba(200,162,39,0.4); }
+    50% { box-shadow: 0 0 0 5px rgba(200,162,39,0.15), 0 2px 14px rgba(200,162,39,0.6); }
+}
+
+/* =====================================================
+   ROLLABLE HOVER ANIMATION
+   ===================================================== */
+.rollable {
+    cursor: pointer;
+    transition: color 0.15s, transform 0.15s, text-shadow 0.15s;
+    display: inline-block;
+    position: relative;
+}
+.rollable:hover {
+    color: var(--primary-color);
+    transform: translateY(-1px) scale(1.04);
+    text-shadow: 0 2px 8px rgba(122,40,40,0.25);
+}
+.rollable:hover::after {
+    content: '🎲';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.85em;
+    animation: dicePop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes dicePop { from { opacity:0; transform:translateY(-50%) scale(0.5); } to { opacity:1; transform:translateY(-50%) scale(1); } }
+.rollable:active { transform: scale(0.96); }
+
+/* =====================================================
+   CATEGORY TABS — animation de survol améliorée
+   ===================================================== */
+.cat-tab {
+    transition: all 0.18s ease;
+    position: relative;
+    overflow: hidden;
+}
+.cat-tab::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%;
+    width: 0; height: 2px;
+    background: var(--primary-color);
+    transition: width 0.2s, left 0.2s;
+}
+.cat-tab:hover::after, .cat-tab.active::after { width: 100%; left: 0; }
+.cat-tab:hover:not(.active) { background: rgba(122,40,40,0.07); transform: translateY(-1px); }
+.cat-tab.active { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(122,40,40,0.15); }
+
+/* =====================================================
+   EFFETS VISUELS DES ÉTATS
+   ===================================================== */
+.status-fx-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 800;
+    transition: all 0.5s ease;
+}
+.status-fx-labels {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex; flex-wrap: wrap; gap: 6px;
+    justify-content: center;
+    z-index: 801;
+    pointer-events: none;
+}
+.status-fx-badge {
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-family: 'Cinzel', serif;
+    backdrop-filter: blur(4px);
+}
+
+/* Aveuglé — assombrissement + vignette pulsante */
+.fx-blind { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 30%, rgba(0,0,0,0.82) 100%); animation: blind-pulse 3s ease-in-out infinite; }
+@keyframes blind-pulse { 0%,100%{opacity:0.85;} 50%{opacity:1;} }
+
+/* Charmé — teinte rose/coeur */
+.fx-charm { background: radial-gradient(ellipse at center, rgba(255,100,160,0.12) 0%, rgba(255,50,120,0.25) 100%); animation: charm-float 4s ease-in-out infinite; }
+@keyframes charm-float { 0%,100%{opacity:0.7;} 50%{opacity:1;} }
+body.body-fx-charm .app-screen::after { content:'💖'; position:fixed; top:20px; right:20px; font-size:2rem; animation:charm-float 2s infinite; pointer-events:none; z-index:802; }
+
+/* Assourdi — bandes horizontales légères */
+.fx-deaf { background: repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(128,128,128,0.06) 60px, rgba(128,128,128,0.06) 62px); }
+
+/* Effrayé — vignette rouge tremblante */
+.fx-fright { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 20%, rgba(180,0,0,0.4) 100%); animation: fright-shake 0.5s ease-in-out infinite alternate; }
+@keyframes fright-shake { from{transform:translateX(-1px);} to{transform:translateX(1px);} }
+
+/* Empoigné — bordure verte clignotante */
+.fx-grap { outline: 3px solid rgba(46,204,113,0.5); outline-offset: -3px; animation: grap-blink 1.5s step-start infinite; }
+@keyframes grap-blink { 50%{outline-color:transparent;} }
+
+/* Empoisonné — teinte verte poisonnée */
+.fx-poison { background: radial-gradient(ellipse at bottom, rgba(39,174,96,0.25) 0%, rgba(0,80,0,0.15) 100%); animation: poison-pulse 2.5s ease-in-out infinite; }
+@keyframes poison-pulse { 0%,100%{opacity:0.6;} 50%{opacity:1;} }
+
+/* À terre — flou en bas de l'écran */
+.fx-prone { background: linear-gradient(to top, rgba(100,60,0,0.35) 0%, transparent 50%); }
+
+/* Entravé — chaînes aux bords */
+.fx-restrain { background: linear-gradient(to right, rgba(100,100,100,0.2) 0%, transparent 15%, transparent 85%, rgba(100,100,100,0.2) 100%); animation: restrain-tight 3s ease-in-out infinite; }
+@keyframes restrain-tight { 0%,100%{opacity:0.7;} 50%{opacity:1;} }
+
+/* Étourdi — rotation douce */
+.fx-stun { background: radial-gradient(ellipse at center, rgba(241,196,15,0.15) 0%, rgba(52,73,94,0.3) 100%); animation: stun-spin 8s linear infinite; }
+@keyframes stun-spin { from{filter:hue-rotate(0deg);} to{filter:hue-rotate(360deg);} }
+
+/* Inconscient — fondu au noir presque total */
+.fx-uncon { background: rgba(0,0,0,0.75); animation: uncon-breathe 4s ease-in-out infinite; }
+@keyframes uncon-breathe { 0%,100%{opacity:0.75;} 50%{opacity:0.85;} }
+
+/* =====================================================
+   MODULE SORTS PRÉPARÉS
+   ===================================================== */
+.prepared-level-group { margin-bottom: 12px; }
+.prepared-level-header {
+    font-family: 'Cinzel', serif;
+    font-size: 0.82rem;
+    color: var(--primary-color);
+    border-bottom: 1px solid rgba(122,40,40,0.2);
+    padding-bottom: 3px;
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+.prepared-spell-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: rgba(244,232,193,0.5);
+    border: 1px solid rgba(196,180,135,0.4);
+    margin-bottom: 4px;
+    transition: background 0.15s;
+}
+.prepared-spell-row:hover { background: rgba(244,232,193,0.9); }
+.prepared-spell-name { font-weight: 600; color: var(--text-color, #333); font-size: 0.9rem; }
+.prepared-spell-meta { font-size: 0.75rem; color: #999; white-space: nowrap; }
+#prepare-spells-modal .modal-box { animation: none; }
+.prepare-spell-row:hover { background: rgba(122,40,40,0.05) !important; }
+
+/* =====================================================
+   RACCOURCIS CLAVIER UI
+   ===================================================== */
+.shortcut-key-btn {
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.shortcut-key-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(122,40,40,0.3);
+}

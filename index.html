@@ -119,6 +119,10 @@
             <input type="checkbox" id="toggle-floating-dice" checked> Bouton dés volant
         </label>
         <hr>
+        <label style="font-weight:bold; font-size:0.85rem; color:var(--primary-color);">⌨️ Raccourcis clavier :</label>
+        <div id="shortcuts-config-list" style="margin-top:6px; display:flex; flex-direction:column; gap:5px;"></div>
+        <p style="font-size:0.72rem; color:#aaa; margin-top:4px;">Cliquer sur la touche pour l'enregistrer.</p>
+        <hr>
         <div id="auth-user-display" style="font-size:0.75rem; color:#888; text-align:center; padding:4px 0; font-style:italic;"></div>
         <button id="btn-signout" class="btn-menu-item" style="color:#e74c3c;">🚪 Se déconnecter</button>
     </div>
@@ -509,6 +513,22 @@
                 </div>
             </div>
 
+            <div id="widget-prepared-spells" class="draggable-widget widget-full">
+                <div class="dynamic-box">
+                    <div class="section-title-row collapsible-header">
+                        <label class="section-title">📋 Sorts Préparés</label>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <span id="prepared-spell-count" style="font-size:0.8rem; color:#888;"></span>
+                            <button id="btn-open-prepare-spells" class="btn-icon no-print">⚙️ Gérer</button>
+                            <span class="collapse-icon no-print">▼</span>
+                        </div>
+                    </div>
+                    <div class="collapsible-content">
+                        <div id="prepared-spells-list"></div>
+                    </div>
+                </div>
+            </div>
+
             <div id="widget-abilities" class="draggable-widget widget-full">
                 <div class="dynamic-box">
                     <div class="section-title-row collapsible-header"><label class="section-title">Capacités Limitées</label><div style="display:flex; gap:10px;"><button id="btn-open-ability-modal" class="btn-icon no-print">➕ Ajouter</button><span class="collapse-icon no-print">▼</span></div></div>
@@ -598,6 +618,31 @@
 </div>
 
 <div id="grimoire-modal" class="modal-overlay hidden no-print"><div class="scroll-container"><div class="scroll-top" id="btn-close-grimoire">▲ Refermer le grimoire ▲</div><div class="scroll-paper"><h2 class="grimoire-title">Le Grimoire des Sortilèges</h2><div style="text-align:center; margin-bottom: 20px;"><button id="btn-open-spell-add" class="btn">➕ Inscrire un nouveau sort</button></div><div id="grimoire-content"></div></div><div class="scroll-bottom"></div></div></div>
+
+<!-- Modale Sorts Préparés -->
+<div id="prepare-spells-modal" class="modal-overlay hidden no-print">
+    <div class="modal-box" style="max-width:680px;">
+        <div class="modal-header">
+            <h2>📋 Sorts Préparés</h2>
+            <button class="btn-close-modal" id="btn-close-prepare-spells">✕</button>
+        </div>
+        <p style="font-size:0.85rem; color:#888; margin-bottom:10px;">Coche les sorts que ton personnage a préparés pour aujourd'hui.</p>
+        <div style="display:flex; gap:8px; margin-bottom:12px;" class="no-print">
+            <input type="text" id="prepare-search" placeholder="Filtrer par nom..." style="flex:1;">
+            <select id="prepare-filter-level" style="border:1px solid #c4b487; border-radius:5px; padding:6px;">
+                <option value="">Tous niveaux</option>
+                <option value="0">Tours de magie</option>
+                <option value="1">Niveau 1</option><option value="2">Niveau 2</option><option value="3">Niveau 3</option>
+                <option value="4">Niveau 4</option><option value="5">Niveau 5</option><option value="6">Niveau 6</option>
+                <option value="7">Niveau 7</option><option value="8">Niveau 8</option><option value="9">Niveau 9</option>
+            </select>
+        </div>
+        <div id="prepare-spells-checklist" style="display:flex; flex-direction:column; gap:6px; max-height:55vh; overflow-y:auto;"></div>
+    </div>
+</div>
+
+<!-- Overlay effets d'états -->
+<div id="status-fx-overlay" class="status-fx-overlay hidden"></div>
 <div id="journal-modal" class="modal-overlay hidden no-print">
     <button id="btn-lighter-close" title="Brûler le livre pour fermer">🔥</button>
     <div class="book-container" id="book-container">
