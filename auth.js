@@ -155,11 +155,27 @@ window.SyncQueue = {
 // =====================================================
 async function loadUserDataIntoLocalStorage(userId) {
     const characters = await SupaAuth.loadCharacters();
+
+    // Pour chaque personnage, charger ses données de fiche pour récupérer le vrai nom/niveau/classe
+    await Promise.all(characters.map(async (c) => {
+        const data = await SupaAuth.loadCharacterData(c.id);
+        // Stocker toutes les données en cache local
+        Object.entries(data).forEach(([key, value]) => {
+            localStorage.setItem(`${c.id}_${key}`, value);
+        });
+        // Enrichir l'objet personnage avec les vraies valeurs de la fiche
+        const sheetName  = data['dnd-sheet-char-name'];
+        const sheetLevel = data['dnd-sheet-char-level'];
+        const sheetClass = data['dnd-sheet-char-class'];
+        if(sheetName  && sheetName  !== 'undefined') c.name  = sheetName;
+        if(sheetLevel && sheetLevel !== 'undefined') c.level = parseInt(sheetLevel) || c.level;
+        if(sheetClass && sheetClass !== 'undefined') c.class = sheetClass;
+    }));
+
     localStorage.setItem('dnd-character-list', JSON.stringify(characters));
-    const activeId = localStorage.getItem('dnd-active-char');
-    if (activeId && characters.find(c => c.id === activeId)) {
-        await loadCharacterDataIntoLocalStorage(activeId);
-    }
+
+    // Re-rendre la liste si la fonction est déjà disponible (page déjà chargée)
+    if (typeof window.renderHomeScreen === 'function') window.renderHomeScreen();
 }
 
 async function loadCharacterDataIntoLocalStorage(charId) {
@@ -167,6 +183,7 @@ async function loadCharacterDataIntoLocalStorage(charId) {
     Object.entries(data).forEach(([key, value]) => {
         localStorage.setItem(`${charId}_${key}`, value);
     });
+    return data; // retourner les données pour usage éventuel
 }
 
 window.loadUserDataIntoLocalStorage      = loadUserDataIntoLocalStorage;
@@ -205,9 +222,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const emailEl = document.getElementById('auth-user-display');
         if (emailEl) emailEl.textContent = user.email;
 
-        await loadUserDataIntoLocalStorage(user.id);
         showScreen('home-screen');
-        if (typeof window.initDndApp === 'function') window.initDndApp();
+        // Charger les données en arrière-plan et re-rendre la liste quand c'est prêt
+        loadUserDataIntoLocalStorage(user.id); // async, renderHomeScreen appelé dedans
     } else {
         showScreen('login-screen');
     }
@@ -217,9 +234,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             SupaAuth.currentUser = session.user;
             const emailEl = document.getElementById('auth-user-display');
             if (emailEl) emailEl.textContent = session.user.email;
-            await loadUserDataIntoLocalStorage(session.user.id);
             showScreen('home-screen');
-            if (typeof window.initDndApp === 'function') window.initDndApp();
+            loadUserDataIntoLocalStorage(session.user.id);
         }
         if (event === 'SIGNED_OUT') {
             showScreen('login-screen');
@@ -263,9 +279,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             await SupaAuth.signInEmail(email, password);
             const emailEl = document.getElementById('auth-user-display');
             if (emailEl) emailEl.textContent = SupaAuth.currentUser.email;
-            await loadUserDataIntoLocalStorage(SupaAuth.currentUser.id);
             showScreen('home-screen');
-            if (typeof window.initDndApp === 'function') window.initDndApp();
+            loadUserDataIntoLocalStorage(SupaAuth.currentUser.id);
         } catch (e) {
             showMsg(translateAuthError(e.message), 'error');
         } finally {
@@ -294,9 +309,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (data.user) {
                 const emailEl = document.getElementById('auth-user-display');
                 if (emailEl) emailEl.textContent = data.user.email;
-                await loadUserDataIntoLocalStorage(data.user.id);
                 showScreen('home-screen');
-                if (typeof window.initDndApp === 'function') window.initDndApp();
+                loadUserDataIntoLocalStorage(data.user.id);
             }
         } catch (e) {
             showMsg(translateAuthError(e.message), 'error');

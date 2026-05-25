@@ -199,9 +199,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // AFFICHER L'ACCUEIL
         if(homeScreen) homeScreen.classList.remove('hidden'); 
         if(appScreen) appScreen.classList.add('hidden'); 
-        
-        const listDiv = document.getElementById('character-list'); 
-        if(listDiv) {
+
+        // Rendu de la liste — appelable depuis auth.js après login
+        function renderHomeScreen() {
+            // Relire charactersList depuis localStorage (peut avoir été mis à jour par auth.js)
+            try {
+                let raw = DB.get('dnd-character-list');
+                if(raw && raw !== 'undefined') {
+                    let parsed = JSON.parse(raw);
+                    if(Array.isArray(parsed)) charactersList = parsed;
+                }
+            } catch(e) {}
+
+            const listDiv = document.getElementById('character-list'); 
+            if(!listDiv) return;
             listDiv.innerHTML = '';
             if(charactersList.length === 0) { 
                 listDiv.innerHTML = "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>"; 
@@ -209,10 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 charactersList.forEach(c => {
                     let card = document.createElement('div'); card.className = 'char-card';
                     let info = document.createElement('div'); info.className = 'char-info';
-                    info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1} ${c.class || ''})</span>`;
+                    info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1}${c.class ? ' ' + c.class : ''})</span>`;
                     info.onclick = async () => { 
                         DB.set('dnd-active-char', c.id);
-                        // Charger les données depuis Supabase avant de recharger
                         if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) {
                             await window.loadCharacterDataIntoLocalStorage(c.id);
                         }
@@ -222,20 +232,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     delBtn.onclick = async (e) => { 
                         e.stopPropagation(); 
                         if(confirm(`Supprimer définitivement ${c.name} ?`)) {
-                            // Supprimer dans Supabase (cascade supprime character_data)
                             if(window.SupaAuth?.currentUser) {
                                 await window.SupaAuth.deleteCharacter(c.id);
                             }
                             charactersList = charactersList.filter(char => char.id !== c.id); 
                             DB.set('dnd-character-list', JSON.stringify(charactersList)); 
                             DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); });
-                            location.reload();
+                            renderHomeScreen(); // Re-render sans reload
                         } 
                     };
                     card.appendChild(info); card.appendChild(delBtn); listDiv.appendChild(card);
                 });
             }
         }
+        renderHomeScreen();
+        // Exposer pour que auth.js puisse re-rendre après login
+        window.renderHomeScreen = renderHomeScreen;
     } 
     else { 
         // AFFICHER LA FICHE DE PERSONNAGE
@@ -541,15 +553,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const levelInput = document.getElementById('char-level'); const profInput = document.getElementById('prof-bonus'); const initInput = document.getElementById('initiative');
 
-        // Fonction pour synchroniser niveau et classe dans la liste des personnages (menu d'accueil)
+        // Synchronise nom, niveau et classe entre la fiche et la liste d'accueil
         function syncCharMeta() {
-            const lvl = parseInt(document.getElementById('char-level').value) || 1;
-            const cls = document.getElementById('char-class').value || '';
+            const lvl = parseInt(document.getElementById('char-level')?.value) || 1;
+            const cls = document.getElementById('char-class')?.value || '';
+            const charName = document.getElementById('char-name')?.value || '';
             const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID);
             if(idx !== -1) {
                 charactersList[idx].level = lvl;
                 charactersList[idx].class = cls;
+                if(charName) charactersList[idx].name = charName;
                 DB.set('dnd-character-list', JSON.stringify(charactersList));
+                // Mettre à jour aussi dans Supabase
+                if(window.SupaAuth?.currentUser) {
+                    const fields = { level: lvl, class: cls };
+                    if(charName) fields.name = charName;
+                    window.SupaAuth.updateCharacterMeta(ACTIVE_CHAR_ID, fields);
+                }
             }
         }
 
@@ -565,6 +585,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const classInput = document.getElementById('char-class');
         if(classInput) { classInput.addEventListener('input', () => { syncCharMeta(); }); }
+        const charNameInput = document.getElementById('char-name');
+        if(charNameInput) { charNameInput.addEventListener('input', () => { syncCharMeta(); }); }
 
         const skillsMap = [{ id: 'str', name: 'Force', skills: [{id: 'save-str', name: 'Sauvegarde', type: 'save'}, {id: 'athletics', name: 'Athlétisme'}] }, { id: 'dex', name: 'Dextérité', skills: [{id: 'save-dex', name: 'Sauvegarde', type: 'save'}, {id: 'acrobatics', name: 'Acrobaties'}, {id: 'sleight', name: 'Escamotage'}, {id: 'stealth', name: 'Discrétion'}] }, { id: 'con', name: 'Constitution', skills: [{id: 'save-con', name: 'Sauvegarde', type: 'save'}] }, { id: 'int', name: 'Intelligence', skills: [{id: 'save-int', name: 'Sauvegarde', type: 'save'}, {id: 'arcana', name: 'Arcanes'}, {id: 'history', name: 'Histoire'}, {id: 'investigation', name: 'Investigation'}, {id: 'nature', name: 'Nature'}, {id: 'religion', name: 'Religion'}] }, { id: 'wis', name: 'Sagesse', skills: [{id: 'save-wis', name: 'Sauvegarde', type: 'save'}, {id: 'animal', name: 'Dressage'}, {id: 'insight', name: 'Intuition'}, {id: 'medicine', name: 'Médecine'}, {id: 'perception', name: 'Perception'}, {id: 'survival', name: 'Survie'}] }, { id: 'cha', name: 'Charisme', skills: [{id: 'save-cha', name: 'Sauvegarde', type: 'save'}, {id: 'deception', name: 'Tromperie'}, {id: 'intimidation', name: 'Intimidation'}, {id: 'performance', name: 'Représentation'}, {id: 'persuasion', name: 'Persuasion'}] }];
         const attributesContainer = document.getElementById('attributes-list');
