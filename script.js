@@ -280,14 +280,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const DEFAULT_CLASSIC_LAYOUT = {
             'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'],
             'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-initiative', 'widget-companion'],
-            'col-right': ['widget-magic-stats', 'widget-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'],
+            'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'],
             'col-bottom': ['widget-appearance', 'widget-notes']
         };
 
         const DEFAULT_TABS_LAYOUT = {
             'tab-strict-gen': ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'],
             'tab-strict-com': ['widget-combat', 'widget-initiative', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'],
-            'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-calculator'],
+            'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'],
             'tab-strict-not': ['widget-quests', 'widget-notes']
         };
 
@@ -472,17 +472,23 @@ document.addEventListener('DOMContentLoaded', () => {
         let dicePool = []; const dicePoolDisplay = document.getElementById('dice-pool'); const quickToast = document.getElementById('quick-roll-toast');
         document.querySelectorAll('.btn-dice').forEach(btn => { btn.addEventListener('click', (e) => { dicePool.push(parseInt(e.target.getAttribute('data-faces'))); renderDicePool(); }); });
         function renderDicePool() { if(!dicePoolDisplay) return; dicePoolDisplay.innerHTML = ''; dicePool.forEach((faces, index) => { const dieDiv = document.createElement('div'); dieDiv.className = 'die-icon'; dieDiv.textContent = `d${faces}`; dieDiv.onclick = () => { dicePool.splice(index, 1); renderDicePool(); }; dicePoolDisplay.appendChild(dieDiv); }); }
+        
         function executeRoll() {
             if (dicePool.length === 0) return; let resultsBox = document.getElementById('dice-results'); let totalBox = document.getElementById('dice-total');
             if(resultsBox) resultsBox.innerHTML = ''; if(totalBox) totalBox.innerHTML = 'Calcul...'; let poolTotal = 0; let resultsHTML = ''; let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`); const advMode = advModeNode ? advModeNode.value : 'normal'; 
             dicePool.forEach((faces, index) => {
                 let score1 = Math.floor(Math.random() * faces) + 1; let finalScore = score1; let extraHTML = '';
-                if(advMode !== 'normal') { let score2 = Math.floor(Math.random() * faces) + 1; if(advMode === 'adv') { finalScore = Math.max(score1, score2); extraHTML = `<div style="font-size:0.5rem; color:var(--primary-color);">Avantage</div>`; } else { finalScore = Math.min(score1, score2); extraHTML = `<div style="font-size:0.5rem; color:var(--primary-color);">Désavantage</div>`; } }
+                if(advMode !== 'normal') { 
+                    let score2 = Math.floor(Math.random() * faces) + 1; let droppedScore;
+                    if(advMode === 'adv') { finalScore = Math.max(score1, score2); droppedScore = Math.min(score1, score2); } else { finalScore = Math.min(score1, score2); droppedScore = Math.max(score1, score2); } 
+                    extraHTML = `<div class="die-dropped-score">${droppedScore}</div>`; 
+                }
                 poolTotal += finalScore; let colorClass = ''; if (faces === 20 && finalScore === 20) colorClass = 'crit-success'; if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
-                resultsHTML += `<div class="die-result rolling ${colorClass}"><span>d${faces}</span>${finalScore}${extraHTML}</div>`; if (index < dicePool.length - 1) resultsHTML += `<div class="die-math">+</div>`;
+                resultsHTML += `<div class="die-result rolling ${colorClass}"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`; if (index < dicePool.length - 1) resultsHTML += `<div class="die-math">+</div>`;
             });
             if(resultsBox) resultsBox.innerHTML = resultsHTML; setTimeout(() => { document.querySelectorAll('.die-result').forEach(el => el.classList.remove('rolling')); if(totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, 500); dicePool = []; renderDicePool();
         }
+        
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
         
         document.body.addEventListener('click', (e) => {
