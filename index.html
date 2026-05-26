@@ -6,12 +6,10 @@
     <title>Fiche D&D Interactive</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
-    <!-- Supabase JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-<!-- =================== ÉCRAN DE CHARGEMENT =================== -->
 <div id="loading-screen" class="auth-fullscreen">
     <div class="auth-card" style="text-align:center;">
         <div class="auth-logo">⚔️</div>
@@ -20,47 +18,25 @@
     </div>
 </div>
 
-<!-- =================== PAGE DE CONNEXION =================== -->
 <div id="login-screen" class="auth-fullscreen hidden">
     <div class="auth-card">
         <div class="auth-logo">⚔️</div>
         <h1 class="auth-title">Fiche D&amp;D</h1>
         <p class="auth-subtitle">Connecte-toi pour accéder à tes personnages</p>
-
         <div id="auth-message" class="auth-message hidden"></div>
-
         <div class="auth-tabs">
             <button id="auth-tab-login" class="auth-tab active">Se connecter</button>
             <button id="auth-tab-register" class="auth-tab">S'inscrire</button>
         </div>
-
-        <!-- Formulaire connexion -->
         <div id="auth-form-login">
-            <div class="auth-field">
-                <label>Email</label>
-                <input type="email" id="signin-email" placeholder="ton@email.com" autocomplete="email">
-            </div>
-            <div class="auth-field">
-                <label>Mot de passe</label>
-                <input type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password">
-            </div>
+            <div class="auth-field"><label>Email</label><input type="email" id="signin-email" placeholder="ton@email.com" autocomplete="email"></div>
+            <div class="auth-field"><label>Mot de passe</label><input type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password"></div>
             <button id="btn-signin" class="auth-btn-primary">Se connecter</button>
         </div>
-
-        <!-- Formulaire inscription -->
         <div id="auth-form-register" class="hidden">
-            <div class="auth-field">
-                <label>Email</label>
-                <input type="email" id="signup-email" placeholder="ton@email.com" autocomplete="email">
-            </div>
-            <div class="auth-field">
-                <label>Mot de passe</label>
-                <input type="password" id="signup-password" placeholder="6 caractères minimum" autocomplete="new-password">
-            </div>
-            <div class="auth-field">
-                <label>Confirmer le mot de passe</label>
-                <input type="password" id="signup-password2" placeholder="••••••••" autocomplete="new-password">
-            </div>
+            <div class="auth-field"><label>Email</label><input type="email" id="signup-email" placeholder="ton@email.com" autocomplete="email"></div>
+            <div class="auth-field"><label>Mot de passe</label><input type="password" id="signup-password" placeholder="6 caractères minimum" autocomplete="new-password"></div>
+            <div class="auth-field"><label>Confirmer le mot de passe</label><input type="password" id="signup-password2" placeholder="••••••••" autocomplete="new-password"></div>
             <button id="btn-signup" class="auth-btn-primary">S'inscrire</button>
         </div>
     </div>
@@ -77,47 +53,31 @@
             <option value="tabs">📑 Mode Onglets</option>
             <option value="custom">🧩 Mode Personnalisé (Brouillon)</option>
         </select>
-        
         <div id="profile-actions" class="hidden" style="display:flex; gap:5px; margin-top:8px;">
             <button id="btn-rename-profile" class="btn-small" style="flex:1; background:#e67e22;">✏️ Renommer</button>
             <button id="btn-delete-profile" class="btn-small" style="flex:1; background:#e74c3c;">❌ Supprimer</button>
         </div>
-        
         <hr>
         <label style="font-weight:bold; font-size:0.85rem; color:var(--primary-color);">Thème (Couleurs) :</label>
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <label style="font-size:0.8rem; color:#555;">Principale:</label><input type="color" id="color-primary" value="#7A2828" class="color-picker">
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <label style="font-size:0.8rem; color:#555;">Accent:</label><input type="color" id="color-accent" value="#C49B35" class="color-picker">
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <label style="font-size:0.8rem; color:#555;">Fond Fiche:</label><input type="color" id="color-sheet-bg" value="#FAF3E0" class="color-picker">
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <label style="font-size:0.8rem; color:#555;">Fond Blocs:</label><input type="color" id="color-widget-bg" value="#FFFFFF" class="color-picker">
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-            <label style="font-size:0.8rem; color:#555;">Concentration:</label><input type="color" id="color-concentration" value="#2980b9" class="color-picker">
-        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><label style="font-size:0.8rem; color:#555;">Principale:</label><input type="color" id="color-primary" value="#7A2828" class="color-picker"></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><label style="font-size:0.8rem; color:#555;">Accent:</label><input type="color" id="color-accent" value="#C49B35" class="color-picker"></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><label style="font-size:0.8rem; color:#555;">Fond Fiche:</label><input type="color" id="color-sheet-bg" value="#FAF3E0" class="color-picker"></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><label style="font-size:0.8rem; color:#555;">Fond Blocs:</label><input type="color" id="color-widget-bg" value="#FFFFFF" class="color-picker"></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><label style="font-size:0.8rem; color:#555;">Concentration:</label><input type="color" id="color-concentration" value="#2980b9" class="color-picker"></div>
         <button id="btn-reset-theme" class="btn-small" style="width:100%; margin-bottom:10px;">Réinitialiser couleurs</button>
-        
         <hr>
         <button id="btn-export-json" class="btn-menu-item" style="color:#2980b9;">📥 Exporter la sauvegarde</button>
         <label class="btn-menu-item" style="color:#27ae60; cursor:pointer; display:block;">
-            📤 Importer une sauvegarde <input type="file" id="btn-import-json" accept=".json" class="hidden">
+            📤 Importer sauvegarde <input type="file" id="btn-import-json" accept=".json" class="hidden">
         </label>
         <button id="btn-export-pdf" class="btn-menu-item">💾 Imprimer (PDF)</button>
-        
         <hr>
         <button id="btn-change-bg" class="btn-menu-item">🖼️ Changer image de fond</button>
         <button id="btn-reset-bg" class="btn-menu-item" style="color:var(--primary-hover);">↺ Supprimer image fond</button>
         <input type="file" id="bg-file-input" accept="image/*" class="hidden">
-        
         <hr>
-        <label class="toggle-label" style="font-size:0.85rem; color:#555;">
-            <input type="checkbox" id="toggle-floating-dice" checked> Bouton dés volant
-        </label>
+        <label class="toggle-label" style="font-size:0.85rem; color:#555;"><input type="checkbox" id="toggle-floating-dice" checked> Bouton dés volant</label>
+        <label class="toggle-label" style="font-size:0.85rem; color:#555;"><input type="checkbox" id="toggle-search-btn" checked> Bouton Recherche (🔍)</label>
         <hr>
         <label style="font-weight:bold; font-size:0.85rem; color:var(--primary-color);">⌨️ Raccourcis clavier :</label>
         <div id="shortcuts-config-list" style="margin-top:6px; display:flex; flex-direction:column; gap:5px;"></div>
@@ -143,6 +103,7 @@
 <div id="app-screen" class="screen-view hidden">
     
     <button id="btn-go-home" class="btn-icon no-print" style="position:fixed; top:15px; left:65px; z-index:2900;" title="Retour à l'accueil">🏠 Accueil</button>
+    <button id="btn-global-search-trigger" class="btn-icon no-print" style="position:fixed; top:15px; right:15px; z-index:2900;" title="Recherche Globale">🔍</button>
 
     <button id="btn-toggle-dice" class="no-print" title="Glisse-moi librement !">🎲 Dés</button>
     <div id="dice-drawer" class="dice-container no-print">
@@ -156,9 +117,7 @@
             <button class="btn-dice" data-faces="4">d4</button><button class="btn-dice" data-faces="6">d6</button><button class="btn-dice" data-faces="8">d8</button>
             <button class="btn-dice" data-faces="10">d10</button><button class="btn-dice" data-faces="12">d12</button><button class="btn-dice" data-faces="20">d20</button><button class="btn-dice" data-faces="100">d100</button>
         </div>
-        <div class="dice-pool-wrapper">
-            <span style="font-size:0.8rem; font-weight:bold;">Dés sélectionnés :</span><div id="dice-pool"></div>
-        </div>
+        <div class="dice-pool-wrapper"><span style="font-size:0.8rem; font-weight:bold;">Dés sélectionnés :</span><div id="dice-pool"></div></div>
         <button id="btn-roll" class="btn-roll-main">Lancer !</button>
         <div id="dice-results"></div><div id="dice-total"></div>
     </div>
@@ -169,10 +128,7 @@
             <div class="header-info">
                 <div class="header-main-row">
                     <div id="header-avatar" class="avatar-mini" title="Modifie l'image de ton avatar"></div>
-                    <div class="input-group character-name-group">
-                        <input type="text" id="char-name" placeholder="Nom du Personnage">
-                        <label>Nom du Personnage</label>
-                    </div>
+                    <div class="input-group character-name-group"><input type="text" id="char-name" placeholder="Nom du Personnage"><label>Nom du Personnage</label></div>
                 </div>
                 <div class="info-grid">
                     <div class="input-group"><input type="number" id="char-level" value="1" min="1" max="20"><label>Niveau</label></div>
@@ -199,566 +155,112 @@
         </div>
 
         <div id="layout-classic-container" class="layout-wrapper hidden">
-            <div class="classic-grid">
-                <div id="col-left" class="sheet-col col-flex-row"></div>
-                <div id="col-center" class="sheet-col"></div>
-                <div id="col-right" class="sheet-col"></div>
-            </div>
+            <div class="classic-grid"><div id="col-left" class="sheet-col col-flex-row"></div><div id="col-center" class="sheet-col"></div><div id="col-right" class="sheet-col"></div></div>
             <div id="col-bottom" class="full-width-zone"></div>
         </div>
 
         <div id="layout-custom-container" class="layout-wrapper hidden">
-            <div style="text-align:center; margin-bottom: 20px;" class="no-print">
-                <button id="btn-edit-custom" class="btn" style="background:#2980b9; color:white;">⚙️ Modifier Disposition</button>
-            </div>
-            
+            <div style="text-align:center; margin-bottom: 20px;" class="no-print"><button id="btn-edit-custom" class="btn" style="background:#2980b9; color:white;">⚙️ Modifier Disposition</button></div>
             <div id="custom-layout-manager" class="hidden no-print" style="background: var(--widget-bg); border: 2px solid var(--accent-color); border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--primary-color); margin-bottom: 10px; padding-bottom: 5px;">
                     <div class="manager-header" style="border:none; margin:0; padding:0;">⚙️ Gestionnaire de Disposition</div>
-                    <button id="btn-save-as-profile" class="btn-small" style="background:#2980b9;">💾 Enregistrer comme Profil</button>
+                    <div style="display:flex; gap:10px;">
+                        <button id="btn-reset-custom-layout" class="btn-small" style="background:#e67e22;">↺ Réinitialiser</button>
+                        <button id="btn-save-as-profile" class="btn-small" style="background:#2980b9;">💾 Enregistrer Profil</button>
+                    </div>
                 </div>
-
-                <p style="font-size:0.85rem; color:#666; margin-bottom:15px; font-style:italic;">Gérez vos onglets et l'ordre de vos modules. Vos modifications seront appliquées au profil actuel (ou au Brouillon si aucun n'est actif).</p>
-                
-                <div style="margin-bottom: 15px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <label style="font-weight:bold; color:var(--primary-color);">Onglets :</label>
-                    <div id="manager-tabs-list" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
-                    <button id="btn-manager-add-tab" class="btn-small" style="background:#27ae60;">➕ Ajouter Onglet</button>
-                </div>
-                
+                <div style="margin-bottom: 15px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:bold; color:var(--primary-color);">Onglets :</label><div id="manager-tabs-list" style="display:flex; gap:5px; flex-wrap:wrap;"></div><button id="btn-manager-add-tab" class="btn-small" style="background:#27ae60;">➕ Onglet</button></div>
                 <div style="background:rgba(0,0,0,0.03); padding:15px; border-radius:8px; border:1px solid #c4b487;">
                     <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;" id="manager-cols-container">
-                        <div class="manager-col">
-                            <strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Colonne Gauche</strong>
-                            <div id="manager-col1-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div>
-                        </div>
-                        <div class="manager-col">
-                            <strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Colonne Centre</strong>
-                            <div id="manager-col2-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div>
-                        </div>
-                        <div class="manager-col">
-                            <strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Colonne Droite</strong>
-                            <div id="manager-col3-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div>
-                        </div>
+                        <div class="manager-col"><strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Col Gauche</strong><div id="manager-col1-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div></div>
+                        <div class="manager-col"><strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Col Centre</strong><div id="manager-col2-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div></div>
+                        <div class="manager-col"><strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Col Droite</strong><div id="manager-col3-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div></div>
                     </div>
-                    
                     <div style="margin-top:20px; padding-top:15px; border-top:1px dashed #c4b487; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <strong style="color:var(--primary-color);">📦 Réserve (Modules cachés) :</strong>
-                        <select id="manager-hidden-select" style="flex:1; min-width:150px; padding:5px; border-radius:4px; border:1px solid var(--primary-color); font-weight:bold;"></select>
-                        <button id="btn-manager-add-col1" class="btn-small">➔ Col Gauche</button>
-                        <button id="btn-manager-add-col2" class="btn-small">➔ Col Centre</button>
-                        <button id="btn-manager-add-col3" class="btn-small">➔ Col Droite</button>
+                        <strong style="color:var(--primary-color);">📦 Réserve :</strong><select id="manager-hidden-select" style="flex:1; min-width:150px; padding:5px; border-radius:4px; border:1px solid var(--primary-color); font-weight:bold;"></select>
+                        <button id="btn-manager-add-col1" class="btn-small">➔ Gauche</button><button id="btn-manager-add-col2" class="btn-small">➔ Centre</button><button id="btn-manager-add-col3" class="btn-small">➔ Droite</button>
                     </div>
                 </div>
             </div>
-
             <nav id="custom-tabs-nav" class="tabs-nav no-print"></nav>
-            
-            <div class="classic-grid">
-                <div id="custom-col-1" class="sheet-col col-flex-row"></div>
-                <div id="custom-col-2" class="sheet-col"></div>
-                <div id="custom-col-3" class="sheet-col"></div>
-            </div>
+            <div class="classic-grid"><div id="custom-col-1" class="sheet-col col-flex-row"></div><div id="custom-col-2" class="sheet-col"></div><div id="custom-col-3" class="sheet-col"></div></div>
         </div>
 
         <div id="widget-storage" style="display: none;">
+            <div id="widget-inspiration" class="draggable-widget widget-third"><div class="dynamic-box mini-stat-box" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;"><label class="section-title">Inspiration</label><input type="checkbox" id="heroic-inspiration" style="transform:scale(1.5); margin-top:5px; cursor:pointer;"></div></div>
+            <div id="widget-concentration" class="draggable-widget widget-third"><div class="dynamic-box mini-stat-box" style="text-align:center; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;"><label class="section-title rollable" data-name="Jet de Concentration" data-target="skill-val-save-con" title="Cliquer pour lancer">Concentration</label><div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:5px;"><label class="toggle-label" style="color:var(--text-color); cursor:pointer;"><input type="checkbox" id="is-concentrating"> Active</label></div></div></div>
+            <div id="widget-proficiency" class="draggable-widget widget-third"><div class="dynamic-box mini-stat-box" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;"><label class="section-title">Maîtrise</label><div class="prof-bonus-box" style="margin-top:5px;"><input type="number" id="prof-bonus" value="2"></div></div></div>
+            <div id="widget-stats" class="draggable-widget widget-full"><div id="attributes-list"></div></div>
+            <div id="widget-training" class="draggable-widget widget-full"><div class="dynamic-box training-module"><div class="section-title-row collapsible-header"><label class="section-title">Maîtrises & Outils</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="training-row"><strong>ARMURES</strong><label><input type="checkbox" id="prof-armor-light"> Légères</label><label><input type="checkbox" id="prof-armor-med"> Inter.</label><label><input type="checkbox" id="prof-armor-heavy"> Lourdes</label><label><input type="checkbox" id="prof-armor-shield"> Boucliers</label></div><div class="training-row"><strong>ARMES</strong><label><input type="checkbox" id="prof-weapon-simple"> Courantes</label><label><input type="checkbox" id="prof-weapon-martial"> De guerre</label><label><input type="checkbox" id="prof-weapon-other"> Autres</label></div><div class="training-text-box"><strong>OUTILS & AUTRES</strong><textarea id="prof-tools" class="auto-expand" placeholder="Outils de voleur, instruments..."></textarea></div></div></div></div>
+            <div id="widget-combat" class="draggable-widget widget-full"><div class="dynamic-box combat-stats"><div class="combat-box"><input type="number" id="armor-class"><label>CA</label><div class="shield-check"><input type="checkbox" id="has-shield" title="Bouclier"></div></div><div class="combat-box"><input type="number" id="initiative" title="S'actualise avec la DEX"><label class="rollable" data-name="Initiative" data-target="initiative">Initiative</label></div><div class="combat-box"><input type="text" id="speed"><label>Vitesse</label></div><div class="combat-box"><input type="text" id="char-size" placeholder="Ex: M"><label>Taille</label></div><div class="combat-box"><input type="number" id="passive-perception"><label>Percep. Passive</label></div></div></div>
+            <div id="widget-hp" class="draggable-widget widget-full"><div class="dynamic-box health-block"><div class="health-section"><div class="health-inputs"><div class="health-col"><label>PV Max</label><input type="number" id="hp-max" class="hp-input"></div><div class="health-col"><label>PV Actuels</label><input type="number" id="hp-current" class="hp-input"></div><div class="health-col"><label>PV Temp.</label><input type="number" id="hp-temp" class="hp-input"></div></div><div class="conditions-track" id="conditions-track-container"><label><input type="checkbox" id="cond-blind"> 👁️ Aveuglé</label><label><input type="checkbox" id="cond-charm"> 💖 Charmé</label><label><input type="checkbox" id="cond-deaf"> 🙉 Assourdi</label><label><input type="checkbox" id="cond-fright"> 👻 Effrayé</label><label><input type="checkbox" id="cond-grap"> ✊ Empoigné</label><label><input type="checkbox" id="cond-pois"> 🧪 Empoisonné</label><label><input type="checkbox" id="cond-prone"> ⏬ À terre</label><label><input type="checkbox" id="cond-restr"> ⛓️ Entravé</label><label><input type="checkbox" id="cond-stun"> 💫 Étourdi</label><label><input type="checkbox" id="cond-uncon"> 💤 Inconscient</label></div><div id="custom-conditions-container" style="width:100%; margin-top:5px;"></div><div style="display:flex; gap:5px; margin-top:5px; width:100%;"><input type="text" id="input-custom-condition" placeholder="Nouvel état personnalisé..." style="flex:1;"><button id="btn-add-custom-condition" class="btn-small no-print">Ajouter</button></div></div><div class="death-saves-section"><label class="rollable" data-name="Jet contre la mort" data-target="none">Jets contre la mort</label><div class="death-saves-row"><span style="color:#2ecc71;">Succès</span><input type="checkbox" id="death-s1"><input type="checkbox" id="death-s2"><input type="checkbox" id="death-s3"></div><div class="death-saves-row"><span style="color:#e74c3c;">Échecs</span><input type="checkbox" id="death-f1"><input type="checkbox" id="death-f2"><input type="checkbox" id="death-f3"></div></div></div></div>
+            <div id="widget-rests" class="draggable-widget widget-full"><div class="dynamic-box" style="display:flex; justify-content:space-around; align-items:center; flex-wrap:wrap; gap:15px; padding:10px;"><div style="display:flex; gap:10px;"><button id="btn-short-rest" class="btn btn-icon" style="background:#4a6b53; padding:10px 15px;">⏳ Repos Court</button><button id="btn-long-rest" class="btn btn-icon" style="background:#2c3e50; padding:10px 15px;">⛺ Repos Long</button></div><div class="hit-dice-box"><label>Dés de Vie :</label><div style="display:flex; align-items:center; gap:3px;"><input type="number" id="hd-spent" value="0" min="0" title="Dés dépensés"><span>/</span><input type="number" id="hd-max" value="1" min="1" title="Dés maximum"><select id="hd-size" title="Taille du dé"><option value="6">d6</option><option value="8" selected>d8</option><option value="10">d10</option><option value="12">d12</option></select></div></div></div></div>
             
-            <div id="widget-inspiration" class="draggable-widget widget-third">
-                <div class="dynamic-box mini-stat-box" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;">
-                    <label class="section-title">Inspiration</label>
-                    <input type="checkbox" id="heroic-inspiration" style="transform:scale(1.5); margin-top:5px; cursor:pointer;">
-                </div>
-            </div>
-
-            <div id="widget-concentration" class="draggable-widget widget-third">
-                <div class="dynamic-box mini-stat-box" style="text-align:center; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                    <label class="section-title rollable" data-name="Jet de Concentration" data-target="skill-val-save-con" title="Cliquer pour lancer">Concentration</label>
-                    <div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:5px;">
-                        <label class="toggle-label" style="color:var(--text-color); cursor:pointer;">
-                            <input type="checkbox" id="is-concentrating"> Active
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-proficiency" class="draggable-widget widget-third">
-                <div class="dynamic-box mini-stat-box" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;">
-                    <label class="section-title">Maîtrise</label>
-                    <div class="prof-bonus-box" style="margin-top:5px;"><input type="number" id="prof-bonus" value="2"></div>
-                </div>
-            </div>
-
-            <div id="widget-stats" class="draggable-widget widget-full">
-                <div id="attributes-list"></div>
-            </div>
-
-            <div id="widget-training" class="draggable-widget widget-full">
-                <div class="dynamic-box training-module">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Maîtrises & Outils</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <div class="training-row"><strong>ARMURES</strong><label><input type="checkbox" id="prof-armor-light"> Légères</label><label><input type="checkbox" id="prof-armor-med"> Inter.</label><label><input type="checkbox" id="prof-armor-heavy"> Lourdes</label><label><input type="checkbox" id="prof-armor-shield"> Boucliers</label></div>
-                        <div class="training-row"><strong>ARMES</strong><label><input type="checkbox" id="prof-weapon-simple"> Courantes</label><label><input type="checkbox" id="prof-weapon-martial"> De guerre</label><label><input type="checkbox" id="prof-weapon-other"> Autres</label></div>
-                        <div class="training-text-box"><strong>OUTILS & AUTRES</strong><textarea id="prof-tools" class="auto-expand" placeholder="Outils de voleur, instruments..."></textarea></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-combat" class="draggable-widget widget-full">
-                <div class="dynamic-box combat-stats">
-                    <div class="combat-box"><input type="number" id="armor-class"><label>CA</label><div class="shield-check"><input type="checkbox" id="has-shield" title="Bouclier"></div></div>
-                    <div class="combat-box"><input type="number" id="initiative" title="S'actualise avec la DEX"><label class="rollable" data-name="Initiative" data-target="initiative">Initiative</label></div>
-                    <div class="combat-box"><input type="text" id="speed"><label>Vitesse</label></div>
-                    <div class="combat-box"><input type="text" id="char-size" placeholder="Ex: M"><label>Taille</label></div>
-                    <div class="combat-box"><input type="number" id="passive-perception"><label>Percep. Passive</label></div>
-                </div>
-            </div>
-
-            <div id="widget-hp" class="draggable-widget widget-full">
-                <div class="dynamic-box health-block">
-                    <div class="health-section">
-                        <div class="health-inputs">
-                            <div class="health-col"><label>PV Max</label><input type="number" id="hp-max" class="hp-input"></div>
-                            <div class="health-col"><label>PV Actuels</label><input type="number" id="hp-current" class="hp-input"></div>
-                            <div class="health-col"><label>PV Temp.</label><input type="number" id="hp-temp" class="hp-input"></div>
-                        </div>
-                        <div class="conditions-track" id="conditions-track-container">
-                            <label title="Avantage pour vous attaquer. Désavantage à vos attaques."><input type="checkbox" id="cond-blind"> 👁️ Aveuglé</label>
-                            <label title="Ne peut pas attaquer le charmeur. Le charmeur a l'avantage sur les interactions sociales."><input type="checkbox" id="cond-charm"> 💖 Charmé</label>
-                            <label title="Échoue tous les jets de perception auditive."><input type="checkbox" id="cond-deaf"> 🙉 Assourdi</label>
-                            <label title="Désavantage aux attaques et jets de carac tant que la source est en vue."><input type="checkbox" id="cond-fright"> 👻 Effrayé</label>
-                            <label title="Vitesse réduite à 0."><input type="checkbox" id="cond-grap"> ✊ Empoigné</label>
-                            <label title="Désavantage aux jets d'attaque et de carac."><input type="checkbox" id="cond-pois"> 🧪 Empoisonné</label>
-                            <label title="Désavantage à vos attaques. Avantage pour vous attaquer à moins de 1.5m."><input type="checkbox" id="cond-prone"> ⏬ À terre</label>
-                            <label title="Vitesse 0. Avantage pour vous attaquer. Désavantage à vos attaques et jets de DEX."><input type="checkbox" id="cond-restr"> ⛓️ Entravé</label>
-                            <label title="Rien ne peut être fait. Jets de FOR et DEX échouent automatiquement. Avantage pour vous attaquer."><input type="checkbox" id="cond-stun"> 💫 Étourdi</label>
-                            <label title="Étourdi lourdement. Tombe à terre. Coups critiques reçus à moins de 1.5m."><input type="checkbox" id="cond-uncon"> 💤 Inconscient</label>
-                        </div>
-                        <div id="custom-conditions-container" style="width:100%; margin-top:5px;"></div>
-                        <div style="display:flex; gap:5px; margin-top:5px; width:100%;">
-                            <input type="text" id="input-custom-condition" placeholder="Nouvel état personnalisé..." style="flex:1;">
-                            <button id="btn-add-custom-condition" class="btn-small no-print">Ajouter</button>
-                        </div>
-                    </div>
-                    <div class="death-saves-section">
-                        <label class="rollable" data-name="Jet contre la mort" data-target="none">Jets contre la mort</label>
-                        <div class="death-saves-row"><span style="color:#2ecc71;">Succès</span><input type="checkbox" id="death-s1"><input type="checkbox" id="death-s2"><input type="checkbox" id="death-s3"></div>
-                        <div class="death-saves-row"><span style="color:#e74c3c;">Échecs</span><input type="checkbox" id="death-f1"><input type="checkbox" id="death-f2"><input type="checkbox" id="death-f3"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-rests" class="draggable-widget widget-full">
-                <div class="dynamic-box" style="display:flex; justify-content:space-around; align-items:center; flex-wrap:wrap; gap:15px; padding:10px;">
-                    <div style="display:flex; gap:10px;">
-                        <button id="btn-short-rest" class="btn btn-icon" style="background:#4a6b53; padding:10px 15px;">⏳ Repos Court</button>
-                        <button id="btn-long-rest" class="btn btn-icon" style="background:#2c3e50; padding:10px 15px;">⛺ Repos Long</button>
-                    </div>
-                    <div class="hit-dice-box">
-                        <label>Dés de Vie :</label>
-                        <div style="display:flex; align-items:center; gap:3px;">
-                            <input type="number" id="hd-spent" value="0" min="0" title="Dés dépensés">
-                            <span>/</span>
-                            <input type="number" id="hd-max" value="1" min="1" title="Dés maximum">
-                            <select id="hd-size" title="Taille du dé"><option value="6">d6</option><option value="8" selected>d8</option><option value="10">d10</option><option value="12">d12</option></select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div id="widget-traits" class="draggable-widget widget-full">
                 <div class="dynamic-box">
                     <div class="section-title-row collapsible-header">
                         <label class="section-title">Capacités & Dons</label>
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; gap:10px; align-items:center;">
                             <button id="btn-open-trait-modal" class="btn-icon no-print">➕ Ajouter</button>
                             <span class="collapse-icon no-print">▼</span>
                         </div>
                     </div>
                     <div class="collapsible-content">
-                        <h4 class="trait-section-title">🛡️ Capacités de classe</h4>
+                        <h4 class="trait-section-title" onclick="this.nextElementSibling.classList.toggle('hidden')">🛡️ Capacités de classe <span style="font-size:0.8rem; pointer-events:none;">▼</span></h4>
                         <div id="traits-list-class" class="trait-sub-list"></div>
-                        
-                        <h4 class="trait-section-title">🧬 Traits d'espèce</h4>
+                        <h4 class="trait-section-title" onclick="this.nextElementSibling.classList.toggle('hidden')">🧬 Traits d'espèce <span style="font-size:0.8rem; pointer-events:none;">▼</span></h4>
                         <div id="traits-list-race" class="trait-sub-list"></div>
-                        
-                        <h4 class="trait-section-title">📜 Dons & Historique</h4>
+                        <h4 class="trait-section-title" onclick="this.nextElementSibling.classList.toggle('hidden')">📜 Dons & Historique <span style="font-size:0.8rem; pointer-events:none;">▼</span></h4>
                         <div id="traits-list-feat" class="trait-sub-list"></div>
                     </div>
                 </div>
             </div>
 
-            <div id="widget-attacks" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header">
-                        <label class="section-title">Équipement (Attaques)</label>
-                        <div style="display:flex; gap:10px;">
-                            <button id="btn-open-attack-modal" class="btn-icon no-print">➕ Ajouter</button>
-                            <span class="collapse-icon no-print">▼</span>
-                        </div>
-                    </div>
-                    <div class="collapsible-content">
-                        <div id="atk-tabs-container" class="category-tabs no-print"></div>
-                        <div id="attacks-list"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-inventory" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header">
-                        <label class="section-title">Sac à dos</label>
-                        <div style="display:flex; gap:10px;">
-                            <button id="btn-open-inventory" class="btn-icon no-print">🎒 Ouvrir</button>
-                            <span class="collapse-icon no-print">▼</span>
-                        </div>
-                    </div>
-                    <div class="collapsible-content" id="pinned-inventory-wrapper">
-                        <div id="inv-tabs-container-pinned" class="category-tabs no-print"></div>
-                        <div id="pinned-inventory-list"></div>
-                        <div class="inventory-weight-total no-print">
-                            <strong>Poids Total : <span id="inv-total-weight">0</span></strong>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-currency" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Bourse</label><div style="display:flex; gap:10px;"><button id="btn-toggle-currency" class="btn-icon no-print">🪙 Taux</button><span class="collapse-icon no-print">▼</span></div></div>
-                    <div class="collapsible-content">
-                        <div class="currency-container">
-                            <div class="coin-box"><label>PC</label><input type="number" id="coin-pc"></div><div class="coin-box"><label>PA</label><input type="number" id="coin-pa"></div>
-                            <div class="coin-box"><label>PE</label><input type="number" id="coin-pe"></div><div class="coin-box"><label>PO</label><input type="number" id="coin-po"></div>
-                            <div class="coin-box"><label>PP</label><input type="number" id="coin-pp"></div>
-                        </div>
-                        <div id="currency-inline-rules" class="hidden">
-                            <table class="currency-table">
-                                <tr><th>Pièce</th><th>PC</th><th>PA</th><th>PE</th><th>PO</th><th>PP</th></tr>
-                                <tr><td>Cuivre (PC)</td><td>1</td><td>1/10</td><td>1/50</td><td>1/100</td><td>1/1000</td></tr>
-                                <tr><td>Argent (PA)</td><td>10</td><td>1</td><td>1/5</td><td>1/10</td><td>1/100</td></tr>
-                                <tr><td>Or (PO)</td><td>100</td><td>10</td><td>2</td><td>1</td><td>1/10</td></tr>
-                            </table>
-                        </div>
-                        <div class="currency-pay-form no-print">
-                            <input type="number" id="pay-amount-val" placeholder="Payer..." min="0" step="0.1">
-                            <select id="pay-amount-type">
-                                <option value="po" selected>PO</option>
-                                <option value="pa">PA</option>
-                                <option value="pc">PC</option>
-                                <option value="pe">PE</option>
-                                <option value="pp">PP</option>
-                            </select>
-                            <button id="btn-pay-currency" class="btn-small">Déduire</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-initiative" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">⚔️ Tracker d'Initiative</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <div style="display:flex; gap:5px; margin-bottom:10px;" class="no-print">
-                            <input type="text" id="init-add-name" placeholder="Nom..." style="flex:2;">
-                            <input type="number" id="init-add-score" placeholder="Init" style="flex:1;">
-                            <input type="number" id="init-add-hp" placeholder="PV" style="flex:1;">
-                            <button id="btn-init-add" class="btn-small">Ajouter</button>
-                        </div>
-                        <div id="init-tracker-list" style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px;"></div>
-                        <div style="display:flex; gap:10px;" class="no-print">
-                            <button id="btn-init-next" class="btn-small" style="flex:1; background:#4a6b53;">Tour Suivant ➔</button>
-                            <button id="btn-init-clear" class="btn-small" style="background:var(--primary-hover);">Vider</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-companion" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">🐾 Compagnon / Familier</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <div style="display:flex; gap:10px; margin-bottom:10px;">
-                            <input type="text" id="comp-name" placeholder="Nom du compagnon..." style="flex:2; font-weight:bold; font-size:1.1rem; color:var(--primary-color);">
-                            <div style="display:flex; align-items:center; gap:5px;"><label style="font-weight:bold; color:#555;">CA</label><input type="number" id="comp-ac" style="width:50px;"></div>
-                            <div style="display:flex; align-items:center; gap:5px;"><label style="font-weight:bold; color:#555;">PV</label><input type="number" id="comp-hp" style="width:60px;"></div>
-                        </div>
-                        <textarea id="comp-notes" class="auto-expand" placeholder="Attaques, capacités, notes de suivi..."></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-magic-stats" class="draggable-widget widget-full">
-                <div class="dynamic-box magic-module">
-                    <div class="section-title-row collapsible-header" style="border:none;"><label class="section-title" style="border:none; margin:0;">Caractéristiques Magiques</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <div class="spell-stats-container">
-                            <div class="spell-stat-col main-cast-col"><label>Incantation</label><select id="spellcasting-ability"><option value="">- Choisir -</option><option value="int">Intelligence</option><option value="wis">Sagesse</option><option value="cha">Charisme</option><option value="none">Aucune</option></select></div>
-                            <div class="spell-stat-col"><label>Mod</label><input type="number" id="spell-modifier" title="Modifiable manuellement"></div>
-                            <div class="spell-stat-col"><label>DD Sauvegarde</label><input type="number" id="spell-save-dc" title="Modifiable manuellement"></div>
-                            <div class="spell-stat-col"><label class="rollable" data-name="Attaque magique" data-target="spell-attack-bonus">Bonus Attaque</label><input type="number" id="spell-attack-bonus" title="Modifiable manuellement"></div>
-                        </div>
-                        <div class="spell-slots-module" style="margin-top:15px;">
-                            <div class="section-title-row"><label class="section-title">Emplacements</label><button id="btn-open-spell-slots-modal" class="btn-icon no-print">⚙️ Gérer</button></div>
-                            <div id="spell-slots-grid" class="spell-slots-grid"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-spells" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Sorts Rapides</label><div style="display:flex; gap:10px;"><button id="btn-open-grimoire" class="btn-icon no-print">📖 Grimoire</button><span class="collapse-icon no-print">▼</span></div></div>
-                    <div class="collapsible-content" id="spells-list"></div>
-                </div>
-            </div>
-
-            <div id="widget-prepared-spells" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header">
-                        <label class="section-title">📋 Sorts Préparés</label>
-                        <div style="display:flex; gap:10px; align-items:center;">
-                            <span id="prepared-spell-count" style="font-size:0.8rem; color:#888;"></span>
-                            <button id="btn-open-prepare-spells" class="btn-icon no-print">⚙️ Gérer</button>
-                            <span class="collapse-icon no-print">▼</span>
-                        </div>
-                    </div>
-                    <div class="collapsible-content">
-                        <div id="prepared-spells-list"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-abilities" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Capacités Limitées</label><div style="display:flex; gap:10px;"><button id="btn-open-ability-modal" class="btn-icon no-print">➕ Ajouter</button><span class="collapse-icon no-print">▼</span></div></div>
-                    <div class="collapsible-content" id="abilities-list"></div>
-                </div>
-            </div>
-
-            <div id="widget-macros" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">⚙️ Macros (Dés)</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <div style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px;" class="no-print">
-                            <input type="text" id="macro-name" placeholder="Nom (Ex: Attaque Sournoise)">
-                            <div style="display:flex; gap:5px;">
-                                <input type="text" id="macro-formula" placeholder="Formule (Ex: 1d8+3d6+4)" style="flex:1;">
-                                <button id="btn-add-macro" class="btn-small">Créer</button>
-                            </div>
-                        </div>
-                        <div id="macro-list" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-calculator" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">🧮 Calculatrice</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <input type="text" id="calc-display" readonly placeholder="0" class="calc-display no-print">
-                        <div class="calc-grid no-print">
-                            <button class="btn-calc" onclick="appendCalc('7')">7</button><button class="btn-calc" onclick="appendCalc('8')">8</button><button class="btn-calc" onclick="appendCalc('9')">9</button><button class="btn-calc btn-calc-op" onclick="appendCalc('/')">÷</button>
-                            <button class="btn-calc" onclick="appendCalc('4')">4</button><button class="btn-calc" onclick="appendCalc('5')">5</button><button class="btn-calc" onclick="appendCalc('6')">6</button><button class="btn-calc btn-calc-op" onclick="appendCalc('*')">×</button>
-                            <button class="btn-calc" onclick="appendCalc('1')">1</button><button class="btn-calc" onclick="appendCalc('2')">2</button><button class="btn-calc" onclick="appendCalc('3')">3</button><button class="btn-calc btn-calc-op" onclick="appendCalc('-')">-</button>
-                            <button class="btn-calc btn-calc-clear" onclick="clearCalc()">C</button><button class="btn-calc" onclick="appendCalc('0')">0</button><button class="btn-calc btn-calc-eq" onclick="evalCalc()">=</button><button class="btn-calc btn-calc-op" onclick="appendCalc('+')">+</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-quests" class="draggable-widget widget-full">
-                <div class="dynamic-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">🗺️ Quêtes & PNJ</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <label style="font-weight:bold; color:#555;">Quêtes en cours :</label>
-                        <textarea id="quest-log" class="auto-expand" placeholder="- Objectif 1..."></textarea>
-                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Registre des PNJ :</label>
-                        <textarea id="npc-log" class="auto-expand" placeholder="- Bob le tavernier (Amical)..."></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <div id="widget-notes" class="draggable-widget widget-full">
-                <div>
-                    <div class="dynamic-box full-width-notes">
-                        <div class="section-title-row collapsible-header"><label class="section-title">📋 Note Rapide</label><div style="display:flex; gap:10px;"><button id="btn-clear-note" class="btn-icon no-print" style="background:#a62424; font-size: 0.8rem;">Effacer</button><span class="collapse-icon no-print">▼</span></div></div>
-                        <div class="collapsible-content"><textarea id="quick-note" class="auto-expand" placeholder="Saisis tes notes temporaires ici..."></textarea></div>
-                    </div>
-                    <div class="dynamic-box full-width-notes">
-                        <div class="section-title-row collapsible-header"><label class="section-title">Journal</label><div style="display:flex; gap:10px;"><button id="btn-open-journal" class="btn-icon no-print">📕 Ouvrir</button><span class="collapse-icon no-print">▼</span></div></div>
-                        <div class="collapsible-content add-form spell-form no-print">
-                            <input type="text" id="new-journal-title" placeholder="Titre (Ex: Rencontre avec le Roi)">
-                            <textarea id="new-journal-content" class="auto-expand" placeholder="Contenu du chapitre..."></textarea>
-                            <button id="btn-save-journal" class="btn-small" style="margin-top: 5px; width: 100%;">Sauvegarder ce chapitre</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="widget-appearance" class="draggable-widget widget-full">
-                <div class="dynamic-box appearance-box">
-                    <div class="section-title-row collapsible-header"><label class="section-title">Identité</label><span class="collapse-icon no-print">▼</span></div>
-                    <div class="collapsible-content">
-                        <div class="avatar-upload-container">
-                            <label for="avatar-file-input" class="avatar-label"><img id="main-avatar-preview" src="" alt="Avatar" class="hidden"><span id="avatar-placeholder">📸 Portrait</span></label>
-                            <input type="file" id="avatar-file-input" accept="image/*" class="hidden">
-                        </div>
-                        <div class="appearance-header" style="display: flex; gap: 15px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;">
-                            <label>Alignement :</label><input type="text" id="char-alignment" style="flex: 1; min-width: 150px;">
-                            <label>Langues :</label><input type="text" id="char-languages" placeholder="Commun, Elfique..." style="flex: 2; min-width: 200px;">
-                        </div>
-                        <textarea id="char-appearance" class="auto-expand" placeholder="Décris l'apparence physique..."></textarea>
-                    </div>
-                </div>
-            </div>
-            
+            <div id="widget-attacks" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">Équipement (Attaques)</label><div style="display:flex; gap:10px;"><button id="btn-open-attack-modal" class="btn-icon no-print">➕ Ajouter</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content"><div id="atk-tabs-container" class="category-tabs no-print"></div><div id="attacks-list"></div></div></div></div>
+            <div id="widget-inventory" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">Sac à dos</label><div style="display:flex; gap:10px;"><button id="btn-open-inventory" class="btn-icon no-print">🎒 Ouvrir</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content" id="pinned-inventory-wrapper"><div id="inv-tabs-container-pinned" class="category-tabs no-print"></div><div id="pinned-inventory-list"></div><div class="inventory-weight-total no-print"><strong>Poids Total : <span id="inv-total-weight">0</span></strong></div></div></div></div>
+            <div id="widget-currency" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">Bourse</label><div style="display:flex; gap:10px;"><button id="btn-toggle-currency" class="btn-icon no-print">🪙 Taux</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content"><div class="currency-container"><div class="coin-box"><label>PC</label><input type="number" id="coin-pc"></div><div class="coin-box"><label>PA</label><input type="number" id="coin-pa"></div><div class="coin-box"><label>PE</label><input type="number" id="coin-pe"></div><div class="coin-box"><label>PO</label><input type="number" id="coin-po"></div><div class="coin-box"><label>PP</label><input type="number" id="coin-pp"></div></div><div id="currency-inline-rules" class="hidden"><table class="currency-table"><tr><th>Pièce</th><th>PC</th><th>PA</th><th>PE</th><th>PO</th><th>PP</th></tr><tr><td>Cuivre (PC)</td><td>1</td><td>1/10</td><td>1/50</td><td>1/100</td><td>1/1000</td></tr><tr><td>Argent (PA)</td><td>10</td><td>1</td><td>1/5</td><td>1/10</td><td>1/100</td></tr><tr><td>Or (PO)</td><td>100</td><td>10</td><td>2</td><td>1</td><td>1/10</td></tr></table></div><div class="currency-pay-form no-print"><input type="number" id="pay-amount-val" placeholder="Payer..." min="0" step="0.1"><select id="pay-amount-type"><option value="po" selected>PO</option><option value="pa">PA</option><option value="pc">PC</option><option value="pe">PE</option><option value="pp">PP</option></select><button id="btn-pay-currency" class="btn-small">Déduire</button></div></div></div></div>
+            <div id="widget-initiative" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">⚔️ Tracker d'Initiative</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div style="display:flex; gap:5px; margin-bottom:10px;" class="no-print"><input type="text" id="init-add-name" placeholder="Nom..." style="flex:2;"><input type="number" id="init-add-score" placeholder="Init" style="flex:1;"><input type="number" id="init-add-hp" placeholder="PV" style="flex:1;"><button id="btn-init-add" class="btn-small">Ajouter</button></div><div id="init-tracker-list" style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px;"></div><div style="display:flex; gap:10px;" class="no-print"><button id="btn-init-next" class="btn-small" style="flex:1; background:#4a6b53;">Tour Suivant ➔</button><button id="btn-init-clear" class="btn-small" style="background:var(--primary-hover);">Vider</button></div></div></div></div>
+            <div id="widget-companion" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">🐾 Compagnon / Familier</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div style="display:flex; gap:10px; margin-bottom:10px;"><input type="text" id="comp-name" placeholder="Nom du compagnon..." style="flex:2; font-weight:bold; font-size:1.1rem; color:var(--primary-color);"><div style="display:flex; align-items:center; gap:5px;"><label style="font-weight:bold; color:#555;">CA</label><input type="number" id="comp-ac" style="width:50px;"></div><div style="display:flex; align-items:center; gap:5px;"><label style="font-weight:bold; color:#555;">PV</label><input type="number" id="comp-hp" style="width:60px;"></div></div><textarea id="comp-notes" class="auto-expand" placeholder="Attaques, capacités, notes de suivi..."></textarea></div></div></div>
+            <div id="widget-magic-stats" class="draggable-widget widget-full"><div class="dynamic-box magic-module"><div class="section-title-row collapsible-header" style="border:none;"><label class="section-title" style="border:none; margin:0;">Caractéristiques Magiques</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="spell-stats-container"><div class="spell-stat-col main-cast-col"><label>Incantation</label><select id="spellcasting-ability"><option value="">- Choisir -</option><option value="int">Intelligence</option><option value="wis">Sagesse</option><option value="cha">Charisme</option><option value="none">Aucune</option></select></div><div class="spell-stat-col"><label>Mod</label><input type="number" id="spell-modifier"></div><div class="spell-stat-col"><label>DD Sauvegarde</label><input type="number" id="spell-save-dc"></div><div class="spell-stat-col"><label class="rollable" data-name="Attaque magique" data-target="spell-attack-bonus">Bonus Attaque</label><input type="number" id="spell-attack-bonus"></div></div><div class="spell-slots-module" style="margin-top:15px;"><div class="section-title-row"><label class="section-title">Emplacements</label><button id="btn-open-spell-slots-modal" class="btn-icon no-print">⚙️ Gérer</button></div><div id="spell-slots-grid" class="spell-slots-grid"></div></div></div></div></div>
+            <div id="widget-spells" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">Sorts Rapides</label><div style="display:flex; gap:10px;"><button id="btn-open-grimoire" class="btn-icon no-print">📖 Grimoire</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content" id="spells-list"></div></div></div>
+            <div id="widget-prepared-spells" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">📋 Sorts Préparés</label><div style="display:flex; gap:10px; align-items:center;"><span id="prepared-spell-count" style="font-size:0.8rem; color:#888;"></span><button id="btn-open-prepare-spells" class="btn-icon no-print">⚙️ Gérer</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content"><div id="prepared-spells-list"></div></div></div></div>
+            <div id="widget-abilities" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">Capacités Limitées</label><div style="display:flex; gap:10px;"><button id="btn-open-ability-modal" class="btn-icon no-print">➕ Ajouter</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content" id="abilities-list"></div></div></div>
+            <div id="widget-macros" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">⚙️ Macros (Dés)</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px;" class="no-print"><input type="text" id="macro-name" placeholder="Nom (Ex: Attaque Sournoise)"><div style="display:flex; gap:5px;"><input type="text" id="macro-formula" placeholder="Formule (Ex: 1d8+3d6+4)" style="flex:1;"><button id="btn-add-macro" class="btn-small">Créer</button></div></div><div id="macro-list" style="display:flex; flex-wrap:wrap; gap:5px;"></div></div></div></div>
+            <div id="widget-calculator" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">🧮 Calculatrice</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><input type="text" id="calc-display" readonly placeholder="0" class="calc-display no-print"><div class="calc-grid no-print"><button class="btn-calc" onclick="appendCalc('7')">7</button><button class="btn-calc" onclick="appendCalc('8')">8</button><button class="btn-calc" onclick="appendCalc('9')">9</button><button class="btn-calc btn-calc-op" onclick="appendCalc('/')">÷</button><button class="btn-calc" onclick="appendCalc('4')">4</button><button class="btn-calc" onclick="appendCalc('5')">5</button><button class="btn-calc" onclick="appendCalc('6')">6</button><button class="btn-calc btn-calc-op" onclick="appendCalc('*')">×</button><button class="btn-calc" onclick="appendCalc('1')">1</button><button class="btn-calc" onclick="appendCalc('2')">2</button><button class="btn-calc" onclick="appendCalc('3')">3</button><button class="btn-calc btn-calc-op" onclick="appendCalc('-')">-</button><button class="btn-calc btn-calc-clear" onclick="clearCalc()">C</button><button class="btn-calc" onclick="appendCalc('0')">0</button><button class="btn-calc btn-calc-eq" onclick="evalCalc()">=</button><button class="btn-calc btn-calc-op" onclick="appendCalc('+')">+</button></div></div></div></div>
+            <div id="widget-quests" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">🗺️ Quêtes & PNJ</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><label style="font-weight:bold; color:#555;">Quêtes en cours :</label><textarea id="quest-log" class="auto-expand" placeholder="- Objectif 1..."></textarea><label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Registre des PNJ :</label><textarea id="npc-log" class="auto-expand" placeholder="- Bob le tavernier (Amical)..."></textarea></div></div></div>
+            <div id="widget-notes" class="draggable-widget widget-full"><div><div class="dynamic-box full-width-notes"><div class="section-title-row collapsible-header"><label class="section-title">📋 Note Rapide</label><div style="display:flex; gap:10px;"><button id="btn-clear-note" class="btn-icon no-print" style="background:#a62424; font-size: 0.8rem;">Effacer</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content"><textarea id="quick-note" class="auto-expand" placeholder="Saisis tes notes temporaires ici..."></textarea></div></div><div class="dynamic-box full-width-notes"><div class="section-title-row collapsible-header"><label class="section-title">Journal</label><div style="display:flex; gap:10px;"><button id="btn-open-journal" class="btn-icon no-print">📕 Ouvrir</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content add-form spell-form no-print"><input type="text" id="new-journal-title" placeholder="Titre (Ex: Rencontre avec le Roi)"><textarea id="new-journal-content" class="auto-expand" placeholder="Contenu du chapitre..."></textarea><button id="btn-save-journal" class="btn-small" style="margin-top: 5px; width: 100%;">Sauvegarder ce chapitre</button></div></div></div></div>
+            <div id="widget-appearance" class="draggable-widget widget-full"><div class="dynamic-box appearance-box"><div class="section-title-row collapsible-header"><label class="section-title">Identité</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="avatar-upload-container"><label for="avatar-file-input" class="avatar-label"><img id="main-avatar-preview" src="" alt="Avatar" class="hidden"><span id="avatar-placeholder">📸 Portrait</span></label><input type="file" id="avatar-file-input" accept="image/*" class="hidden"></div><div class="appearance-header" style="display: flex; gap: 15px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;"><label>Alignement :</label><input type="text" id="char-alignment" style="flex: 1; min-width: 150px;"><label>Langues :</label><input type="text" id="char-languages" placeholder="Commun, Elfique..." style="flex: 2; min-width: 200px;"></div><textarea id="char-appearance" class="auto-expand" placeholder="Décris l'apparence physique..."></textarea></div></div></div>
         </div>
     </div>
 </div>
 
 <div id="grimoire-modal" class="modal-overlay hidden no-print"><div class="scroll-container"><div class="scroll-top" id="btn-close-grimoire">▲ Refermer le grimoire ▲</div><div class="scroll-paper"><h2 class="grimoire-title">Le Grimoire des Sortilèges</h2><div style="text-align:center; margin-bottom: 20px;"><button id="btn-open-spell-add" class="btn">➕ Inscrire un nouveau sort</button></div><div id="grimoire-content"></div></div><div class="scroll-bottom"></div></div></div>
-
-<!-- Modale Sorts Préparés -->
-<div id="prepare-spells-modal" class="modal-overlay hidden no-print">
-    <div class="modal-box" style="max-width:680px;">
-        <div class="modal-header">
-            <h2>📋 Sorts Préparés</h2>
-            <button class="btn-close-modal" id="btn-close-prepare-spells">✕</button>
-        </div>
-        <p style="font-size:0.85rem; color:#888; margin-bottom:10px;">Coche les sorts que ton personnage a préparés pour aujourd'hui.</p>
-        <div style="display:flex; gap:8px; margin-bottom:12px;" class="no-print">
-            <input type="text" id="prepare-search" placeholder="Filtrer par nom..." style="flex:1;">
-            <select id="prepare-filter-level" style="border:1px solid #c4b487; border-radius:5px; padding:6px;">
-                <option value="">Tous niveaux</option>
-                <option value="0">Tours de magie</option>
-                <option value="1">Niveau 1</option><option value="2">Niveau 2</option><option value="3">Niveau 3</option>
-                <option value="4">Niveau 4</option><option value="5">Niveau 5</option><option value="6">Niveau 6</option>
-                <option value="7">Niveau 7</option><option value="8">Niveau 8</option><option value="9">Niveau 9</option>
-            </select>
-        </div>
-        <div id="prepare-spells-checklist" style="display:flex; flex-direction:column; gap:6px; max-height:55vh; overflow-y:auto;"></div>
-    </div>
-</div>
-
-<!-- Overlay effets d'états -->
+<div id="prepare-spells-modal" class="modal-overlay hidden no-print"><div class="modal-box" style="max-width:680px;"><div class="modal-header"><h2>📋 Sorts Préparés</h2><button class="btn-close-modal" id="btn-close-prepare-spells">✕</button></div><p style="font-size:0.85rem; color:#888; margin-bottom:10px;">Coche les sorts préparés pour aujourd'hui.</p><div style="display:flex; gap:8px; margin-bottom:12px;" class="no-print"><input type="text" id="prepare-search" placeholder="Filtrer par nom..." style="flex:1;"><select id="prepare-filter-level" style="border:1px solid #c4b487; border-radius:5px; padding:6px;"><option value="">Tous niveaux</option><option value="0">Tours de magie</option><option value="1">Niveau 1</option><option value="2">Niveau 2</option><option value="3">Niveau 3</option><option value="4">Niveau 4</option><option value="5">Niveau 5</option><option value="6">Niveau 6</option><option value="7">Niveau 7</option><option value="8">Niveau 8</option><option value="9">Niveau 9</option></select></div><div id="prepare-spells-checklist" style="display:flex; flex-direction:column; gap:6px; max-height:55vh; overflow-y:auto;"></div></div></div>
 <div id="status-fx-overlay" class="status-fx-overlay hidden"></div>
-<div id="journal-modal" class="modal-overlay hidden no-print">
-    <button id="btn-lighter-close" title="Brûler le livre pour fermer">🔥</button>
-    <div class="book-container" id="book-container">
-        <div class="book-page">
-            <div id="book-page-content"></div>
-        </div>
-    </div>
-</div>
-
-<div id="inventory-modal" class="modal-overlay hidden no-print">
-    <div class="modal-box">
-        <div class="modal-header"><h2>🎒 Sac à Dos</h2><button class="btn-close-modal" id="btn-close-inventory">X</button></div>
-        <div class="add-form" style="display:flex; flex-wrap:wrap; gap:5px;">
-            <input type="text" id="inv-name" placeholder="Objet" style="flex:2; min-width:150px;">
-            <input type="number" id="inv-qty" placeholder="Qté" style="flex:0.5; min-width:50px;">
-            <input type="text" id="inv-weight" placeholder="Poids" style="flex:0.5; min-width:60px;">
-            <select id="inv-category" style="flex:1; min-width:120px; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold;"></select>
-            <button id="btn-add-inventory" class="btn-small">Ajouter</button>
-        </div>
-        <div id="inv-tabs-container-modal" class="category-tabs" style="margin-top:10px;"></div>
-        <div id="inventory-full-list" class="modal-list"></div>
-    </div>
-</div>
-
-<div id="edit-inventory-modal" class="modal-overlay hidden no-print" style="z-index: 1010;">
-    <div class="modal-box">
-        <div class="modal-header"><h2>Modifier l'objet</h2><button class="btn-close-modal" id="btn-close-edit-inv">X</button></div>
-        <div class="add-form" style="display:flex; flex-wrap:wrap; gap:5px;">
-            <input type="text" id="edit-inv-name" placeholder="Objet" style="flex:2; min-width:150px;">
-            <input type="number" id="edit-inv-qty" placeholder="Qté" style="flex:0.5; min-width:50px;">
-            <input type="text" id="edit-inv-weight" placeholder="Poids" style="flex:0.5; min-width:60px;">
-            <select id="edit-inv-category" style="flex:1; min-width:120px; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold;"></select>
-            <button id="btn-save-edit-inv" class="btn-small" style="width:100%; margin-top:5px;">Enregistrer</button>
-        </div>
-    </div>
-</div>
-
-<div id="attack-form-modal" class="modal-overlay hidden no-print">
-    <div class="modal-box">
-        <div class="modal-header"><h2>Forger une Arme/Attaque</h2><button class="btn-close-modal" id="btn-close-attack-form">X</button></div>
-        <div class="spell-form">
-            <input type="text" id="new-atk-name" placeholder="Nom de l'arme/attaque">
-            <input type="text" id="new-atk-bonus" placeholder="Bonus Attaque ou DD">
-            <input type="text" id="new-atk-dmg" placeholder="Dégâts & Type (ex: 1d8+3 Tranchant)">
-            <select id="new-atk-category" style="width:100%; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold; margin-bottom:5px;"></select>
-            <input type="text" id="new-atk-notes" placeholder="Notes (ex: Finesse)">
-            <label style="margin-top:10px; cursor:pointer;"><input type="checkbox" id="new-atk-req-attune"> Nécessite liaison</label>
-            <button id="btn-save-atk" class="btn" style="margin-top:15px; width:100%;">Ajouter / Sauvegarder</button>
-        </div>
-    </div>
-</div>
-
-<div id="trait-form-modal" class="modal-overlay hidden no-print" style="z-index: 1010;">
-    <div class="modal-box">
-        <div class="modal-header">
-            <h2 id="trait-modal-title">Ajouter une Capacité</h2>
-            <button class="btn-close-modal" id="btn-close-trait-form">X</button>
-        </div>
-        <div class="spell-form">
-            <input type="text" id="new-trait-name" placeholder="Nom de la capacité / don">
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <select id="new-trait-type" style="flex:2; padding:8px; border:1px solid #c4b487; border-radius:5px; font-weight:bold;">
-                    <option value="class">Capacité de classe</option>
-                    <option value="race">Trait d'espèce</option>
-                    <option value="feat">Don / Historique</option>
-                </select>
-                <input type="number" id="new-trait-level" placeholder="Niveau" style="flex:1;">
-            </div>
-            <textarea id="new-trait-desc" class="auto-expand" placeholder="Description de la capacité..." style="margin-top:10px; min-height:100px;"></textarea>
-            <label style="margin-top:10px; cursor:pointer; display:block; font-weight:bold;">
-                <input type="checkbox" id="new-trait-pinned"> 📍 Épingler pour l'afficher développée
-            </label>
-            <button id="btn-save-trait" class="btn" style="margin-top:15px; width:100%;">Enregistrer</button>
-        </div>
-    </div>
-</div>
-
-<div id="category-manager-modal" class="modal-overlay hidden no-print" style="z-index: 1020;">
-    <div class="modal-box" style="max-width: 500px;">
-        <div class="modal-header">
-            <h2 id="cat-manager-title">Gérer les Onglets</h2>
-            <button class="btn-close-modal" id="btn-close-cat-manager">X</button>
-        </div>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:15px; font-style:italic;">Renommez ou supprimez vos onglets. Si vous supprimez un onglet, son contenu retournera dans "Général".</p>
-        <div id="cat-manager-list" class="modal-list"></div>
-    </div>
-</div>
-
+<div id="journal-modal" class="modal-overlay hidden no-print"><button id="btn-lighter-close" title="Brûler le livre pour fermer">🔥</button><div class="book-container" id="book-container"><div class="book-page"><div id="book-page-content"></div></div></div></div>
+<div id="inventory-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2>🎒 Sac à Dos</h2><button class="btn-close-modal" id="btn-close-inventory">X</button></div><div class="add-form" style="display:flex; flex-wrap:wrap; gap:5px;"><input type="text" id="inv-name" placeholder="Objet" style="flex:2; min-width:150px;"><input type="number" id="inv-qty" placeholder="Qté" style="flex:0.5; min-width:50px;"><input type="text" id="inv-weight" placeholder="Poids" style="flex:0.5; min-width:60px;"><select id="inv-category" style="flex:1; min-width:120px; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold;"></select><button id="btn-add-inventory" class="btn-small">Ajouter</button></div><div id="inv-tabs-container-modal" class="category-tabs" style="margin-top:10px;"></div><div id="inventory-full-list" class="modal-list"></div></div></div>
+<div id="edit-inventory-modal" class="modal-overlay hidden no-print" style="z-index: 1010;"><div class="modal-box"><div class="modal-header"><h2>Modifier l'objet</h2><button class="btn-close-modal" id="btn-close-edit-inv">X</button></div><div class="add-form" style="display:flex; flex-wrap:wrap; gap:5px;"><input type="text" id="edit-inv-name" placeholder="Objet" style="flex:2; min-width:150px;"><input type="number" id="edit-inv-qty" placeholder="Qté" style="flex:0.5; min-width:50px;"><input type="text" id="edit-inv-weight" placeholder="Poids" style="flex:0.5; min-width:60px;"><select id="edit-inv-category" style="flex:1; min-width:120px; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold;"></select><button id="btn-save-edit-inv" class="btn-small" style="width:100%; margin-top:5px;">Enregistrer</button></div></div></div>
+<div id="attack-form-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2>Forger une Arme/Attaque</h2><button class="btn-close-modal" id="btn-close-attack-form">X</button></div><div class="spell-form"><input type="text" id="new-atk-name" placeholder="Nom de l'arme/attaque"><input type="text" id="new-atk-bonus" placeholder="Bonus Attaque ou DD"><input type="text" id="new-atk-dmg" placeholder="Dégâts & Type (ex: 1d8+3 Tranchant)"><select id="new-atk-category" style="width:100%; border:1px solid #c4b487; border-radius:5px; padding:8px; font-weight:bold; margin-bottom:5px;"></select><input type="text" id="new-atk-notes" placeholder="Notes (ex: Finesse)"><label style="margin-top:10px; cursor:pointer;"><input type="checkbox" id="new-atk-req-attune"> Nécessite liaison</label><button id="btn-save-atk" class="btn" style="margin-top:15px; width:100%;">Ajouter / Sauvegarder</button></div></div></div>
+<div id="trait-form-modal" class="modal-overlay hidden no-print" style="z-index: 1010;"><div class="modal-box"><div class="modal-header"><h2 id="trait-modal-title">Ajouter une Capacité</h2><button class="btn-close-modal" id="btn-close-trait-form">X</button></div><div class="spell-form"><input type="text" id="new-trait-name" placeholder="Nom de la capacité / don"><div style="display:flex; gap:10px; margin-top:10px;"><select id="new-trait-type" style="flex:2; padding:8px; border:1px solid #c4b487; border-radius:5px; font-weight:bold;"><option value="class">Capacité de classe</option><option value="race">Trait d'espèce</option><option value="feat">Don / Historique</option></select><input type="number" id="new-trait-level" placeholder="Niveau" style="flex:1;"></div><textarea id="new-trait-desc" class="auto-expand" placeholder="Description de la capacité..." style="margin-top:10px; min-height:100px;"></textarea><label style="margin-top:10px; cursor:pointer; display:block; font-weight:bold;"><input type="checkbox" id="new-trait-pinned"> 📍 Épingler pour l'afficher développée</label><button id="btn-save-trait" class="btn" style="margin-top:15px; width:100%;">Enregistrer</button></div></div></div>
+<div id="category-manager-modal" class="modal-overlay hidden no-print" style="z-index: 1020;"><div class="modal-box" style="max-width: 500px;"><div class="modal-header"><h2 id="cat-manager-title">Gérer les Onglets</h2><button class="btn-close-modal" id="btn-close-cat-manager">X</button></div><p style="font-size:0.85rem; color:#666; margin-bottom:15px; font-style:italic;">Renommez ou supprimez vos onglets. Si vous supprimez un onglet, son contenu retournera dans "Général".</p><div id="cat-manager-list" class="modal-list"></div></div></div>
 <div id="spell-form-modal" class="modal-overlay hidden no-print" style="z-index: 1010;"><div class="modal-box"><div class="modal-header"><h2 id="spell-modal-title">Inscrire un Sort</h2><button class="btn-close-modal" id="btn-close-spell-form">X</button></div><div class="spell-form"><div style="display:flex; gap:5px; margin-bottom: 10px;"><input type="text" id="new-spell-name" placeholder="Nom du sort" style="flex:2;"><input type="number" id="new-spell-level" placeholder="Niv" min="0" max="9" style="flex:1;"></div><input type="text" id="new-spell-time" placeholder="Temps (ex: 1 action)"><input type="text" id="new-spell-range" placeholder="Portée (ex: 18m)"><input type="text" id="new-spell-res" placeholder="Ressources (V, S, M)"><textarea id="new-spell-desc" placeholder="Description du sort" style="margin: 10px 0; min-height:100px;"></textarea><input type="text" id="new-spell-notes" placeholder="Notes (ex: 8d6 feu)"><div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;"><button id="btn-add-spell" class="btn">Sauvegarder</button><label style="cursor:pointer;"><input type="checkbox" id="new-spell-pinned" checked> Épingler</label></div></div></div></div>
 <div id="ability-form-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2>Capacité Limitée</h2><button class="btn-close-modal" id="btn-close-ability-form">X</button></div><div class="spell-form"><input type="text" id="new-ability-name" placeholder="Nom" style="width:100%; margin-bottom:10px;"><input type="number" id="new-ability-max" placeholder="Utilisations Max" min="1" style="width:100%; margin-bottom:15px;"><div style="text-align:left; border-top:2px dashed var(--primary-color); padding-top:15px;"><label style="font-weight:bold; display:block; margin-bottom:10px; font-family:'Cinzel', serif;">Régénération :</label><select id="ab-regen-mode" style="width:100%; margin-bottom:15px; font-weight:bold;"><option value="long">Repos Long uniquement</option><option value="short_long">Repos Court ET Repos Long</option></select><div id="ab-short-rest-block" class="regen-block hidden"><label style="color:#4a6b53; font-weight:bold;">▶ Repos Court :</label><select id="ab-short-type" style="width:100%; margin-bottom:5px;"><option value="all">Récupère TOUT</option><option value="fixed">Récupère une partie</option></select><input type="number" id="ab-short-amount" placeholder="Combien ?" min="1" class="hidden" style="width:100%; margin-bottom:10px;"></div><div id="ab-long-rest-block" class="regen-block"><label style="color:#2c3e50; font-weight:bold;">▶ Repos Long :</label><select id="ab-long-type" style="width:100%; margin-bottom:5px;"><option value="all">Récupère TOUT</option><option value="fixed">Récupère une partie</option></select><input type="number" id="ab-long-amount" placeholder="Combien ?" min="1" class="hidden" style="width:100%; margin-bottom:10px;"></div></div><button id="btn-save-ability" class="btn" style="margin-top:20px; width:100%;">Enregistrer</button></div></div></div>
 <div id="spell-slots-modal" class="modal-overlay hidden no-print"><div class="modal-box spell-slots-modal-box"><div class="modal-header"><h2>Emplacements de Sorts</h2><button class="btn-close-modal" id="btn-close-spell-slots">X</button></div><p class="spell-slots-helper">Options de récupération apparaissent uniquement pour les niveaux utilisés.</p><div id="spell-slots-config-list" class="spell-slots-config-list"></div><button id="btn-save-spell-slots-config" class="btn spell-slots-save-btn">Enregistrer les emplacements</button></div></div>
-<div id="rest-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2 id="rest-modal-title">Repos</h2><button class="btn-close-modal" id="btn-close-rest">X</button></div>
-    <div id="rest-short-content" class="hidden">
-        <p class="rest-rule-text"><strong>Repos court :</strong> Choisis le nombre de dés à lancer pour récupérer des PV.</p>
-        <div class="rest-summary-grid">
-            <div class="rest-summary-card"><span>Dés dispos</span><strong><span id="rest-hd-available">0</span> / <span id="rest-hd-max-display">0</span></strong></div>
-            <div class="rest-summary-card"><span>Dé utilisé</span><strong id="rest-hd-size-display">d8</strong></div>
-            <div class="rest-summary-card"><span>Mod. CON</span><strong id="rest-con-mod">+0</strong></div>
-            <div class="rest-summary-card"><span>Points de vie</span><strong id="rest-hp-status">0 / 0</strong></div>
-        </div>
-        <div class="rest-actions-row">
-            <div style="display:flex; align-items:center; gap:5px; background:rgba(255,255,255,0.7); padding:5px 10px; border-radius:6px; border:1px solid #c4b487;">
-                <label style="font-weight:bold; color:var(--primary-color); font-size:0.9rem;">Dés à lancer :</label>
-                <input type="number" id="rest-hd-to-roll" value="1" min="1" style="width:50px; font-weight:bold; font-size:1.1rem; text-align:center;">
-            </div>
-            <button id="btn-roll-hit-die" class="btn btn-rest-roll">🎲 Lancer</button>
-            <button id="btn-confirm-short-rest" class="btn btn-rest-finish">Terminer</button>
-        </div>
-        <div id="rest-roll-result" class="rest-roll-log"></div>
-    </div>
-    <div id="rest-long-content" class="hidden">
-        <p class="rest-rule-text"><strong>Repos long :</strong> Tu récupères tes PV, emplacements de sorts, capacités et moitié des dés de vie.</p>
-        <button id="btn-confirm-long-rest" class="btn" style="width:100%; background:#2c3e50;">Dormir</button>
-    </div>
-</div></div>
+<div id="rest-modal" class="modal-overlay hidden no-print"><div class="modal-box"><div class="modal-header"><h2 id="rest-modal-title">Repos</h2><button class="btn-close-modal" id="btn-close-rest">X</button></div><div id="rest-short-content" class="hidden"><p class="rest-rule-text"><strong>Repos court :</strong> Choisis le nombre de dés à lancer pour récupérer des PV.</p><div class="rest-summary-grid"><div class="rest-summary-card"><span>Dés dispos</span><strong><span id="rest-hd-available">0</span> / <span id="rest-hd-max-display">0</span></strong></div><div class="rest-summary-card"><span>Dé utilisé</span><strong id="rest-hd-size-display">d8</strong></div><div class="rest-summary-card"><span>Mod. CON</span><strong id="rest-con-mod">+0</strong></div><div class="rest-summary-card"><span>Points de vie</span><strong id="rest-hp-status">0 / 0</strong></div></div><div class="rest-actions-row"><div style="display:flex; align-items:center; gap:5px; background:rgba(255,255,255,0.7); padding:5px 10px; border-radius:6px; border:1px solid #c4b487;"><label style="font-weight:bold; color:var(--primary-color); font-size:0.9rem;">Dés à lancer :</label><input type="number" id="rest-hd-to-roll" value="1" min="1" style="width:50px; font-weight:bold; font-size:1.1rem; text-align:center;"></div><button id="btn-roll-hit-die" class="btn btn-rest-roll">🎲 Lancer</button><button id="btn-confirm-short-rest" class="btn btn-rest-finish">Terminer</button></div><div id="rest-roll-result" class="rest-roll-log"></div></div><div id="rest-long-content" class="hidden"><p class="rest-rule-text"><strong>Repos long :</strong> Tu récupères tes PV, emplacements de sorts, capacités et moitié des dés de vie.</p><button id="btn-confirm-long-rest" class="btn" style="width:100%; background:#2c3e50;">Dormir</button></div></div></div>
 <div id="quick-roll-toast" class="hidden"></div>
+
+<div id="global-search-modal" class="modal-overlay hidden no-print" style="z-index: 5000; align-items: flex-start; padding-top: 10vh;">
+    <div class="modal-box" style="max-width:600px; padding:15px; border-width:3px; animation: slideDown 0.2s ease-out;">
+        <div style="display:flex; gap:10px; align-items:center; border-bottom:2px solid var(--primary-color); padding-bottom:10px;">
+            <span style="font-size:1.5rem;">🔍</span>
+            <input type="text" id="global-search-input" placeholder="Que cherchez-vous ? (Sort, capacité, stat...)" autocomplete="off" style="flex:1; font-size:1.2rem; border:none; outline:none; background:transparent;">
+            <span style="font-size:0.8rem; color:#777; background:rgba(0,0,0,0.05); padding:3px 6px; border-radius:4px; font-family:monospace;">ÉCHAP pour quitter</span>
+        </div>
+        <div id="global-search-results" style="max-height: 55vh; overflow-y: auto; margin-top:10px; display:flex; flex-direction:column; gap:5px;">
+            <div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>
+        </div>
+    </div>
+</div>
 
 <script src="auth.js"></script>
 <script src="script.js"></script>

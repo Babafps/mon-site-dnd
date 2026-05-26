@@ -3,15 +3,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 1. BASE DE DONNÉES ET GESTIONNAIRE D'ÉTAT
     // ==========================================
-    // DB = localStorage (lecture/écriture immédiate) + sync Supabase en arrière-plan
     const DB = {
         get: function(key) { try { return localStorage.getItem(key); } catch(e) { return null; } },
         set: function(key, val) { 
             try { localStorage.setItem(key, val); } catch(e) { console.warn("Erreur sauvegarde locale."); }
-            // Sync Supabase pour les données de fiche (clés commençant par un char_id)
             if (window.SupaAuth?.currentUser && window.SyncQueue && ACTIVE_CHAR_ID && key.startsWith(ACTIVE_CHAR_ID + '_')) {
                 const subKey = key.slice(ACTIVE_CHAR_ID.length + 1);
-                // Ne pas sync les préférences globales dans character_data
                 if (!key.startsWith('dnd-theme-') && !key.startsWith('dnd-custom-background')) {
                     window.SyncQueue.push(ACTIVE_CHAR_ID, subKey, val);
                 }
@@ -43,10 +40,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 2. ÉCOUTEURS GLOBAUX INDÉPENDANTS (Toujours actifs)
+    // 2. ÉCOUTEURS GLOBAUX INDÉPENDANTS
     // ==========================================
     
-    // Thème et Couleurs
     function applyTheme() {
         let primary = DB.get('dnd-theme-primary') || '#7A2828';
         let accent = DB.get('dnd-theme-accent') || '#C49B35';
@@ -75,377 +71,195 @@ document.addEventListener('DOMContentLoaded', () => {
     const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
     const btnResetTheme = document.getElementById('btn-reset-theme'); if(btnResetTheme) btnResetTheme.addEventListener('click', () => { DB.remove('dnd-theme-primary'); DB.remove('dnd-theme-accent'); DB.remove('dnd-theme-sheet-bg'); DB.remove('dnd-theme-widget-bg'); DB.remove('dnd-theme-concentration'); applyTheme(); });
 
-    // Menu Hamburger (Options)
     const btnSettingsToggle = document.getElementById('btn-settings-toggle');
     const settingsDropdown = document.getElementById('settings-dropdown');
     if (btnSettingsToggle && settingsDropdown) {
-        btnSettingsToggle.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            settingsDropdown.classList.toggle('hidden'); 
-        });
-        document.addEventListener('click', (e) => { 
-            if (!settingsDropdown.classList.contains('hidden') && !e.target.closest('.settings-container')) {
-                settingsDropdown.classList.add('hidden'); 
-            }
-        });
+        btnSettingsToggle.addEventListener('click', (e) => { e.stopPropagation(); settingsDropdown.classList.toggle('hidden'); });
+        document.addEventListener('click', (e) => { if (!settingsDropdown.classList.contains('hidden') && !e.target.closest('.settings-container')) { settingsDropdown.classList.add('hidden'); } });
     }
 
-    // Import / Export JSON
     const btnExportJson = document.getElementById('btn-export-json');
     if (btnExportJson) {
-        btnExportJson.addEventListener('click', () => {
-            const data = { version: "3.0", charactersList: charactersList, activeCharId: ACTIVE_CHAR_ID, allData: {} };
-            DB.keys().forEach(k => { data.allData[k] = DB.get(k); });
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
-            const downloadAnchor = document.createElement('a'); downloadAnchor.setAttribute("href", dataStr); downloadAnchor.setAttribute("download", "sauvegarde_dnd.json");
-            document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
+        btnExportJson.addEventListener('click', async () => {
+            btnExportJson.disabled = true; btnExportJson.textContent = '⏳ Export en cours…';
+            try {
+                let exportData;
+                if (window.SupaAuth?.currentUser) {
+                    const chars = await window.SupaAuth.loadCharacters(); exportData = { version: "4.0", characters: [] };
+                    for (const c of chars) { const data = await window.SupaAuth.loadCharacterData(c.id); exportData.characters.push({ meta: c, data: data }); }
+                } else {
+                    exportData = { version: "3.0", charactersList: charactersList, activeCharId: ACTIVE_CHAR_ID, allData: {} };
+                    DB.keys().forEach(k => { exportData.allData[k] = DB.get(k); });
+                }
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+                const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "sauvegarde_dnd.json"); document.body.appendChild(a); a.click(); a.remove();
+            } catch(err) { alert("Erreur lors de l'export : " + err.message); } finally { btnExportJson.disabled = false; btnExportJson.textContent = '📥 Exporter la sauvegarde'; }
         });
     }
 
     const btnImportJson = document.getElementById('btn-import-json');
     if (btnImportJson) {
         btnImportJson.addEventListener('change', (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
+            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = async (event) => {
                 try {
                     const parsed = JSON.parse(event.target.result);
-                    if (parsed.allData) {
-                        Object.keys(parsed.allData).forEach(k => { DB.set(k, parsed.allData[k]); });
-                        if (parsed.charactersList) DB.set('dnd-character-list', JSON.stringify(parsed.charactersList));
-                        if (parsed.activeCharId) DB.set('dnd-active-char', parsed.activeCharId);
-                        alert("Sauvegarde importée avec succès !"); location.reload();
-                    } else { alert("Format de fichier invalide."); }
-                } catch (err) { alert("Erreur lors de la lecture du JSON."); }
-            };
-            reader.readAsText(file);
+                    if (window.SupaAuth?.currentUser) {
+                        if (parsed.version === "4.0" && Array.isArray(parsed.characters)) {
+                            if (!confirm(`Importer ${parsed.characters.length} personnage(s) ? Ils seront ajoutés à vos personnages existants.`)) { btnImportJson.value = ''; return; }
+                            let ok = 0;
+                            for (const charExport of parsed.characters) {
+                                const charName = charExport.data?.['dnd-sheet-char-name'] || charExport.meta?.name || 'Personnage importé';
+                                const newChar = await window.SupaAuth.createCharacter(charName); if (!newChar) return;
+                                const entries = Object.entries(charExport.data || {}).filter(([, v]) => v !== null && v !== undefined).map(([key, value]) => ({ key, value: String(value) }));
+                                if (entries.length > 0) await window.SupaAuth.saveKeys(newChar.id, entries); ok++;
+                            }
+                            alert(`✅ ${ok} personnage(s) importé(s) !`); location.reload();
+                        } else if (parsed.allData && Array.isArray(parsed.charactersList)) {
+                            if (!confirm(`Importer ${parsed.charactersList.length} personnage(s) depuis un ancien format ?`)) { btnImportJson.value = ''; return; }
+                            let ok = 0;
+                            for (const c of parsed.charactersList) {
+                                const charName = parsed.allData[c.id + '_dnd-sheet-char-name'] || c.name || 'Personnage importé';
+                                const newChar = await window.SupaAuth.createCharacter(charName); if (!newChar) continue; const prefix = c.id + '_';
+                                const entries = Object.entries(parsed.allData).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => ({ key: k.slice(prefix.length), value: String(v) }));
+                                if (entries.length > 0) await window.SupaAuth.saveKeys(newChar.id, entries); ok++;
+                            }
+                            alert(`✅ ${ok} personnage(s) importé(s) !`); location.reload();
+                        } else { alert("Format de fichier non reconnu."); }
+                    } else {
+                        if (parsed.allData) { Object.keys(parsed.allData).forEach(k => { DB.set(k, parsed.allData[k]); }); if (parsed.charactersList) DB.set('dnd-character-list', JSON.stringify(parsed.charactersList)); if (parsed.activeCharId) DB.set('dnd-active-char', parsed.activeCharId); alert("Sauvegarde importée !"); location.reload(); } else { alert("Format de fichier invalide."); }
+                    }
+                } catch (err) { alert("Erreur lors de la lecture du fichier : " + err.message); } btnImportJson.value = '';
+            }; reader.readAsText(file);
         });
     }
 
-    // Fond d'écran
-    const bgInput = document.getElementById('bg-file-input');
-    const CUSTOM_BG_KEY = 'dnd-custom-background-image';
-    function applySavedBackground() {
-        const savedBg = DB.get(CUSTOM_BG_KEY);
-        if(savedBg && savedBg !== 'undefined') { document.body.style.backgroundImage = `url("${savedBg}")`; } 
-        else { document.body.style.backgroundImage = ''; }
-    }
+    const bgInput = document.getElementById('bg-file-input'); const CUSTOM_BG_KEY = 'dnd-custom-background-image';
+    function applySavedBackground() { const savedBg = DB.get(CUSTOM_BG_KEY); if(savedBg && savedBg !== 'undefined') { document.body.style.backgroundImage = `url("${savedBg}")`; } else { document.body.style.backgroundImage = ''; } }
     applySavedBackground();
     
-    const btnChangeBg = document.getElementById('btn-change-bg'); 
-    if(btnChangeBg && bgInput) { btnChangeBg.addEventListener('click', () => { bgInput.click(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
-    if(bgInput) {
-        bgInput.addEventListener('change', (e) => {
-            const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return;
-            const reader = new FileReader();
-            reader.onload = (event) => { 
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas'); const MAX_WIDTH = 1920; 
-                    let width = img.width; let height = img.height;
-                    if(width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
-                    canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-                    try { DB.set(CUSTOM_BG_KEY, canvas.toDataURL('image/jpeg', 0.7)); applySavedBackground(); } catch (err) { alert("L'image est toujours trop lourde."); } 
-                    bgInput.value = '';
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-    const btnResetBg = document.getElementById('btn-reset-bg'); 
-    if(btnResetBg) { btnResetBg.addEventListener('click', () => { DB.remove(CUSTOM_BG_KEY); applySavedBackground(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
+    const btnChangeBg = document.getElementById('btn-change-bg'); if(btnChangeBg && bgInput) { btnChangeBg.addEventListener('click', () => { bgInput.click(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
+    if(bgInput) { bgInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1920; let width = img.width; let height = img.height; if(width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); try { DB.set(CUSTOM_BG_KEY, canvas.toDataURL('image/jpeg', 0.7)); applySavedBackground(); } catch (err) { alert("L'image est toujours trop lourde."); } bgInput.value = ''; }; img.src = event.target.result; }; reader.readAsDataURL(file); }); }
+    const btnResetBg = document.getElementById('btn-reset-bg'); if(btnResetBg) { btnResetBg.addEventListener('click', () => { DB.remove(CUSTOM_BG_KEY); applySavedBackground(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
 
-    // Boutons de navigation globaux
-    const btnGoHome = document.getElementById('btn-go-home');
-    if(btnGoHome) btnGoHome.addEventListener('click', () => { DB.remove('dnd-active-char'); location.reload(); });
+    const btnGoHome = document.getElementById('btn-go-home'); if(btnGoHome) btnGoHome.addEventListener('click', () => { DB.remove('dnd-active-char'); location.reload(); });
 
     const btnCreateChar = document.getElementById('btn-create-char');
     if(btnCreateChar) {
         btnCreateChar.addEventListener('click', async () => {
-            const inputName = document.getElementById('new-char-name');
-            if(!inputName) return;
-            const name = inputName.value.trim();
+            const inputName = document.getElementById('new-char-name'); if(!inputName) return; const name = inputName.value.trim();
             if(name) { 
                 let newId, newChar;
-                if(window.SupaAuth?.currentUser) {
-                    // Créer dans Supabase (retourne un UUID)
-                    newChar = await window.SupaAuth.createCharacter(name);
-                    if(!newChar) { alert("Erreur lors de la création. Réessaie."); return; }
-                    newId = newChar.id;
-                    charactersList.push({ id: newId, name: name, level: 1, class: '' });
-                    DB.set('dnd-character-list', JSON.stringify(charactersList));
-                } else {
-                    newId = 'char_' + Date.now();
-                    charactersList.push({ id: newId, name: name, level: 1, class: '' }); 
-                    DB.set('dnd-character-list', JSON.stringify(charactersList));
-                }
-                DB.set(`${newId}_dnd-sheet-char-name`, name); 
-                DB.set('dnd-active-char', newId); 
-                location.reload(); 
-            } else {
-                alert("Donne un nom à ton personnage avant de le créer.");
-            }
+                if(window.SupaAuth?.currentUser) { newChar = await window.SupaAuth.createCharacter(name); if(!newChar) { alert("Erreur lors de la création."); return; } newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
+                DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId); location.reload(); 
+            } else { alert("Donne un nom à ton personnage."); }
         });
     }
 
-    // ==========================================
-    // 3. AIGUILLAGE DU ROUTAGE (Accueil vs Fiche)
-    // ==========================================
-    const homeScreen = document.getElementById('home-screen');
-    const appScreen = document.getElementById('app-screen');
+    const homeScreen = document.getElementById('home-screen'); const appScreen = document.getElementById('app-screen');
 
     if(!ACTIVE_CHAR_ID) { 
-        // AFFICHER L'ACCUEIL
-        if(homeScreen) homeScreen.classList.remove('hidden'); 
-        if(appScreen) appScreen.classList.add('hidden'); 
-        
+        if(homeScreen) homeScreen.classList.remove('hidden'); if(appScreen) appScreen.classList.add('hidden'); 
         const listDiv = document.getElementById('character-list'); 
         if(listDiv) {
             listDiv.innerHTML = '';
-            if(charactersList.length === 0) { 
-                listDiv.innerHTML = "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>"; 
-            } else {
+            if(charactersList.length === 0) { listDiv.innerHTML = "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>"; } else {
                 charactersList.forEach(c => {
-                    let card = document.createElement('div'); card.className = 'char-card';
-                    let info = document.createElement('div'); info.className = 'char-info';
+                    let card = document.createElement('div'); card.className = 'char-card'; let info = document.createElement('div'); info.className = 'char-info';
                     info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1} ${c.class || ''})</span>`;
-                    info.onclick = async () => { 
-                        DB.set('dnd-active-char', c.id);
-                        // Charger les données depuis Supabase avant de recharger
-                        if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) {
-                            await window.loadCharacterDataIntoLocalStorage(c.id);
-                        }
-                        location.reload(); 
-                    };
+                    info.onclick = async () => { DB.set('dnd-active-char', c.id); if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); } location.reload(); };
                     let delBtn = document.createElement('button'); delBtn.className = 'btn-delete-char'; delBtn.innerHTML = '✖';
-                    delBtn.onclick = async (e) => { 
-                        e.stopPropagation(); 
-                        if(confirm(`Supprimer définitivement ${c.name} ?`)) {
-                            // Supprimer dans Supabase (cascade supprime character_data)
-                            if(window.SupaAuth?.currentUser) {
-                                await window.SupaAuth.deleteCharacter(c.id);
-                            }
-                            charactersList = charactersList.filter(char => char.id !== c.id); 
-                            DB.set('dnd-character-list', JSON.stringify(charactersList)); 
-                            DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); });
-                            location.reload();
-                        } 
-                    };
+                    delBtn.onclick = async (e) => { e.stopPropagation(); if(confirm(`Supprimer définitivement ${c.name} ?`)) { if(window.SupaAuth?.currentUser) { await window.SupaAuth.deleteCharacter(c.id); } charactersList = charactersList.filter(char => char.id !== c.id); DB.set('dnd-character-list', JSON.stringify(charactersList)); DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); }); location.reload(); } };
                     card.appendChild(info); card.appendChild(delBtn); listDiv.appendChild(card);
                 });
             }
         }
-    } 
-    else { 
-        // AFFICHER LA FICHE DE PERSONNAGE
-        if(homeScreen) homeScreen.classList.add('hidden'); 
-        if(appScreen) appScreen.classList.remove('hidden'); 
+    } else { 
+        if(homeScreen) homeScreen.classList.add('hidden'); if(appScreen) appScreen.classList.remove('hidden'); 
 
-        // TOUTE LA LOGIQUE DE LA FICHE DOIT RESTER DANS CE BLOC (if ACTIVE_CHAR_ID)
-        
-        document.querySelectorAll('.btn-close-modal').forEach(btn => { 
-            btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); 
-        });
+        document.querySelectorAll('.btn-close-modal').forEach(btn => { btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); });
 
         const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic-stats', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-macros', 'widget-initiative', 'widget-notes', 'widget-calculator'];
         
-        function safeStoreAllWidgets() {
-            const storage = document.getElementById('widget-storage');
-            ALL_WIDGETS.forEach(wId => { const w = document.getElementById(wId); if(w && w.parentNode !== storage) { storage.appendChild(w); } });
-        }
+        function safeStoreAllWidgets() { const storage = document.getElementById('widget-storage'); ALL_WIDGETS.forEach(wId => { const w = document.getElementById(wId); if(w && w.parentNode !== storage) { storage.appendChild(w); } }); }
 
         document.body.addEventListener('click', (e) => {
-            const header = e.target.closest('.collapsible-header');
-            if(!header) return;
+            const header = e.target.closest('.collapsible-header'); if(!header) return;
             if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.classList.contains('btn-icon')) return;
             if(e.target.closest('.trait-card')) return; 
-            
-            e.preventDefault();
-            const content = header.nextElementSibling;
-            if(!content || !content.classList.contains('collapsible-content')) return;
-            
-            const icon = header.querySelector('.collapse-icon');
-            content.classList.toggle('collapsed');
-            if(icon) icon.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+            e.preventDefault(); const content = header.nextElementSibling; if(!content || !content.classList.contains('collapsible-content')) return;
+            const icon = header.querySelector('.collapse-icon'); content.classList.toggle('collapsed'); if(icon) icon.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
         });
 
-        const layoutSelector = document.getElementById('layout-selector');
-        const layoutTabsContainer = document.getElementById('layout-tabs-container');
-        const layoutClassicContainer = document.getElementById('layout-classic-container');
-        const layoutCustomContainer = document.getElementById('layout-custom-container');
-        const btnEditCustom = document.getElementById('btn-edit-custom');
-        let isEditMode = false;
+        const layoutSelector = document.getElementById('layout-selector'); const layoutTabsContainer = document.getElementById('layout-tabs-container'); const layoutClassicContainer = document.getElementById('layout-classic-container'); const layoutCustomContainer = document.getElementById('layout-custom-container'); const btnEditCustom = document.getElementById('btn-edit-custom'); let isEditMode = false;
         
-        const DEFAULT_CLASSIC_LAYOUT = {
-            'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'],
-            'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-initiative', 'widget-companion'],
-            'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'],
-            'col-bottom': ['widget-appearance', 'widget-notes']
-        };
+        const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-initiative', 'widget-companion'], 'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
+        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-initiative', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
 
-        const DEFAULT_TABS_LAYOUT = {
-            'tab-strict-gen': ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'],
-            'tab-strict-com': ['widget-combat', 'widget-initiative', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'],
-            'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'],
-            'tab-strict-not': ['widget-quests', 'widget-notes']
-        };
+        function applyWidgetSizes() { ALL_WIDGETS.forEach(wId => { const el = document.getElementById(wId); if(el) { el.classList.remove('widget-full', 'widget-half', 'widget-third'); if(['widget-inspiration', 'widget-concentration', 'widget-proficiency'].includes(wId)) { el.classList.add('widget-third'); } else { el.classList.add('widget-full'); } } }); }
 
-        function applyWidgetSizes() {
-            ALL_WIDGETS.forEach(wId => {
-                const el = document.getElementById(wId);
-                if(el) {
-                    el.classList.remove('widget-full', 'widget-half', 'widget-third');
-                    if(['widget-inspiration', 'widget-concentration', 'widget-proficiency'].includes(wId)) { el.classList.add('widget-third'); } 
-                    else { el.classList.add('widget-full'); }
-                }
-            });
-        }
+        let customProfiles = []; try { customProfiles = JSON.parse(DB.get('dnd-global-profiles')) || []; } catch(e) { customProfiles = []; }
 
-        let customProfiles = [];
-        try { customProfiles = JSON.parse(DB.get('dnd-global-profiles')) || []; } catch(e) { customProfiles = []; }
+        function updateLayoutSelectorOptions() { if(!layoutSelector) return; const currentVal = getStore('dnd-layout-mode', false) || 'classic'; layoutSelector.innerHTML = `<option value="classic">📜 Mode Classique</option><option value="tabs">📑 Mode Onglets</option><option value="custom">🧩 Mode Personnalisé (Brouillon)</option>`; customProfiles.forEach(p => { let opt = document.createElement('option'); opt.value = p.id; opt.textContent = `💾 Profil: ${p.name}`; layoutSelector.appendChild(opt); }); let found = Array.from(layoutSelector.options).some(o => o.value === currentVal); layoutSelector.value = found ? currentVal : 'classic'; }
 
-        function updateLayoutSelectorOptions() {
-            if(!layoutSelector) return;
-            const currentVal = getStore('dnd-layout-mode', false) || 'classic';
-            layoutSelector.innerHTML = `<option value="classic">📜 Mode Classique</option><option value="tabs">📑 Mode Onglets</option><option value="custom">🧩 Mode Personnalisé (Brouillon)</option>`;
-            customProfiles.forEach(p => { let opt = document.createElement('option'); opt.value = p.id; opt.textContent = `💾 Profil: ${p.name}`; layoutSelector.appendChild(opt); });
-            let found = Array.from(layoutSelector.options).some(o => o.value === currentVal);
-            layoutSelector.value = found ? currentVal : 'classic';
-        }
-
-        const btnSaveAsProfile = document.getElementById('btn-save-as-profile');
-        if(btnSaveAsProfile) {
-            btnSaveAsProfile.addEventListener('click', () => {
-                let name = prompt("Donnez un nom à ce profil (ex: 'Mage', 'Combat') :");
-                if(name && name.trim() !== '') {
-                    let newProf = { id: 'prof_' + Date.now(), name: name.trim(), layout: JSON.parse(JSON.stringify(customLayout)) };
-                    customProfiles.push(newProf); DB.set('dnd-global-profiles', JSON.stringify(customProfiles));
-                    updateLayoutSelectorOptions(); layoutSelector.value = newProf.id; applyLayout(newProf.id);
-                }
-            });
-        }
-
-        const btnRenameProfile = document.getElementById('btn-rename-profile');
-        if(btnRenameProfile) {
-            btnRenameProfile.addEventListener('click', () => {
-                let selValue = layoutSelector.value; let prof = customProfiles.find(p => p.id === selValue);
-                if(prof) {
-                    let newName = prompt("Nouveau nom pour ce profil :", prof.name);
-                    if(newName && newName.trim() !== '') { prof.name = newName.trim(); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); }
-                }
-            });
-        }
-
-        const btnDeleteProfile = document.getElementById('btn-delete-profile');
-        if(btnDeleteProfile) {
-            btnDeleteProfile.addEventListener('click', () => {
-                let selValue = layoutSelector.value;
-                if(confirm("Supprimer ce profil ?")) {
-                    customProfiles = customProfiles.filter(p => p.id !== selValue); DB.set('dnd-global-profiles', JSON.stringify(customProfiles));
-                    updateLayoutSelectorOptions(); applyLayout('classic');
-                }
-            });
-        }
+        const btnSaveAsProfile = document.getElementById('btn-save-as-profile'); if(btnSaveAsProfile) { btnSaveAsProfile.addEventListener('click', () => { let name = prompt("Donnez un nom à ce profil :"); if(name && name.trim() !== '') { let newProf = { id: 'prof_' + Date.now(), name: name.trim(), layout: JSON.parse(JSON.stringify(customLayout)) }; customProfiles.push(newProf); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); layoutSelector.value = newProf.id; applyLayout(newProf.id); } }); }
+        const btnRenameProfile = document.getElementById('btn-rename-profile'); if(btnRenameProfile) { btnRenameProfile.addEventListener('click', () => { let selValue = layoutSelector.value; let prof = customProfiles.find(p => p.id === selValue); if(prof) { let newName = prompt("Nouveau nom :", prof.name); if(newName && newName.trim() !== '') { prof.name = newName.trim(); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); } } }); }
+        const btnDeleteProfile = document.getElementById('btn-delete-profile'); if(btnDeleteProfile) { btnDeleteProfile.addEventListener('click', () => { let selValue = layoutSelector.value; if(confirm("Supprimer ce profil ?")) { customProfiles = customProfiles.filter(p => p.id !== selValue); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); applyLayout('classic'); } }); }
 
         let customLayout = []; let activeCustomTabId = null; let managerActiveTabId = null; let hiddenCustomWidgets = [];
-        function syncHiddenWidgets() { let used = []; customLayout.forEach(t => used.push(...t.col1, ...t.col2, ...t.col3)); hiddenCustomWidgets = ALL_WIDGETS.filter(w => !used.includes(w) && w !== 'widget-dice'); }
+        function syncHiddenWidgets() { let used = []; customLayout.forEach(t => used.push(...t.col1, ...t.col2, ...t.col3)); hiddenCustomWidgets = ALL_WIDGETS.filter(w => !used.includes(w)); }
 
-        function renderCustomSheet() {
-            safeStoreAllWidgets();
-            const nav = document.getElementById('custom-tabs-nav'); if(!nav) return; nav.innerHTML = '';
-            if (customLayout.length <= 1) { nav.style.display = 'none'; } else {
-                nav.style.display = 'flex';
-                customLayout.forEach(tab => {
-                    let btn = document.createElement('button'); btn.className = `tab-btn-strict ${tab.id === activeCustomTabId ? 'active' : ''}`; btn.textContent = tab.name;
-                    btn.onclick = () => { activeCustomTabId = tab.id; renderCustomSheet(); }; nav.appendChild(btn);
-                });
-            }
-            let activeTab = customLayout.find(t => t.id === activeCustomTabId);
-            if(!activeTab) { activeTab = customLayout[0]; activeCustomTabId = activeTab.id; }
-            const c1 = document.getElementById('custom-col-1'); c1.innerHTML = ''; const c2 = document.getElementById('custom-col-2'); c2.innerHTML = ''; const c3 = document.getElementById('custom-col-3'); c3.innerHTML = '';
-            activeTab.col1.forEach(wId => { let w = document.getElementById(wId); if(w) c1.appendChild(w); });
-            activeTab.col2.forEach(wId => { let w = document.getElementById(wId); if(w) c2.appendChild(w); });
-            activeTab.col3.forEach(wId => { let w = document.getElementById(wId); if(w) c3.appendChild(w); });
-            applyWidgetSizes();
-        }
+        function renderCustomSheet() { safeStoreAllWidgets(); const nav = document.getElementById('custom-tabs-nav'); if(!nav) return; nav.innerHTML = ''; if (customLayout.length <= 1) { nav.style.display = 'none'; } else { nav.style.display = 'flex'; customLayout.forEach(tab => { let btn = document.createElement('button'); btn.className = `tab-btn-strict ${tab.id === activeCustomTabId ? 'active' : ''}`; btn.textContent = tab.name; btn.onclick = () => { activeCustomTabId = tab.id; renderCustomSheet(); }; nav.appendChild(btn); }); } let activeTab = customLayout.find(t => t.id === activeCustomTabId); if(!activeTab) { activeTab = customLayout[0]; activeCustomTabId = activeTab.id; } const c1 = document.getElementById('custom-col-1'); c1.innerHTML = ''; const c2 = document.getElementById('custom-col-2'); c2.innerHTML = ''; const c3 = document.getElementById('custom-col-3'); c3.innerHTML = ''; activeTab.col1.forEach(wId => { let w = document.getElementById(wId); if(w) c1.appendChild(w); }); activeTab.col2.forEach(wId => { let w = document.getElementById(wId); if(w) c2.appendChild(w); }); activeTab.col3.forEach(wId => { let w = document.getElementById(wId); if(w) c3.appendChild(w); }); applyWidgetSizes(); }
 
-        function renderManager() {
-            syncHiddenWidgets();
-            const tabsList = document.getElementById('manager-tabs-list'); if(!tabsList) return; tabsList.innerHTML = '';
-            customLayout.forEach(tab => {
-                let div = document.createElement('div'); div.style.display = 'flex'; div.style.alignItems = 'center'; div.style.gap = '5px'; div.style.background = tab.id === managerActiveTabId ? 'var(--primary-color)' : 'rgba(0,0,0,0.1)'; div.style.color = tab.id === managerActiveTabId ? 'white' : 'var(--text-color)'; div.style.padding = '5px 10px'; div.style.borderRadius = '5px';
-                let input = document.createElement('input'); input.value = tab.name; input.style.border = 'none'; input.style.background = 'transparent'; input.style.color = 'inherit'; input.style.fontWeight = 'bold'; input.style.width = '120px';
-                input.onchange = (e) => { tab.name = e.target.value.trim() || 'Onglet'; saveCustomLayout(); renderManager(); renderCustomSheet(); }; div.appendChild(input);
-                let btnSelect = document.createElement('button'); btnSelect.innerHTML = '⚙️'; btnSelect.className = 'btn-small'; btnSelect.style.background = 'transparent'; btnSelect.title = "Éditer cet onglet"; btnSelect.onclick = () => { managerActiveTabId = tab.id; renderManager(); }; div.appendChild(btnSelect);
-                if (customLayout.length > 1) {
-                    let btnDel = document.createElement('button'); btnDel.innerHTML = 'X'; btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c';
-                    btnDel.onclick = () => { if(confirm(`Supprimer l'onglet "${tab.name}" ? Ses modules retourneront dans la réserve.`)) { customLayout = customLayout.filter(t => t.id !== tab.id); if(managerActiveTabId === tab.id) managerActiveTabId = customLayout[0].id; if(activeCustomTabId === tab.id) activeCustomTabId = customLayout[0].id; saveCustomLayout(); renderManager(); renderCustomSheet(); } }; div.appendChild(btnDel);
-                }
-                tabsList.appendChild(div);
-            });
-            let activeTab = customLayout.find(t => t.id === managerActiveTabId); if(!activeTab) { activeTab = customLayout[0]; managerActiveTabId = activeTab.id; }
-            ['col1', 'col2', 'col3'].forEach(colName => {
-                const colContainer = document.getElementById(`manager-${colName}-list`); if(!colContainer) return; colContainer.innerHTML = '';
-                activeTab[colName].forEach((wId, index) => {
-                    let prettyName = wId.replace('widget-', '').toUpperCase();
-                    colContainer.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:white; border:1px solid #c4b487; padding:4px 8px; border-radius:4px; font-size:0.8rem;"><span style="font-weight:bold; color:#333;">${prettyName}</span><div style="display:flex; gap:3px;"><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.5;"' : ''}>▲</button><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, 1)" ${index === activeTab[colName].length - 1 ? 'disabled style="opacity:0.5;"' : ''}>▼</button><button class="btn-small" style="background:#e74c3c; padding:2px 6px;" onclick="window.removeCustomWidget('${managerActiveTabId}', '${colName}', ${index})">X</button></div></div>`;
-                });
-            });
-            const sel = document.getElementById('manager-hidden-select');
-            if(sel) { sel.innerHTML = hiddenCustomWidgets.length === 0 ? '<option value="">(Aucun module)</option>' : hiddenCustomWidgets.map(w => `<option value="${w}">${w.replace('widget-', '').toUpperCase()}</option>`).join(''); }
-        }
+        function renderManager() { syncHiddenWidgets(); const tabsList = document.getElementById('manager-tabs-list'); if(!tabsList) return; tabsList.innerHTML = ''; customLayout.forEach(tab => { let div = document.createElement('div'); div.style.display = 'flex'; div.style.alignItems = 'center'; div.style.gap = '5px'; div.style.background = tab.id === managerActiveTabId ? 'var(--primary-color)' : 'rgba(0,0,0,0.1)'; div.style.color = tab.id === managerActiveTabId ? 'white' : 'var(--text-color)'; div.style.padding = '5px 10px'; div.style.borderRadius = '5px'; let input = document.createElement('input'); input.value = tab.name; input.style.border = 'none'; input.style.background = 'transparent'; input.style.color = 'inherit'; input.style.fontWeight = 'bold'; input.style.width = '120px'; input.onchange = (e) => { tab.name = e.target.value.trim() || 'Onglet'; saveCustomLayout(); renderManager(); renderCustomSheet(); }; div.appendChild(input); let btnSelect = document.createElement('button'); btnSelect.innerHTML = '⚙️'; btnSelect.className = 'btn-small'; btnSelect.style.background = 'transparent'; btnSelect.onclick = () => { managerActiveTabId = tab.id; renderManager(); }; div.appendChild(btnSelect); if (customLayout.length > 1) { let btnDel = document.createElement('button'); btnDel.innerHTML = 'X'; btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.onclick = () => { if(confirm(`Supprimer l'onglet "${tab.name}" ?`)) { customLayout = customLayout.filter(t => t.id !== tab.id); if(managerActiveTabId === tab.id) managerActiveTabId = customLayout[0].id; if(activeCustomTabId === tab.id) activeCustomTabId = customLayout[0].id; saveCustomLayout(); renderManager(); renderCustomSheet(); } }; div.appendChild(btnDel); } tabsList.appendChild(div); }); let activeTab = customLayout.find(t => t.id === managerActiveTabId); if(!activeTab) { activeTab = customLayout[0]; managerActiveTabId = activeTab.id; } ['col1', 'col2', 'col3'].forEach(colName => { const colContainer = document.getElementById(`manager-${colName}-list`); if(!colContainer) return; colContainer.innerHTML = ''; activeTab[colName].forEach((wId, index) => { let prettyName = wId.replace('widget-', '').toUpperCase(); colContainer.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.5); border:1px solid rgba(138,28,28,0.25); padding:4px 8px; border-radius:4px; font-size:0.8rem;"><span style="font-weight:bold; color:var(--text-color);">${prettyName}</span><div style="display:flex; gap:3px;"><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.5;"' : ''}>▲</button><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, 1)" ${index === activeTab[colName].length - 1 ? 'disabled style="opacity:0.5;"' : ''}>▼</button><button class="btn-small" style="background:#e74c3c; padding:2px 6px;" onclick="window.removeCustomWidget('${managerActiveTabId}', '${colName}', ${index})">X</button></div></div>`; }); }); const sel = document.getElementById('manager-hidden-select'); if(sel) { sel.innerHTML = hiddenCustomWidgets.length === 0 ? '<option value="">(Aucun module)</option>' : hiddenCustomWidgets.map(w => `<option value="${w}">${w.replace('widget-', '').toUpperCase()}</option>`).join(''); } }
 
         window.moveCustomWidget = (tabId, colName, index, dir) => { let tab = customLayout.find(t => t.id === tabId); let arr = tab[colName]; if (dir === -1 && index > 0) [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]; else if (dir === 1 && index < arr.length - 1) [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; saveCustomLayout(); renderManager(); renderCustomSheet(); };
         window.removeCustomWidget = (tabId, colName, index) => { let tab = customLayout.find(t => t.id === tabId); tab[colName].splice(index, 1); saveCustomLayout(); renderManager(); renderCustomSheet(); };
         window.addCustomWidget = (colName) => { const sel = document.getElementById('manager-hidden-select'); if(!sel || !sel.value) return; let tab = customLayout.find(t => t.id === managerActiveTabId); tab[colName].push(sel.value); saveCustomLayout(); renderManager(); renderCustomSheet(); };
-        let btnAddCol1 = document.getElementById('btn-manager-add-col1'); if(btnAddCol1) btnAddCol1.onclick = () => addCustomWidget('col1');
-        let btnAddCol2 = document.getElementById('btn-manager-add-col2'); if(btnAddCol2) btnAddCol2.onclick = () => addCustomWidget('col2');
-        let btnAddCol3 = document.getElementById('btn-manager-add-col3'); if(btnAddCol3) btnAddCol3.onclick = () => addCustomWidget('col3');
-        let btnAddTab = document.getElementById('btn-manager-add-tab');
-        if(btnAddTab) { btnAddTab.onclick = () => { let newTab = { id: 'tab_' + Date.now(), name: 'Nouvel Onglet', col1: [], col2: [], col3: [] }; customLayout.push(newTab); managerActiveTabId = newTab.id; saveCustomLayout(); renderManager(); renderCustomSheet(); }; }
-
+        let btnAddCol1 = document.getElementById('btn-manager-add-col1'); if(btnAddCol1) btnAddCol1.onclick = () => addCustomWidget('col1'); let btnAddCol2 = document.getElementById('btn-manager-add-col2'); if(btnAddCol2) btnAddCol2.onclick = () => addCustomWidget('col2'); let btnAddCol3 = document.getElementById('btn-manager-add-col3'); if(btnAddCol3) btnAddCol3.onclick = () => addCustomWidget('col3');
+        let btnAddTab = document.getElementById('btn-manager-add-tab'); if(btnAddTab) { btnAddTab.onclick = () => { let newTab = { id: 'tab_' + Date.now(), name: 'Nouvel Onglet', col1: [], col2: [], col3: [] }; customLayout.push(newTab); managerActiveTabId = newTab.id; saveCustomLayout(); renderManager(); renderCustomSheet(); }; }
+        
+        const btnResetCustomLayout = document.getElementById('btn-reset-custom-layout');
+        if (btnResetCustomLayout) {
+            btnResetCustomLayout.addEventListener('click', () => {
+                if (confirm("Réinitialiser cette disposition personnalisée à l'état par défaut ?")) {
+                    customLayout = [{
+                        id: 'tab_custom_default',
+                        name: 'Ma Fiche',
+                        col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']],
+                        col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']],
+                        col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']]
+                    }];
+                    managerActiveTabId = customLayout[0].id;
+                    activeCustomTabId = customLayout[0].id;
+                    saveCustomLayout();
+                    renderManager();
+                    renderCustomSheet();
+                }
+            });
+        }
+        
         function saveCustomLayout() { let mode = getStore('dnd-layout-mode', false) || 'classic'; if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { prof.layout = customLayout; DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); } } else { setStore('dnd-custom-layout', customLayout); } }
-
         if(btnEditCustom) btnEditCustom.addEventListener('click', () => { isEditMode = !isEditMode; const manager = document.getElementById('custom-layout-manager'); if(manager) manager.classList.toggle('hidden', !isEditMode); if(isEditMode) { renderManager(); btnEditCustom.textContent = "✅ Terminer Édition"; } else { btnEditCustom.textContent = "⚙️ Modifier Disposition"; } });
-
         updateLayoutSelectorOptions(); 
 
         function applyLayout(mode) {
-            setStore('dnd-layout-mode', mode, false); isEditMode = false;
-            const profileActions = document.getElementById('profile-actions'); if(profileActions) { if(mode.startsWith('prof_')) profileActions.classList.remove('hidden'); else profileActions.classList.add('hidden'); }
-            if(document.getElementById('custom-layout-manager')) document.getElementById('custom-layout-manager').classList.add('hidden');
-            if(btnEditCustom) btnEditCustom.textContent = "⚙️ Modifier Disposition";
+            setStore('dnd-layout-mode', mode, false); isEditMode = false; const profileActions = document.getElementById('profile-actions'); if(profileActions) { if(mode.startsWith('prof_')) profileActions.classList.remove('hidden'); else profileActions.classList.add('hidden'); }
+            if(document.getElementById('custom-layout-manager')) document.getElementById('custom-layout-manager').classList.add('hidden'); if(btnEditCustom) btnEditCustom.textContent = "⚙️ Modifier Disposition";
             if(layoutTabsContainer) layoutTabsContainer.classList.add('hidden'); if(layoutClassicContainer) layoutClassicContainer.classList.add('hidden'); if(layoutCustomContainer) layoutCustomContainer.classList.add('hidden');
             safeStoreAllWidgets(); applyWidgetSizes();
 
-            if (mode === 'tabs' && layoutTabsContainer) {
-                layoutTabsContainer.classList.remove('hidden');
-                for (const [containerId, widgetList] of Object.entries(DEFAULT_TABS_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } }
-                switchStrictTab('tab-strict-gen');
-            } else if (mode === 'classic' && layoutClassicContainer) {
-                layoutClassicContainer.classList.remove('hidden');
-                for (const [containerId, widgetList] of Object.entries(DEFAULT_CLASSIC_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } }
-            } else if (mode === 'custom' || mode.startsWith('prof_')) {
-                layoutCustomContainer.classList.remove('hidden');
-                if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { customLayout = prof.layout; } else { applyLayout('classic'); return; } } 
-                else { let savedBrouillon = getStore('dnd-custom-layout'); if (savedBrouillon && Array.isArray(savedBrouillon)) { customLayout = savedBrouillon; } else { customLayout = [{ id: 'tab_custom_default', name: 'Ma Fiche', col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']], col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']], col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']] }]; } }
-                if (!customLayout.find(t => t.id === activeCustomTabId)) { activeCustomTabId = customLayout[0].id; managerActiveTabId = customLayout[0].id; }
-                renderCustomSheet();
-            }
+            if (mode === 'tabs' && layoutTabsContainer) { layoutTabsContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_TABS_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } } switchStrictTab('tab-strict-gen');
+            } else if (mode === 'classic' && layoutClassicContainer) { layoutClassicContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_CLASSIC_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } }
+            } else if (mode === 'custom' || mode.startsWith('prof_')) { layoutCustomContainer.classList.remove('hidden'); if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { customLayout = prof.layout; } else { applyLayout('classic'); return; } } else { let savedBrouillon = getStore('dnd-custom-layout'); if (savedBrouillon && Array.isArray(savedBrouillon)) { customLayout = savedBrouillon; } else { customLayout = [{ id: 'tab_custom_default', name: 'Ma Fiche', col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']], col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']], col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']] }]; } } if (!customLayout.find(t => t.id === activeCustomTabId)) { activeCustomTabId = customLayout[0].id; managerActiveTabId = customLayout[0].id; } renderCustomSheet(); }
             if(settingsDropdown) settingsDropdown.classList.add('hidden');
         }
         if(layoutSelector) layoutSelector.addEventListener('change', (e) => applyLayout(e.target.value));
-
         function switchStrictTab(tabId) { document.querySelectorAll('.tab-btn-strict').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId)); document.querySelectorAll('#layout-tabs-container .tab-content').forEach(content => { content.classList.toggle('hidden', content.id !== tabId); content.classList.toggle('active', content.id === tabId); }); }
         document.querySelectorAll('.tab-btn-strict').forEach(btn => { btn.addEventListener('click', () => switchStrictTab(btn.dataset.tab)); });
 
-        // Calculatrice
-        window.appendCalc = (val) => { const disp = document.getElementById('calc-display'); if(disp) disp.value += val; };
-        window.clearCalc = () => { const disp = document.getElementById('calc-display'); if(disp) disp.value = ''; };
-        window.evalCalc = () => { const disp = document.getElementById('calc-display'); if(disp) { try { let safeVal = disp.value.replace(/[^0-9+\-*/.]/g, ''); disp.value = eval(safeVal) || ''; } catch(e) { disp.value = 'Erreur'; setTimeout(() => disp.value='', 1000); } } };
+        window.appendCalc = (val) => { const disp = document.getElementById('calc-display'); if(disp) disp.value += val; }; window.clearCalc = () => { const disp = document.getElementById('calc-display'); if(disp) disp.value = ''; }; window.evalCalc = () => { const disp = document.getElementById('calc-display'); if(disp) { try { let safeVal = disp.value.replace(/[^0-9+\-*/.]/g, ''); disp.value = eval(safeVal) || ''; } catch(e) { disp.value = 'Erreur'; setTimeout(() => disp.value='', 1000); } } };
 
-        // Avatar & Concentration
         const avatarInput = document.getElementById('avatar-file-input'); const avatarPreview = document.getElementById('main-avatar-preview'); const avatarHeader = document.getElementById('header-avatar'); const avatarPlaceholder = document.getElementById('avatar-placeholder');
         function loadAvatar() { const savedAvatar = getStore('dnd-avatar', false); if(savedAvatar && avatarPreview && avatarPlaceholder && avatarHeader) { avatarPreview.src = savedAvatar; avatarPreview.classList.remove('hidden'); avatarPlaceholder.classList.add('hidden'); avatarHeader.style.backgroundImage = `url("${savedAvatar}")`; } }
         if(avatarInput) { avatarInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 250; const scaleSize = MAX_WIDTH / img.width; canvas.width = MAX_WIDTH; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); try { setStore('dnd-avatar', canvas.toDataURL('image/jpeg', 0.8), false); loadAvatar(); } catch (err) { alert("L'image est toujours trop lourde."); } bgInput.value = ''; }; img.src = event.target.result; }; reader.readAsDataURL(file); }); }
@@ -455,7 +269,13 @@ document.addEventListener('DOMContentLoaded', () => {
         function updateConcentrationUI() { if(!cbConcentration || !concentrationGlow || !avatarHeader) return; if(cbConcentration.checked) { document.body.classList.add('concentrating-mode'); concentrationGlow.classList.remove('hidden'); avatarHeader.classList.add('concentrating'); } else { document.body.classList.remove('concentrating-mode'); concentrationGlow.classList.add('hidden'); avatarHeader.classList.remove('concentrating'); } }
         if(cbConcentration) { cbConcentration.checked = getStore('dnd-is-concentrating', false) === 'true'; updateConcentrationUI(); cbConcentration.addEventListener('change', () => { setStore('dnd-is-concentrating', cbConcentration.checked, false); updateConcentrationUI(); }); }
 
-        // Dés Volants
+        const btnGlobalSearchTrigger = document.getElementById('btn-global-search-trigger');
+        const toggleSearchBtn = document.getElementById('toggle-search-btn');
+        if(toggleSearchBtn && btnGlobalSearchTrigger) {
+            let showSearch = DB.get('dnd-show-search-btn'); if(showSearch === null) showSearch = 'true'; toggleSearchBtn.checked = showSearch === 'true'; btnGlobalSearchTrigger.classList.toggle('hidden', !toggleSearchBtn.checked);
+            toggleSearchBtn.addEventListener('change', (e) => { DB.set('dnd-show-search-btn', e.target.checked); btnGlobalSearchTrigger.classList.toggle('hidden', !e.target.checked); });
+        }
+
         const btnToggleDice = document.getElementById('btn-toggle-dice'); const diceDrawer = document.getElementById('dice-drawer'); const toggleFloatingDice = document.getElementById('toggle-floating-dice');
         if(toggleFloatingDice && btnToggleDice && diceDrawer) {
             let showFloatingDice = DB.get('dnd-show-floating-dice'); if(showFloatingDice === null) showFloatingDice = 'true'; toggleFloatingDice.checked = showFloatingDice === 'true'; btnToggleDice.classList.toggle('hidden', !toggleFloatingDice.checked);
@@ -478,33 +298,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if(resultsBox) resultsBox.innerHTML = ''; if(totalBox) totalBox.innerHTML = 'Calcul...'; let poolTotal = 0; let resultsHTML = ''; let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`); const advMode = advModeNode ? advModeNode.value : 'normal'; 
             dicePool.forEach((faces, index) => {
                 let score1 = Math.floor(Math.random() * faces) + 1; let finalScore = score1; let extraHTML = '';
-                if(advMode !== 'normal') { 
-                    let score2 = Math.floor(Math.random() * faces) + 1; let droppedScore;
-                    if(advMode === 'adv') { finalScore = Math.max(score1, score2); droppedScore = Math.min(score1, score2); } else { finalScore = Math.min(score1, score2); droppedScore = Math.max(score1, score2); } 
-                    extraHTML = `<div class="die-dropped-score">${droppedScore}</div>`; 
-                }
+                if(advMode !== 'normal') { let score2 = Math.floor(Math.random() * faces) + 1; let droppedScore; if(advMode === 'adv') { finalScore = Math.max(score1, score2); droppedScore = Math.min(score1, score2); } else { finalScore = Math.min(score1, score2); droppedScore = Math.max(score1, score2); } extraHTML = `<div class="die-dropped-score">${droppedScore}</div>`; }
                 poolTotal += finalScore; let colorClass = ''; if (faces === 20 && finalScore === 20) colorClass = 'crit-success'; if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
                 resultsHTML += `<div class="die-result rolling ${colorClass}"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`; if (index < dicePool.length - 1) resultsHTML += `<div class="die-math">+</div>`;
             });
             if(resultsBox) resultsBox.innerHTML = resultsHTML; setTimeout(() => { document.querySelectorAll('.die-result').forEach(el => el.classList.remove('rolling')); if(totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, 500); dicePool = []; renderDicePool();
         }
-        
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
         
         document.body.addEventListener('click', (e) => {
             const el = e.target.closest('.rollable');
             if(el) {
                 let name = el.getAttribute('data-name'); let targetId = el.getAttribute('data-target'); let mod = 0; if(targetId !== "none") { let targetEl = document.getElementById(targetId); if(targetEl) mod = parseInt(targetEl.textContent || targetEl.value) || 0; }
-                let advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal'; let roll1 = Math.floor(Math.random() * 20) + 1; let finalRoll = roll1; let modeText = ""; let secondDieHTML = '';
-                if(advMode === 'adv') { 
-                    let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.max(roll1, roll2); 
-                    const kept = roll1 >= roll2 ? roll1 : roll2; const dropped = roll1 >= roll2 ? roll2 : roll1;
-                    secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#f1c40f; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Avantage)</span></div>`;
-                } else if (advMode === 'dis') { 
-                    let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.min(roll1, roll2); 
-                    const kept = roll1 <= roll2 ? roll1 : roll2; const dropped = roll1 <= roll2 ? roll2 : roll1;
-                    secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#e67e22; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Désavantage)</span></div>`;
-                }
+                let advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal'; let roll1 = Math.floor(Math.random() * 20) + 1; let finalRoll = roll1; let secondDieHTML = '';
+                if(advMode === 'adv') { let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.max(roll1, roll2); const kept = roll1 >= roll2 ? roll1 : roll2; const dropped = roll1 >= roll2 ? roll2 : roll1; secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#f1c40f; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Avantage)</span></div>`; } else if (advMode === 'dis') { let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.min(roll1, roll2); const kept = roll1 <= roll2 ? roll1 : roll2; const dropped = roll1 <= roll2 ? roll2 : roll1; secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#e67e22; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Désavantage)</span></div>`; }
                 let total = finalRoll + mod; let critText = finalRoll === 20 ? " 🟢 CRIT" : (finalRoll === 1 ? " 🔴 ÉCHEC" : ""); let modStr = mod >= 0 ? `+${mod}` : mod;
                 if(quickToast) { quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4000); } return;
             }
@@ -516,145 +323,58 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Catégories et Onglets
         let invCategories = getStore('dnd-inv-categories') || []; let atkCategories = getStore('dnd-atk-categories') || [];
         function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let editInvSel = document.getElementById('edit-inv-category'); if(editInvSel) editInvSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); }
-
         const catManagerModal = document.getElementById('category-manager-modal'); let currentCatContext = null; 
         window.openCategoryManager = function(context) { currentCatContext = context; const title = document.getElementById('cat-manager-title'); if(title) title.textContent = context === 'inv' ? "Onglets : Sac à dos" : "Onglets : Attaques"; renderCategoryManagerList(); if(catManagerModal) catManagerModal.classList.remove('hidden'); }
-        function renderCategoryManagerList() {
-            const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories;
-            if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; }
-            categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '10px'; row.style.marginBottom = '10px'; let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid #c4b487'; input.style.borderRadius = '4px'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); });
-        }
-        function saveCategoryRename(index, newName) {
-            if (!newName) return; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(newName === oldName) return; categories[index] = newName; items.forEach(item => { if (item.category === oldName) item.category = newName; });
-            if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = newName; if (activeInvTabModal === oldName) activeInvTabModal = newName; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = newName; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList();
-        }
-        function deleteCategory(index) {
-            let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(!confirm(`Supprimer l'onglet "${oldName}" ? Les objets à l'intérieur retourneront dans "Général".`)) return; categories.splice(index, 1); items.forEach(item => { if (item.category === oldName) item.category = 'Général'; });
-            if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = 'Tout'; if (activeInvTabModal === oldName) activeInvTabModal = 'Tout'; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = 'Tout'; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList();
-        }
+        function renderCategoryManagerList() { const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; } categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '10px'; row.style.marginBottom = '10px'; let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid rgba(138,28,28,0.25)'; input.style.borderRadius = '4px'; input.style.background = 'rgba(255,255,255,0.5)'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); }); }
+        function saveCategoryRename(index, newName) { if (!newName) return; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(newName === oldName) return; categories[index] = newName; items.forEach(item => { if (item.category === oldName) item.category = newName; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = newName; if (activeInvTabModal === oldName) activeInvTabModal = newName; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = newName; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
+        function deleteCategory(index) { let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(!confirm(`Supprimer l'onglet "${oldName}" ? Les objets à l'intérieur retourneront dans "Général".`)) return; categories.splice(index, 1); items.forEach(item => { if (item.category === oldName) item.category = 'Général'; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = 'Tout'; if (activeInvTabModal === oldName) activeInvTabModal = 'Tout'; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = 'Tout'; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
         if(document.getElementById('btn-close-cat-manager')) document.getElementById('btn-close-cat-manager').addEventListener('click', () => catManagerModal.classList.add('hidden'));
 
-        function renderTabs(containerId, items, activeTab, categoriesArr, onTabClick, onAddCategory, onEditCategories) {
-            const container = document.getElementById(containerId); if(!container) return; let html = `<button class="cat-tab ${activeTab === 'Tout' ? 'active' : ''}" data-cat="Tout">Tout</button>`; categoriesArr.forEach(cat => { html += `<button class="cat-tab ${activeTab === cat ? 'active' : ''}" data-cat="${cat}">${cat}</button>`; }); html += `<button class="cat-tab-add" title="Nouvelle catégorie">+</button><button class="cat-tab-edit" title="Gérer les onglets">⚙️</button>`; container.innerHTML = html; container.querySelectorAll('.cat-tab').forEach(btn => { btn.addEventListener('click', (e) => { e.preventDefault(); onTabClick(e.target.dataset.cat); }); }); const addBtn = container.querySelector('.cat-tab-add'); if(addBtn) addBtn.addEventListener('click', (e) => { e.preventDefault(); onAddCategory(); }); const editBtn = container.querySelector('.cat-tab-edit'); if(editBtn && onEditCategories) editBtn.addEventListener('click', (e) => { e.preventDefault(); onEditCategories(); });
-        }
-
+        function renderTabs(containerId, items, activeTab, categoriesArr, onTabClick, onAddCategory, onEditCategories) { const container = document.getElementById(containerId); if(!container) return; let html = `<button class="cat-tab ${activeTab === 'Tout' ? 'active' : ''}" data-cat="Tout">Tout</button>`; categoriesArr.forEach(cat => { html += `<button class="cat-tab ${activeTab === cat ? 'active' : ''}" data-cat="${cat}">${cat}</button>`; }); html += `<button class="cat-tab-add" title="Nouvelle catégorie">+</button><button class="cat-tab-edit" title="Gérer les onglets">⚙️</button>`; container.innerHTML = html; container.querySelectorAll('.cat-tab').forEach(btn => { btn.addEventListener('click', (e) => { e.preventDefault(); onTabClick(e.target.dataset.cat); }); }); const addBtn = container.querySelector('.cat-tab-add'); if(addBtn) addBtn.addEventListener('click', (e) => { e.preventDefault(); onAddCategory(); }); const editBtn = container.querySelector('.cat-tab-edit'); if(editBtn && onEditCategories) editBtn.addEventListener('click', (e) => { e.preventDefault(); onEditCategories(); }); }
         function moveWithinFilter(array, index, direction, filterFn) { let targetIndex = -1; if (direction === -1) { for (let i = index - 1; i >= 0; i--) { if (filterFn(array[i])) { targetIndex = i; break; } } } else { for (let i = index + 1; i < array.length; i++) { if (filterFn(array[i])) { targetIndex = i; break; } } } if (targetIndex !== -1) { [array[targetIndex], array[index]] = [array[index], array[targetIndex]]; return true; } return false; }
-        
         let editingAbilityIndex = -1; let editingSpellIndex = -1; let editingAttackIndex = -1; let editingInvIndex = -1; let editingTraitIndex = -1;
         function getCrudControlsHTML(index, prefix, hideMove = false) { let moveBtns = hideMove ? '' : `<button title="Monter" onclick="move${prefix}Up(${index})">▲</button><button title="Descendre" onclick="move${prefix}Down(${index})">▼</button>`; return `<div class="item-controls no-print">${moveBtns}<button title="Modifier" onclick="edit${prefix}(${index})">✎</button><button title="Supprimer" class="btn-del" onclick="delete${prefix}(${index})">X</button></div>`; }
 
         const autoExpandTextareas = document.querySelectorAll('.auto-expand');
         function adjustHeight(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight) + 'px'; } window.adjustHeight = adjustHeight;
         autoExpandTextareas.forEach(textarea => { textarea.addEventListener('input', () => adjustHeight(textarea)); setTimeout(() => adjustHeight(textarea), 100); });
-
         const btnClearNote = document.getElementById('btn-clear-note'); const quickNoteInput = document.getElementById('quick-note');
         if(btnClearNote && quickNoteInput) { btnClearNote.addEventListener('click', () => { if(confirm('Effacer la note rapide ?')) { quickNoteInput.value = ''; setStore('dnd-sheet-quick-note', '', false); adjustHeight(quickNoteInput); } }); }
 
         const levelInput = document.getElementById('char-level'); const profInput = document.getElementById('prof-bonus'); const initInput = document.getElementById('initiative');
-
-        // Fonction pour synchroniser niveau et classe dans la liste des personnages (menu d'accueil)
-        function syncCharMeta() {
-            const lvl = parseInt(document.getElementById('char-level').value) || 1;
-            const cls = document.getElementById('char-class').value || '';
-            const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID);
-            if(idx !== -1) {
-                charactersList[idx].level = lvl;
-                charactersList[idx].class = cls;
-                DB.set('dnd-character-list', JSON.stringify(charactersList));
-            }
-        }
-
-        if(levelInput && profInput) { 
-            levelInput.addEventListener('input', () => { 
-                let lvl = parseInt(levelInput.value) || 1; 
-                let prof = Math.floor((lvl - 1) / 4) + 2; 
-                profInput.value = prof; 
-                setStore('dnd-sheet-prof-bonus', prof, false); 
-                updateStatsAndSkills(); 
-                syncCharMeta();
-            }); 
-        }
-        const classInput = document.getElementById('char-class');
-        if(classInput) { classInput.addEventListener('input', () => { syncCharMeta(); }); }
+        function syncCharMeta() { const lvl = parseInt(document.getElementById('char-level').value) || 1; const cls = document.getElementById('char-class').value || ''; const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID); if(idx !== -1) { charactersList[idx].level = lvl; charactersList[idx].class = cls; DB.set('dnd-character-list', JSON.stringify(charactersList)); } }
+        if(levelInput && profInput) { levelInput.addEventListener('input', () => { let lvl = parseInt(levelInput.value) || 1; let prof = Math.floor((lvl - 1) / 4) + 2; profInput.value = prof; setStore('dnd-sheet-prof-bonus', prof, false); updateStatsAndSkills(); syncCharMeta(); }); }
+        const classInput = document.getElementById('char-class'); if(classInput) { classInput.addEventListener('input', () => { syncCharMeta(); }); }
 
         const skillsMap = [{ id: 'str', name: 'Force', skills: [{id: 'save-str', name: 'Sauvegarde', type: 'save'}, {id: 'athletics', name: 'Athlétisme'}] }, { id: 'dex', name: 'Dextérité', skills: [{id: 'save-dex', name: 'Sauvegarde', type: 'save'}, {id: 'acrobatics', name: 'Acrobaties'}, {id: 'sleight', name: 'Escamotage'}, {id: 'stealth', name: 'Discrétion'}] }, { id: 'con', name: 'Constitution', skills: [{id: 'save-con', name: 'Sauvegarde', type: 'save'}] }, { id: 'int', name: 'Intelligence', skills: [{id: 'save-int', name: 'Sauvegarde', type: 'save'}, {id: 'arcana', name: 'Arcanes'}, {id: 'history', name: 'Histoire'}, {id: 'investigation', name: 'Investigation'}, {id: 'nature', name: 'Nature'}, {id: 'religion', name: 'Religion'}] }, { id: 'wis', name: 'Sagesse', skills: [{id: 'save-wis', name: 'Sauvegarde', type: 'save'}, {id: 'animal', name: 'Dressage'}, {id: 'insight', name: 'Intuition'}, {id: 'medicine', name: 'Médecine'}, {id: 'perception', name: 'Perception'}, {id: 'survival', name: 'Survie'}] }, { id: 'cha', name: 'Charisme', skills: [{id: 'save-cha', name: 'Sauvegarde', type: 'save'}, {id: 'deception', name: 'Tromperie'}, {id: 'intimidation', name: 'Intimidation'}, {id: 'performance', name: 'Représentation'}, {id: 'persuasion', name: 'Persuasion'}] }];
         const attributesContainer = document.getElementById('attributes-list');
-        // Chaque compétence a : case maîtrise (rond) + bouton expertise (étoile, demi-prof si demi-maîtrise ou ×2)
-        // Cycle au clic sur le rond : aucun → maîtrise → expertise → aucun
         if(attributesContainer) {
             skillsMap.forEach(attr => {
-                let skillsHTML = attr.skills.map(skill => `
-                    <div class="skill-row ${skill.type === 'save' ? 'saving-throw' : ''}">
-                        <button type="button" class="skill-prof-btn" id="profbtn-${skill.id}" data-stat="${attr.id}" data-skill="${skill.id}" title="Clic: maîtrise / Double-clic: expertise">○</button>
-                        <input type="hidden" id="prof-${skill.id}" class="skill-prof" data-stat="${attr.id}" value="0">
-                        <span class="skill-mod" id="skill-val-${skill.id}">+0</span>
-                        <label class="rollable" data-name="${skill.name}" data-target="skill-val-${skill.id}">${skill.name}</label>
-                    </div>`).join('');
+                let skillsHTML = attr.skills.map(skill => `<div class="skill-row ${skill.type === 'save' ? 'saving-throw' : ''}"><button type="button" class="skill-prof-btn" id="profbtn-${skill.id}" data-stat="${attr.id}" data-skill="${skill.id}" title="Clic: maîtrise / Double-clic: expertise">○</button><input type="hidden" id="prof-${skill.id}" class="skill-prof" data-stat="${attr.id}" value="0"><span class="skill-mod" id="skill-val-${skill.id}">+0</span><label class="rollable" data-name="${skill.name}" data-target="skill-val-${skill.id}">${skill.name}</label></div>`).join('');
                 attributesContainer.innerHTML += `<div class="attribute-block"><h3 class="rollable" data-name="${attr.name}" data-target="mod-${attr.id}">${attr.name}</h3><div class="stat-main-row"><div class="stat-score-circle"><input type="number" id="stat-${attr.id}" class="stat-score stat-score-input" value="10"></div><div class="stat-mod-box" id="mod-${attr.id}">+0</div></div><div class="nested-skills-list">${skillsHTML}</div></div>`;
             });
         }
 
         function getModifier(score) { return Math.floor((score - 10) / 2); }
         function updateAutoMagicStats() { const abilityEl = document.getElementById('spellcasting-ability'); const profEl = document.getElementById('prof-bonus'); if(!abilityEl || !profEl) return; const ability = abilityEl.value; const prof = parseInt(profEl.value) || 2; if (ability && ability !== 'none') { const score = parseInt(document.getElementById(`stat-${ability}`).value) || 10; const mod = getModifier(score); document.getElementById('spell-modifier').value = mod >= 0 ? `+${mod}` : mod; document.getElementById('spell-save-dc').value = 8 + prof + mod; document.getElementById('spell-attack-bonus').value = prof + mod; setStore('dnd-sheet-spell-save-dc', 8 + prof + mod, false); setStore('dnd-sheet-spell-attack-bonus', prof + mod, false); setStore('dnd-sheet-spell-modifier', mod, false); } }
-        
-        function updateSkillProfBtn(skillId) {
-            const hiddenInput = document.getElementById('prof-' + skillId);
-            const btn = document.getElementById('profbtn-' + skillId);
-            if(!hiddenInput || !btn) return;
-            const level = parseInt(hiddenInput.value) || 0;
-            if(level === 0) { btn.textContent = '○'; btn.classList.remove('prof-active', 'exp-active'); btn.title = 'Clic : ajouter maîtrise'; }
-            else if(level === 1) { btn.textContent = '●'; btn.classList.add('prof-active'); btn.classList.remove('exp-active'); btn.title = 'Maîtrise — clic : expertise'; }
-            else { btn.textContent = '★'; btn.classList.remove('prof-active'); btn.classList.add('exp-active'); btn.title = 'Expertise — clic : retirer'; }
-        }
+        function updateSkillProfBtn(skillId) { const hiddenInput = document.getElementById('prof-' + skillId); const btn = document.getElementById('profbtn-' + skillId); if(!hiddenInput || !btn) return; const level = parseInt(hiddenInput.value) || 0; if(level === 0) { btn.textContent = '○'; btn.classList.remove('prof-active', 'exp-active'); btn.title = 'Clic : ajouter maîtrise'; } else if(level === 1) { btn.textContent = '●'; btn.classList.add('prof-active'); btn.classList.remove('exp-active'); btn.title = 'Maîtrise — clic : expertise'; } else { btn.textContent = '★'; btn.classList.remove('prof-active'); btn.classList.add('exp-active'); btn.title = 'Expertise — clic : retirer'; } }
 
         function updateStatsAndSkills() {
-            const profEl = document.getElementById('prof-bonus'); if(!profEl) return;
-            const profBonus = parseInt(profEl.value) || 2;
-            skillsMap.forEach(attr => {
-                const statEl = document.getElementById(`stat-${attr.id}`);
-                const modEl = document.getElementById(`mod-${attr.id}`);
-                if(statEl && modEl) {
-                    const score = parseInt(statEl.value) || 10;
-                    const mod = getModifier(score);
-                    modEl.textContent = mod >= 0 ? `+${mod}` : mod;
-                    attr.skills.forEach(skill => {
-                        const hiddenInput = document.getElementById(`prof-${skill.id}`);
-                        const profLevel = hiddenInput ? (parseInt(hiddenInput.value) || 0) : 0;
-                        // 0 = aucun, 1 = maîtrise (+prof), 2 = expertise (+2×prof)
-                        const bonus = profLevel === 2 ? profBonus * 2 : (profLevel === 1 ? profBonus : 0);
-                        const totalMod = mod + bonus;
-                        const valEl = document.getElementById(`skill-val-${skill.id}`);
-                        if(valEl) valEl.textContent = totalMod >= 0 ? `+${totalMod}` : totalMod;
-                    });
-                }
-            });
+            const profEl = document.getElementById('prof-bonus'); if(!profEl) return; const profBonus = parseInt(profEl.value) || 2;
+            skillsMap.forEach(attr => { const statEl = document.getElementById(`stat-${attr.id}`); const modEl = document.getElementById(`mod-${attr.id}`); if(statEl && modEl) { const score = parseInt(statEl.value) || 10; const mod = getModifier(score); modEl.textContent = mod >= 0 ? `+${mod}` : mod; attr.skills.forEach(skill => { const hiddenInput = document.getElementById(`prof-${skill.id}`); const profLevel = hiddenInput ? (parseInt(hiddenInput.value) || 0) : 0; const bonus = profLevel === 2 ? profBonus * 2 : (profLevel === 1 ? profBonus : 0); const totalMod = mod + bonus; const valEl = document.getElementById(`skill-val-${skill.id}`); if(valEl) valEl.textContent = totalMod >= 0 ? `+${totalMod}` : totalMod; }); } });
             updateAutoMagicStats();
         }
 
         const statDex = document.getElementById('stat-dex'); if(statDex && initInput) { statDex.addEventListener('change', () => { const dexScore = parseInt(statDex.value) || 10; initInput.value = getModifier(dexScore); setStore('dnd-sheet-initiative', initInput.value, false); }); }
         document.body.addEventListener('input', (e) => { if(e.target.classList.contains('stat-score')) updateStatsAndSkills(); });
         document.body.addEventListener('change', (e) => { if(e.target.classList.contains('stat-score')) updateStatsAndSkills(); });
-        // Clic sur le bouton de compétence : cycle 0→1→2→0 (aucun / maîtrise / expertise)
-        document.body.addEventListener('click', (e) => {
-            const btn = e.target.closest('.skill-prof-btn');
-            if(!btn) return;
-            const skillId = btn.dataset.skill;
-            const hiddenInput = document.getElementById('prof-' + skillId);
-            if(!hiddenInput) return;
-            let level = (parseInt(hiddenInput.value) || 0) + 1;
-            if(level > 2) level = 0;
-            hiddenInput.value = level;
-            setStore('dnd-sheet-prof-' + skillId, level, false);
-            updateSkillProfBtn(skillId);
-            updateStatsAndSkills();
-        });
+        document.body.addEventListener('click', (e) => { const btn = e.target.closest('.skill-prof-btn'); if(!btn) return; const skillId = btn.dataset.skill; const hiddenInput = document.getElementById('prof-' + skillId); if(!hiddenInput) return; let level = (parseInt(hiddenInput.value) || 0) + 1; if(level > 2) level = 0; hiddenInput.value = level; setStore('dnd-sheet-prof-' + skillId, level, false); updateSkillProfBtn(skillId); updateStatsAndSkills(); });
         const spellCastingAbility = document.getElementById('spellcasting-ability'); if(spellCastingAbility) spellCastingAbility.addEventListener('change', () => { setStore('dnd-sheet-spellcasting-ability', spellCastingAbility.value, false); updateAutoMagicStats(); });
 
         let customConditions = getStore('dnd-custom-conditions') || []; const customCondContainer = document.getElementById('custom-conditions-container'); const customCondInput = document.getElementById('input-custom-condition'); const btnAddCustomCond = document.getElementById('btn-add-custom-condition');
-        function renderCustomConditions() { if(!customCondContainer) return; customCondContainer.innerHTML = ''; customConditions.forEach((cond, i) => { customCondContainer.innerHTML += `<div style="display:flex; align-items:center; gap:5px; margin-bottom:4px; background:rgba(255,255,255,0.7); padding:4px 8px; border-radius:4px; border:1px dashed #c4b487;"><input type="checkbox" id="custom-cond-${i}" ${cond.active ? 'checked' : ''} onchange="toggleCustomCond(${i})" style="transform:scale(1.2); cursor:pointer;"><label style="flex:1; cursor:pointer; font-weight:bold; color:var(--text-color);" for="custom-cond-${i}">${cond.name}</label><span style="color:#e74c3c; cursor:pointer; font-weight:bold; padding:0 5px;" onclick="deleteCustomCond(${i})">X</span></div>`; }); }
+        function renderCustomConditions() { if(!customCondContainer) return; customCondContainer.innerHTML = ''; customConditions.forEach((cond, i) => { customCondContainer.innerHTML += `<div style="display:flex; align-items:center; gap:5px; margin-bottom:4px; background:rgba(255,255,255,0.5); padding:4px 8px; border-radius:4px; border:1px dashed rgba(138,28,28,0.25);"><input type="checkbox" id="custom-cond-${i}" ${cond.active ? 'checked' : ''} onchange="toggleCustomCond(${i})" style="transform:scale(1.2); cursor:pointer;"><label style="flex:1; cursor:pointer; font-weight:bold; color:var(--text-color);" for="custom-cond-${i}">${cond.name}</label><span style="color:#e74c3c; cursor:pointer; font-weight:bold; padding:0 5px;" onclick="deleteCustomCond(${i})">X</span></div>`; }); }
         if(btnAddCustomCond && customCondInput) { btnAddCustomCond.addEventListener('click', () => { let val = customCondInput.value.trim(); if(val) { customConditions.push({name: val, active: false}); setStore('dnd-custom-conditions', customConditions); customCondInput.value = ''; renderCustomConditions(); } }); }
         window.toggleCustomCond = (i) => { customConditions[i].active = !customConditions[i].active; setStore('dnd-custom-conditions', customConditions); }; window.deleteCustomCond = (i) => { customConditions.splice(i, 1); setStore('dnd-custom-conditions', customConditions); renderCustomConditions(); };
 
@@ -689,196 +409,203 @@ document.addEventListener('DOMContentLoaded', () => {
         let spells = getStore('dnd-spells') || [];
         function renderPinnedSpells() { const list = document.getElementById('spells-list'); if(!list) return; list.innerHTML = ''; spells.forEach((sp, index) => { if(!sp.pinned) return; list.innerHTML += `<div class="item-card spell-card"><div class="item-card-header"><h4>Niv.${sp.level||0} - ${sp.name}</h4><div class="item-controls no-print"><button title="Monter" onclick="moveSpellUp(${index})">▲</button><button title="Descendre" onclick="moveSpellDown(${index})">▼</button><button class="btn-pin pinned" onclick="togglePin(${index})">📍</button></div></div><div class="item-details"><span>⏱️ ${sp.time}</span><span>📏 ${sp.range}</span><span>💎 ${sp.res}</span></div><p><em>${sp.desc}</em></p>${sp.notes ? `<p><small>📝 ${sp.notes}</small></p>` : ''}</div>`; }); }
         function renderGrimoire() { const content = document.getElementById('grimoire-content'); if(!content) return; content.innerHTML = ''; let grouped = {}; spells.forEach((sp, index) => { let lvl = parseInt(sp.level) || 0; if(!grouped[lvl]) grouped[lvl] = []; grouped[lvl].push({ ...sp, originalIndex: index }); }); let levels = Object.keys(grouped).sort((a,b) => a - b); levels.forEach(lvl => { let sortedSpells = grouped[lvl].sort((a,b) => a.name.localeCompare(b.name)); let lvlHtml = `<div class="spell-level-group"><h3 class="spell-level-title">Niveau ${lvl} ${lvl == 0 ? '(Tours de magie)' : ''}</h3>`; sortedSpells.forEach(sp => { let pinClass = sp.pinned ? 'pinned' : ''; let pinText = sp.pinned ? '📍 Épinglé' : '📌 Épingler'; lvlHtml += `<div class="item-card spell-card"><div class="item-card-header"><h4>${sp.name}</h4><div class="item-controls"><button class="btn-pin ${pinClass}" onclick="togglePin(${sp.originalIndex})">${pinText}</button><button title="Modifier" onclick="editSpell(${sp.originalIndex})">✎</button><button title="Supprimer" class="btn-del" onclick="deleteSpell(${sp.originalIndex})">X</button></div></div><div class="item-details"><span>⏱️ ${sp.time}</span><span>📏 ${sp.range}</span><span>💎 ${sp.res}</span></div><p><em>${sp.desc}</em></p>${sp.notes ? `<p><small>📝 ${sp.notes}</small></p>` : ''}</div>`; }); lvlHtml += `</div>`; content.innerHTML += lvlHtml; }); if(levels.length === 0) content.innerHTML = "<p style='text-align:center;'>Le grimoire est vide.</p>"; }
+        
+        function renderPreparedSpells() {
+            const list = document.getElementById('prepared-spells-list');
+            const countEl = document.getElementById('prepared-spell-count');
+            if(!list) return;
+
+            let preparedSpells = spells.filter(sp => sp.prepared);
+            if (countEl) countEl.textContent = `${preparedSpells.length} préparés`;
+
+            list.innerHTML = '';
+            if (preparedSpells.length === 0) {
+                list.innerHTML = '<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun sort préparé.</span>';
+                return;
+            }
+
+            let grouped = {};
+            preparedSpells.forEach(sp => {
+                let lvl = parseInt(sp.level) || 0;
+                if(!grouped[lvl]) grouped[lvl] = [];
+                grouped[lvl].push(sp);
+            });
+
+            let levels = Object.keys(grouped).sort((a,b) => a - b);
+            levels.forEach(lvl => {
+                let lvlHtml = `<div class="prepared-level-group"><div class="prepared-level-header">Niveau ${lvl}</div>`;
+                grouped[lvl].sort((a,b) => a.name.localeCompare(b.name)).forEach(sp => {
+                    lvlHtml += `<div class="prepared-spell-row">
+                        <span class="prepared-spell-name">${sp.name}</span>
+                        <span class="prepared-spell-meta">⏱️ ${sp.time}</span>
+                    </div>`;
+                });
+                lvlHtml += `</div>`;
+                list.innerHTML += lvlHtml;
+            });
+        }
+
+        function renderPrepareModalList() {
+            const checklist = document.getElementById('prepare-spells-checklist');
+            const search = document.getElementById('prepare-search')?.value.toLowerCase() || "";
+            const filterLvl = document.getElementById('prepare-filter-level')?.value || "";
+
+            if (!checklist) return;
+            checklist.innerHTML = '';
+
+            let filtered = spells.filter(sp => {
+                if (search && !sp.name.toLowerCase().includes(search)) return false;
+                if (filterLvl !== "" && String(sp.level||0) !== filterLvl) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                checklist.innerHTML = '<p style="text-align:center; color:#888; font-style:italic;">Aucun sort correspondant.</p>';
+                return;
+            }
+
+            filtered.sort((a,b) => (parseInt(a.level)||0) - (parseInt(b.level)||0) || a.name.localeCompare(b.name)).forEach((sp) => {
+                const originalIndex = spells.indexOf(sp);
+                const isChecked = sp.prepared ? 'checked' : '';
+                checklist.innerHTML += `
+                    <label class="prepared-spell-row prepare-spell-row" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" style="transform:scale(1.2);" ${isChecked} onchange="toggleSpellPrepared(${originalIndex}, this.checked)">
+                        <div style="flex:1;">
+                            <div class="prepared-spell-name">${sp.name}</div>
+                            <div class="prepared-spell-meta">Niv. ${sp.level||0} • ${sp.time}</div>
+                        </div>
+                    </label>
+                `;
+            });
+        }
+
+        window.toggleSpellPrepared = (index, isPrepared) => {
+            spells[index].prepared = isPrepared;
+            setStore('dnd-spells', spells);
+            renderPreparedSpells();
+        };
+
+        const prepareSearchInput = document.getElementById('prepare-search');
+        if (prepareSearchInput) prepareSearchInput.addEventListener('input', renderPrepareModalList);
+
+        const prepareFilterLevel = document.getElementById('prepare-filter-level');
+        if (prepareFilterLevel) prepareFilterLevel.addEventListener('change', renderPrepareModalList);
+
         const spellModal = document.getElementById('spell-form-modal');
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-spell-add') { editingSpellIndex = -1; document.getElementById('spell-modal-title').textContent = "Inscrire un Sort"; document.querySelectorAll('#spell-form-modal input[type="text"], #spell-form-modal input[type="number"], #spell-form-modal textarea').forEach(i => i.value = ''); spellModal.classList.remove('hidden'); }});
-        if(document.getElementById('btn-add-spell')) { document.getElementById('btn-add-spell').addEventListener('click', () => { const sp = { name: document.getElementById('new-spell-name').value, level: document.getElementById('new-spell-level').value || 0, time: document.getElementById('new-spell-time').value, range: document.getElementById('new-spell-range').value, res: document.getElementById('new-spell-res').value, desc: document.getElementById('new-spell-desc').value, notes: document.getElementById('new-spell-notes').value, pinned: document.getElementById('new-spell-pinned').checked }; if(sp.name) { if(editingSpellIndex >= 0) { spells[editingSpellIndex] = sp; } else { spells.push(sp); } setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); spellModal.classList.add('hidden'); } }); }
-        window.togglePin = (index) => { spells[index].pinned = !spells[index].pinned; setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }; window.deleteSpell = (index) => { if(confirm("Oublier ce sort ?")) { spells.splice(index, 1); setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }}; window.moveSpellUp = (index) => { let prevIndex = -1; for(let i = index - 1; i >= 0; i--) { if(spells[i].pinned) { prevIndex = i; break; } } if(prevIndex !== -1) { [spells[prevIndex], spells[index]] = [spells[index], spells[prevIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.moveSpellDown = (index) => { let nextIndex = -1; for(let i = index + 1; i < spells.length; i++) { if(spells[i].pinned) { nextIndex = i; break; } } if(nextIndex !== -1) { [spells[nextIndex], spells[index]] = [spells[index], spells[nextIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.editSpell = (index) => { const data = spells[index]; document.getElementById('new-spell-name').value = data.name; document.getElementById('new-spell-level').value = data.level; document.getElementById('new-spell-time').value = data.time; document.getElementById('new-spell-range').value = data.range; document.getElementById('new-spell-res').value = data.res; document.getElementById('new-spell-desc').value = data.desc; document.getElementById('new-spell-notes').value = data.notes; document.getElementById('new-spell-pinned').checked = data.pinned; editingSpellIndex = index; document.getElementById('spell-modal-title').textContent = "Modifier le Sort"; spellModal.classList.remove('hidden'); };
+        document.body.addEventListener('click', (e) => { 
+            if(e.target.id === 'btn-open-spell-add') { editingSpellIndex = -1; document.getElementById('spell-modal-title').textContent = "Inscrire un Sort"; document.querySelectorAll('#spell-form-modal input[type="text"], #spell-form-modal input[type="number"], #spell-form-modal textarea').forEach(i => i.value = ''); spellModal.classList.remove('hidden'); }
+            
+            if (e.target.id === 'btn-open-prepare-spells') {
+                document.getElementById('prepare-spells-modal').classList.remove('hidden');
+                document.getElementById('prepare-search').value = '';
+                document.getElementById('prepare-filter-level').value = '';
+                renderPrepareModalList();
+            }
+        });
+
+        if(document.getElementById('btn-close-prepare-spells')) {
+            document.getElementById('btn-close-prepare-spells').addEventListener('click', () => {
+                document.getElementById('prepare-spells-modal').classList.add('hidden');
+            });
+        }
+
+        if(document.getElementById('btn-add-spell')) { document.getElementById('btn-add-spell').addEventListener('click', () => { const sp = { name: document.getElementById('new-spell-name').value, level: document.getElementById('new-spell-level').value || 0, time: document.getElementById('new-spell-time').value, range: document.getElementById('new-spell-range').value, res: document.getElementById('new-spell-res').value, desc: document.getElementById('new-spell-desc').value, notes: document.getElementById('new-spell-notes').value, pinned: document.getElementById('new-spell-pinned').checked, prepared: editingSpellIndex >= 0 ? spells[editingSpellIndex].prepared : false }; if(sp.name) { if(editingSpellIndex >= 0) { spells[editingSpellIndex] = sp; } else { spells.push(sp); } setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); spellModal.classList.add('hidden'); } }); }
+        window.togglePin = (index) => { spells[index].pinned = !spells[index].pinned; setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }; window.deleteSpell = (index) => { if(confirm("Oublier ce sort ?")) { spells.splice(index, 1); setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); }}; window.moveSpellUp = (index) => { let prevIndex = -1; for(let i = index - 1; i >= 0; i--) { if(spells[i].pinned) { prevIndex = i; break; } } if(prevIndex !== -1) { [spells[prevIndex], spells[index]] = [spells[index], spells[prevIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.moveSpellDown = (index) => { let nextIndex = -1; for(let i = index + 1; i < spells.length; i++) { if(spells[i].pinned) { nextIndex = i; break; } } if(nextIndex !== -1) { [spells[nextIndex], spells[index]] = [spells[index], spells[nextIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.editSpell = (index) => { const data = spells[index]; document.getElementById('new-spell-name').value = data.name; document.getElementById('new-spell-level').value = data.level; document.getElementById('new-spell-time').value = data.time; document.getElementById('new-spell-range').value = data.range; document.getElementById('new-spell-res').value = data.res; document.getElementById('new-spell-desc').value = data.desc; document.getElementById('new-spell-notes').value = data.notes; document.getElementById('new-spell-pinned').checked = data.pinned; editingSpellIndex = index; document.getElementById('spell-modal-title').textContent = "Modifier le Sort"; spellModal.classList.remove('hidden'); };
         const grimoireModal = document.getElementById('grimoire-modal'); document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-grimoire') { renderGrimoire(); grimoireModal.classList.remove('hidden', 'closing'); grimoireModal.classList.add('opening'); } }); if(document.getElementById('btn-close-grimoire')) document.getElementById('btn-close-grimoire').addEventListener('click', () => { grimoireModal.classList.remove('opening'); grimoireModal.classList.add('closing'); setTimeout(() => { grimoireModal.classList.add('hidden'); }, 550); });
 
         let journal = getStore('dnd-journal') || []; const journalPage = document.getElementById('book-page-content');
         window.renderJournalTOC = () => { if(!journalPage) return; let html = `<h2 class="toc-title">Sommaire</h2><div class="toc-list">`; if(journal.length === 0) html += `<p style="text-align:center;">Aucune note dans le journal. Écris un chapitre !</p>`; journal.forEach((entry, i) => { html += `<div class="toc-item"><div class="toc-link" onclick="openJournalEntry(${i})"><span class="toc-title-text">${entry.title}</span><div class="toc-dots"></div></div><div class="toc-controls"><span title="Déchirer la page" onclick="deleteJournalEntry(${i})">❌</span></div></div>`; }); html += `</div>`; journalPage.innerHTML = html; };
-        window.openJournalEntry = (index) => { const entry = journal[index]; journalPage.innerHTML = `<div class="bookmark-return" onclick="renderJournalTOC()" title="Retour au sommaire">🔖</div><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:20px;"><h2 class="note-view-title" style="margin-top:0;">${entry.title}</h2><button class="btn-small no-print" style="background:var(--primary-color);" onclick="editJournalForm(${index})">✎ Modifier</button></div><div class="note-view-content" id="view-journal-content">${entry.content}</div><div id="journal-edit-container" class="hidden" style="margin-top: 20px; border-top: 2px dashed #c4b487; padding-top: 15px;"><h3 style="font-family:'Cinzel'; color:var(--primary-color); margin-bottom:10px;">Modifier le chapitre</h3><input type="text" id="edit-journal-title" style="width:100%; margin-bottom:10px; font-weight:bold; font-size:1.1rem; border:1px solid #c4b487; padding:8px;"><textarea id="edit-journal-content" class="auto-expand" style="width:100%; min-height:200px; border:1px solid #c4b487; padding:10px;"></textarea><div style="display:flex; gap:10px; margin-top:10px;"><button id="btn-confirm-edit-journal" class="btn-small" style="background:#27ae60;">Sauvegarder</button><button id="btn-cancel-edit-journal" class="btn-small" style="background:#e74c3c;">Annuler</button></div></div>`; };
+        window.openJournalEntry = (index) => { const entry = journal[index]; journalPage.innerHTML = `<div class="bookmark-return" onclick="renderJournalTOC()" title="Retour au sommaire">🔖</div><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:20px;"><h2 class="note-view-title" style="margin-top:0;">${entry.title}</h2><button class="btn-small no-print" style="background:var(--primary-color);" onclick="editJournalForm(${index})">✎ Modifier</button></div><div class="note-view-content" id="view-journal-content">${entry.content}</div><div id="journal-edit-container" class="hidden" style="margin-top: 20px; border-top: 2px dashed rgba(138,28,28,0.25); padding-top: 15px;"><h3 style="font-family:'Cinzel'; color:var(--primary-color); margin-bottom:10px;">Modifier le chapitre</h3><input type="text" id="edit-journal-title" style="width:100%; margin-bottom:10px; font-weight:bold; font-size:1.1rem; border:1px solid rgba(138,28,28,0.25); padding:8px;"><textarea id="edit-journal-content" class="auto-expand" style="width:100%; min-height:200px; border:1px solid rgba(138,28,28,0.25); padding:10px;"></textarea><div style="display:flex; gap:10px; margin-top:10px;"><button id="btn-confirm-edit-journal" class="btn-small" style="background:#27ae60;">Sauvegarder</button><button id="btn-cancel-edit-journal" class="btn-small" style="background:#e74c3c;">Annuler</button></div></div>`; };
         window.editJournalForm = (index) => { const entry = journal[index]; document.getElementById('view-journal-content').classList.add('hidden'); document.getElementById('journal-edit-container').classList.remove('hidden'); document.getElementById('edit-journal-title').value = entry.title; const ta = document.getElementById('edit-journal-content'); ta.value = entry.content; setTimeout(() => adjustHeight(ta), 50); document.getElementById('btn-confirm-edit-journal').onclick = () => { journal[index].title = document.getElementById('edit-journal-title').value.trim(); journal[index].content = document.getElementById('edit-journal-content').value.trim(); setStore('dnd-journal', journal); openJournalEntry(index); }; document.getElementById('btn-cancel-edit-journal').onclick = () => { openJournalEntry(index); }; };
         window.deleteJournalEntry = (index) => { if(confirm("Déchirer cette page définitivement ?")) { journal.splice(index, 1); setStore('dnd-journal', journal); renderJournalTOC(); } };
         if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = document.getElementById('new-journal-content').value.trim(); if(title && content) { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; document.getElementById('new-journal-content').value = ''; alert("Chapitre enregistré dans le journal !"); } }); }
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); } if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); modal.classList.add('book-burning'); setTimeout(() => modal.classList.add('hidden'), 1500); } });
 
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
-        function renderAttacks() { const list = document.getElementById('attacks-list'); if(!list) return; renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nom de la nouvelle catégorie d'attaque :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); }); list.innerHTML = ''; let filtered = activeAtkTab === 'Tout' ? attacks : attacks.filter(a => (a.category || 'Général') === activeAtkTab); filtered.forEach(atk => { let originalIndex = attacks.indexOf(atk); let attuneHtml = atk.reqAttune ? `<div class="attune-check" title="Objet Lié ?"><input type="checkbox" ${atk.isAttuned ? 'checked' : ''} onchange="toggleAttune(${originalIndex})"><label>Lié</label></div>` : ''; list.innerHTML += `<div class="item-card atk-card"><div class="item-card-header"><div style="display:flex; align-items:center; gap:10px;"><h4>⚔️ ${atk.name}</h4>${attuneHtml}</div>${getCrudControlsHTML(originalIndex, 'Attack', activeAtkTab === 'Tout')}</div><div class="item-details"><span><strong>Bonus:</strong> ${atk.bonus}</span><span><strong>Dégâts:</strong> ${atk.dmg}</span></div>${atk.notes ? `<p><small>📝 ${atk.notes}</small></p>` : ''}</div>`; }); }
+        function renderAttacks() { const list = document.getElementById('attacks-list'); if(!list) return; renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); }); list.innerHTML = ''; let filtered = activeAtkTab === 'Tout' ? attacks : attacks.filter(a => (a.category || 'Général') === activeAtkTab); filtered.forEach(atk => { let originalIndex = attacks.indexOf(atk); let attuneHtml = atk.reqAttune ? `<div class="attune-check" title="Objet Lié ?"><input type="checkbox" ${atk.isAttuned ? 'checked' : ''} onchange="toggleAttune(${originalIndex})"><label>Lié</label></div>` : ''; list.innerHTML += `<div class="item-card atk-card"><div class="item-card-header"><div style="display:flex; align-items:center; gap:10px;"><h4>⚔️ ${atk.name}</h4>${attuneHtml}</div>${getCrudControlsHTML(originalIndex, 'Attack', activeAtkTab === 'Tout')}</div><div class="item-details"><span><strong>Bonus:</strong> ${atk.bonus}</span><span><strong>Dégâts:</strong> ${atk.dmg}</span></div>${atk.notes ? `<p><small>📝 ${atk.notes}</small></p>` : ''}</div>`; }); }
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-attack-modal') { editingAttackIndex = -1; atkModal.classList.remove('hidden'); document.querySelectorAll('#attack-form-modal input[type="text"]').forEach(i => i.value = ''); document.getElementById('new-atk-req-attune').checked = false; }});
         if(document.getElementById('btn-save-atk')) { document.getElementById('btn-save-atk').addEventListener('click', () => { const atk = { name: document.getElementById('new-atk-name').value, bonus: document.getElementById('new-atk-bonus').value, dmg: document.getElementById('new-atk-dmg').value, category: document.getElementById('new-atk-category').value.trim() || 'Général', notes: document.getElementById('new-atk-notes').value, reqAttune: document.getElementById('new-atk-req-attune').checked, isAttuned: false }; if(atk.name) { if(editingAttackIndex >= 0) { atk.isAttuned = attacks[editingAttackIndex].isAttuned; attacks[editingAttackIndex] = atk; } else { attacks.push(atk); } setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden'); } }); }
         window.toggleAttune = (index) => { attacks[index].isAttuned = !attacks[index].isAttuned; setStore('dnd-attacks', attacks); }; window.deleteAttack = (index) => { if(confirm("Supprimer ?")) { attacks.splice(index, 1); setStore('dnd-attacks', attacks); renderAttacks(); }}; window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.editAttack = (index) => { const data = attacks[index]; document.getElementById('new-atk-name').value = data.name; document.getElementById('new-atk-bonus').value = data.bonus; document.getElementById('new-atk-dmg').value = data.dmg; document.getElementById('new-atk-category').value = data.category || 'Général'; document.getElementById('new-atk-notes').value = data.notes; document.getElementById('new-atk-req-attune').checked = data.reqAttune; editingAttackIndex = index; atkModal.classList.remove('hidden'); };
 
         let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let activeInvTabModal = 'Tout'; const invModal = document.getElementById('inventory-modal');
-        function renderInventory() { const listMain = document.getElementById('pinned-inventory-list'); const listFull = document.getElementById('inventory-full-list'); if(!listMain || !listFull) return; let pinnedItems = inventory.filter(i => i.pinned); let onAddInvCat = () => { let nouv = prompt("Nom de la nouvelle catégorie d'inventaire :"); if(nouv && nouv.trim() !== "" && !invCategories.includes(nouv.trim())) { invCategories.push(nouv.trim()); setStore('dnd-inv-categories', invCategories); updateCategorySelects(); renderInventory(); } }; renderTabs('inv-tabs-container-pinned', pinnedItems, activeInvTabPinned, invCategories, (tab) => { activeInvTabPinned = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); }); renderTabs('inv-tabs-container-modal', inventory, activeInvTabModal, invCategories, (tab) => { activeInvTabModal = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); }); listMain.innerHTML = ''; listFull.innerHTML = ''; let totalWeight = 0; inventory.forEach((item, index) => { let pinClass = item.pinned ? 'pinned' : ''; let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); let cat = item.category || 'Général'; if(activeInvTabModal === 'Tout' || cat === activeInvTabModal) { listFull.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${item.name} (x${item.qty})</h4><div class="item-controls no-print"><button title="Modifier" onclick="editInv(${index})">✎</button><button class="btn-pin ${pinClass}" onclick="toggleInvPin(${index})">📍</button><button class="btn-del" onclick="deleteInv(${index})">X</button></div></div><div class="item-details"><span style="color:#888;">Poids: ${item.weight}</span></div></div>`; } if(item.pinned && (activeInvTabPinned === 'Tout' || cat === activeInvTabPinned)) { listMain.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${item.name} (x${item.qty})</h4>${getCrudControlsHTML(index, 'Inv', activeInvTabPinned === 'Tout')}<button class="btn-pin ${pinClass}" onclick="toggleInvPin(${index})">📍</button></div></div><div class="item-details"><span style="color:#888;">Poids: ${item.weight}</span></div></div>`; } }); const weightDisplay = document.getElementById('inv-total-weight'); if(weightDisplay) weightDisplay.textContent = (totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight; }
+        function renderInventory() { const listMain = document.getElementById('pinned-inventory-list'); const listFull = document.getElementById('inventory-full-list'); if(!listMain || !listFull) return; let pinnedItems = inventory.filter(i => i.pinned); let onAddInvCat = () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !invCategories.includes(nouv.trim())) { invCategories.push(nouv.trim()); setStore('dnd-inv-categories', invCategories); updateCategorySelects(); renderInventory(); } }; renderTabs('inv-tabs-container-pinned', pinnedItems, activeInvTabPinned, invCategories, (tab) => { activeInvTabPinned = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); }); renderTabs('inv-tabs-container-modal', inventory, activeInvTabModal, invCategories, (tab) => { activeInvTabModal = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); }); listMain.innerHTML = ''; listFull.innerHTML = ''; let totalWeight = 0; inventory.forEach((item, index) => { let pinClass = item.pinned ? 'pinned' : ''; let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); let cat = item.category || 'Général'; if(activeInvTabModal === 'Tout' || cat === activeInvTabModal) { listFull.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${item.name} (x${item.qty})</h4><div class="item-controls no-print"><button title="Modifier" onclick="editInv(${index})">✎</button><button class="btn-pin ${pinClass}" onclick="toggleInvPin(${index})">📍</button><button class="btn-del" onclick="deleteInv(${index})">X</button></div></div><div class="item-details"><span style="color:#888;">Poids: ${item.weight}</span></div></div>`; } if(item.pinned && (activeInvTabPinned === 'Tout' || cat === activeInvTabPinned)) { listMain.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${item.name} (x${item.qty})</h4>${getCrudControlsHTML(index, 'Inv', activeInvTabPinned === 'Tout')}<button class="btn-pin ${pinClass}" onclick="toggleInvPin(${index})">📍</button></div></div><div class="item-details"><span style="color:#888;">Poids: ${item.weight}</span></div></div>`; } }); const weightDisplay = document.getElementById('inv-total-weight'); if(weightDisplay) weightDisplay.textContent = (totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight; }
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-inventory') { invModal.classList.remove('hidden'); renderInventory(); }});
         if(document.getElementById('btn-add-inventory')) { document.getElementById('btn-add-inventory').addEventListener('click', () => { let name = document.getElementById('inv-name').value; if(name) { inventory.push({ name: name, qty: document.getElementById('inv-qty').value || 1, weight: document.getElementById('inv-weight').value || "-", category: document.getElementById('inv-category').value.trim() || 'Général', pinned: false }); setStore('dnd-inventory', inventory); renderInventory(); document.querySelectorAll('#inventory-modal input').forEach(i => i.value = ''); } }); }
         window.toggleInvPin = (index) => { inventory[index].pinned = !inventory[index].pinned; setStore('dnd-inventory', inventory); renderInventory(); }; window.deleteInv = (index) => { if(confirm("Jeter ?")) { inventory.splice(index, 1); setStore('dnd-inventory', inventory); renderInventory(); }}; window.moveInvUp = (index) => { if(moveWithinFilter(inventory, index, -1, i => i.pinned && (activeInvTabPinned === 'Tout' ? true : (i.category || 'Général') === activeInvTabPinned))) { setStore('dnd-inventory', inventory); renderInventory(); } }; window.moveInvDown = (index) => { if(moveWithinFilter(inventory, index, 1, i => i.pinned && (activeInvTabPinned === 'Tout' ? true : (i.category || 'Général') === activeInvTabPinned))) { setStore('dnd-inventory', inventory); renderInventory(); } }; window.editInv = (index) => { editingInvIndex = index; const item = inventory[index]; document.getElementById('edit-inv-name').value = item.name; document.getElementById('edit-inv-qty').value = item.qty; document.getElementById('edit-inv-weight').value = item.weight; document.getElementById('edit-inv-category').value = item.category || 'Général'; document.getElementById('edit-inventory-modal').classList.remove('hidden'); }; 
         if(document.getElementById('btn-save-edit-inv')) { document.getElementById('btn-save-edit-inv').addEventListener('click', () => { if (editingInvIndex >= 0) { inventory[editingInvIndex] = { name: document.getElementById('edit-inv-name').value, qty: document.getElementById('edit-inv-qty').value || 1, weight: document.getElementById('edit-inv-weight').value || "-", category: document.getElementById('edit-inv-category').value.trim() || 'Général', pinned: inventory[editingInvIndex].pinned }; setStore('dnd-inventory', inventory); renderInventory(); document.getElementById('edit-inventory-modal').classList.add('hidden'); editingInvIndex = -1; } }); }
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-toggle-currency') { document.getElementById('currency-inline-rules').classList.toggle('hidden'); } });
 
-        function renderTraits() { const listClass = document.getElementById('traits-list-class'); const listRace = document.getElementById('traits-list-race'); const listFeat = document.getElementById('traits-list-feat'); if(!listClass || !listRace || !listFeat) return; listClass.innerHTML = ''; listRace.innerHTML = ''; listFeat.innerHTML = ''; traits.forEach((trait, index) => { let isExpandedClass = trait.pinned ? 'expanded' : ''; let html = `<div class="item-card trait-card"><div class="item-card-header" onclick="toggleTraitDesc(event, ${index})"><div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;"><span class="trait-meta">${trait.level ? 'Niv.'+trait.level : ''}</span><h4 style="margin:0;">${trait.name}</h4>${trait.pinned ? '📍' : ''}</div>${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`; if(trait.type === 'class') listClass.innerHTML += html; else if(trait.type === 'race') listRace.innerHTML += html; else listFeat.innerHTML += html; }); if(listClass.innerHTML === '') listClass.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucune capacité.</span>`; if(listRace.innerHTML === '') listRace.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun trait.</span>`; if(listFeat.innerHTML === '') listFeat.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun don.</span>`; }
+        function renderTraits() { 
+            const listClass = document.getElementById('traits-list-class'); 
+            const listRace = document.getElementById('traits-list-race'); 
+            const listFeat = document.getElementById('traits-list-feat'); 
+            if(!listClass || !listRace || !listFeat) return; 
+            listClass.innerHTML = ''; listRace.innerHTML = ''; listFeat.innerHTML = ''; 
+            traits.forEach((trait, index) => { 
+                let isExpandedClass = trait.pinned ? 'expanded' : ''; 
+                let html = `<div class="item-card trait-card"><div class="item-card-header" onclick="toggleTraitDesc(event, ${index})"><div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;"><span class="trait-meta">${trait.level ? 'Niv.'+trait.level : ''}</span><h4 style="margin:0;">${trait.name}</h4>${trait.pinned ? '📍' : ''}</div>${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`; 
+                if(trait.type === 'class') listClass.innerHTML += html; else if(trait.type === 'race') listRace.innerHTML += html; else listFeat.innerHTML += html; 
+            }); 
+            if(listClass.innerHTML === '') listClass.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucune capacité.</span>`; 
+            if(listRace.innerHTML === '') listRace.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun trait.</span>`; 
+            if(listFeat.innerHTML === '') listFeat.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun don.</span>`; 
+        }
+
         window.toggleTraitDesc = (e, index) => { if(e.target.closest('button') || e.target.closest('.item-controls')) return; if(traits[index].pinned) return; const desc = document.getElementById(`trait-desc-${index}`); if(desc) desc.classList.toggle('expanded'); };
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-trait-modal') { editingTraitIndex = -1; document.getElementById('trait-modal-title').textContent = "Ajouter une Capacité"; document.querySelectorAll('#trait-form-modal input[type="text"], #trait-form-modal input[type="number"], #trait-form-modal textarea').forEach(i => i.value = ''); document.getElementById('new-trait-pinned').checked = false; traitModal.classList.remove('hidden'); } });
-        if(document.getElementById('btn-save-trait')) { document.getElementById('btn-save-trait').addEventListener('click', () => { const trait = { name: document.getElementById('new-trait-name').value.trim(), type: document.getElementById('new-trait-type').value, level: parseInt(document.getElementById('new-trait-level').value) || 0, desc: document.getElementById('new-trait-desc').value, pinned: document.getElementById('new-trait-pinned').checked }; if(trait.name) { if(editingTraitIndex >= 0) traits[editingTraitIndex] = trait; else traits.push(trait); setStore('dnd-traits', traits); renderTraits(); traitModal.classList.add('hidden'); } }); }
-        window.deleteTrait = (index) => { if(confirm("Supprimer cette capacité ?")) { traits.splice(index, 1); setStore('dnd-traits', traits); renderTraits(); }}; window.moveTraitUp = (index) => { if(moveWithinFilter(traits, index, -1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.moveTraitDown = (index) => { if(moveWithinFilter(traits, index, 1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.editTrait = (index) => { const data = traits[index]; document.getElementById('new-trait-name').value = data.name; document.getElementById('new-trait-type').value = data.type; document.getElementById('new-trait-level').value = data.level || ''; document.getElementById('new-trait-desc').value = data.desc; document.getElementById('new-trait-pinned').checked = data.pinned; editingTraitIndex = index; document.getElementById('trait-modal-title').textContent = "Modifier la Capacité"; traitModal.classList.remove('hidden'); };
-
-        // ==========================================
-        // DÉCLARATIONS MANQUANTES - Variables critiques
-        // ==========================================
-        const crudIgnoredPrefixes = ['new-', 'edit-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll'];
-
-        // TRAITS (Capacités & Dons)
-        let traits = getStore('dnd-traits') || [];
-        const traitModal = document.getElementById('trait-form-modal');
-
-        // ABILITIES (Capacités Limitées)
-        let abilities = getStore('dnd-abilities') || [];
-        const abilityModal = document.getElementById('ability-form-modal');
-
-        function renderAbilities() {
-            const list = document.getElementById('abilities-list');
-            if(!list) return;
-            list.innerHTML = '';
-            if(abilities.length === 0) { list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucune capacité limitée.</span>`; return; }
-            abilities.forEach((ab, index) => {
-                const usedCount = ab.used ? ab.used.filter(Boolean).length : 0;
-                const available = ab.max - usedCount;
-                let cbHtml = '';
-                for(let i = 0; i < ab.max; i++) {
-                    cbHtml += `<input type="checkbox" class="ability-check" data-idx="${index}" data-i="${i}" ${ab.used && ab.used[i] ? 'checked' : ''} title="Utiliser">`;
-                }
-                let regenText = ab.regenMode === 'short_long' ? 'Court + Long' : 'Repos Long';
-                list.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${ab.name}</h4>${getCrudControlsHTML(index, 'Ability')}</div><div class="ability-checkboxes">${cbHtml}</div><div class="item-details" style="margin-top:8px;"><span>${available}/${ab.max} disponible(s)</span><span>🔄 ${regenText}</span></div></div>`;
-            });
-            document.querySelectorAll('.ability-check').forEach(cb => {
-                cb.addEventListener('change', (e) => {
-                    const idx = parseInt(e.target.dataset.idx);
-                    const i = parseInt(e.target.dataset.i);
-                    if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false);
-                    abilities[idx].used[i] = e.target.checked;
-                    setStore('dnd-abilities', abilities);
+        
+        const btnToggleAllTraits = document.getElementById('btn-toggle-all-traits');
+        if(btnToggleAllTraits) {
+            btnToggleAllTraits.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const allDescs = document.querySelectorAll('.trait-desc');
+                const anyExpanded = Array.from(allDescs).some(d => d.classList.contains('expanded'));
+                allDescs.forEach(d => {
+                    if(anyExpanded) d.classList.remove('expanded');
+                    else d.classList.add('expanded');
                 });
             });
         }
 
-        document.body.addEventListener('click', (e) => {
-            if(e.target.id === 'btn-open-ability-modal') {
-                editingAbilityIndex = -1;
-                document.getElementById('new-ability-name').value = '';
-                document.getElementById('new-ability-max').value = '';
-                document.getElementById('ab-regen-mode').value = 'long';
-                document.getElementById('ab-short-rest-block').classList.add('hidden');
-                if(abilityModal) abilityModal.classList.remove('hidden');
-            }
-        });
+        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-trait-modal') { editingTraitIndex = -1; document.getElementById('trait-modal-title').textContent = "Ajouter une Capacité"; document.querySelectorAll('#trait-form-modal input[type="text"], #trait-form-modal input[type="number"], #trait-form-modal textarea').forEach(i => i.value = ''); document.getElementById('new-trait-pinned').checked = false; traitModal.classList.remove('hidden'); } });
+        if(document.getElementById('btn-save-trait')) { document.getElementById('btn-save-trait').addEventListener('click', () => { const trait = { name: document.getElementById('new-trait-name').value.trim(), type: document.getElementById('new-trait-type').value, level: parseInt(document.getElementById('new-trait-level').value) || 0, desc: document.getElementById('new-trait-desc').value, pinned: document.getElementById('new-trait-pinned').checked }; if(trait.name) { if(editingTraitIndex >= 0) traits[editingTraitIndex] = trait; else traits.push(trait); setStore('dnd-traits', traits); renderTraits(); traitModal.classList.add('hidden'); } }); }
+        window.deleteTrait = (index) => { if(confirm("Supprimer cette capacité ?")) { traits.splice(index, 1); setStore('dnd-traits', traits); renderTraits(); }}; window.moveTraitUp = (index) => { if(moveWithinFilter(traits, index, -1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.moveTraitDown = (index) => { if(moveWithinFilter(traits, index, 1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.editTrait = (index) => { const data = traits[index]; document.getElementById('new-trait-name').value = data.name; document.getElementById('new-trait-type').value = data.type; document.getElementById('new-trait-level').value = data.level || ''; document.getElementById('new-trait-desc').value = data.desc; document.getElementById('new-trait-pinned').checked = data.pinned; editingTraitIndex = index; document.getElementById('trait-modal-title').textContent = "Modifier la Capacité"; traitModal.classList.remove('hidden'); };
 
-        const abRegenMode = document.getElementById('ab-regen-mode');
-        if(abRegenMode) {
-            abRegenMode.addEventListener('change', () => {
-                const shortBlock = document.getElementById('ab-short-rest-block');
-                if(shortBlock) shortBlock.classList.toggle('hidden', abRegenMode.value !== 'short_long');
+        const crudIgnoredPrefixes = ['new-', 'edit-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll'];
+
+        let traits = getStore('dnd-traits') || []; const traitModal = document.getElementById('trait-form-modal');
+        let abilities = getStore('dnd-abilities') || []; const abilityModal = document.getElementById('ability-form-modal');
+
+        function renderAbilities() {
+            const list = document.getElementById('abilities-list'); if(!list) return; list.innerHTML = '';
+            if(abilities.length === 0) { list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucune capacité limitée. Utilisez ➕ Ajouter pour en créer.</span>`; return; }
+            abilities.forEach((ab, index) => {
+                const usedCount = ab.used ? ab.used.filter(Boolean).length : 0; const available = ab.max - usedCount; let chargesHtml = '';
+                for(let i = 0; i < ab.max; i++) { const isUsed = ab.used && ab.used[i]; chargesHtml += `<button class="ability-charge-btn ${isUsed ? 'used' : ''}" data-idx="${index}" data-i="${i}" title="${isUsed ? '↩ Récupérer' : '▶ Dépenser'}"></button>`; }
+                const regenIcon = ab.regenMode === 'short_long' ? '⏳' : '🌙'; const regenText = ab.regenMode === 'short_long' ? 'Court + Long' : 'Repos Long';
+                list.innerHTML += `<div class="item-card ability-card"><div class="item-card-header"><h4>${ab.name}</h4><div style="display:flex; align-items:center; gap:8px; flex-shrink:0;"><span class="ability-counter">${available}<span style="color:#bbb; font-size:0.8em;">/${ab.max}</span></span>${getCrudControlsHTML(index, 'Ability')}</div></div><div class="ability-charges">${chargesHtml}</div><div><span class="ability-regen-badge">${regenIcon} ${regenText}</span></div></div>`;
             });
+            list.querySelectorAll('.ability-charge-btn').forEach(btn => { btn.addEventListener('click', (e) => { e.preventDefault(); const idx = parseInt(e.currentTarget.dataset.idx); const i = parseInt(e.currentTarget.dataset.i); if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false); abilities[idx].used[i] = !abilities[idx].used[i]; setStore('dnd-abilities', abilities); renderAbilities(); }); });
         }
 
-        const abShortType = document.getElementById('ab-short-type');
-        if(abShortType) abShortType.addEventListener('change', () => {
-            const el = document.getElementById('ab-short-amount');
-            if(el) el.classList.toggle('hidden', abShortType.value === 'all');
-        });
-        const abLongType = document.getElementById('ab-long-type');
-        if(abLongType) abLongType.addEventListener('change', () => {
-            const el = document.getElementById('ab-long-amount');
-            if(el) el.classList.toggle('hidden', abLongType.value === 'all');
-        });
+        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-ability-modal') { editingAbilityIndex = -1; document.getElementById('new-ability-name').value = ''; document.getElementById('new-ability-max').value = ''; document.getElementById('ab-regen-mode').value = 'long'; document.getElementById('ab-short-rest-block').classList.add('hidden'); if(abilityModal) abilityModal.classList.remove('hidden'); } });
+        const abRegenMode = document.getElementById('ab-regen-mode'); if(abRegenMode) { abRegenMode.addEventListener('change', () => { const shortBlock = document.getElementById('ab-short-rest-block'); if(shortBlock) shortBlock.classList.toggle('hidden', abRegenMode.value !== 'short_long'); }); }
+        const abShortType = document.getElementById('ab-short-type'); if(abShortType) abShortType.addEventListener('change', () => { const el = document.getElementById('ab-short-amount'); if(el) el.classList.toggle('hidden', abShortType.value === 'all'); });
+        const abLongType = document.getElementById('ab-long-type'); if(abLongType) abLongType.addEventListener('change', () => { const el = document.getElementById('ab-long-amount'); if(el) el.classList.toggle('hidden', abLongType.value === 'all'); });
 
-        if(document.getElementById('btn-save-ability')) {
-            document.getElementById('btn-save-ability').addEventListener('click', () => {
-                const name = document.getElementById('new-ability-name').value.trim();
-                const max = parseInt(document.getElementById('new-ability-max').value) || 1;
-                const regenMode = document.getElementById('ab-regen-mode').value;
-                const shortType = document.getElementById('ab-short-type').value;
-                const shortAmount = parseInt(document.getElementById('ab-short-amount').value) || 1;
-                const longType = document.getElementById('ab-long-type').value;
-                const longAmount = parseInt(document.getElementById('ab-long-amount').value) || 1;
-                if(name && max > 0) {
-                    const ab = { name, max, used: Array(max).fill(false), regenMode, shortType, shortAmount, longType, longAmount };
-                    if(editingAbilityIndex >= 0) {
-                        ab.used = (abilities[editingAbilityIndex].used || []).slice(0, max);
-                        while(ab.used.length < max) ab.used.push(false);
-                        abilities[editingAbilityIndex] = ab;
-                    } else { abilities.push(ab); }
-                    setStore('dnd-abilities', abilities);
-                    renderAbilities();
-                    if(abilityModal) abilityModal.classList.add('hidden');
-                }
-            });
-        }
+        if(document.getElementById('btn-save-ability')) { document.getElementById('btn-save-ability').addEventListener('click', () => { const name = document.getElementById('new-ability-name').value.trim(); const max = parseInt(document.getElementById('new-ability-max').value) || 1; const regenMode = document.getElementById('ab-regen-mode').value; const shortType = document.getElementById('ab-short-type').value; const shortAmount = parseInt(document.getElementById('ab-short-amount').value) || 1; const longType = document.getElementById('ab-long-type').value; const longAmount = parseInt(document.getElementById('ab-long-amount').value) || 1; if(name && max > 0) { const ab = { name, max, used: Array(max).fill(false), regenMode, shortType, shortAmount, longType, longAmount }; if(editingAbilityIndex >= 0) { ab.used = (abilities[editingAbilityIndex].used || []).slice(0, max); while(ab.used.length < max) ab.used.push(false); abilities[editingAbilityIndex] = ab; } else { abilities.push(ab); } setStore('dnd-abilities', abilities); renderAbilities(); if(abilityModal) abilityModal.classList.add('hidden'); } }); }
         window.deleteAbility = (index) => { if(confirm("Supprimer cette capacité ?")) { abilities.splice(index, 1); setStore('dnd-abilities', abilities); renderAbilities(); } };
         window.moveAbilityUp = (index) => { if(index > 0) { [abilities[index-1], abilities[index]] = [abilities[index], abilities[index-1]]; setStore('dnd-abilities', abilities); renderAbilities(); } };
         window.moveAbilityDown = (index) => { if(index < abilities.length-1) { [abilities[index], abilities[index+1]] = [abilities[index+1], abilities[index]]; setStore('dnd-abilities', abilities); renderAbilities(); } };
-        window.editAbility = (index) => {
-            const ab = abilities[index];
-            document.getElementById('new-ability-name').value = ab.name;
-            document.getElementById('new-ability-max').value = ab.max;
-            document.getElementById('ab-regen-mode').value = ab.regenMode || 'long';
-            const shortBlock = document.getElementById('ab-short-rest-block');
-            if(shortBlock) shortBlock.classList.toggle('hidden', ab.regenMode !== 'short_long');
-            const abShortEl = document.getElementById('ab-short-type');
-            if(abShortEl) abShortEl.value = ab.shortType || 'all';
-            const abShortAmtEl = document.getElementById('ab-short-amount');
-            if(abShortAmtEl) { abShortAmtEl.value = ab.shortAmount || 1; abShortAmtEl.classList.toggle('hidden', (ab.shortType || 'all') === 'all'); }
-            const abLongEl = document.getElementById('ab-long-type');
-            if(abLongEl) abLongEl.value = ab.longType || 'all';
-            const abLongAmtEl = document.getElementById('ab-long-amount');
-            if(abLongAmtEl) { abLongAmtEl.value = ab.longAmount || 1; abLongAmtEl.classList.toggle('hidden', (ab.longType || 'all') === 'all'); }
-            editingAbilityIndex = index;
-            if(abilityModal) abilityModal.classList.remove('hidden');
-        };
+        window.editAbility = (index) => { const ab = abilities[index]; document.getElementById('new-ability-name').value = ab.name; document.getElementById('new-ability-max').value = ab.max; document.getElementById('ab-regen-mode').value = ab.regenMode || 'long'; const shortBlock = document.getElementById('ab-short-rest-block'); if(shortBlock) shortBlock.classList.toggle('hidden', ab.regenMode !== 'short_long'); const abShortEl = document.getElementById('ab-short-type'); if(abShortEl) abShortEl.value = ab.shortType || 'all'; const abShortAmtEl = document.getElementById('ab-short-amount'); if(abShortAmtEl) { abShortAmtEl.value = ab.shortAmount || 1; abShortAmtEl.classList.toggle('hidden', (ab.shortType || 'all') === 'all'); } const abLongEl = document.getElementById('ab-long-type'); if(abLongEl) abLongEl.value = ab.longType || 'all'; const abLongAmtEl = document.getElementById('ab-long-amount'); if(abLongAmtEl) { abLongAmtEl.value = ab.longAmount || 1; abLongAmtEl.classList.toggle('hidden', (ab.longType || 'all') === 'all'); } editingAbilityIndex = index; if(abilityModal) abilityModal.classList.remove('hidden'); };
 
-        // MACROS
         let macros = getStore('dnd-macros') || [];
-        function renderMacros() {
-            const list = document.getElementById('macro-list');
-            if(!list) return;
-            list.innerHTML = '';
-            macros.forEach((m, i) => {
-                list.innerHTML += `<div class="macro-pill"><button class="macro-btn rollable" data-formula="${m.formula}" data-name="${m.name}">${m.name}</button><span class="macro-del" onclick="deleteMacro(${i})">✖</span></div>`;
-            });
-        }
-        if(document.getElementById('btn-add-macro')) {
-            document.getElementById('btn-add-macro').addEventListener('click', () => {
-                const name = document.getElementById('macro-name').value.trim();
-                const formula = document.getElementById('macro-formula').value.trim();
-                if(name && formula) {
-                    macros.push({ name, formula });
-                    setStore('dnd-macros', macros);
-                    renderMacros();
-                    document.getElementById('macro-name').value = '';
-                    document.getElementById('macro-formula').value = '';
-                }
-            });
-        }
+        function renderMacros() { const list = document.getElementById('macro-list'); if(!list) return; list.innerHTML = ''; macros.forEach((m, i) => { list.innerHTML += `<div class="macro-pill"><button class="macro-btn rollable" data-formula="${m.formula}" data-name="${m.name}">${m.name}</button><span class="macro-del" onclick="deleteMacro(${i})">✖</span></div>`; }); }
+        if(document.getElementById('btn-add-macro')) { document.getElementById('btn-add-macro').addEventListener('click', () => { const name = document.getElementById('macro-name').value.trim(); const formula = document.getElementById('macro-formula').value.trim(); if(name && formula) { macros.push({ name, formula }); setStore('dnd-macros', macros); renderMacros(); document.getElementById('macro-name').value = ''; document.getElementById('macro-formula').value = ''; } }); }
         window.deleteMacro = (index) => { macros.splice(index, 1); setStore('dnd-macros', macros); renderMacros(); };
 
-        // CURRENCY PAY
-        document.body.addEventListener('click', (e) => {
-            if(e.target.id === 'btn-pay-currency') {
-                const amount = parseFloat(document.getElementById('pay-amount-val').value) || 0;
-                const type = document.getElementById('pay-amount-type').value;
-                if(amount <= 0) return;
-                const coinInput = document.getElementById('coin-' + type);
-                if(coinInput) {
-                    let current = parseFloat(coinInput.value) || 0;
-                    coinInput.value = Math.max(0, current - amount);
-                    setStore('dnd-sheet-coin-' + type, coinInput.value, false);
-                    document.getElementById('pay-amount-val').value = '';
-                }
-            }
-        });
+        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-pay-currency') { const amount = parseFloat(document.getElementById('pay-amount-val').value) || 0; const type = document.getElementById('pay-amount-type').value; if(amount <= 0) return; const coinInput = document.getElementById('coin-' + type); if(coinInput) { let current = parseFloat(coinInput.value) || 0; coinInput.value = Math.max(0, current - amount); setStore('dnd-sheet-coin-' + type, coinInput.value, false); document.getElementById('pay-amount-val').value = ''; } } });
 
         function initGlobalSave() {
-            const allSimpleInputs = document.querySelectorAll('#app-screen input:not(.slot-total-input):not(#avatar-file-input):not(#bg-file-input):not(#btn-import-json):not(.color-picker):not([type="radio"]):not([type="file"]):not(#pay-amount-val):not(#calc-display):not(#new-trait-pinned), #app-screen textarea:not(#new-trait-desc), #app-screen select:not(#hd-size):not(#layout-selector):not(#pay-amount-type):not(#traits-sort-select):not(#new-trait-type):not(#inv-category):not(#edit-inv-category):not(#new-atk-category)');
+            const allSimpleInputs = document.querySelectorAll('#app-screen input:not(.slot-total-input):not(#avatar-file-input):not(#bg-file-input):not(#btn-import-json):not(.color-picker):not([type="radio"]):not([type="file"]):not(#pay-amount-val):not(#calc-display):not(#new-trait-pinned):not(#global-search-input), #app-screen textarea:not(#new-trait-desc), #app-screen select:not(#hd-size):not(#layout-selector):not(#pay-amount-type):not(#traits-sort-select):not(#new-trait-type):not(#inv-category):not(#edit-inv-category):not(#new-atk-category)');
             allSimpleInputs.forEach(input => {
                 if(!input.id || crudIgnoredPrefixes.some(pref => input.id.startsWith(pref))) return;
                 if (input.type === 'checkbox') {
@@ -895,163 +622,100 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function initSkillProfSave() {
-            // Restaurer les niveaux de maîtrise (0/1/2) pour chaque compétence
-            document.querySelectorAll('.skill-prof').forEach(input => {
-                const skillId = input.id.replace('prof-', '');
-                const saved = getStore('dnd-sheet-' + input.id, false);
-                if(saved !== null) { input.value = parseInt(saved) || 0; }
-                updateSkillProfBtn(skillId);
-            });
-            // Restaurer les cases à cocher d'armures/armes (inchangées)
-            document.querySelectorAll('#prof-armor-light, #prof-armor-med, #prof-armor-heavy, #prof-armor-shield, #prof-weapon-simple, #prof-weapon-martial, #prof-weapon-other').forEach(input => {
-                const saved = getStore('dnd-sheet-'+input.id, false); if (saved !== null) input.checked = (saved === 'true');
-                input.addEventListener('change', () => { setStore('dnd-sheet-'+input.id, input.checked, false); updateStatsAndSkills(); });
-            });
+            document.querySelectorAll('.skill-prof').forEach(input => { const skillId = input.id.replace('prof-', ''); const saved = getStore('dnd-sheet-' + input.id, false); if(saved !== null) { input.value = parseInt(saved) || 0; } updateSkillProfBtn(skillId); });
+            document.querySelectorAll('#prof-armor-light, #prof-armor-med, #prof-armor-heavy, #prof-armor-shield, #prof-weapon-simple, #prof-weapon-martial, #prof-weapon-other').forEach(input => { const saved = getStore('dnd-sheet-'+input.id, false); if (saved !== null) input.checked = (saved === 'true'); input.addEventListener('change', () => { setStore('dnd-sheet-'+input.id, input.checked, false); updateStatsAndSkills(); }); });
         }
 
-        // Appliquer le layout EN PREMIER pour que les widgets soient dans le DOM visible
-        let savedLayout = getStore('dnd-layout-mode', false) || 'classic';
-        if(layoutSelector) layoutSelector.value = savedLayout;
-        applyLayout(savedLayout);
-
-        // Puis initialiser la sauvegarde (les inputs sont maintenant dans le DOM)
+        let savedLayout = getStore('dnd-layout-mode', false) || 'classic'; if(layoutSelector) layoutSelector.value = savedLayout; applyLayout(savedLayout);
         initSkillProfSave(); initGlobalSave(); 
         if(levelInput) { let prof = Math.floor((parseInt(levelInput.value) || 1) - 1) / 4 + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = Math.floor(prof); }
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
-        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits();
+        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits(); renderPreparedSpells();
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', () => { applyLayout('classic'); window.print(); });
-        // ==========================================
-        // EFFETS VISUELS DES ÉTATS (CONDITIONS)
-        // ==========================================
-        const STATUS_EFFECTS = {
-            'cond-blind':  { label: 'Aveuglé',      css: 'fx-blind',   desc: 'Aveuglé : désavantage à vos attaques, avantage pour vous attaquer.' },
-            'cond-charm':  { label: 'Charmé',        css: 'fx-charm',   desc: 'Charmé : vous ne pouvez pas attaquer la créature qui vous charme.' },
-            'cond-deaf':   { label: 'Assourdi',      css: 'fx-deaf',    desc: 'Assourdi : vous ne pouvez entendre.' },
-            'cond-fright': { label: 'Effrayé',       css: 'fx-fright',  desc: 'Effrayé : désavantage tant que la source de peur est visible.' },
-            'cond-grap':   { label: 'Empoigné',      css: 'fx-grap',    desc: 'Empoigné : vitesse réduite à 0.' },
-            'cond-pois':   { label: 'Empoisonné',    css: 'fx-poison',  desc: 'Empoisonné : désavantage aux jets d\'attaque et de caractéristique.' },
-            'cond-prone':  { label: 'À terre',       css: 'fx-prone',   desc: 'À terre : désavantage à vos attaques, avantage à moins de 1,5 m.' },
-            'cond-restr':  { label: 'Entravé',       css: 'fx-restrain',desc: 'Entravé : vitesse 0, désavantage attaques & jets DEX.' },
-            'cond-stun':   { label: 'Étourdi',       css: 'fx-stun',    desc: 'Étourdi : ne peut rien faire, jets FOR & DEX ratés auto.' },
-            'cond-uncon':  { label: 'Inconscient',   css: 'fx-uncon',   desc: 'Inconscient : à terre, coups critiques à moins de 1,5 m.' },
-        };
 
-        const statusOverlay = document.getElementById('status-fx-overlay');
-        function updateStatusFx() {
-            if(!statusOverlay) return;
-            const activeEffects = [];
-            document.body.classList.remove(...Object.values(STATUS_EFFECTS).map(e => 'body-' + e.css));
-            statusOverlay.className = 'status-fx-overlay';
+        // ==========================================
+        // MODULE DE RECHERCHE GLOBALE
+        // ==========================================
+        const searchModal = document.getElementById('global-search-modal');
+        const searchInput = document.getElementById('global-search-input');
+        const searchResults = document.getElementById('global-search-results');
+        const searchTrigger = document.getElementById('btn-global-search-trigger');
 
-            Object.entries(STATUS_EFFECTS).forEach(([id, fx]) => {
-                const cb = document.getElementById(id);
-                if(cb && cb.checked) {
-                    activeEffects.push(fx);
-                    document.body.classList.add('body-' + fx.css);
-                    statusOverlay.classList.add(fx.css);
+        if (searchModal && searchInput && searchResults) {
+            function openSearch() { searchModal.classList.remove('hidden'); searchInput.value = ''; searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>'; setTimeout(() => searchInput.focus(), 50); }
+            function closeSearch() { searchModal.classList.add('hidden'); document.activeElement?.blur(); }
+
+            if (searchTrigger) {
+                searchTrigger.addEventListener('click', (e) => { e.stopPropagation(); if (searchModal.classList.contains('hidden')) openSearch(); else closeSearch(); });
+            }
+
+            searchModal.addEventListener('click', (e) => { if (e.target === searchModal) closeSearch(); });
+
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase().trim();
+                if (!query) { searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>'; return; }
+                const itemsFound = [];
+                const targets = document.querySelectorAll('h1, h2, h3, h4, label, th, .widget-title, .spell-name, [placeholder]');
+                
+                targets.forEach(el => {
+                    if (el.closest('#global-search-modal') || el.closest('#login-screen') || el.closest('#loading-screen')) return;
+                    let text = el.hasAttribute('placeholder') && el.getAttribute('placeholder') ? el.getAttribute('placeholder') : (el.textContent || el.innerText);
+                    text = text.replace(/[\n\r]+|[\s]{2,}/g, ' ').trim();
+                    if (!text || text.length < 2) return;
+
+                    if (text.toLowerCase().includes(query)) {
+                        let contextName = 'Fiche de personnage';
+                        let widget = el.closest('.draggable-widget, .modal-box, .scroll-paper, .auth-card');
+                        if (widget) {
+                            let titleEl = widget.querySelector('.section-title, h2, .grimoire-title');
+                            if (titleEl) contextName = "Dossier : " + titleEl.textContent.trim().replace(/[▶▼]/g, '');
+                        }
+
+                        const clickTarget = el.hasAttribute('placeholder') ? el : (el.closest('div, li, tr, label') || el);
+                        if (!itemsFound.some(item => item.element === clickTarget)) { itemsFound.push({ title: text, context: contextName, element: clickTarget }); }
+                    }
+                });
+
+                if (itemsFound.length === 0) {
+                    searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Aucun élément correspondant trouvé.</div>';
+                } else {
+                    searchResults.innerHTML = '';
+                    itemsFound.slice(0, 15).forEach(item => {
+                        const row = document.createElement('div');
+                        row.className = 'search-result-item';
+                        row.innerHTML = `<div class="result-title">${item.title}</div><div class="result-path">${item.context}</div>`;
+                        row.addEventListener('click', () => {
+                            closeSearch();
+                            let hiddenParent = item.element.closest('.hidden, [style*="display: none"]');
+                            if (hiddenParent) {
+                                const tabId = item.element.closest('[id]')?.id;
+                                if (tabId) {
+                                    const tabBtn = document.querySelector(`[data-tab="${tabId}"], [href="#${tabId}"], #btn-tab-${tabId}`);
+                                    if (tabBtn) tabBtn.click();
+                                }
+                            }
+                            item.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            if (item.element.tagName === 'INPUT' || item.element.tagName === 'TEXTAREA') setTimeout(() => item.element.focus(), 300);
+                            item.element.classList.add('search-highlight-active');
+                            setTimeout(() => item.element.classList.remove('search-highlight-active'), 2400);
+                        });
+                        searchResults.appendChild(row);
+                    });
                 }
             });
-            // Gérer les conditions personnalisées actives
-            customConditions.forEach(cond => {
-                if(cond.active) activeEffects.push({ label: cond.name });
-            });
-            if(activeEffects.length > 0) {
-                statusOverlay.classList.remove('hidden');
-                let labels = document.getElementById('status-fx-labels');
-                if(!labels) { labels = document.createElement('div'); labels.id = 'status-fx-labels'; labels.className = 'status-fx-labels'; statusOverlay.appendChild(labels); }
-                labels.innerHTML = activeEffects.map(e => `<span class="status-fx-badge">${e.label}</span>`).join('');
-            } else {
-                statusOverlay.classList.add('hidden');
-            }
+
+            window.openGlobalSearch = openSearch;
+            window.closeGlobalSearch = closeSearch;
         }
 
-        // Écouter les changements de conditions
-        Object.keys(STATUS_EFFECTS).forEach(id => {
-            const cb = document.getElementById(id);
-            if(cb) cb.addEventListener('change', updateStatusFx);
-        });
-        // Mise à jour quand les conditions perso changent
-        const origToggleCustomCond = window.toggleCustomCond;
-        window.toggleCustomCond = (i) => { origToggleCustomCond(i); updateStatusFx(); };
-        updateStatusFx(); // init au chargement
-
         // ==========================================
-        // MODULE SORTS PRÉPARÉS
-        // ==========================================
-        let preparedSpells = getStore('dnd-prepared-spells') || []; // tableau d'indices de sorts préparés
-
-        function renderPreparedSpells() {
-            const list = document.getElementById('prepared-spells-list');
-            const countEl = document.getElementById('prepared-spell-count');
-            if(!list) return;
-            const prepared = spells.filter((sp, i) => preparedSpells.includes(i));
-            if(countEl) countEl.textContent = `${prepared.length} sort${prepared.length !== 1 ? 's' : ''} préparé${prepared.length !== 1 ? 's' : ''}`;
-            if(prepared.length === 0) { list.innerHTML = `<span style="font-size:0.85rem; color:#888; font-style:italic;">Aucun sort préparé. Cliquez sur ⚙️ Gérer pour en sélectionner.</span>`; return; }
-            // Grouper par niveau
-            const byLevel = {};
-            prepared.forEach((sp, _) => { const lvl = parseInt(sp.level) || 0; if(!byLevel[lvl]) byLevel[lvl] = []; byLevel[lvl].push(sp); });
-            list.innerHTML = Object.keys(byLevel).sort((a,b)=>a-b).map(lvl => `
-                <div class="prepared-level-group">
-                    <div class="prepared-level-header">Niveau ${lvl}${lvl=='0' ? ' — Tours de magie' : ''}</div>
-                    ${byLevel[lvl].map(sp => `<div class="prepared-spell-row">
-                        <span class="prepared-spell-name">${sp.name}</span>
-                        <span class="prepared-spell-meta">⏱️ ${sp.time || '—'} · 📏 ${sp.range || '—'}</span>
-                    </div>`).join('')}
-                </div>`).join('');
-        }
-
-        function renderPrepareChecklist() {
-            const list = document.getElementById('prepare-spells-checklist');
-            if(!list) return;
-            const search = (document.getElementById('prepare-search')?.value || '').toLowerCase();
-            const filterLvl = document.getElementById('prepare-filter-level')?.value || '';
-            const filtered = spells.map((sp, i) => ({...sp, idx: i}))
-                .filter(sp => (!search || sp.name.toLowerCase().includes(search)) && (filterLvl === '' || String(sp.level) === filterLvl));
-            if(filtered.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun sort trouvé.</p>`; return; }
-            const byLevel = {};
-            filtered.forEach(sp => { const lvl = parseInt(sp.level)||0; if(!byLevel[lvl]) byLevel[lvl]=[]; byLevel[lvl].push(sp); });
-            list.innerHTML = Object.keys(byLevel).sort((a,b)=>a-b).map(lvl => `
-                <div style="margin-bottom:10px;">
-                    <div style="font-weight:bold; color:var(--primary-color); font-family:'Cinzel',serif; font-size:0.85rem; padding:4px 0; border-bottom:1px solid rgba(122,40,40,0.2); margin-bottom:6px;">Niveau ${lvl}${lvl=='0'?' — Tours de magie':''}</div>
-                    ${byLevel[lvl].map(sp => `
-                    <label class="prepare-spell-row" style="display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:6px; cursor:pointer; transition:background 0.15s; margin-bottom:3px;">
-                        <input type="checkbox" class="prepare-cb" data-idx="${sp.idx}" ${preparedSpells.includes(sp.idx)?'checked':''} style="transform:scale(1.3); cursor:pointer; accent-color:var(--primary-color);">
-                        <span style="flex:1; font-weight:${preparedSpells.includes(sp.idx)?'bold':'normal'}; color:var(--text-color);">${sp.name}</span>
-                        <span style="font-size:0.75rem; color:#aaa;">⏱️ ${sp.time||'—'}</span>
-                    </label>`).join('')}
-                </div>`).join('');
-            list.querySelectorAll('.prepare-cb').forEach(cb => {
-                cb.addEventListener('change', (e) => {
-                    const idx = parseInt(e.target.dataset.idx);
-                    if(e.target.checked) { if(!preparedSpells.includes(idx)) preparedSpells.push(idx); }
-                    else { preparedSpells = preparedSpells.filter(i => i !== idx); }
-                    setStore('dnd-prepared-spells', preparedSpells);
-                    renderPreparedSpells();
-                    e.target.closest('label').style.fontWeight = e.target.checked ? 'bold' : 'normal';
-                });
-            });
-        }
-
-        document.body.addEventListener('click', (e) => {
-            if(e.target.id === 'btn-open-prepare-spells') {
-                renderPrepareChecklist();
-                document.getElementById('prepare-spells-modal').classList.remove('hidden');
-            }
-            if(e.target.id === 'btn-close-prepare-spells') {
-                document.getElementById('prepare-spells-modal').classList.add('hidden');
-            }
-        });
-        document.getElementById('prepare-search')?.addEventListener('input', renderPrepareChecklist);
-        document.getElementById('prepare-filter-level')?.addEventListener('change', renderPrepareChecklist);
-        renderPreparedSpells();
-
-        // ==========================================
-        // RACCOURCIS CLAVIER
+        // GESTIONNAIRE DE RACCOURCIS CLAVIER
         // ==========================================
         const DEFAULT_SHORTCUTS = [
+            { id: 'open-search',  label: 'Recherche Globale',    key: 'k', action: () => { document.getElementById('btn-global-search-trigger')?.click(); } },
             { id: 'roll-adv',     label: 'Mode Avantage',        key: 'a', action: () => { const r = document.querySelector('input[name="roll-mode"][value="adv"]'); if(r){r.checked=true;} } },
             { id: 'roll-dis',     label: 'Mode Désavantage',     key: 'd', action: () => { const r = document.querySelector('input[name="roll-mode"][value="dis"]'); if(r){r.checked=true;} } },
             { id: 'roll-normal',  label: 'Mode Normal',          key: 'n', action: () => { const r = document.querySelector('input[name="roll-mode"][value="normal"]'); if(r){r.checked=true;} } },
@@ -1083,15 +747,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.textContent = '⏳';
                     btn.style.background = '#e67e22';
                     const handler = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        let key = e.key.toLowerCase();
-                        if(key === 'escape') key = '';
-                        shortcuts[i].key = key;
-                        savedShortcutKeys[shortcuts[i].id] = key;
+                        e.preventDefault(); e.stopPropagation();
+                        let key = e.key.toLowerCase(); if(key === 'escape') key = '';
+                        shortcuts[i].key = key; savedShortcutKeys[shortcuts[i].id] = key;
                         DB.set('dnd-shortcuts', JSON.stringify(savedShortcutKeys));
-                        renderShortcutsConfig();
-                        window.removeEventListener('keydown', handler, true);
+                        renderShortcutsConfig(); window.removeEventListener('keydown', handler, true);
                     };
                     window.addEventListener('keydown', handler, true);
                 });
@@ -1099,7 +759,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderShortcutsConfig();
 
-        // Écouter les raccourcis — ignorer si on est dans un input/textarea/select
         window.addEventListener('keydown', (e) => {
             const tag = document.activeElement?.tagName;
             if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
@@ -1108,6 +767,5 @@ document.addEventListener('DOMContentLoaded', () => {
             const sc = shortcuts.find(s => s.key && s.key === key);
             if(sc) { e.preventDefault(); sc.action(); }
         });
-
     }
 });
