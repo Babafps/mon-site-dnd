@@ -1,5 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
 
+    let diceBox;
+    if(window.DiceBox) {
+        diceBox = new window.DiceBox("#dice-box", {
+            assetPath: 'https://unpkg.com/@3d-dice/dice-box@1.1.4/dist/assets/',
+            theme: 'default',
+            scale: 6,
+            spinForce: 6,
+            throwForce: 7
+        });
+        diceBox.init();
+    }
+
     // ==========================================
     // 1. BASE DE DONNÉES ET GESTIONNAIRE D'ÉTAT
     // ==========================================
@@ -175,6 +187,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     } else { 
+        let quillNewJournal = new Quill('#new-journal-content', { theme: 'snow' });
+        let quillNewSpell = new Quill('#new-spell-desc', { theme: 'snow' });
+        let quillEditJournal = null;
+
         if(homeScreen) homeScreen.classList.add('hidden'); if(appScreen) appScreen.classList.remove('hidden'); 
 
         document.querySelectorAll('.btn-close-modal').forEach(btn => { btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); });
@@ -293,17 +309,71 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.btn-dice').forEach(btn => { btn.addEventListener('click', (e) => { dicePool.push(parseInt(e.target.getAttribute('data-faces'))); renderDicePool(); }); });
         function renderDicePool() { if(!dicePoolDisplay) return; dicePoolDisplay.innerHTML = ''; dicePool.forEach((faces, index) => { const dieDiv = document.createElement('div'); dieDiv.className = 'die-icon'; dieDiv.textContent = `d${faces}`; dieDiv.onclick = () => { dicePool.splice(index, 1); renderDicePool(); }; dicePoolDisplay.appendChild(dieDiv); }); }
         
-        function executeRoll() {
-            if (dicePool.length === 0) return; let resultsBox = document.getElementById('dice-results'); let totalBox = document.getElementById('dice-total');
-            if(resultsBox) resultsBox.innerHTML = ''; if(totalBox) totalBox.innerHTML = 'Calcul...'; let poolTotal = 0; let resultsHTML = ''; let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`); const advMode = advModeNode ? advModeNode.value : 'normal'; 
-            dicePool.forEach((faces, index) => {
-                let score1 = Math.floor(Math.random() * faces) + 1; let finalScore = score1; let extraHTML = '';
-                if(advMode !== 'normal') { let score2 = Math.floor(Math.random() * faces) + 1; let droppedScore; if(advMode === 'adv') { finalScore = Math.max(score1, score2); droppedScore = Math.min(score1, score2); } else { finalScore = Math.min(score1, score2); droppedScore = Math.max(score1, score2); } extraHTML = `<div class="die-dropped-score">${droppedScore}</div>`; }
-                poolTotal += finalScore; let colorClass = ''; if (faces === 20 && finalScore === 20) colorClass = 'crit-success'; if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
-                resultsHTML += `<div class="die-result rolling ${colorClass}"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`; if (index < dicePool.length - 1) resultsHTML += `<div class="die-math">+</div>`;
+        async function executeRoll() {
+            if (dicePool.length === 0) return; 
+            let resultsBox = document.getElementById('dice-results'); 
+            let totalBox = document.getElementById('dice-total');
+
+            if(resultsBox) resultsBox.innerHTML = '<span style="font-size:0.9rem; color:#888;">Lancement en cours...</span>'; 
+            if(totalBox) totalBox.innerHTML = ''; 
+            
+            let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`); 
+            const advMode = advModeNode ? advModeNode.value : 'normal'; 
+            
+            let notationArray = [];
+            dicePool.forEach(faces => {
+                notationArray.push(advMode !== 'normal' ? `2d${faces}` : `1d${faces}`);
             });
-            if(resultsBox) resultsBox.innerHTML = resultsHTML; setTimeout(() => { document.querySelectorAll('.die-result').forEach(el => el.classList.remove('rolling')); if(totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, 500); dicePool = []; renderDicePool();
+
+            let poolTotal = 0; 
+            let resultsHTML = ''; 
+
+            if(diceBox) {
+                const boxResults = await diceBox.roll(notationArray);
+                
+                boxResults.forEach((group, index) => {
+                    const faces = group.sides;
+                    let finalScore;
+                    let extraHTML = '';
+
+                    if(advMode !== 'normal') {
+                        const score1 = group.rolls[0].value;
+                        const score2 = group.rolls[1].value;
+                        let droppedScore;
+                        if(advMode === 'adv') {
+                            finalScore = Math.max(score1, score2);
+                            droppedScore = Math.min(score1, score2);
+                        } else {
+                            finalScore = Math.min(score1, score2);
+                            droppedScore = Math.max(score1, score2);
+                        }
+                        extraHTML = `<div class="die-dropped-score">${droppedScore}</div>`;
+                    } else {
+                        finalScore = group.value;
+                    }
+
+                    poolTotal += finalScore;
+                    let colorClass = ''; 
+                    if (faces === 20 && finalScore === 20) colorClass = 'crit-success'; 
+                    if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
+
+                    resultsHTML += `<div class="die-result rolling ${colorClass}"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`; 
+                    if (index < boxResults.length - 1) resultsHTML += `<div class="die-math">+</div>`;
+                });
+
+                setTimeout(() => { diceBox.clear(); }, 3000);
+            }
+
+            if(resultsBox) resultsBox.innerHTML = resultsHTML; 
+            setTimeout(() => { 
+                document.querySelectorAll('.die-result').forEach(el => el.classList.remove('rolling')); 
+                if(totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; 
+            }, 500); 
+            
+            dicePool = []; 
+            renderDicePool();
         }
+
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
         
         document.body.addEventListener('click', (e) => {
@@ -402,8 +472,60 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); alert("Repos Long terminé !"); });
 
         let initiativeTracker = getStore('dnd-initiative-tracker') || []; let activeInitIndex = getStore('dnd-initiative-active', false) || -1;
-        function renderInitiativeTracker() { const list = document.getElementById('init-tracker-list'); if(!list) return; list.innerHTML = ''; if(initiativeTracker.length === 0) list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun combattant.</span>`; initiativeTracker.forEach((c, i) => { let activeClass = i === activeInitIndex ? 'active-turn' : ''; list.innerHTML += `<div class="init-item ${activeClass}"><span class="init-score">${c.score}</span><span style="flex:1; font-weight:bold;">${c.name}</span><span style="font-size:0.8rem; margin-right:10px;">❤️ ${c.hp}</span><span class="init-del no-print" onclick="deleteInit(${i})">X</span></div>`; }); }
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-init-add') { const name = document.getElementById('init-add-name').value.trim(); const score = parseInt(document.getElementById('init-add-score').value) || 0; const hp = document.getElementById('init-add-hp').value.trim() || "-"; if(name) { initiativeTracker.push({name, score, hp}); initiativeTracker.sort((a,b) => b.score - a.score); setStore('dnd-initiative-tracker', initiativeTracker); renderInitiativeTracker(); document.getElementById('init-add-name').value=''; document.getElementById('init-add-score').value=''; document.getElementById('init-add-hp').value=''; } } if(e.target.id === 'btn-init-next') { if(initiativeTracker.length === 0) return; activeInitIndex++; if(activeInitIndex >= initiativeTracker.length) activeInitIndex = 0; setStore('dnd-initiative-active', activeInitIndex, false); renderInitiativeTracker(); } if(e.target.id === 'btn-init-clear') { if(confirm("Vider le tracker ?")) { initiativeTracker = []; activeInitIndex = -1; setStore('dnd-initiative-tracker', initiativeTracker); setStore('dnd-initiative-active', activeInitIndex, false); renderInitiativeTracker(); } } });
+        let initiativeRound = parseInt(getStore('dnd-initiative-round', false)) || 1;
+
+        function renderInitiativeTracker() { 
+            const list = document.getElementById('init-tracker-list'); 
+            if(!list) return; 
+            list.innerHTML = ''; 
+            if(initiativeTracker.length === 0) list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun combattant.</span>`; 
+            initiativeTracker.forEach((c, i) => { 
+                let activeClass = i === activeInitIndex ? 'active-turn' : ''; 
+                list.innerHTML += `<div class="init-item ${activeClass}"><span class="init-score">${c.score}</span><span style="flex:1; font-weight:bold;">${c.name}</span><span style="font-size:0.8rem; margin-right:10px;">❤️ ${c.hp}</span><span class="init-del no-print" onclick="deleteInit(${i})">X</span></div>`; 
+            }); 
+            
+            const roundVal = document.getElementById('init-round-val');
+            if(roundVal) roundVal.textContent = initiativeRound;
+        }
+
+        document.body.addEventListener('click', (e) => { 
+            if(e.target.id === 'btn-init-add') { 
+                const name = document.getElementById('init-add-name').value.trim(); 
+                const score = parseInt(document.getElementById('init-add-score').value) || 0; 
+                const hp = document.getElementById('init-add-hp').value.trim() || "-"; 
+                if(name) { 
+                    initiativeTracker.push({name, score, hp}); 
+                    initiativeTracker.sort((a,b) => b.score - a.score); 
+                    setStore('dnd-initiative-tracker', initiativeTracker); 
+                    renderInitiativeTracker(); 
+                    document.getElementById('init-add-name').value=''; 
+                    document.getElementById('init-add-score').value=''; 
+                    document.getElementById('init-add-hp').value=''; 
+                } 
+            } 
+            if(e.target.id === 'btn-init-next') { 
+                if(initiativeTracker.length === 0) return;
+                activeInitIndex++;
+                if(activeInitIndex >= initiativeTracker.length) {
+                    activeInitIndex = 0;
+                    initiativeRound++; 
+                    setStore('dnd-initiative-round', initiativeRound, false);
+                }
+                setStore('dnd-initiative-active', activeInitIndex, false);
+                renderInitiativeTracker();
+            } 
+            if(e.target.id === 'btn-init-clear') { 
+                if(confirm("Vider le tracker ?")) {
+                    initiativeTracker = [];
+                    activeInitIndex = -1;
+                    initiativeRound = 1; 
+                    setStore('dnd-initiative-tracker', initiativeTracker);
+                    setStore('dnd-initiative-active', activeInitIndex, false);
+                    setStore('dnd-initiative-round', initiativeRound, false);
+                    renderInitiativeTracker();
+                }
+            } 
+        });
         window.deleteInit = (i) => { initiativeTracker.splice(i, 1); if(activeInitIndex >= initiativeTracker.length) activeInitIndex = 0; if(initiativeTracker.length === 0) activeInitIndex = -1; setStore('dnd-initiative-tracker', initiativeTracker); setStore('dnd-initiative-active', activeInitIndex, false); renderInitiativeTracker(); };
 
         let spells = getStore('dnd-spells') || [];
@@ -493,7 +615,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const spellModal = document.getElementById('spell-form-modal');
         document.body.addEventListener('click', (e) => { 
-            if(e.target.id === 'btn-open-spell-add') { editingSpellIndex = -1; document.getElementById('spell-modal-title').textContent = "Inscrire un Sort"; document.querySelectorAll('#spell-form-modal input[type="text"], #spell-form-modal input[type="number"], #spell-form-modal textarea').forEach(i => i.value = ''); spellModal.classList.remove('hidden'); }
+            if(e.target.id === 'btn-open-spell-add') { 
+                editingSpellIndex = -1; 
+                document.getElementById('spell-modal-title').textContent = "Inscrire un Sort"; 
+                document.querySelectorAll('#spell-form-modal input[type="text"], #spell-form-modal input[type="number"]').forEach(i => i.value = ''); 
+                quillNewSpell.root.innerHTML = '';
+                spellModal.classList.remove('hidden'); 
+            }
             
             if (e.target.id === 'btn-open-prepare-spells') {
                 document.getElementById('prepare-spells-modal').classList.remove('hidden');
@@ -509,16 +637,40 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        if(document.getElementById('btn-add-spell')) { document.getElementById('btn-add-spell').addEventListener('click', () => { const sp = { name: document.getElementById('new-spell-name').value, level: document.getElementById('new-spell-level').value || 0, time: document.getElementById('new-spell-time').value, range: document.getElementById('new-spell-range').value, res: document.getElementById('new-spell-res').value, desc: document.getElementById('new-spell-desc').value, notes: document.getElementById('new-spell-notes').value, pinned: document.getElementById('new-spell-pinned').checked, prepared: editingSpellIndex >= 0 ? spells[editingSpellIndex].prepared : false }; if(sp.name) { if(editingSpellIndex >= 0) { spells[editingSpellIndex] = sp; } else { spells.push(sp); } setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); spellModal.classList.add('hidden'); } }); }
-        window.togglePin = (index) => { spells[index].pinned = !spells[index].pinned; setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }; window.deleteSpell = (index) => { if(confirm("Oublier ce sort ?")) { spells.splice(index, 1); setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); }}; window.moveSpellUp = (index) => { let prevIndex = -1; for(let i = index - 1; i >= 0; i--) { if(spells[i].pinned) { prevIndex = i; break; } } if(prevIndex !== -1) { [spells[prevIndex], spells[index]] = [spells[index], spells[prevIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.moveSpellDown = (index) => { let nextIndex = -1; for(let i = index + 1; i < spells.length; i++) { if(spells[i].pinned) { nextIndex = i; break; } } if(nextIndex !== -1) { [spells[nextIndex], spells[index]] = [spells[index], spells[nextIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.editSpell = (index) => { const data = spells[index]; document.getElementById('new-spell-name').value = data.name; document.getElementById('new-spell-level').value = data.level; document.getElementById('new-spell-time').value = data.time; document.getElementById('new-spell-range').value = data.range; document.getElementById('new-spell-res').value = data.res; document.getElementById('new-spell-desc').value = data.desc; document.getElementById('new-spell-notes').value = data.notes; document.getElementById('new-spell-pinned').checked = data.pinned; editingSpellIndex = index; document.getElementById('spell-modal-title').textContent = "Modifier le Sort"; spellModal.classList.remove('hidden'); };
+        if(document.getElementById('btn-add-spell')) { document.getElementById('btn-add-spell').addEventListener('click', () => { const sp = { name: document.getElementById('new-spell-name').value, level: document.getElementById('new-spell-level').value || 0, time: document.getElementById('new-spell-time').value, range: document.getElementById('new-spell-range').value, res: document.getElementById('new-spell-res').value, desc: quillNewSpell.root.innerHTML, notes: document.getElementById('new-spell-notes').value, pinned: document.getElementById('new-spell-pinned').checked, prepared: editingSpellIndex >= 0 ? spells[editingSpellIndex].prepared : false }; if(sp.name) { if(editingSpellIndex >= 0) { spells[editingSpellIndex] = sp; } else { spells.push(sp); } setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); spellModal.classList.add('hidden'); } }); }
+        window.togglePin = (index) => { spells[index].pinned = !spells[index].pinned; setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }; window.deleteSpell = (index) => { if(confirm("Oublier ce sort ?")) { spells.splice(index, 1); setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); }}; window.moveSpellUp = (index) => { let prevIndex = -1; for(let i = index - 1; i >= 0; i--) { if(spells[i].pinned) { prevIndex = i; break; } } if(prevIndex !== -1) { [spells[prevIndex], spells[index]] = [spells[index], spells[prevIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.moveSpellDown = (index) => { let nextIndex = -1; for(let i = index + 1; i < spells.length; i++) { if(spells[i].pinned) { nextIndex = i; break; } } if(nextIndex !== -1) { [spells[nextIndex], spells[index]] = [spells[index], spells[nextIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.editSpell = (index) => { const data = spells[index]; document.getElementById('new-spell-name').value = data.name; document.getElementById('new-spell-level').value = data.level; document.getElementById('new-spell-time').value = data.time; document.getElementById('new-spell-range').value = data.range; document.getElementById('new-spell-res').value = data.res; quillNewSpell.root.innerHTML = data.desc; document.getElementById('new-spell-notes').value = data.notes; document.getElementById('new-spell-pinned').checked = data.pinned; editingSpellIndex = index; document.getElementById('spell-modal-title').textContent = "Modifier le Sort"; spellModal.classList.remove('hidden'); };
         const grimoireModal = document.getElementById('grimoire-modal'); document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-grimoire') { renderGrimoire(); grimoireModal.classList.remove('hidden', 'closing'); grimoireModal.classList.add('opening'); } }); if(document.getElementById('btn-close-grimoire')) document.getElementById('btn-close-grimoire').addEventListener('click', () => { grimoireModal.classList.remove('opening'); grimoireModal.classList.add('closing'); setTimeout(() => { grimoireModal.classList.add('hidden'); }, 550); });
 
         let journal = getStore('dnd-journal') || []; const journalPage = document.getElementById('book-page-content');
         window.renderJournalTOC = () => { if(!journalPage) return; let html = `<h2 class="toc-title">Sommaire</h2><div class="toc-list">`; if(journal.length === 0) html += `<p style="text-align:center;">Aucune note dans le journal. Écris un chapitre !</p>`; journal.forEach((entry, i) => { html += `<div class="toc-item"><div class="toc-link" onclick="openJournalEntry(${i})"><span class="toc-title-text">${entry.title}</span><div class="toc-dots"></div></div><div class="toc-controls"><span title="Déchirer la page" onclick="deleteJournalEntry(${i})">❌</span></div></div>`; }); html += `</div>`; journalPage.innerHTML = html; };
-        window.openJournalEntry = (index) => { const entry = journal[index]; journalPage.innerHTML = `<div class="bookmark-return" onclick="renderJournalTOC()" title="Retour au sommaire">🔖</div><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:20px;"><h2 class="note-view-title" style="margin-top:0;">${entry.title}</h2><button class="btn-small no-print" style="background:var(--primary-color);" onclick="editJournalForm(${index})">✎ Modifier</button></div><div class="note-view-content" id="view-journal-content">${entry.content}</div><div id="journal-edit-container" class="hidden" style="margin-top: 20px; border-top: 2px dashed rgba(138,28,28,0.25); padding-top: 15px;"><h3 style="font-family:'Cinzel'; color:var(--primary-color); margin-bottom:10px;">Modifier le chapitre</h3><input type="text" id="edit-journal-title" style="width:100%; margin-bottom:10px; font-weight:bold; font-size:1.1rem; border:1px solid rgba(138,28,28,0.25); padding:8px;"><textarea id="edit-journal-content" class="auto-expand" style="width:100%; min-height:200px; border:1px solid rgba(138,28,28,0.25); padding:10px;"></textarea><div style="display:flex; gap:10px; margin-top:10px;"><button id="btn-confirm-edit-journal" class="btn-small" style="background:#27ae60;">Sauvegarder</button><button id="btn-cancel-edit-journal" class="btn-small" style="background:#e74c3c;">Annuler</button></div></div>`; };
-        window.editJournalForm = (index) => { const entry = journal[index]; document.getElementById('view-journal-content').classList.add('hidden'); document.getElementById('journal-edit-container').classList.remove('hidden'); document.getElementById('edit-journal-title').value = entry.title; const ta = document.getElementById('edit-journal-content'); ta.value = entry.content; setTimeout(() => adjustHeight(ta), 50); document.getElementById('btn-confirm-edit-journal').onclick = () => { journal[index].title = document.getElementById('edit-journal-title').value.trim(); journal[index].content = document.getElementById('edit-journal-content').value.trim(); setStore('dnd-journal', journal); openJournalEntry(index); }; document.getElementById('btn-cancel-edit-journal').onclick = () => { openJournalEntry(index); }; };
+        
+        window.openJournalEntry = (index) => { 
+            const entry = journal[index]; 
+            journalPage.innerHTML = `<div class="bookmark-return" onclick="renderJournalTOC()" title="Retour au sommaire">🔖</div><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:20px;"><h2 class="note-view-title" style="margin-top:0;">${entry.title}</h2><button class="btn-small no-print" style="background:var(--primary-color);" onclick="editJournalForm(${index})">✎ Modifier</button></div><div class="note-view-content ql-editor" id="view-journal-content">${entry.content}</div><div id="journal-edit-container" class="hidden" style="margin-top: 20px; border-top: 2px dashed rgba(138,28,28,0.25); padding-top: 15px;"><h3 style="font-family:'Cinzel'; color:var(--primary-color); margin-bottom:10px;">Modifier le chapitre</h3><input type="text" id="edit-journal-title" style="width:100%; margin-bottom:10px; font-weight:bold; font-size:1.1rem; border:1px solid rgba(138,28,28,0.25); padding:8px;"><div id="edit-journal-content" style="background: white; color: black; min-height: 200px; border-radius: 4px;"></div><div style="display:flex; gap:10px; margin-top:10px;"><button id="btn-confirm-edit-journal" class="btn-small" style="background:#27ae60;">Sauvegarder</button><button id="btn-cancel-edit-journal" class="btn-small" style="background:#e74c3c;">Annuler</button></div></div>`; 
+        };
+
+        window.editJournalForm = (index) => { 
+            const entry = journal[index]; 
+            document.getElementById('view-journal-content').classList.add('hidden'); 
+            document.getElementById('journal-edit-container').classList.remove('hidden'); 
+            document.getElementById('edit-journal-title').value = entry.title; 
+            
+            if(!quillEditJournal) {
+                quillEditJournal = new Quill('#edit-journal-content', { theme: 'snow' });
+            }
+            quillEditJournal.root.innerHTML = entry.content; 
+            
+            document.getElementById('btn-confirm-edit-journal').onclick = () => { 
+                journal[index].title = document.getElementById('edit-journal-title').value.trim(); 
+                journal[index].content = quillEditJournal.root.innerHTML; 
+                setStore('dnd-journal', journal); 
+                openJournalEntry(index); 
+            }; 
+            document.getElementById('btn-cancel-edit-journal').onclick = () => { openJournalEntry(index); }; 
+        };
+
         window.deleteJournalEntry = (index) => { if(confirm("Déchirer cette page définitivement ?")) { journal.splice(index, 1); setStore('dnd-journal', journal); renderJournalTOC(); } };
-        if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = document.getElementById('new-journal-content').value.trim(); if(title && content) { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; document.getElementById('new-journal-content').value = ''; alert("Chapitre enregistré dans le journal !"); } }); }
+        if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; alert("Chapitre enregistré dans le journal !"); } }); }
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); } if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); modal.classList.add('book-burning'); setTimeout(() => modal.classList.add('hidden'), 1500); } });
 
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
@@ -761,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.addEventListener('keydown', (e) => {
             const tag = document.activeElement?.tagName;
-            if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+            if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable || document.activeElement?.classList.contains('ql-editor')) return;
             if(e.ctrlKey || e.metaKey || e.altKey) return;
             const key = e.key.toLowerCase();
             const sc = shortcuts.find(s => s.key && s.key === key);
