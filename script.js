@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let diceBox;
     if(window.DiceBox) {
         diceBox = new window.DiceBox("#dice-box", {
-            assetPath: 'https://unpkg.com/@3d-dice/dice-box@1.1.4/dist/assets/',
+            // 👇 MODIFICATION ICI : On pointe vers ton dossier local sur GitHub
+            assetPath: './assets/', 
             theme: 'default',
             scale: 6,
             spinForce: 6,
