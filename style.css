@@ -217,7 +217,6 @@ body.concentrating-mode #concentration-glow {
     pointer-events: none;
     z-index: 0;
 }
-/* Gold top strip */
 .home-container::after {
     content: '';
     position: absolute;
@@ -622,7 +621,6 @@ h1::before, h1::after {
     z-index: 0;
     opacity: 0.45;
 }
-/* Subtle top accent line */
 .dynamic-box::before {
     content: '';
     position: absolute;
@@ -860,7 +858,6 @@ h1::before, h1::after {
     color: var(--text-color); font-family: 'Cinzel', serif;
     box-shadow: 0 2px 5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.7);
 }
-/* BUG FIX: override glass-hover only for base calc buttons, not colored ones */
 .btn-calc:not(.btn-calc-op):not(.btn-calc-eq):not(.btn-calc-clear):hover {
     background: linear-gradient(160deg, rgba(240,220,185,0.95), rgba(225,205,165,0.9));
     border-color: rgba(122,40,40,0.38);
@@ -1028,7 +1025,7 @@ h1::before, h1::after {
 .slot-info { font-size: 0.75rem; color: #777; line-height: 1.2; }
 
 /* ============================================================
-   DICE ROLLER
+   DICE ROLLER (Animation 2D & États)
    ============================================================ */
 #btn-toggle-dice {
     position: fixed; right: 0; top: 120px;
@@ -1124,45 +1121,36 @@ h1::before, h1::after {
     padding-top: 6px; font-size: 1.3rem; font-family: 'Lora', serif;
     color: var(--primary-color);
     box-shadow: 0 4px 10px rgba(0,0,0,0.1), inset 0 1px 2px rgba(255,255,255,0.7);
-    animation: dieReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) backwards;
-}
-@keyframes dieReveal {
-    from { opacity: 0; transform: scale(0.6) rotate(-15deg); }
-    to   { opacity: 1; transform: scale(1) rotate(0deg); }
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 .die-main-score { line-height: 1; margin-top: 2px; }
-.die-dropped-score { font-size: 0.8rem; color: #999; text-decoration: line-through; margin-top: 2px; }
 .die-result span { font-size: 0.65rem; color: #666; font-weight: normal; margin-bottom: -5px; }
 .die-math { color: var(--text-color); font-size: 1.8rem; margin: 0 3px; }
+
+/* 2D Roll Animation */
+@keyframes rollAnim2D {
+    0%   { transform: rotate(0deg) scale(1); }
+    25%  { transform: rotate(-15deg) scale(1.1); }
+    50%  { transform: rotate(15deg) scale(1.15); }
+    75%  { transform: rotate(-10deg) scale(1.05); }
+    100% { transform: rotate(0deg) scale(1); }
+}
+.rolling { animation: rollAnim2D 0.55s cubic-bezier(0.2,0.8,0.2,1); }
+
+/* Critiques et Avantages */
 .crit-success {
     color: #2ecc71 !important; border-color: #2ecc71;
     background: linear-gradient(160deg, rgba(46,204,113,0.15), rgba(39,174,96,0.1)) !important;
-    animation: dieReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) backwards, critGlow 0.6s ease 0.35s;
-}
-@keyframes critGlow {
-    0% { box-shadow: 0 0 0 0 rgba(46,204,113,0.6); }
-    100% { box-shadow: 0 0 20px 6px rgba(46,204,113,0); }
+    box-shadow: 0 0 15px rgba(46,204,113,0.5), inset 0 1px 2px rgba(255,255,255,0.7);
 }
 .crit-fail {
     color: #e74c3c !important; border-color: #e74c3c;
     background: linear-gradient(160deg, rgba(231,76,60,0.15), rgba(192,57,43,0.1)) !important;
-    animation: dieReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) backwards, failGlow 0.6s ease 0.35s;
-}
-@keyframes failGlow {
-    0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.6); }
-    100% { box-shadow: 0 0 20px 6px rgba(231,76,60,0); }
+    box-shadow: 0 0 15px rgba(231,76,60,0.5), inset 0 1px 2px rgba(255,255,255,0.7);
 }
 
 #dice-total { margin-top: 15px; font-size: 2rem; font-family: 'Cinzel', serif; font-weight: bold; color: #666; border-top: 1px dashed rgba(122,40,40,0.25); padding-top: 15px; }
 .total-number { color: var(--primary-color); font-size: 3rem; text-shadow: 0 2px 8px rgba(122,40,40,0.2); }
-
-@keyframes rollAnim {
-    0%   { transform: rotate(0deg) scale(1); }
-    30%  { transform: rotate(120deg) scale(1.25); }
-    70%  { transform: rotate(280deg) scale(1.15); }
-    100% { transform: rotate(360deg) scale(1); }
-}
-.rolling { animation: rollAnim 0.55s cubic-bezier(0.2,0.8,0.2,1); }
 
 #quick-roll-toast {
     position: fixed; bottom: 24px; left: 50%;
@@ -1475,7 +1463,7 @@ h1::before, h1::after {
 .toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
 /* ============================================================
-   PRINT STYLES (unchanged, keeping layout intact)
+   PRINT STYLES
    ============================================================ */
 @media print {
     @page { margin: 1.2cm 1.4cm; size: A4; }
@@ -1567,4 +1555,241 @@ h1::before, h1::after {
     #layout-tabs-container .tab-content { background: white !important; }
     .inventory-weight-total { font-size: 7pt !important; }
     #comp-notes { min-height: 30px !important; }
+    .hp-bar-block, .hp-quick-controls { display: none !important; }
 }
+
+/* ============================================================
+   ✦ AMÉLIORATIONS — ACCESSIBILITÉ (FOCUS CLAVIER)
+   ============================================================ */
+:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.btn:focus-visible, .btn-small:focus-visible, .btn-icon:focus-visible,
+.btn-dice:focus-visible, .btn-roll-main:focus-visible, .cat-tab:focus-visible,
+.tab-btn-strict:focus-visible, .auth-btn-primary:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 3px;
+}
+/* Respecte les préférences de réduction de mouvement */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.05ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ============================================================
+   ✦ BARRE DE POINTS DE VIE + SOIN / DÉGÂTS RAPIDES
+   ============================================================ */
+.hp-bar-block { width: 100%; margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+.hp-bar-track {
+    position: relative; height: 28px; border-radius: 14px;
+    background: rgba(0,0,0,0.13);
+    border: 1px solid var(--soft-border);
+    overflow: hidden;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.2);
+}
+.hp-bar-fill {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 100%; border-radius: 14px;
+    background: linear-gradient(90deg, #27ae60, #2ecc71);
+    box-shadow: 0 0 12px rgba(46,204,113,0.4);
+    transition: width 0.55s cubic-bezier(0.2,0.8,0.2,1), background 0.4s, box-shadow 0.4s;
+}
+.hp-bar-fill.hp-mid { background: linear-gradient(90deg, #d4a017, #f1c40f); box-shadow: 0 0 12px rgba(241,196,15,0.4); }
+.hp-bar-fill.hp-low { background: linear-gradient(90deg, #c0392b, #e74c3c); box-shadow: 0 0 14px rgba(231,76,60,0.5); animation: hpLowPulse 1.6s ease-in-out infinite alternate; }
+@keyframes hpLowPulse { from { opacity: 0.85; } to { opacity: 1; box-shadow: 0 0 20px rgba(231,76,60,0.65); } }
+.hp-bar-text {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.92rem;
+    color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.65), 0 0 2px rgba(0,0,0,0.5);
+    letter-spacing: 0.05em; z-index: 1; pointer-events: none;
+}
+.hp-bar-temp-badge { color: #5dc7ff; margin-left: 6px; font-size: 0.8rem; }
+.hp-quick-controls { display: flex; gap: 6px; align-items: center; }
+.hp-quick-amount {
+    flex: 1; min-width: 0; text-align: center;
+    border: 1px solid var(--soft-border) !important;
+    border-radius: 8px; background: rgba(255,255,255,0.55);
+    padding: 7px 6px; font-weight: bold; outline: none;
+}
+.hp-quick-amount:focus { border-color: var(--primary-color) !important; background: rgba(255,255,255,0.85); }
+.btn-hp-quick {
+    width: 44px; height: 38px; border: none; border-radius: 9px;
+    cursor: pointer; font-size: 1.5rem; font-weight: bold; color: #fff;
+    line-height: 1; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: var(--transition-smooth);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.btn-hp-dmg  { background: linear-gradient(160deg, #e85c4a, #c0392b); }
+.btn-hp-heal { background: linear-gradient(160deg, #34d672, #27ae60); }
+.btn-hp-quick:hover  { transform: translateY(-2px); filter: brightness(1.09); box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-hp-quick:active { transform: translateY(0) scale(0.95); }
+
+/* ============================================================
+   ✦ RESPONSIVE — TABLETTE & MOBILE
+   ============================================================ */
+/* Empêche le lecteur musical fixe de masquer le bas de la fiche */
+body { padding-bottom: 78px; }
+
+@media (max-width: 768px) {
+    body { padding: 10px 8px 84px; }
+    .sheet-container { padding: 18px 14px; border-radius: var(--radius-md); }
+    h1 { font-size: 1.9rem; }
+    h1::before, h1::after { margin: 0 6px; }
+    .sheet-header h1 { font-size: 1.7rem; }
+    .home-container { margin: 40px auto; padding: 30px 22px; }
+    .home-title { font-size: 2.1rem; }
+    .modal-box { padding: 20px 16px; width: 94%; }
+    .modal-header h2 { font-size: 1.25rem; }
+    /* Boutons d'en-tête flottants plus compacts */
+    #btn-go-home { left: 60px !important; font-size: 0.8rem; padding: 6px 10px; }
+    #btn-global-search-trigger { padding: 6px 10px; }
+    /* Plateau de dés en plein écran mobile */
+    #dice-drawer { width: calc(100vw - 24px); max-width: 360px; padding: 20px; }
+    .rest-summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .rest-actions-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+    .home-title { font-size: 1.7rem; }
+    h1 { font-size: 1.55rem; letter-spacing: 0.02em; }
+    .header-main-row { gap: 10px; }
+    .avatar-mini { width: 50px; height: 50px; }
+    .input-group { min-width: 100px; }
+    .new-char-box { flex-direction: column; }
+    .settings-dropdown { width: calc(100vw - 24px); }
+    .info-grid { gap: 10px; }
+    /* Empile proprement les onglets de catégorie scrollables */
+    .dice-buttons .btn-dice { padding: 10px 12px; font-size: 0.95rem; }
+    .modal-box { padding: 16px 12px; }
+    #btn-go-home { font-size: 0; padding: 7px 9px; }   /* garde juste l'icône 🏠 */
+    #btn-go-home::first-letter { font-size: 1rem; }
+}
+
+/* Cibles tactiles plus confortables sur écrans tactiles */
+@media (hover: none) and (pointer: coarse) {
+    .skill-prof-btn { width: 26px; height: 26px; }
+    .collapse-icon { padding: 4px 9px; }
+    .btn-close-modal { width: 38px; height: 38px; }
+}
+
+/* ============================================================
+   ✦ MODE NUIT (FICHE) — body.theme-dark
+   ============================================================ */
+body.theme-dark {
+    --sheet-bg-color: #1d1712;
+    --widget-bg: #261e18;
+    --text-color: #ece3d2;
+    --soft-border: rgba(196,155,53,0.22);
+    --glass-bg: rgba(60,48,36,0.5);
+    --glass-hover: rgba(72,58,42,0.7);
+}
+body.theme-dark .sheet-container {
+    background: linear-gradient(172deg, #1d1712 0%, #241c16 100%);
+    border-color: rgba(196,155,53,0.28);
+}
+body.theme-dark .dynamic-box,
+body.theme-dark .full-width-notes,
+body.theme-dark .mini-stat-box {
+    background: linear-gradient(158deg, #2a211a 0%, #241d17 100%);
+    border-color: rgba(196,155,53,0.18);
+}
+body.theme-dark .dynamic-box::after { opacity: 0.15; }
+body.theme-dark .attribute-block,
+body.theme-dark .combat-box,
+body.theme-dark .coin-box,
+body.theme-dark .item-card,
+body.theme-dark .spell-slot-row,
+body.theme-dark .init-item,
+body.theme-dark .prepared-spell-row {
+    background: linear-gradient(158deg, #2c231b, #251e18);
+    border-color: rgba(196,155,53,0.16);
+}
+body.theme-dark .health-block { background: linear-gradient(160deg, #2c231b, #241d17); border-color: rgba(196,155,53,0.2); }
+body.theme-dark .stat-score-circle,
+body.theme-dark .prof-bonus-box {
+    background: linear-gradient(135deg, #332a20, #2a221b);
+}
+body.theme-dark .stat-score-input,
+body.theme-dark .combat-box input,
+body.theme-dark .health-col input,
+body.theme-dark .coin-box input,
+body.theme-dark .spell-stat-col input,
+body.theme-dark .prof-bonus-box input { color: var(--text-color); }
+/* Champs de saisie & textareas */
+body.theme-dark input,
+body.theme-dark textarea,
+body.theme-dark select { color: var(--text-color); }
+body.theme-dark input::placeholder,
+body.theme-dark textarea::placeholder { color: #8a7a64; }
+body.theme-dark #quick-note { background: rgba(255,255,255,0.05); }
+body.theme-dark textarea:focus,
+body.theme-dark input:focus { background: rgba(196,155,53,0.07); }
+/* Titres & libellés : on remonte le contraste */
+body.theme-dark .section-title,
+body.theme-dark .attribute-block h3,
+body.theme-dark .health-col label,
+body.theme-dark .coin-box label,
+body.theme-dark .slot-lvl-label { color: var(--accent-color); }
+body.theme-dark .input-group label,
+body.theme-dark .combat-box label,
+body.theme-dark .spell-stat-col label,
+body.theme-dark .item-details,
+body.theme-dark .item-details span,
+body.theme-dark .training-text-box strong,
+body.theme-dark .health-col label { color: #c2b094; }
+body.theme-dark .item-card-header h4 { color: #e8b84a; }
+body.theme-dark .conditions-track { background: rgba(0,0,0,0.2); }
+body.theme-dark .conditions-track label { background: rgba(255,255,255,0.05); color: #c2b094; }
+/* Modales sombres */
+body.theme-dark .modal-box {
+    background: linear-gradient(158deg, #221b15 0%, #2a211a 100%);
+    border-color: rgba(196,155,53,0.26);
+}
+body.theme-dark .modal-list { border-top-color: rgba(196,155,53,0.2); }
+body.theme-dark .search-result-item { background: rgba(255,255,255,0.04); border-color: rgba(196,155,53,0.2); }
+body.theme-dark .result-path { color: #9a8a70; }
+/* Plateau de dés sombre */
+body.theme-dark #dice-drawer {
+    background: linear-gradient(162deg, #221b15 0%, #2a211a 100%);
+    border-color: rgba(196,155,53,0.3);
+}
+body.theme-dark .die-result { background: linear-gradient(160deg, #332a20, #2a221b); color: var(--accent-color); }
+body.theme-dark .die-icon { background: rgba(255,255,255,0.06); color: var(--accent-color); }
+body.theme-dark .radio-pill span { background: rgba(255,255,255,0.06); color: #c2b094; }
+body.theme-dark .btn-dice { background: linear-gradient(158deg, #332a20, #2a221b); color: var(--accent-color); }
+body.theme-dark .hp-quick-amount { background: rgba(255,255,255,0.06); }
+body.theme-dark .currency-table td { color: #c2b094; }
+/* Petit halo lunaire sur l'en-tête en mode nuit */
+body.theme-dark .sheet-header::after { background: var(--sheet-bg-color); }
+
+/* ============================================================
+   ✦ DÉS — VRAIE ANIMATION DE ROULEMENT 3D
+   ============================================================ */
+#dice-results { perspective: 900px; }
+.die-result { transform-style: preserve-3d; }
+.die-rolling-3d {
+    animation: diceTumble3D 0.5s linear infinite;
+    background: linear-gradient(160deg, rgba(255,255,255,0.78), rgba(255,244,220,0.62));
+    box-shadow: 0 10px 22px rgba(0,0,0,0.28), inset 0 1px 2px rgba(255,255,255,0.7);
+}
+.die-rolling-3d .die-main-score { color: var(--primary-color); opacity: 0.85; }
+@keyframes diceTumble3D {
+    0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+    100% { transform: rotateX(360deg) rotateY(270deg) rotateZ(180deg); }
+}
+.die-settle { animation: diceSettle 0.5s cubic-bezier(0.34,1.56,0.64,1) backwards; }
+@keyframes diceSettle {
+    0%   { transform: scale(1.35) rotateX(55deg) rotateZ(14deg); opacity: 0.35; }
+    55%  { transform: scale(0.9) rotateX(-10deg) rotateZ(-4deg); opacity: 1; }
+    100% { transform: scale(1) rotateX(0deg) rotateZ(0deg); }
+}
+body.theme-dark .die-rolling-3d { background: linear-gradient(160deg, #332a20, #2a221b); }
+body.theme-dark .die-rolling-3d .die-main-score { color: var(--accent-color); }

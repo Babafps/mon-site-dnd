@@ -157,7 +157,6 @@ async function loadUserDataIntoLocalStorage(userId) {
 
     await Promise.all(characters.map(async (c) => {
         const data = await SupaAuth.loadCharacterData(c.id);
-        // CORRECTION ICI : utilisation correcte de la variable ${key}
         Object.entries(data).forEach(([key, value]) => {
             localStorage.setItem(`${c.id}_${key}`, value);
         });
@@ -177,7 +176,6 @@ async function loadUserDataIntoLocalStorage(userId) {
 
 async function loadCharacterDataIntoLocalStorage(charId) {
     const data = await SupaAuth.loadCharacterData(charId);
-    // CORRECTION ICI : utilisation correcte de la variable ${key}
     Object.entries(data).forEach(([key, value]) => {
         localStorage.setItem(`${charId}_${key}`, value);
     });

@@ -1,18 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    let diceBox;
-    if(window.DiceBox) {
-        diceBox = new window.DiceBox("#dice-box", {
-            // 👇 MODIFICATION ICI : On pointe vers ton dossier local sur GitHub
-            assetPath: './assets/', 
-            theme: 'default',
-            scale: 6,
-            spinForce: 6,
-            throwForce: 7
-        });
-        diceBox.init();
-    }
-
     // ==========================================
     // 1. BASE DE DONNÉES ET GESTIONNAIRE D'ÉTAT
     // ==========================================
@@ -53,6 +40,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
+    // EFFETS VISUELS ET ÉTATS
+    // ==========================================
+    const conditionsMap = {
+        'cond-blind': { class: 'fx-blind', label: 'Aveuglé', icon: '👁️' },
+        'cond-charm': { class: 'fx-charm', label: 'Charmé', icon: '💖' },
+        'cond-deaf': { class: 'fx-deaf', label: 'Assourdi', icon: '🙉' },
+        'cond-fright': { class: 'fx-fright', label: 'Effrayé', icon: '👻' },
+        'cond-grap': { class: 'fx-grap', label: 'Empoigné', icon: '✊' },
+        'cond-pois': { class: 'fx-poison', label: 'Empoisonné', icon: '🧪' },
+        'cond-prone': { class: 'fx-prone', label: 'À terre', icon: '⏬' },
+        'cond-restr': { class: 'fx-restrain', label: 'Entravé', icon: '⛓️' },
+        'cond-stun': { class: 'fx-stun', label: 'Étourdi', icon: '💫' },
+        'cond-uncon': { class: 'fx-uncon', label: 'Inconscient', icon: '💤' }
+    };
+
+    function updateStatusEffects() {
+        const overlay = document.getElementById('status-fx-overlay');
+        const labelsContainer = document.getElementById('status-fx-labels');
+        if(!overlay) return;
+        let activeClasses = [];
+        let activeLabels = [];
+        Object.keys(conditionsMap).forEach(id => {
+            const cb = document.getElementById(id);
+            if(cb && cb.checked) {
+                activeClasses.push(conditionsMap[id].class);
+                activeLabels.push(`<span class="status-fx-badge">${conditionsMap[id].icon} ${conditionsMap[id].label}</span>`);
+            }
+        });
+        overlay.className = 'status-fx-overlay ' + activeClasses.join(' ');
+        if(activeClasses.length > 0) overlay.classList.remove('hidden');
+        else overlay.classList.add('hidden');
+        
+        if(labelsContainer) labelsContainer.innerHTML = activeLabels.join('');
+    }
+
+    // ==========================================
     // 2. ÉCOUTEURS GLOBAUX INDÉPENDANTS
     // ==========================================
     
@@ -76,6 +99,26 @@ document.addEventListener('DOMContentLoaded', () => {
         let cc = document.getElementById('color-concentration'); if(cc) cc.value = concentrationColor;
     }
     applyTheme();
+
+    // --- Toast applicatif élégant (remplace certains alert) ---
+    window.showAppToast = function(msg, bg = '#27ae60') {
+        let t = document.getElementById('app-toast');
+        if(!t) {
+            t = document.createElement('div'); t.id = 'app-toast'; t.className = 'no-print';
+            t.style.cssText = 'position:fixed; bottom:92px; left:50%; transform:translateX(-50%) translateY(20px); padding:12px 24px; border-radius:30px; font-family:"Cinzel",serif; font-size:1rem; font-weight:bold; color:#fff; z-index:6000; box-shadow:0 8px 28px rgba(0,0,0,0.45); opacity:0; transition:opacity 0.3s, transform 0.3s; pointer-events:none; text-align:center; max-width:90vw; border:1px solid rgba(196,155,53,0.5);';
+            document.body.appendChild(t);
+        }
+        t.style.background = bg; t.textContent = msg;
+        requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; });
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(20px)'; }, 2800);
+    };
+
+    // --- Mode Nuit (fiche) ---
+    const toggleDarkMode = document.getElementById('toggle-dark-mode');
+    function applyDarkMode(on) { document.body.classList.toggle('theme-dark', on); if(toggleDarkMode) toggleDarkMode.checked = on; }
+    applyDarkMode(DB.get('dnd-theme-darkmode') === 'true');
+    if(toggleDarkMode) toggleDarkMode.addEventListener('change', (e) => { DB.set('dnd-theme-darkmode', e.target.checked); applyDarkMode(e.target.checked); });
 
     const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.documentElement.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
     const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
@@ -310,68 +353,74 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.btn-dice').forEach(btn => { btn.addEventListener('click', (e) => { dicePool.push(parseInt(e.target.getAttribute('data-faces'))); renderDicePool(); }); });
         function renderDicePool() { if(!dicePoolDisplay) return; dicePoolDisplay.innerHTML = ''; dicePool.forEach((faces, index) => { const dieDiv = document.createElement('div'); dieDiv.className = 'die-icon'; dieDiv.textContent = `d${faces}`; dieDiv.onclick = () => { dicePool.splice(index, 1); renderDicePool(); }; dicePoolDisplay.appendChild(dieDiv); }); }
         
-        async function executeRoll() {
-            if (dicePool.length === 0) return; 
-            let resultsBox = document.getElementById('dice-results'); 
-            let totalBox = document.getElementById('dice-total');
+        const btnToggleCurrency = document.getElementById('btn-toggle-currency');
+        const currencyRules = document.getElementById('currency-inline-rules');
+        if(btnToggleCurrency && currencyRules) {
+            btnToggleCurrency.addEventListener('click', () => {
+                currencyRules.classList.toggle('hidden');
+            });
+        }
 
-            if(resultsBox) resultsBox.innerHTML = '<span style="font-size:0.9rem; color:#888;">Lancement en cours...</span>'; 
-            if(totalBox) totalBox.innerHTML = ''; 
-            
-            let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`); 
-            const advMode = advModeNode ? advModeNode.value : 'normal'; 
-            
-            let notationArray = [];
-            dicePool.forEach(faces => {
-                notationArray.push(advMode !== 'normal' ? `2d${faces}` : `1d${faces}`);
+        async function executeRoll() {
+            if (dicePool.length === 0) return;
+            let resultsBox = document.getElementById('dice-results');
+            let totalBox = document.getElementById('dice-total');
+            if(totalBox) totalBox.innerHTML = '';
+
+            let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`);
+            const advMode = advModeNode ? advModeNode.value : 'normal';
+            const poolSnapshot = [...dicePool];
+
+            // 1) Affiche immédiatement les dés en train de rouler (culbute 3D + chiffres qui défilent)
+            let rollingHTML = '';
+            poolSnapshot.forEach((faces, index) => {
+                rollingHTML += `<div class="die-result die-rolling-3d" id="rolling-die-${index}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">?</div></div>`;
+                if (index < poolSnapshot.length - 1) rollingHTML += `<div class="die-math">+</div>`;
+            });
+            if(resultsBox) resultsBox.innerHTML = rollingHTML;
+
+            // Défilement aléatoire des chiffres pendant le lancer
+            const scramble = setInterval(() => {
+                poolSnapshot.forEach((faces, index) => {
+                    const el = document.querySelector(`#rolling-die-${index} .die-main-score`);
+                    if(el) el.textContent = Math.floor(Math.random() * faces) + 1;
+                });
+            }, 60);
+
+            await new Promise(resolve => setTimeout(resolve, 850));
+            clearInterval(scramble);
+
+            // 2) Calcule et révèle les résultats finaux avec un rebond de stabilisation
+            let poolTotal = 0;
+            poolSnapshot.forEach((faces, index) => {
+                let finalScore, droppedScore;
+                let extraHTML = '';
+                if(advMode !== 'normal') {
+                    let score1 = Math.floor(Math.random() * faces) + 1;
+                    let score2 = Math.floor(Math.random() * faces) + 1;
+                    if(advMode === 'adv') { finalScore = Math.max(score1, score2); droppedScore = Math.min(score1, score2); }
+                    else { finalScore = Math.min(score1, score2); droppedScore = Math.max(score1, score2); }
+                    extraHTML = `<div class="die-dropped-score" style="position:absolute; top:4px; right:6px; font-size:0.75rem; color:#888; text-decoration:line-through;">${droppedScore}</div>`;
+                } else {
+                    finalScore = Math.floor(Math.random() * faces) + 1;
+                }
+                poolTotal += finalScore;
+                let colorClass = '';
+                if (faces === 20 && finalScore === 20) colorClass = 'crit-success';
+                if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
+
+                const tile = document.getElementById(`rolling-die-${index}`);
+                if(tile) {
+                    tile.className = `die-result die-settle ${colorClass}`;
+                    tile.style.position = 'relative';
+                    tile.style.animationDelay = (index * 0.06) + 's';
+                    tile.innerHTML = `<span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}`;
+                }
             });
 
-            let poolTotal = 0; 
-            let resultsHTML = ''; 
+            if(totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
 
-            if(diceBox) {
-                const boxResults = await diceBox.roll(notationArray);
-                
-                boxResults.forEach((group, index) => {
-                    const faces = group.sides;
-                    let finalScore;
-                    let extraHTML = '';
-
-                    if(advMode !== 'normal') {
-                        const score1 = group.rolls[0].value;
-                        const score2 = group.rolls[1].value;
-                        let droppedScore;
-                        if(advMode === 'adv') {
-                            finalScore = Math.max(score1, score2);
-                            droppedScore = Math.min(score1, score2);
-                        } else {
-                            finalScore = Math.min(score1, score2);
-                            droppedScore = Math.max(score1, score2);
-                        }
-                        extraHTML = `<div class="die-dropped-score">${droppedScore}</div>`;
-                    } else {
-                        finalScore = group.value;
-                    }
-
-                    poolTotal += finalScore;
-                    let colorClass = ''; 
-                    if (faces === 20 && finalScore === 20) colorClass = 'crit-success'; 
-                    if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
-
-                    resultsHTML += `<div class="die-result rolling ${colorClass}"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`; 
-                    if (index < boxResults.length - 1) resultsHTML += `<div class="die-math">+</div>`;
-                });
-
-                setTimeout(() => { diceBox.clear(); }, 3000);
-            }
-
-            if(resultsBox) resultsBox.innerHTML = resultsHTML; 
-            setTimeout(() => { 
-                document.querySelectorAll('.die-result').forEach(el => el.classList.remove('rolling')); 
-                if(totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; 
-            }, 500); 
-            
-            dicePool = []; 
+            dicePool = [];
             renderDicePool();
         }
 
@@ -447,9 +496,52 @@ document.addEventListener('DOMContentLoaded', () => {
         let customConditions = getStore('dnd-custom-conditions') || []; const customCondContainer = document.getElementById('custom-conditions-container'); const customCondInput = document.getElementById('input-custom-condition'); const btnAddCustomCond = document.getElementById('btn-add-custom-condition');
         function renderCustomConditions() { if(!customCondContainer) return; customCondContainer.innerHTML = ''; customConditions.forEach((cond, i) => { customCondContainer.innerHTML += `<div style="display:flex; align-items:center; gap:5px; margin-bottom:4px; background:rgba(255,255,255,0.5); padding:4px 8px; border-radius:4px; border:1px dashed rgba(138,28,28,0.25);"><input type="checkbox" id="custom-cond-${i}" ${cond.active ? 'checked' : ''} onchange="toggleCustomCond(${i})" style="transform:scale(1.2); cursor:pointer;"><label style="flex:1; cursor:pointer; font-weight:bold; color:var(--text-color);" for="custom-cond-${i}">${cond.name}</label><span style="color:#e74c3c; cursor:pointer; font-weight:bold; padding:0 5px;" onclick="deleteCustomCond(${i})">X</span></div>`; }); }
         if(btnAddCustomCond && customCondInput) { btnAddCustomCond.addEventListener('click', () => { let val = customCondInput.value.trim(); if(val) { customConditions.push({name: val, active: false}); setStore('dnd-custom-conditions', customConditions); customCondInput.value = ''; renderCustomConditions(); } }); }
-        window.toggleCustomCond = (i) => { customConditions[i].active = !customConditions[i].active; setStore('dnd-custom-conditions', customConditions); }; window.deleteCustomCond = (i) => { customConditions.splice(i, 1); setStore('dnd-custom-conditions', customConditions); renderCustomConditions(); };
+        window.toggleCustomCond = (i) => { customConditions[i].active = !customConditions[i].active; setStore('dnd-custom-conditions', customConditions); updateStatusEffects(); }; window.deleteCustomCond = (i) => { customConditions.splice(i, 1); setStore('dnd-custom-conditions', customConditions); renderCustomConditions(); updateStatusEffects(); };
 
-        function updateHpVisuals() { const hpCurrentInput = document.getElementById('hp-current'); const hpMaxInput = document.getElementById('hp-max'); if(!hpCurrentInput || !hpMaxInput) return; const current = parseInt(hpCurrentInput.value) || 0; const max = parseInt(hpMaxInput.value) || 1; const block = document.querySelector('.health-block'); if(!block) return; const ratio = current / max; if(ratio > 0.5) { block.style.borderColor = '#2ecc71'; block.style.boxShadow = '0 0 10px rgba(46, 204, 113, 0.2)'; } else if (ratio > 0.25) { block.style.borderColor = '#f1c40f'; block.style.boxShadow = '0 0 10px rgba(241, 196, 15, 0.2)'; } else { block.style.borderColor = '#e74c3c'; block.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.3)'; } }
+        function updateHpVisuals() {
+            const hpCurrentInput = document.getElementById('hp-current'); const hpMaxInput = document.getElementById('hp-max');
+            if(!hpCurrentInput || !hpMaxInput) return;
+            const current = parseInt(hpCurrentInput.value) || 0;
+            const maxRaw = parseInt(hpMaxInput.value) || 0;
+            const temp = parseInt(document.getElementById('hp-temp')?.value) || 0;
+            const max = maxRaw > 0 ? maxRaw : 1;
+            const ratio = Math.max(0, Math.min(1, current / max));
+            const block = document.querySelector('.health-block');
+            if(block) {
+                if(ratio > 0.5) { block.style.borderColor = '#2ecc71'; block.style.boxShadow = '0 0 10px rgba(46, 204, 113, 0.2)'; }
+                else if (ratio > 0.25) { block.style.borderColor = '#f1c40f'; block.style.boxShadow = '0 0 10px rgba(241, 196, 15, 0.2)'; }
+                else { block.style.borderColor = '#e74c3c'; block.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.3)'; }
+            }
+            const fill = document.getElementById('hp-bar-fill');
+            if(fill) {
+                fill.style.width = (maxRaw > 0 ? ratio * 100 : 0) + '%';
+                fill.classList.remove('hp-mid', 'hp-low');
+                if(maxRaw > 0 && ratio <= 0.25) fill.classList.add('hp-low');
+                else if(maxRaw > 0 && ratio <= 0.5) fill.classList.add('hp-mid');
+            }
+            const text = document.getElementById('hp-bar-text');
+            if(text) text.innerHTML = `${current} / ${maxRaw}` + (temp > 0 ? ` <span class="hp-bar-temp-badge">+${temp} PVT</span>` : '');
+        }
+
+        // Soin / dégâts rapides (les dégâts entament d'abord les PV temporaires, règle D&D)
+        function applyHpDelta(delta) {
+            const cur = document.getElementById('hp-current'); const tmp = document.getElementById('hp-temp'); const maxEl = document.getElementById('hp-max');
+            if(!cur) return; const max = parseInt(maxEl?.value) || 0;
+            if(delta < 0) {
+                let dmg = -delta; let temp = parseInt(tmp?.value) || 0;
+                if(temp > 0 && tmp) { const absorbed = Math.min(temp, dmg); temp -= absorbed; dmg -= absorbed; tmp.value = temp; tmp.dispatchEvent(new Event('input', { bubbles: true })); }
+                if(dmg > 0) { cur.value = (parseInt(cur.value) || 0) - dmg; cur.dispatchEvent(new Event('input', { bubbles: true })); }
+            } else if(delta > 0) {
+                let nv = (parseInt(cur.value) || 0) + delta; if(max > 0) nv = Math.min(nv, max); cur.value = nv; cur.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            updateHpVisuals();
+        }
+        const hpQuickAmount = document.getElementById('hp-quick-amount');
+        const getHpQuickAmount = () => Math.abs(parseInt(hpQuickAmount?.value) || 0);
+        const btnHpDamage = document.getElementById('btn-hp-damage'); const btnHpHeal = document.getElementById('btn-hp-heal');
+        if(btnHpDamage) btnHpDamage.addEventListener('click', () => { const a = getHpQuickAmount(); if(a > 0) { applyHpDelta(-a); if(hpQuickAmount) hpQuickAmount.value = ''; } });
+        if(btnHpHeal) btnHpHeal.addEventListener('click', () => { const a = getHpQuickAmount(); if(a > 0) { applyHpDelta(a); if(hpQuickAmount) hpQuickAmount.value = ''; } });
+        if(hpQuickAmount) hpQuickAmount.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); btnHpHeal?.click(); } });
 
         function createDefaultSpellSlotLevel() { return { total: 0, used: [], regenMode: 'long', shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1 }; }
         function normalizeSpellSlotsData(rawData) { return Array.from({length: 9}, (_, lvl) => { const base = createDefaultSpellSlotLevel(); const old = Array.isArray(rawData) ? rawData[lvl] : null; if(old && typeof old === 'object') { base.total = Math.max(0, Math.min(9, parseInt(old.total) || 0)); base.used = Array.isArray(old.used) ? old.used.slice(0, base.total).map(Boolean) : []; base.regenMode = old.regenMode || 'long'; base.shortType = old.shortType || 'all'; base.shortAmount = Math.max(1, parseInt(old.shortAmount) || 1); base.longType = old.longType || 'all'; base.longAmount = Math.max(1, parseInt(old.longAmount) || 1); } while(base.used.length < base.total) base.used.push(false); base.used = base.used.slice(0, base.total); return base; }); }
@@ -470,10 +562,24 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-short-rest') { document.getElementById('rest-modal-title').innerText = "Repos Court"; restLongContent.classList.add('hidden'); restShortContent.classList.remove('hidden'); shortRestRollLog = []; restRollResult.innerHTML = ``; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); restModal.classList.remove('hidden'); } if(e.target.id === 'btn-long-rest') { document.getElementById('rest-modal-title').innerText = "Repos Long"; restShortContent.classList.add('hidden'); restLongContent.classList.remove('hidden'); restModal.classList.remove('hidden'); } });
         if(btnRollHitDie) { btnRollHitDie.addEventListener('click', () => { const hdMax = parseInt(document.getElementById('hd-max').value) || 0; let hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); if(available <= 0) return; let amountToRoll = parseInt(document.getElementById('rest-hd-to-roll').value) || 1; if(amountToRoll > available) amountToRoll = available; if(amountToRoll <= 0) return; const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const conText = conMod >= 0 ? `+${conMod}` : `${conMod}`; let totalHealed = 0; let rollDetails = []; for(let i=0; i < amountToRoll; i++) { const roll = Math.floor(Math.random() * hdSize) + 1; const healed = Math.max(0, roll + conMod); totalHealed += healed; rollDetails.push(`[${roll}${conText}=${healed}]`); } const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; const newHp = Math.min(maxHp, currentHp + totalHealed); hdSpent += amountToRoll; document.getElementById('hd-spent').value = hdSpent; setStore('dnd-sheet-hd-spent', hdSpent, false); document.getElementById('hp-current').value = newHp; setStore('dnd-sheet-hp-current', newHp, false); shortRestRollLog.push(`<strong>${amountToRoll}d${hdSize}</strong> : ${rollDetails.join(' + ')} ➔ <span style="color:#2ecc71;">+${totalHealed} PV</span>`); restRollResult.innerHTML = `<p class="rest-log-line" style="font-size:1.2rem;"><strong>Lancé (${amountToRoll} dés) :</strong> ➔ <strong>+${totalHealed} PV</strong></p><p class="rest-log-line">PV : ${currentHp} → ${newHp}</p><div class="rest-roll-history" style="margin-top:10px; border-top:1px dashed var(--primary-color); padding-top:10px;"><strong>Historique :</strong><br>${shortRestRollLog.join('<br>')}</div>`; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); updateHpVisuals(); }); }
         if(document.getElementById('btn-confirm-short-rest')) document.getElementById('btn-confirm-short-rest').addEventListener('click', () => { recoverAbilitiesByRest('short'); recoverSpellSlotsByRest('short'); restModal.classList.add('hidden'); });
-        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); alert("Repos Long terminé !"); });
+        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
 
         let initiativeTracker = getStore('dnd-initiative-tracker') || []; let activeInitIndex = getStore('dnd-initiative-active', false) || -1;
         let initiativeRound = parseInt(getStore('dnd-initiative-round', false)) || 1;
+
+        window.updateInitHP = (i, change) => {
+            let hp = parseInt(initiativeTracker[i].hp) || 0;
+            hp += change;
+            initiativeTracker[i].hp = hp;
+            setStore('dnd-initiative-tracker', initiativeTracker);
+            renderInitiativeTracker();
+        };
+
+        window.setInitHP = (i, val) => {
+            initiativeTracker[i].hp = val;
+            setStore('dnd-initiative-tracker', initiativeTracker);
+            renderInitiativeTracker();
+        };
 
         function renderInitiativeTracker() { 
             const list = document.getElementById('init-tracker-list'); 
@@ -482,7 +588,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if(initiativeTracker.length === 0) list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun combattant.</span>`; 
             initiativeTracker.forEach((c, i) => { 
                 let activeClass = i === activeInitIndex ? 'active-turn' : ''; 
-                list.innerHTML += `<div class="init-item ${activeClass}"><span class="init-score">${c.score}</span><span style="flex:1; font-weight:bold;">${c.name}</span><span style="font-size:0.8rem; margin-right:10px;">❤️ ${c.hp}</span><span class="init-del no-print" onclick="deleteInit(${i})">X</span></div>`; 
+                list.innerHTML += `<div class="init-item ${activeClass}">
+                    <span class="init-score">${c.score}</span>
+                    <span style="flex:1; font-weight:bold;">${c.name}</span>
+                    <span style="display:flex; align-items:center; gap:5px; margin-right:10px;">
+                        ❤️ 
+                        <button class="btn-small" style="padding:2px 6px;" onclick="updateInitHP(${i}, -1)">-</button>
+                        <input type="number" value="${c.hp}" onchange="setInitHP(${i}, this.value)" style="width:50px; text-align:center; font-weight:bold; background:rgba(255,255,255,0.5); border:1px solid #ccc; border-radius:4px;">
+                        <button class="btn-small" style="padding:2px 6px;" onclick="updateInitHP(${i}, 1)">+</button>
+                    </span>
+                    <span class="init-del no-print" onclick="deleteInit(${i})">X</span>
+                </div>`; 
             }); 
             
             const roundVal = document.getElementById('init-round-val');
@@ -493,7 +609,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(e.target.id === 'btn-init-add') { 
                 const name = document.getElementById('init-add-name').value.trim(); 
                 const score = parseInt(document.getElementById('init-add-score').value) || 0; 
-                const hp = document.getElementById('init-add-hp').value.trim() || "-"; 
+                const hpInput = document.getElementById('init-add-hp');
+                const hp = hpInput && hpInput.value.trim() !== '' ? hpInput.value.trim() : 0; 
+                
                 if(name) { 
                     initiativeTracker.push({name, score, hp}); 
                     initiativeTracker.sort((a,b) => b.score - a.score); 
@@ -501,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderInitiativeTracker(); 
                     document.getElementById('init-add-name').value=''; 
                     document.getElementById('init-add-score').value=''; 
-                    document.getElementById('init-add-hp').value=''; 
+                    if(hpInput) hpInput.value=''; 
                 } 
             } 
             if(e.target.id === 'btn-init-next') { 
@@ -671,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         window.deleteJournalEntry = (index) => { if(confirm("Déchirer cette page définitivement ?")) { journal.splice(index, 1); setStore('dnd-journal', journal); renderJournalTOC(); } };
-        if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; alert("Chapitre enregistré dans le journal !"); } }); }
+        if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; window.showAppToast("📕 Chapitre enregistré dans le journal", '#27ae60'); } }); }
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); } if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); modal.classList.add('book-burning'); setTimeout(() => modal.classList.add('hidden'), 1500); } });
 
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
@@ -722,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-save-trait')) { document.getElementById('btn-save-trait').addEventListener('click', () => { const trait = { name: document.getElementById('new-trait-name').value.trim(), type: document.getElementById('new-trait-type').value, level: parseInt(document.getElementById('new-trait-level').value) || 0, desc: document.getElementById('new-trait-desc').value, pinned: document.getElementById('new-trait-pinned').checked }; if(trait.name) { if(editingTraitIndex >= 0) traits[editingTraitIndex] = trait; else traits.push(trait); setStore('dnd-traits', traits); renderTraits(); traitModal.classList.add('hidden'); } }); }
         window.deleteTrait = (index) => { if(confirm("Supprimer cette capacité ?")) { traits.splice(index, 1); setStore('dnd-traits', traits); renderTraits(); }}; window.moveTraitUp = (index) => { if(moveWithinFilter(traits, index, -1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.moveTraitDown = (index) => { if(moveWithinFilter(traits, index, 1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.editTrait = (index) => { const data = traits[index]; document.getElementById('new-trait-name').value = data.name; document.getElementById('new-trait-type').value = data.type; document.getElementById('new-trait-level').value = data.level || ''; document.getElementById('new-trait-desc').value = data.desc; document.getElementById('new-trait-pinned').checked = data.pinned; editingTraitIndex = index; document.getElementById('trait-modal-title').textContent = "Modifier la Capacité"; traitModal.classList.remove('hidden'); };
 
-        const crudIgnoredPrefixes = ['new-', 'edit-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll'];
+        const crudIgnoredPrefixes = ['new-', 'edit-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll', 'hp-quick'];
 
         let traits = getStore('dnd-traits') || []; const traitModal = document.getElementById('trait-form-modal');
         let abilities = getStore('dnd-abilities') || []; const abilityModal = document.getElementById('ability-form-modal');
@@ -763,10 +881,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(!input.id || crudIgnoredPrefixes.some(pref => input.id.startsWith(pref))) return;
                 if (input.type === 'checkbox') {
                     const saved = getStore('dnd-sheet-'+input.id, false); if (saved !== null) input.checked = (saved === 'true');
-                    input.addEventListener('change', () => { setStore('dnd-sheet-'+input.id, input.checked, false); updateStatsAndSkills(); });
+                    input.addEventListener('change', () => { 
+                        setStore('dnd-sheet-'+input.id, input.checked, false); 
+                        updateStatsAndSkills(); 
+                        if(input.id.startsWith('cond-')) updateStatusEffects();
+                    });
                 } else {
                     const savedValue = getStore('dnd-sheet-'+input.id, false); if (savedValue !== null) input.value = savedValue;
-                    input.addEventListener('input', () => { setStore('dnd-sheet-'+input.id, input.value, false); if(input.id === 'hp-current' || input.id === 'hp-max') updateHpVisuals(); });
+                    input.addEventListener('input', () => { setStore('dnd-sheet-'+input.id, input.value, false); if(input.id === 'hp-current' || input.id === 'hp-max' || input.id === 'hp-temp') updateHpVisuals(); });
                 }
             });
             const hdSizeInput = document.getElementById('hd-size'); const savedHdSize = getStore('dnd-sheet-hd-size', false); if(savedHdSize !== null && hdSizeInput) hdSizeInput.value = savedHdSize; 
@@ -784,7 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(levelInput) { let prof = Math.floor((parseInt(levelInput.value) || 1) - 1) / 4 + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = Math.floor(prof); }
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
-        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits(); renderPreparedSpells();
+        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects();
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', () => { applyLayout('classic'); window.print(); });
