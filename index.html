@@ -113,7 +113,15 @@
 
     <button id="btn-toggle-dice" class="no-print" title="Glisse-moi librement !">🎲 Dés</button>
     <div id="dice-drawer" class="dice-container no-print">
+        <button id="btn-dice-theme" class="dice-theme-toggle" title="Changer le thème des dés 3D">🎲</button>
         <h3>Plateau de Dés</h3>
+        <div id="dice-theme-panel" class="dice-theme-panel hidden">
+            <div class="dice-theme-title">🎨 Thème des dés 3D</div>
+            <div id="dice-theme-swatches" class="dice-theme-swatches"></div>
+            <div class="dice-theme-custom"><span>🎨 Perso :</span><input type="color" id="dice-theme-custom-color" value="#7A2828"><button id="btn-dice-theme-custom" class="btn-small">Appliquer</button></div>
+            <label class="dice-theme-random-row"><input type="checkbox" id="dice-theme-random"> 🎲 Couleur aléatoire à chaque lancer</label>
+            <button id="btn-open-dice-studio" class="btn-small" style="width:100%; margin-top:10px; background:linear-gradient(160deg,#2980b9,#1f6391);">✏️ Créer mes propres dés</button>
+        </div>
         <div class="dice-options">
             <label class="radio-pill"><input type="radio" name="roll-mode" value="normal" checked> <span>Normal</span></label>
             <label class="radio-pill"><input type="radio" name="roll-mode" value="adv"> <span>Avantage</span></label>
@@ -290,6 +298,58 @@
         </div>
         <div id="global-search-results" style="max-height: 55vh; overflow-y: auto; margin-top:10px; display:flex; flex-direction:column; gap:5px;">
             <div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>
+        </div>
+    </div>
+</div>
+
+<div id="dice-studio-modal" class="modal-overlay hidden no-print" style="z-index:9500;">
+    <div class="dice-studio">
+        <div class="ds-header">
+            <h2>✏️ Atelier de Dés</h2>
+            <button id="ds-close" class="btn-close-modal">✕</button>
+        </div>
+        <div class="ds-body">
+            <div class="ds-toolbar">
+                <div class="ds-tool-group">
+                    <button class="ds-tool active" data-tool="brush" title="Pinceau">🖌️</button>
+                    <button class="ds-tool" data-tool="eraser" title="Gomme">🧽</button>
+                    <button class="ds-tool" data-tool="pipette" title="Pipette (prélever une couleur)">💧</button>
+                    <button class="ds-tool" data-tool="fill" title="Pot de peinture (remplir)">🪣</button>
+                </div>
+                <div class="ds-tool-group ds-sizes">
+                    <button class="ds-size" data-size="4" title="Fin">•</button>
+                    <button class="ds-size active" data-size="12" title="Moyen">●</button>
+                    <button class="ds-size" data-size="26" title="Épais">⬤</button>
+                </div>
+                <div class="ds-color-row"><span>Couleur :</span><input type="color" id="ds-color" value="#C49B35"></div>
+                <div class="ds-palette" id="ds-palette"></div>
+                <div class="ds-tool-group">
+                    <button id="ds-undo" title="Annuler">↶</button>
+                    <button id="ds-redo" title="Refaire">↷</button>
+                    <button id="ds-clear" title="Tout effacer">🗑️</button>
+                </div>
+            </div>
+            <div class="ds-center">
+                <div class="ds-type-tabs" id="ds-type-tabs"></div>
+                <div class="ds-canvas-wrap">
+                    <canvas id="ds-canvas" width="320" height="320"></canvas>
+                </div>
+                <div class="ds-bg-row">
+                    <label>Couleur du dé :</label><input type="color" id="ds-bg" value="#7A2828">
+                    <button id="ds-apply-all" class="btn-small">⮒ Appliquer cette face à TOUS les dés</button>
+                </div>
+            </div>
+            <div class="ds-side">
+                <div class="ds-side-label">Aperçu</div>
+                <div class="ds-preview" id="ds-preview"></div>
+                <div class="ds-save-row">
+                    <input type="text" id="ds-name" placeholder="Nom de ta création…">
+                    <button id="ds-save" class="btn-small" style="background:#27ae60;">💾</button>
+                </div>
+                <div class="ds-side-label">Mes créations</div>
+                <div class="ds-gallery" id="ds-gallery"></div>
+                <button id="ds-deactivate" class="btn-small" style="width:100%; margin-top:auto; background:#7f8c8d;">↺ Dés standards</button>
+            </div>
         </div>
     </div>
 </div>

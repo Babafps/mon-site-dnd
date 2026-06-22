@@ -582,11 +582,12 @@
         const savedLeft = parseFloat(localStorage.getItem('dnd-music-x'));
         if (!isNaN(savedLeft)) applyDockLeft(savedLeft);
 
-        let dragging = false, startX = 0, startLeft = 0;
+        let dragging = false, grabOffsetX = 0;
 
         const onMove = (clientX) => {
             if (!dragging) return;
-            applyDockLeft(startLeft + (clientX - startX));
+            // Le curseur reste « collé » au point de prise : left = curseur − décalage
+            applyDockLeft(clientX - grabOffsetX);
         };
         const onUp = () => {
             if (!dragging) return;
@@ -595,21 +596,25 @@
             try { localStorage.setItem('dnd-music-x', parseFloat(container.style.left) || 0); } catch (e) {}
         };
         const onDown = (clientX) => {
+            const rect = container.getBoundingClientRect();
+            grabOffsetX = clientX - rect.left;          // distance curseur ↔ bord gauche
+            container.style.left = rect.left + 'px';    // épingle EXACTEMENT (aucun clamp → aucun saut)
+            container.style.transform = 'none';
             dragging = true;
             container.classList.add('music-dragging');
-            const rect = container.getBoundingClientRect();
-            startLeft = rect.left;
-            startX = clientX;
-            applyDockLeft(rect.left);
         };
 
-        dragGrip.addEventListener('mousedown', (e) => { e.preventDefault(); onDown(e.clientX); });
-        window.addEventListener('mousemove', (e) => onMove(e.clientX));
-        window.addEventListener('mouseup', onUp);
-
-        dragGrip.addEventListener('touchstart', (e) => { onDown(e.touches[0].clientX); }, { passive: true });
-        window.addEventListener('touchmove', (e) => { if (dragging) { onMove(e.touches[0].clientX); } }, { passive: true });
-        window.addEventListener('touchend', onUp);
+        // Pointer Events + capture : le curseur reste « capturé » par la poignée pendant
+        // tout le glissement (souris ET tactile unifiés), aucun événement perdu → aucun saut.
+        dragGrip.style.touchAction = 'none';
+        dragGrip.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            try { dragGrip.setPointerCapture(e.pointerId); } catch (_) {}
+            onDown(e.clientX);
+        });
+        dragGrip.addEventListener('pointermove', (e) => { if (dragging) onMove(e.clientX); });
+        dragGrip.addEventListener('pointerup',   (e) => { onUp(); try { dragGrip.releasePointerCapture(e.pointerId); } catch (_) {} });
+        dragGrip.addEventListener('pointercancel', onUp);
 
         // Garde le dock dans l'écran au redimensionnement
         window.addEventListener('resize', () => {
@@ -626,17 +631,18 @@
             const savedTabLeft = parseFloat(localStorage.getItem('dnd-music-tab-x'));
             if (!isNaN(savedTabLeft)) applyTabLeft(savedTabLeft);
 
-            let tDrag = false, tMoved = false, tStartX = 0, tStartLeft = 0;
+            let tDrag = false, tMoved = false, tStartX = 0, tGrabOffset = 0;
             const tDown = (clientX) => {
                 tDrag = true; tMoved = false;
                 const rect = tab.getBoundingClientRect();
-                tStartLeft = rect.left; tStartX = clientX;
+                tGrabOffset = clientX - rect.left; tStartX = clientX;
                 tab.style.transition = 'none';
+                tab.style.left = rect.left + 'px'; tab.style.right = 'auto'; // épingle avant de suivre
             };
             const tMove = (clientX) => {
                 if (!tDrag) return;
                 if (Math.abs(clientX - tStartX) > 4) tMoved = true;
-                applyTabLeft(tStartLeft + (clientX - tStartX));
+                applyTabLeft(clientX - tGrabOffset);
             };
             const tUp = () => {
                 if (!tDrag) return;
@@ -647,12 +653,15 @@
                 if (tMoved) { try { localStorage.setItem('dnd-music-tab-x', parseFloat(tab.style.left) || 0); } catch (e) {} }
             };
 
-            tab.addEventListener('mousedown', (e) => { e.preventDefault(); tDown(e.clientX); });
-            window.addEventListener('mousemove', (e) => tMove(e.clientX));
-            window.addEventListener('mouseup', tUp);
-            tab.addEventListener('touchstart', (e) => tDown(e.touches[0].clientX), { passive: true });
-            window.addEventListener('touchmove', (e) => { if (tDrag) tMove(e.touches[0].clientX); }, { passive: true });
-            window.addEventListener('touchend', tUp);
+            tab.style.touchAction = 'none';
+            tab.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                try { tab.setPointerCapture(e.pointerId); } catch (_) {}
+                tDown(e.clientX);
+            });
+            tab.addEventListener('pointermove', (e) => { if (tDrag) tMove(e.clientX); });
+            tab.addEventListener('pointerup',   (e) => { tUp(); try { tab.releasePointerCapture(e.pointerId); } catch (_) {} });
+            tab.addEventListener('pointercancel', tUp);
 
             window.addEventListener('resize', () => {
                 if (tab.style.left && tab.style.left !== '') applyTabLeft(parseFloat(tab.style.left) || 0);

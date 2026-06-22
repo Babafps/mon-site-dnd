@@ -371,6 +371,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ===== PLATEAU DE DÉS 3D (moteur physique @3d-dice/dice-box) =====
         let diceBox = null, diceBoxReady = false, diceBoxInitStarted = false, dice3dBlockedByFile = false, diceRolling = false;
+
+        // --- Thèmes de dés 3D (10 couleurs + aléatoire + couleur perso) ---
+        const DICE_THEMES = [
+            { name: 'Cramoisi',  color: '#7A2828' },
+            { name: 'Or',        color: '#C49B35' },
+            { name: 'Émeraude',  color: '#1f8a4c' },
+            { name: 'Saphir',    color: '#2563c9' },
+            { name: 'Améthyste', color: '#7b3fa0' },
+            { name: 'Rubis',     color: '#c0392b' },
+            { name: 'Onyx',      color: '#2c2c34' },
+            { name: 'Ivoire',    color: '#e8e0cc' },
+            { name: 'Turquoise', color: '#16a3a3' },
+            { name: 'Ambre',     color: '#e08a1e' },
+        ];
+        let diceThemeColor = DB.get('dnd-dice-theme-color') || '#7A2828';
+        let diceThemeRandom = DB.get('dnd-dice-theme-random') === 'true';
+        function currentDiceThemeColor() {
+            if (diceThemeRandom) return DICE_THEMES[Math.floor(Math.random() * DICE_THEMES.length)].color;
+            return diceThemeColor;
+        }
+
+        // --- Créations de dés personnalisées (faces peintes appliquées à l'affichage des résultats) ---
+        function loadDiceDesigns() { try { return JSON.parse(DB.get('dnd-dice-designs')) || []; } catch (e) { return []; } }
+        function persistDiceDesigns() { DB.set('dnd-dice-designs', JSON.stringify(diceDesigns)); }
+        let diceDesigns = loadDiceDesigns();
+        let activeDesignId = DB.get('dnd-dice-active-design') || null;
+        function getActiveDesign() { return diceDesigns.find(d => d.id === activeDesignId) || null; }
+        function faceImageFor(faces) { const d = getActiveDesign(); if (!d) return null; return d.faces['d' + faces] || d.faces.all || null; }
+        function applyCustomDiceSkin(scope) {
+            const d = getActiveDesign();
+            (scope || document).querySelectorAll('.die-result[data-faces]').forEach(el => {
+                const img = faceImageFor(parseInt(el.getAttribute('data-faces')));
+                if (img) { el.classList.add('has-skin'); el.style.backgroundImage = `url(${img})`; if (d && d.bg) el.style.backgroundColor = d.bg; }
+            });
+        }
+
         async function initDiceBox() {
             if (diceBoxInitStarted) return;
             diceBoxInitStarted = true;
@@ -412,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 try { diceBox.clear(); } catch (e) {}
                 const res = await Promise.race([
-                    diceBox.roll(notation),
+                    diceBox.roll(notation, { themeColor: currentDiceThemeColor() }),
                     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout-3D')), 9000))
                 ]);
                 if (!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');
@@ -484,11 +520,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 let colorClass = '';
                 if (faces === 20 && finalScore === 20) colorClass = 'crit-success';
                 if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
-                resultsHTML += `<div class="die-result die-settle ${colorClass}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`;
+                resultsHTML += `<div class="die-result die-settle ${colorClass}" data-faces="${faces}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`;
                 if (index < poolSnapshot.length - 1) resultsHTML += `<div class="die-math">+</div>`;
             });
 
-            if (resultsBox) resultsBox.innerHTML = resultsHTML;
+            if (resultsBox) { resultsBox.innerHTML = resultsHTML; applyCustomDiceSkin(resultsBox); }
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
         }
 
@@ -500,7 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let rollingHTML = '';
             poolSnapshot.forEach((faces, index) => {
-                rollingHTML += `<div class="die-result die-rolling-3d" id="rolling-die-${index}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">?</div></div>`;
+                rollingHTML += `<div class="die-result die-rolling-3d" id="rolling-die-${index}" data-faces="${faces}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">?</div></div>`;
                 if (index < poolSnapshot.length - 1) rollingHTML += `<div class="die-math">+</div>`;
             });
             if (resultsBox) resultsBox.innerHTML = rollingHTML;
@@ -538,11 +574,199 @@ document.addEventListener('DOMContentLoaded', () => {
                     tile.innerHTML = `<span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}`;
                 }
             });
+            applyCustomDiceSkin(resultsBox);
 
             if (totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
         }
 
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
+
+        // --- Panneau de sélection du thème des dés 3D ---
+        (function setupDiceThemePanel() {
+            const btn = document.getElementById('btn-dice-theme');
+            const panel = document.getElementById('dice-theme-panel');
+            const swatches = document.getElementById('dice-theme-swatches');
+            const randomCb = document.getElementById('dice-theme-random');
+            const customColor = document.getElementById('dice-theme-custom-color');
+            const customApply = document.getElementById('btn-dice-theme-custom');
+            if (!btn || !panel || !swatches) return;
+
+            function persist() {
+                DB.set('dnd-dice-theme-color', diceThemeColor);
+                DB.set('dnd-dice-theme-random', diceThemeRandom ? 'true' : 'false');
+            }
+            function renderSwatches() {
+                swatches.innerHTML = '';
+                DICE_THEMES.forEach(t => {
+                    const el = document.createElement('button');
+                    const isActive = !diceThemeRandom && t.color.toLowerCase() === diceThemeColor.toLowerCase();
+                    el.className = 'dice-swatch' + (isActive ? ' active' : '');
+                    el.style.setProperty('--swatch', t.color);
+                    el.title = t.name;
+                    el.innerHTML = `<span class="dice-swatch-face">20</span><span class="dice-swatch-name">${t.name}</span>`;
+                    el.addEventListener('click', () => {
+                        diceThemeColor = t.color; diceThemeRandom = false;
+                        if (randomCb) randomCb.checked = false;
+                        if (customColor) customColor.value = t.color;
+                        persist(); renderSwatches();
+                    });
+                    swatches.appendChild(el);
+                });
+            }
+            renderSwatches();
+            if (customColor) customColor.value = /^#([0-9a-f]{6})$/i.test(diceThemeColor) ? diceThemeColor : '#7A2828';
+            if (randomCb) randomCb.checked = diceThemeRandom;
+
+            btn.addEventListener('click', (e) => { e.stopPropagation(); panel.classList.toggle('hidden'); });
+            if (randomCb) randomCb.addEventListener('change', () => {
+                diceThemeRandom = randomCb.checked; persist(); renderSwatches();
+            });
+            if (customApply && customColor) customApply.addEventListener('click', () => {
+                diceThemeColor = customColor.value; diceThemeRandom = false;
+                if (randomCb) randomCb.checked = false;
+                persist(); renderSwatches();
+            });
+        })();
+
+        // --- Atelier de peinture de dés (canvas : pinceau, gomme, pipette, pot, annuler/refaire) ---
+        (function setupDiceStudio() {
+            const modal = document.getElementById('dice-studio-modal');
+            const openBtn = document.getElementById('btn-open-dice-studio');
+            const canvas = document.getElementById('ds-canvas');
+            if (!modal || !canvas) return;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const W = canvas.width, H = canvas.height;
+
+            const TYPES = ['all', 'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
+            const TYPE_LABEL = { all: 'Tous', d4: 'd4', d6: 'd6', d8: 'd8', d10: 'd10', d12: 'd12', d20: 'd20', d100: 'd100' };
+            const PALETTE = ['#000000', '#ffffff', '#7A2828', '#C49B35', '#c0392b', '#e08a1e', '#27ae60', '#16a3a3', '#2563c9', '#7b3fa0', '#e84393', '#8a6d4a'];
+
+            let tool = 'brush', color = '#C49B35', size = 12;
+            let studioFaces = {}, studioType = 'all', studioBg = '#7A2828';
+            let drawing = false, lastX = 0, lastY = 0;
+            let undoStack = [], redoStack = [];
+
+            const colorInput = document.getElementById('ds-color');
+            const bgInput = document.getElementById('ds-bg');
+            const preview = document.getElementById('ds-preview');
+
+            const snapshot = () => { try { undoStack.push(ctx.getImageData(0, 0, W, H)); if (undoStack.length > 40) undoStack.shift(); redoStack = []; } catch (e) {} };
+            const saveCanvasToFace = () => { studioFaces[studioType] = canvas.toDataURL('image/png'); };
+            function loadFaceToCanvas(type) {
+                ctx.clearRect(0, 0, W, H); undoStack = []; redoStack = [];
+                const url = studioFaces[type];
+                if (url) { const img = new Image(); img.onload = () => { ctx.drawImage(img, 0, 0, W, H); updatePreview(); }; img.src = url; }
+            }
+            function updatePreview() {
+                const url = studioFaces.all || canvas.toDataURL();
+                preview.style.backgroundColor = studioBg;
+                preview.style.backgroundImage = url ? `url(${url})` : 'none';
+            }
+            function renderTypeTabs() {
+                const wrap = document.getElementById('ds-type-tabs'); wrap.innerHTML = '';
+                TYPES.forEach(t => {
+                    const b = document.createElement('button');
+                    b.className = 'ds-type-tab' + (t === studioType ? ' active' : '') + (studioFaces[t] ? ' has-design' : '');
+                    b.textContent = TYPE_LABEL[t];
+                    b.addEventListener('click', () => { saveCanvasToFace(); studioType = t; loadFaceToCanvas(t); renderTypeTabs(); });
+                    wrap.appendChild(b);
+                });
+            }
+            function renderPalette() {
+                const wrap = document.getElementById('ds-palette'); wrap.innerHTML = '';
+                PALETTE.forEach(c => { const s = document.createElement('button'); s.className = 'ds-swatch'; s.style.background = c; s.title = c; s.addEventListener('click', () => { color = c; colorInput.value = c; setTool('brush'); }); wrap.appendChild(s); });
+            }
+            function renderGallery() {
+                const g = document.getElementById('ds-gallery'); g.innerHTML = '';
+                if (!diceDesigns.length) { g.innerHTML = '<div style="grid-column:1/-1;font-size:0.72rem;color:#999;text-align:center;padding:8px;">Aucune création pour l\'instant.</div>'; return; }
+                diceDesigns.forEach(d => {
+                    const item = document.createElement('div');
+                    item.className = 'ds-gallery-item' + (d.id === activeDesignId ? ' active' : '');
+                    item.style.backgroundColor = d.bg || '#7A2828';
+                    if (d.thumb) item.style.backgroundImage = `url(${d.thumb})`;
+                    item.title = d.name;
+                    item.innerHTML = `<button class="ds-gi-del" title="Supprimer">✕</button><div class="ds-gi-name">${d.name}</div>`;
+                    item.addEventListener('click', (e) => { if (e.target.classList.contains('ds-gi-del')) return; activeDesignId = d.id; DB.set('dnd-dice-active-design', d.id); renderGallery(); });
+                    item.querySelector('.ds-gi-del').addEventListener('click', (e) => { e.stopPropagation(); if (confirm('Supprimer « ' + d.name + ' » ?')) { diceDesigns = diceDesigns.filter(x => x.id !== d.id); if (activeDesignId === d.id) { activeDesignId = null; DB.set('dnd-dice-active-design', ''); } persistDiceDesigns(); renderGallery(); } });
+                    g.appendChild(item);
+                });
+            }
+            function setTool(t) { tool = t; document.querySelectorAll('.ds-tool').forEach(x => x.classList.toggle('active', x.dataset.tool === t)); }
+
+            const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) }; };
+            function drawTo(x, y) {
+                ctx.globalCompositeOperation = (tool === 'eraser') ? 'destination-out' : 'source-over';
+                ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+                ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+                lastX = x; lastY = y;
+            }
+            function pickColor(x, y) { const p = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data; if (p[3] === 0) return; const hex = '#' + [p[0], p[1], p[2]].map(v => v.toString(16).padStart(2, '0')).join(''); color = hex; colorInput.value = hex; setTool('brush'); }
+            function floodFill(x, y) {
+                x = Math.floor(x); y = Math.floor(y);
+                const img = ctx.getImageData(0, 0, W, H), data = img.data;
+                const i0 = (y * W + x) * 4, tr = data[i0], tg = data[i0 + 1], tb = data[i0 + 2], ta = data[i0 + 3];
+                const tmp = document.createElement('canvas').getContext('2d'); tmp.fillStyle = color; tmp.fillRect(0, 0, 1, 1); const fc = tmp.getImageData(0, 0, 1, 1).data;
+                if (tr === fc[0] && tg === fc[1] && tb === fc[2] && ta === fc[3]) return;
+                const match = (i) => Math.abs(data[i] - tr) < 28 && Math.abs(data[i + 1] - tg) < 28 && Math.abs(data[i + 2] - tb) < 28 && Math.abs(data[i + 3] - ta) < 28;
+                const stack = [[x, y]];
+                while (stack.length) { const [cx, cy] = stack.pop(); if (cx < 0 || cy < 0 || cx >= W || cy >= H) continue; const i = (cy * W + cx) * 4; if (!match(i)) continue; data[i] = fc[0]; data[i + 1] = fc[1]; data[i + 2] = fc[2]; data[i + 3] = fc[3]; stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]); }
+                ctx.putImageData(img, 0, 0);
+            }
+
+            canvas.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                const { x, y } = pos(e);
+                if (tool === 'pipette') { pickColor(x, y); return; }
+                snapshot();
+                if (tool === 'fill') { floodFill(x, y); updatePreview(); return; }
+                drawing = true; lastX = x; lastY = y; drawTo(x, y);
+            });
+            canvas.addEventListener('pointermove', (e) => { if (!drawing) return; const { x, y } = pos(e); drawTo(x, y); });
+            canvas.addEventListener('pointerup', () => { if (drawing) { drawing = false; updatePreview(); } });
+
+            document.querySelectorAll('.ds-tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+            document.querySelectorAll('.ds-size').forEach(b => b.addEventListener('click', () => { size = parseInt(b.dataset.size); document.querySelectorAll('.ds-size').forEach(x => x.classList.remove('active')); b.classList.add('active'); }));
+            colorInput.addEventListener('input', () => { color = colorInput.value; setTool('brush'); });
+            bgInput.addEventListener('input', () => { studioBg = bgInput.value; updatePreview(); });
+            document.getElementById('ds-undo').addEventListener('click', () => { if (undoStack.length) { redoStack.push(ctx.getImageData(0, 0, W, H)); ctx.putImageData(undoStack.pop(), 0, 0); updatePreview(); } });
+            document.getElementById('ds-redo').addEventListener('click', () => { if (redoStack.length) { undoStack.push(ctx.getImageData(0, 0, W, H)); ctx.putImageData(redoStack.pop(), 0, 0); updatePreview(); } });
+            document.getElementById('ds-clear').addEventListener('click', () => { snapshot(); ctx.clearRect(0, 0, W, H); updatePreview(); });
+            document.getElementById('ds-apply-all').addEventListener('click', () => {
+                saveCanvasToFace();
+                const cur = studioFaces[studioType] || canvas.toDataURL();
+                studioFaces = { all: cur }; studioType = 'all';
+                loadFaceToCanvas('all'); renderTypeTabs(); updatePreview();
+                if (window.showAppToast) window.showAppToast('Face appliquée à tous les dés', '#2980b9');
+            });
+            document.getElementById('ds-save').addEventListener('click', () => {
+                saveCanvasToFace();
+                const name = (document.getElementById('ds-name').value || '').trim() || ('Création ' + (diceDesigns.length + 1));
+                const thumb = studioFaces.all || studioFaces[studioType] || canvas.toDataURL();
+                const design = { id: 'dd_' + Date.now(), name, bg: studioBg, faces: { ...studioFaces }, thumb };
+                diceDesigns.push(design); persistDiceDesigns();
+                activeDesignId = design.id; DB.set('dnd-dice-active-design', design.id);
+                document.getElementById('ds-name').value = '';
+                renderGallery();
+                if (window.showAppToast) window.showAppToast('🎲 Création enregistrée et activée', '#27ae60');
+            });
+            document.getElementById('ds-deactivate').addEventListener('click', () => { activeDesignId = null; DB.set('dnd-dice-active-design', ''); renderGallery(); });
+            document.getElementById('ds-close').addEventListener('click', () => modal.classList.add('hidden'));
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+
+            function openStudio() {
+                const act = getActiveDesign();
+                studioFaces = act ? { ...act.faces } : {};
+                studioBg = act ? (act.bg || '#7A2828') : '#7A2828';
+                bgInput.value = studioBg; studioType = 'all';
+                renderPalette(); renderTypeTabs(); renderGallery();
+                loadFaceToCanvas('all'); updatePreview();
+                modal.classList.remove('hidden');
+                const panel = document.getElementById('dice-theme-panel'); if (panel) panel.classList.add('hidden');
+            }
+            if (openBtn) openBtn.addEventListener('click', openStudio);
+        })();
 
         // --- Jet de caractéristique : affiche le résultat dans la bulle ---
         function showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2) {
@@ -915,6 +1139,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const grimoireModal = document.getElementById('grimoire-modal'); document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-grimoire') { renderGrimoire(); grimoireModal.classList.remove('hidden', 'closing'); grimoireModal.classList.add('opening'); } }); if(document.getElementById('btn-close-grimoire')) document.getElementById('btn-close-grimoire').addEventListener('click', () => { grimoireModal.classList.remove('opening'); grimoireModal.classList.add('closing'); setTimeout(() => { grimoireModal.classList.add('hidden'); }, 550); });
 
         let journal = getStore('dnd-journal') || []; const journalPage = document.getElementById('book-page-content');
+        // Animation « page qui tourne » rejouée à chaque changement de contenu du livre
+        if (journalPage && 'MutationObserver' in window) {
+            const flipObserver = new MutationObserver(() => {
+                journalPage.classList.remove('page-flip-in');
+                void journalPage.offsetWidth; // force un reflow pour rejouer l'animation
+                journalPage.classList.add('page-flip-in');
+            });
+            flipObserver.observe(journalPage, { childList: true });
+        }
         window.renderJournalTOC = () => { if(!journalPage) return; let html = `<h2 class="toc-title">Sommaire</h2><div class="toc-list">`; if(journal.length === 0) html += `<p style="text-align:center;">Aucune note dans le journal. Écris un chapitre !</p>`; journal.forEach((entry, i) => { html += `<div class="toc-item"><div class="toc-link" onclick="openJournalEntry(${i})"><span class="toc-title-text">${entry.title}</span><div class="toc-dots"></div></div><div class="toc-controls"><span title="Déchirer la page" onclick="deleteJournalEntry(${i})">❌</span></div></div>`; }); html += `</div>`; journalPage.innerHTML = html; };
         
         window.openJournalEntry = (index) => { 
@@ -944,7 +1177,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.deleteJournalEntry = (index) => { if(confirm("Déchirer cette page définitivement ?")) { journal.splice(index, 1); setStore('dnd-journal', journal); renderJournalTOC(); } };
         if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; window.showAppToast("📕 Chapitre enregistré dans le journal", '#27ae60'); } }); }
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); } if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); modal.classList.add('book-burning'); setTimeout(() => modal.classList.add('hidden'), 1500); } });
+        function clearBookFlames() { const bc = document.getElementById('book-container'); const f = bc && bc.querySelector('.book-flames'); if(f) f.remove(); }
+        function igniteBook() {
+            const bc = document.getElementById('book-container'); if(!bc) return;
+            clearBookFlames();
+            const flames = document.createElement('div');
+            flames.className = 'book-flames';
+            // 7 langues de feu + 5 braises montantes
+            flames.innerHTML = '<span></span><span></span><span></span><span></span><span></span><span></span><span></span><i></i><i></i><i></i><i></i><i></i>';
+            bc.appendChild(flames);
+        }
+        document.body.addEventListener('click', (e) => {
+            if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); clearBookFlames(); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); }
+            if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); igniteBook(); modal.classList.add('book-burning'); setTimeout(() => { modal.classList.add('hidden'); clearBookFlames(); }, 1800); }
+        });
 
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
         function renderAttacks() {
