@@ -27,7 +27,13 @@
     gap: 12px;
     padding: 0 14px;
     height: 62px;
+    cursor: grab;
 }
+.music-player-bar.music-dragging,
+#music-player-container.music-dragging .music-player-bar { cursor: grabbing; }
+/* Les contrôles gardent leur propre curseur */
+.music-player-bar button,
+.music-player-bar input { cursor: pointer; }
 
 /* ---- POIGNÉE DE DÉPLACEMENT ---- */
 .music-drag-grip {

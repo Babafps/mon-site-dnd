@@ -595,26 +595,27 @@
             container.classList.remove('music-dragging');
             try { localStorage.setItem('dnd-music-x', parseFloat(container.style.left) || 0); } catch (e) {}
         };
-        const onDown = (clientX) => {
+        const startDrag = (clientX) => {
             const rect = container.getBoundingClientRect();
             grabOffsetX = clientX - rect.left;          // distance curseur ↔ bord gauche
-            container.style.left = rect.left + 'px';    // épingle EXACTEMENT (aucun clamp → aucun saut)
+            container.style.left = rect.left + 'px';    // épingle EXACTEMENT (aucun saut)
             container.style.transform = 'none';
             dragging = true;
             container.classList.add('music-dragging');
         };
 
-        // Pointer Events + capture : le curseur reste « capturé » par la poignée pendant
-        // tout le glissement (souris ET tactile unifiés), aucun événement perdu → aucun saut.
-        dragGrip.style.touchAction = 'none';
-        dragGrip.addEventListener('pointerdown', (e) => {
+        // TOUTE la barre est une zone de prise, SAUF les vrais contrôles (boutons, sliders…).
+        // Aucune dépendance à un élément précis ni à une action préalable → drag dès le 1er clic.
+        playerBar.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            if (e.target.closest('button, input, select, textarea, a, label')) return; // laisse les contrôles agir
             e.preventDefault();
-            try { dragGrip.setPointerCapture(e.pointerId); } catch (_) {}
-            onDown(e.clientX);
+            startDrag(e.clientX);
         });
-        dragGrip.addEventListener('pointermove', (e) => { if (dragging) onMove(e.clientX); });
-        dragGrip.addEventListener('pointerup',   (e) => { onUp(); try { dragGrip.releasePointerCapture(e.pointerId); } catch (_) {} });
-        dragGrip.addEventListener('pointercancel', onUp);
+        // Écouteurs sur window : on reçoit toujours move/up, même si le pointeur sort de la barre.
+        window.addEventListener('pointermove', (e) => onMove(e.clientX));
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
 
         // Garde le dock dans l'écran au redimensionnement
         window.addEventListener('resize', () => {

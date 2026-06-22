@@ -642,35 +642,202 @@ document.addEventListener('DOMContentLoaded', () => {
             const PALETTE = ['#000000', '#ffffff', '#7A2828', '#C49B35', '#c0392b', '#e08a1e', '#27ae60', '#16a3a3', '#2563c9', '#7b3fa0', '#e84393', '#8a6d4a'];
 
             let tool = 'brush', color = '#C49B35', size = 12;
-            let studioFaces = {}, studioType = 'all', studioBg = '#7A2828';
+            let studioBg = '#7A2828';
+            let studioScope = 'all';   // 'all' | 'd4' | 'd6' | … | 'd20'
+            let studioFace = 0;        // index de la face en cours (si dé spécifique)
+            let studioData = {};       // { all:url, d4:[url…], d6:[…], … }  (par-face)
             let drawing = false, lastX = 0, lastY = 0;
             let undoStack = [], redoStack = [];
+            let dice3D = null;
+
+            const FACE_COUNTS = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 10 };
+            const faceCountOf = (type) => FACE_COUNTS[type] || 1;
+            const firstNonNull = (arr) => Array.isArray(arr) ? (arr.find(Boolean) || null) : null;
+            function ensureSlots(type) {
+                if (type === 'all') { if (studioData.all === undefined) studioData.all = null; return; }
+                if (!Array.isArray(studioData[type])) studioData[type] = Array(faceCountOf(type)).fill(null);
+                while (studioData[type].length < faceCountOf(type)) studioData[type].push(null);
+            }
+            function curSlotGet() { if (studioScope === 'all') return studioData.all || null; ensureSlots(studioScope); return studioData[studioScope][studioFace] || null; }
+            function curSlotSet(url) { if (studioScope === 'all') { studioData.all = url; } else { ensureSlots(studioScope); studioData[studioScope][studioFace] = url; } }
+            function migrateOldFaces(faces) { // ancien format (1 image/type) → remplit toutes les faces
+                const d = { all: (faces && faces.all) || null };
+                Object.keys(FACE_COUNTS).forEach(t => { const img = (faces && (faces[t] || faces.all)) || null; d[t] = Array(faceCountOf(t)).fill(img); });
+                return d;
+            }
 
             const colorInput = document.getElementById('ds-color');
             const bgInput = document.getElementById('ds-bg');
             const preview = document.getElementById('ds-preview');
 
             const snapshot = () => { try { undoStack.push(ctx.getImageData(0, 0, W, H)); if (undoStack.length > 40) undoStack.shift(); redoStack = []; } catch (e) {} };
-            const saveCanvasToFace = () => { studioFaces[studioType] = canvas.toDataURL('image/png'); };
-            function loadFaceToCanvas(type) {
+            const saveCanvasToFace = () => { curSlotSet(canvas.toDataURL('image/png')); };
+            function loadFaceToCanvas() {
                 ctx.clearRect(0, 0, W, H); undoStack = []; redoStack = [];
-                const url = studioFaces[type];
-                if (url) { const img = new Image(); img.onload = () => { ctx.drawImage(img, 0, 0, W, H); updatePreview(); }; img.src = url; }
+                const url = curSlotGet();
+                if (url) { const img = new Image(); img.onload = () => { ctx.clearRect(0, 0, W, H); ctx.drawImage(img, 0, 0, W, H); updatePreview(); }; img.src = url; }
+                else updatePreview();
             }
             function updatePreview() {
-                const url = studioFaces.all || canvas.toDataURL();
-                preview.style.backgroundColor = studioBg;
-                preview.style.backgroundImage = url ? `url(${url})` : 'none';
+                if (dice3D) {
+                    // Aperçu 3D actif : la face peinte est projetée sur le dé en temps réel
+                    preview.style.backgroundImage = 'none';
+                    preview.style.backgroundColor = '#161210';
+                    dice3D.refresh();
+                } else {
+                    const url = curSlotGet() || canvas.toDataURL();
+                    preview.style.backgroundColor = studioBg;
+                    preview.style.backgroundImage = url ? `url(${url})` : 'none';
+                }
+            }
+
+            // ---- Aperçu 3D temps réel (Three.js) : faces distinctes + clic pour sélectionner ----
+            function build3DPreview() {
+                if (typeof THREE === 'undefined') { console.warn('Three.js indisponible — aperçu 3D désactivé (aperçu plat conservé).'); return null; }
+                const cvs = document.getElementById('ds-3d-canvas'); if (!cvs) return null;
+                let renderer;
+                try { renderer = new THREE.WebGLRenderer({ canvas: cvs, alpha: true, antialias: true }); }
+                catch (e) { console.warn('WebGL indisponible — aperçu 3D désactivé.', e); return null; }
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100); camera.position.set(0, 0, 5);
+                scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+                const d1 = new THREE.DirectionalLight(0xffffff, 0.85); d1.position.set(3, 5, 4); scene.add(d1);
+                const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-4, -3, -2); scene.add(d2);
+                const raycaster = new THREE.Raycaster(); const ndc = new THREE.Vector2();
+
+                let mesh = null, faceCanvases = [], faceTextures = [], materials = [], triFace = [], running = false, raf = null;
+
+                function pentaBipyramid(r, h) {
+                    const eq = []; for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; eq.push([Math.cos(a) * r, 0, Math.sin(a) * r]); }
+                    const top = [0, h, 0], bot = [0, -h, 0], P = [];
+                    for (let i = 0; i < 5; i++) { const a = eq[i], b = eq[(i + 1) % 5]; P.push(top[0], top[1], top[2], a[0], a[1], a[2], b[0], b[1], b[2]); P.push(bot[0], bot[1], bot[2], b[0], b[1], b[2], a[0], a[1], a[2]); }
+                    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); return g;
+                }
+                function makeGeometry(type) {
+                    const r = 1.4;
+                    switch (type) {
+                        case 'd4': return new THREE.TetrahedronGeometry(r * 1.3);
+                        case 'd8': return new THREE.OctahedronGeometry(r);
+                        case 'd10': case 'd100': return pentaBipyramid(1.25, 1.5);
+                        case 'd12': return new THREE.DodecahedronGeometry(r);
+                        case 'd20': return new THREE.IcosahedronGeometry(r);
+                        default: return new THREE.BoxGeometry(2, 2, 2); // d6 / all
+                    }
+                }
+                // Regroupe les triangles coplanaires = vraies faces, pose des UV planaires 0..1 par face
+                function buildFacesUV(geo) {
+                    const g = geo.index ? geo.toNonIndexed() : geo;
+                    const pos = g.attributes.position; const tri = pos.count / 3;
+                    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(pos.count * 2), 2));
+                    const uv = g.attributes.uv;
+                    const key = n => `${Math.round(n.x * 100)},${Math.round(n.y * 100)},${Math.round(n.z * 100)}`;
+                    const fmap = new Map(), tf = [], ftris = [];
+                    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3(), nm = new THREE.Vector3();
+                    for (let t = 0; t < tri; t++) {
+                        a.fromBufferAttribute(pos, t * 3); b.fromBufferAttribute(pos, t * 3 + 1); c.fromBufferAttribute(pos, t * 3 + 2);
+                        ab.subVectors(b, a); ac.subVectors(c, a); nm.crossVectors(ab, ac).normalize();
+                        const k = key(nm); let id = fmap.get(k); if (id === undefined) { id = fmap.size; fmap.set(k, id); ftris[id] = []; }
+                        tf[t] = id; ftris[id].push(t);
+                    }
+                    const U = new THREE.Vector3(), V = new THREE.Vector3(), N = new THREE.Vector3(), p = new THREE.Vector3();
+                    for (let f = 0; f < fmap.size; f++) {
+                        const t0 = ftris[f][0];
+                        a.fromBufferAttribute(pos, t0 * 3); b.fromBufferAttribute(pos, t0 * 3 + 1); c.fromBufferAttribute(pos, t0 * 3 + 2);
+                        ab.subVectors(b, a); ac.subVectors(c, a); N.crossVectors(ab, ac).normalize(); U.copy(ab).normalize(); V.crossVectors(N, U).normalize();
+                        let minS = Infinity, minT = Infinity, maxS = -Infinity, maxT = -Infinity; const vs = [];
+                        ftris[f].forEach(t => { for (let k = 0; k < 3; k++) { p.fromBufferAttribute(pos, t * 3 + k); const s = p.dot(U), tt = p.dot(V); vs.push([t * 3 + k, s, tt]); if (s < minS) minS = s; if (tt < minT) minT = tt; if (s > maxS) maxS = s; if (tt > maxT) maxT = tt; } });
+                        const ds = (maxS - minS) || 1, dt = (maxT - minT) || 1;
+                        vs.forEach(([vi, s, tt]) => uv.setXY(vi, (s - minS) / ds, (tt - minT) / dt));
+                    }
+                    uv.needsUpdate = true;
+                    g.clearGroups();
+                    const allMode = (studioScope === 'all');
+                    for (let t = 0; t < tri; t++) g.addGroup(t * 3, 3, allMode ? 0 : tf[t]);
+                    return { g, faceCount: fmap.size, tf };
+                }
+                function composeInto(i, url) {
+                    const fctx = faceCanvases[i].getContext('2d');
+                    fctx.clearRect(0, 0, 128, 128); fctx.fillStyle = studioBg || '#7A2828'; fctx.fillRect(0, 0, 128, 128);
+                    faceTextures[i].needsUpdate = true;
+                    if (url) { const img = new Image(); img.onload = () => { fctx.fillStyle = studioBg || '#7A2828'; fctx.fillRect(0, 0, 128, 128); fctx.drawImage(img, 0, 0, 128, 128); faceTextures[i].needsUpdate = true; }; img.src = url; }
+                }
+                function disposeMats() { materials.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }
+                function rebuild() {
+                    if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+                    disposeMats();
+                    const built = buildFacesUV(makeGeometry(studioScope));
+                    triFace = built.tf;
+                    const allMode = (studioScope === 'all');
+                    const matCount = allMode ? 1 : built.faceCount;
+                    faceCanvases = []; faceTextures = []; materials = [];
+                    for (let i = 0; i < matCount; i++) {
+                        const fc = document.createElement('canvas'); fc.width = fc.height = 128; faceCanvases.push(fc);
+                        const tx = new THREE.CanvasTexture(fc); if ('SRGBColorSpace' in THREE) tx.colorSpace = THREE.SRGBColorSpace; faceTextures.push(tx);
+                        materials.push(new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5, metalness: 0.12, flatShading: true, side: THREE.DoubleSide }));
+                    }
+                    mesh = new THREE.Mesh(built.g, materials); scene.add(mesh);
+                    if (allMode) composeInto(0, studioData.all);
+                    else { ensureSlots(studioScope); for (let i = 0; i < built.faceCount; i++) composeInto(i, (studioData[studioScope] || [])[i]); }
+                    highlight(studioFace); refresh();
+                }
+                function refresh() { // met à jour la face en cours depuis le canvas live
+                    if (!materials.length) return;
+                    const i = (studioScope === 'all') ? 0 : Math.min(studioFace, materials.length - 1);
+                    const fctx = faceCanvases[i] && faceCanvases[i].getContext('2d'); if (!fctx) return;
+                    fctx.clearRect(0, 0, 128, 128); fctx.fillStyle = studioBg || '#7A2828'; fctx.fillRect(0, 0, 128, 128);
+                    try { fctx.drawImage(canvas, 0, 0, 128, 128); } catch (e) {}
+                    faceTextures[i].needsUpdate = true;
+                }
+                function highlight(i) { materials.forEach((m, k) => m.emissive.setHex((k === i && studioScope !== 'all') ? 0x3a2f12 : 0x000000)); }
+                function fitSize() { const w = cvs.clientWidth || 220, h = cvs.clientHeight || 220; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+                function loop() { if (!running) return; if (mesh) { mesh.rotation.y += 0.011; mesh.rotation.x += 0.005; } renderer.render(scene, camera); raf = requestAnimationFrame(loop); }
+                function start() { if (running) return; running = true; fitSize(); if (!mesh) rebuild(); loop(); }
+                function stop() { running = false; if (raf) cancelAnimationFrame(raf); raf = null; }
+
+                // Clic sur une face du dé 3D → la sélectionne pour l'édition
+                cvs.addEventListener('pointerdown', (e) => {
+                    if (studioScope === 'all' || !mesh) return;
+                    const r = cvs.getBoundingClientRect();
+                    ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1; ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+                    raycaster.setFromCamera(ndc, camera);
+                    const hit = raycaster.intersectObject(mesh)[0];
+                    if (hit && triFace[hit.faceIndex] != null) { saveCanvasToFace(); studioFace = triFace[hit.faceIndex]; renderFaceTabs(); loadFaceToCanvas(); highlight(studioFace); }
+                });
+                window.addEventListener('resize', () => { if (running) fitSize(); });
+                return { refresh, rebuild, start, stop, highlight };
             }
             function renderTypeTabs() {
-                const wrap = document.getElementById('ds-type-tabs'); wrap.innerHTML = '';
+                const wrap = document.getElementById('ds-type-tabs'); if (!wrap) return; wrap.innerHTML = '';
                 TYPES.forEach(t => {
+                    const has = (t === 'all') ? !!studioData.all : (Array.isArray(studioData[t]) && studioData[t].some(Boolean));
                     const b = document.createElement('button');
-                    b.className = 'ds-type-tab' + (t === studioType ? ' active' : '') + (studioFaces[t] ? ' has-design' : '');
+                    b.className = 'ds-type-tab' + (t === studioScope ? ' active' : '') + (has ? ' has-design' : '');
                     b.textContent = TYPE_LABEL[t];
-                    b.addEventListener('click', () => { saveCanvasToFace(); studioType = t; loadFaceToCanvas(t); renderTypeTabs(); });
+                    b.addEventListener('click', () => {
+                        saveCanvasToFace();
+                        studioScope = t; studioFace = 0;
+                        renderTypeTabs(); renderFaceTabs(); loadFaceToCanvas();
+                        if (dice3D) dice3D.rebuild();
+                    });
                     wrap.appendChild(b);
                 });
+            }
+            function renderFaceTabs() {
+                const row = document.getElementById('ds-face-row'); const wrap = document.getElementById('ds-face-tabs');
+                if (!row || !wrap) return;
+                if (studioScope === 'all') { row.style.display = 'none'; wrap.innerHTML = ''; return; }
+                row.style.display = 'flex';
+                ensureSlots(studioScope); wrap.innerHTML = '';
+                const n = faceCountOf(studioScope);
+                for (let i = 0; i < n; i++) {
+                    const b = document.createElement('button');
+                    b.className = 'ds-face-tab' + (i === studioFace ? ' active' : '') + (studioData[studioScope][i] ? ' has-design' : '');
+                    b.textContent = (i + 1);
+                    b.addEventListener('click', () => { saveCanvasToFace(); studioFace = i; renderFaceTabs(); loadFaceToCanvas(); if (dice3D) dice3D.highlight(i); });
+                    wrap.appendChild(b);
+                }
             }
             function renderPalette() {
                 const wrap = document.getElementById('ds-palette'); wrap.innerHTML = '';
@@ -729,40 +896,66 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.ds-tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
             document.querySelectorAll('.ds-size').forEach(b => b.addEventListener('click', () => { size = parseInt(b.dataset.size); document.querySelectorAll('.ds-size').forEach(x => x.classList.remove('active')); b.classList.add('active'); }));
             colorInput.addEventListener('input', () => { color = colorInput.value; setTool('brush'); });
-            bgInput.addEventListener('input', () => { studioBg = bgInput.value; updatePreview(); });
+            bgInput.addEventListener('input', () => { studioBg = bgInput.value; if (dice3D) dice3D.rebuild(); else updatePreview(); });
             document.getElementById('ds-undo').addEventListener('click', () => { if (undoStack.length) { redoStack.push(ctx.getImageData(0, 0, W, H)); ctx.putImageData(undoStack.pop(), 0, 0); updatePreview(); } });
             document.getElementById('ds-redo').addEventListener('click', () => { if (redoStack.length) { undoStack.push(ctx.getImageData(0, 0, W, H)); ctx.putImageData(redoStack.pop(), 0, 0); updatePreview(); } });
             document.getElementById('ds-clear').addEventListener('click', () => { snapshot(); ctx.clearRect(0, 0, W, H); updatePreview(); });
+            // Dupliquer la face en cours sur TOUTES les faces (du dé courant, ou de tous les dés si portée = « Tous »)
+            document.getElementById('ds-apply-faces').addEventListener('click', () => {
+                saveCanvasToFace();
+                const url = canvas.toDataURL('image/png');
+                if (studioScope === 'all') {
+                    studioData.all = url;
+                    Object.keys(FACE_COUNTS).forEach(t => { ensureSlots(t); studioData[t] = studioData[t].map(() => url); });
+                } else {
+                    ensureSlots(studioScope); studioData[studioScope] = studioData[studioScope].map(() => url);
+                }
+                renderTypeTabs(); renderFaceTabs();
+                if (dice3D) dice3D.rebuild();
+                if (window.showAppToast) window.showAppToast('Appliqué à toutes les faces', '#8e44ad');
+            });
+            // Appliquer la face en cours à TOUS les dés (toutes leurs faces) et repasser en « Tous »
             document.getElementById('ds-apply-all').addEventListener('click', () => {
                 saveCanvasToFace();
-                const cur = studioFaces[studioType] || canvas.toDataURL();
-                studioFaces = { all: cur }; studioType = 'all';
-                loadFaceToCanvas('all'); renderTypeTabs(); updatePreview();
+                const url = curSlotGet() || canvas.toDataURL('image/png');
+                studioData.all = url;
+                Object.keys(FACE_COUNTS).forEach(t => { ensureSlots(t); studioData[t] = studioData[t].map(() => url); });
+                studioScope = 'all'; studioFace = 0;
+                renderTypeTabs(); renderFaceTabs(); loadFaceToCanvas();
+                if (dice3D) dice3D.rebuild();
                 if (window.showAppToast) window.showAppToast('Face appliquée à tous les dés', '#2980b9');
             });
             document.getElementById('ds-save').addEventListener('click', () => {
                 saveCanvasToFace();
                 const name = (document.getElementById('ds-name').value || '').trim() || ('Création ' + (diceDesigns.length + 1));
-                const thumb = studioFaces.all || studioFaces[studioType] || canvas.toDataURL();
-                const design = { id: 'dd_' + Date.now(), name, bg: studioBg, faces: { ...studioFaces }, thumb };
+                // image représentative par dé (1ʳᵉ face dessinée) pour conserver le skin 2D des résultats
+                const repFaces = { all: studioData.all || null };
+                Object.keys(FACE_COUNTS).forEach(t => { repFaces[t] = firstNonNull(studioData[t]) || studioData.all || null; });
+                const thumb = repFaces.all || repFaces.d20 || repFaces.d6 || Object.values(repFaces).find(Boolean) || canvas.toDataURL();
+                const design = { id: 'dd_' + Date.now(), name, bg: studioBg, faces: repFaces, facesFull: JSON.parse(JSON.stringify(studioData)), thumb };
                 diceDesigns.push(design); persistDiceDesigns();
                 activeDesignId = design.id; DB.set('dnd-dice-active-design', design.id);
                 document.getElementById('ds-name').value = '';
                 renderGallery();
+                if (typeof applyCustomDiceSkin === 'function') applyCustomDiceSkin();
                 if (window.showAppToast) window.showAppToast('🎲 Création enregistrée et activée', '#27ae60');
             });
             document.getElementById('ds-deactivate').addEventListener('click', () => { activeDesignId = null; DB.set('dnd-dice-active-design', ''); renderGallery(); });
-            document.getElementById('ds-close').addEventListener('click', () => modal.classList.add('hidden'));
-            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+            document.getElementById('ds-close').addEventListener('click', () => { modal.classList.add('hidden'); if (dice3D) dice3D.stop(); });
+            modal.addEventListener('click', (e) => { if (e.target === modal) { modal.classList.add('hidden'); if (dice3D) dice3D.stop(); } });
 
             function openStudio() {
                 const act = getActiveDesign();
-                studioFaces = act ? { ...act.faces } : {};
+                studioData = act ? (act.facesFull ? JSON.parse(JSON.stringify(act.facesFull)) : migrateOldFaces(act.faces)) : {};
                 studioBg = act ? (act.bg || '#7A2828') : '#7A2828';
-                bgInput.value = studioBg; studioType = 'all';
-                renderPalette(); renderTypeTabs(); renderGallery();
-                loadFaceToCanvas('all'); updatePreview();
+                bgInput.value = studioBg; studioScope = 'all'; studioFace = 0;
+                renderPalette(); renderTypeTabs(); renderFaceTabs(); renderGallery();
+                loadFaceToCanvas();
                 modal.classList.remove('hidden');
+                // Le canvas 3D a une taille une fois la modale visible → on initialise ici
+                if (!dice3D) dice3D = build3DPreview();
+                if (dice3D) { dice3D.rebuild(); dice3D.start(); }
+                updatePreview();
                 const panel = document.getElementById('dice-theme-panel'); if (panel) panel.classList.add('hidden');
             }
             if (openBtn) openBtn.addEventListener('click', openStudio);
