@@ -370,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // ===== PLATEAU DE DÉS 3D (moteur physique @3d-dice/dice-box) =====
-        let diceBox = null, diceBoxReady = false, diceBoxInitStarted = false, dice3dBlockedByFile = false;
+        let diceBox = null, diceBoxReady = false, diceBoxInitStarted = false, dice3dBlockedByFile = false, diceRolling = false;
         async function initDiceBox() {
             if (diceBoxInitStarted) return;
             diceBoxInitStarted = true;
@@ -403,6 +403,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         initDiceBox();
 
+        // Accès SÉRIALISÉ à dice-box : un seul lancer 3D à la fois (sinon roll() peut ne
+        // jamais se résoudre) + timeout de sécurité pour ne jamais bloquer l'interface.
+        async function safeDiceRoll(notation) {
+            if (diceRolling) throw new Error('dice-box-busy');
+            diceRolling = true;
+            clearTimeout(window._diceBoxClearTimer);
+            try {
+                try { diceBox.clear(); } catch (e) {}
+                const res = await Promise.race([
+                    diceBox.roll(notation),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout-3D')), 9000))
+                ]);
+                if (!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');
+                return res;
+            } finally {
+                diceRolling = false;
+                window._diceBoxClearTimer = setTimeout(() => { try { diceBox.clear(); } catch (e) {} }, 4500);
+            }
+        }
+
         // Dispatcher : utilise la 3D si elle est prête, sinon l'animation 2D (aucune régression)
         async function executeRoll() {
             if (dicePool.length === 0) return;
@@ -426,7 +446,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalBox = document.getElementById('dice-total');
             if (resultsBox) resultsBox.innerHTML = '<span style="font-size:0.9rem; color:#888;">🎲 Les dés roulent…</span>';
             if (totalBox) totalBox.innerHTML = '';
-            try { diceBox.clear(); } catch (e) {}
 
             // 1 dé par entrée (normal) ou 2 dés (avantage/désavantage) — chaque dé = un groupe
             const notation = [];
@@ -438,8 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 groupMap.push(groups);
             });
 
-            const res = await diceBox.roll(notation);
-            if (!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');
+            const res = await safeDiceRoll(notation);
 
             // Valeur d'un groupe : on retient le dé au plus grand nombre de faces (gère le d100)
             const byGroup = {};
@@ -472,9 +490,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (resultsBox) resultsBox.innerHTML = resultsHTML;
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
-
-            clearTimeout(window._diceBoxClearTimer);
-            window._diceBoxClearTimer = setTimeout(() => { try { diceBox.clear(); } catch (e) {} }, 4500);
         }
 
         // --- Repli : animation 2D (culbute CSS + chiffres qui défilent) ---
@@ -543,14 +558,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Lance 1 ou 2 d20 réels en 3D (via dice-box) et renvoie les valeurs obtenues
         async function rollD20Set3D(n) {
-            clearTimeout(window._diceBoxClearTimer);
-            try { diceBox.clear(); } catch(e) {}
             const notation = Array.from({length: n}, () => '1d20');
-            const res = await diceBox.roll(notation);
-            if(!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');
+            const res = await safeDiceRoll(notation);
             const vals = res.map(d => d.value).filter(v => typeof v === 'number');
             if(vals.length < n) throw new Error('Résultat 3D incomplet');
-            window._diceBoxClearTimer = setTimeout(() => { try { diceBox.clear(); } catch(e) {} }, 4500);
             return vals;
         }
 
