@@ -362,23 +362,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // ===== PLATEAU DE DÉS 3D (moteur physique @3d-dice/dice-box) =====
-        let diceBox = null, diceBoxReady = false, diceBoxInitStarted = false;
+        let diceBox = null, diceBoxReady = false, diceBoxInitStarted = false, dice3dBlockedByFile = false;
         async function initDiceBox() {
             if (diceBoxInitStarted) return;
             diceBoxInitStarted = true;
+            // Les modules ES (donc dice-box) ne se chargent jamais en ouverture fichier local.
+            if (location.protocol === 'file:') {
+                dice3dBlockedByFile = true;
+                console.warn("🎲 Dés 3D désactivés : ouvre le site via un serveur web (http://localhost) — la 3D ne peut pas fonctionner en file://. L'animation 2D est utilisée à la place.");
+                return;
+            }
             try {
-                const mod = await import('https://cdn.jsdelivr.net/npm/@3d-dice/dice-box@1.1.4/dist/dice-box.es.min.js');
+                // dice-box est hébergé EN LOCAL (un Web Worker ne peut pas venir d'un autre domaine)
+                const libUrl = new URL('lib/dice-box/', document.baseURI);
+                const mod = await import(libUrl.href + 'dice-box.es.min.js');
                 const DiceBox = mod.default;
                 let overlay = document.getElementById('dice-box-overlay');
                 if (!overlay) { overlay = document.createElement('div'); overlay.id = 'dice-box-overlay'; overlay.className = 'no-print'; document.body.appendChild(overlay); }
                 const box = new DiceBox({
                     container: '#dice-box-overlay',
-                    assetPath: 'https://cdn.jsdelivr.net/npm/@3d-dice/dice-box@1.1.4/dist/assets/',
+                    assetPath: new URL('lib/dice-box/assets/', document.baseURI).pathname,
                     theme: 'default', scale: 7, gravity: 2, throwForce: 6,
                 });
                 await box.init();
                 diceBox = box;
                 diceBoxReady = true;
+                console.info('🎲 Plateau de dés 3D prêt.');
             } catch (e) {
                 console.warn('Plateau 3D indisponible — animation 2D utilisée à la place.', e);
                 diceBoxReady = false;
