@@ -254,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const layoutSelector = document.getElementById('layout-selector'); const layoutTabsContainer = document.getElementById('layout-tabs-container'); const layoutClassicContainer = document.getElementById('layout-classic-container'); const layoutCustomContainer = document.getElementById('layout-custom-container'); const btnEditCustom = document.getElementById('btn-edit-custom'); let isEditMode = false;
         
         const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-initiative', 'widget-companion'], 'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
-        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-initiative', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
+        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-initiative', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
 
         function applyWidgetSizes() { ALL_WIDGETS.forEach(wId => { const el = document.getElementById(wId); if(el) { el.classList.remove('widget-full', 'widget-half', 'widget-third'); if(['widget-inspiration', 'widget-concentration', 'widget-proficiency'].includes(wId)) { el.classList.add('widget-third'); } else { el.classList.add('widget-full'); } } }); }
 
@@ -361,45 +361,135 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // ===== PLATEAU DE DÉS 3D (moteur physique @3d-dice/dice-box) =====
+        let diceBox = null, diceBoxReady = false, diceBoxInitStarted = false;
+        async function initDiceBox() {
+            if (diceBoxInitStarted) return;
+            diceBoxInitStarted = true;
+            try {
+                const mod = await import('https://cdn.jsdelivr.net/npm/@3d-dice/dice-box@1.1.4/dist/dice-box.es.min.js');
+                const DiceBox = mod.default;
+                let overlay = document.getElementById('dice-box-overlay');
+                if (!overlay) { overlay = document.createElement('div'); overlay.id = 'dice-box-overlay'; overlay.className = 'no-print'; document.body.appendChild(overlay); }
+                const box = new DiceBox({
+                    container: '#dice-box-overlay',
+                    assetPath: 'https://cdn.jsdelivr.net/npm/@3d-dice/dice-box@1.1.4/dist/assets/',
+                    theme: 'default', scale: 7, gravity: 2, throwForce: 6,
+                });
+                await box.init();
+                diceBox = box;
+                diceBoxReady = true;
+            } catch (e) {
+                console.warn('Plateau 3D indisponible — animation 2D utilisée à la place.', e);
+                diceBoxReady = false;
+            }
+        }
+        initDiceBox();
+
+        // Dispatcher : utilise la 3D si elle est prête, sinon l'animation 2D (aucune régression)
         async function executeRoll() {
             if (dicePool.length === 0) return;
-            let resultsBox = document.getElementById('dice-results');
-            let totalBox = document.getElementById('dice-total');
-            if(totalBox) totalBox.innerHTML = '';
-
-            let advModeNode = document.querySelector(`input[name="roll-mode"]:checked`);
+            const advModeNode = document.querySelector(`input[name="roll-mode"]:checked`);
             const advMode = advModeNode ? advModeNode.value : 'normal';
             const poolSnapshot = [...dicePool];
+            dicePool = [];
+            renderDicePool();
 
-            // 1) Affiche immédiatement les dés en train de rouler (culbute 3D + chiffres qui défilent)
+            let done = false;
+            if (diceBoxReady && diceBox) {
+                try { await executeRoll3D(poolSnapshot, advMode); done = true; }
+                catch (e) { console.warn('Échec du lancer 3D, repli sur l\'animation 2D.', e); }
+            }
+            if (!done) await executeRollDOM(poolSnapshot, advMode);
+        }
+
+        // --- Lancer réel en 3D via dice-box (résultats = source de vérité) ---
+        async function executeRoll3D(poolSnapshot, advMode) {
+            const resultsBox = document.getElementById('dice-results');
+            const totalBox = document.getElementById('dice-total');
+            if (resultsBox) resultsBox.innerHTML = '<span style="font-size:0.9rem; color:#888;">🎲 Les dés roulent…</span>';
+            if (totalBox) totalBox.innerHTML = '';
+            try { diceBox.clear(); } catch (e) {}
+
+            // 1 dé par entrée (normal) ou 2 dés (avantage/désavantage) — chaque dé = un groupe
+            const notation = [];
+            const groupMap = [];
+            poolSnapshot.forEach(faces => {
+                const n = advMode === 'normal' ? 1 : 2;
+                const groups = [];
+                for (let k = 0; k < n; k++) { groups.push(notation.length); notation.push(`1d${faces}`); }
+                groupMap.push(groups);
+            });
+
+            const res = await diceBox.roll(notation);
+            if (!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');
+
+            // Valeur d'un groupe : on retient le dé au plus grand nombre de faces (gère le d100)
+            const byGroup = {};
+            res.forEach(d => { (byGroup[d.groupId] = byGroup[d.groupId] || []).push(d); });
+            const groupValue = (g) => {
+                const arr = byGroup[g] || [];
+                if (!arr.length) return null;
+                return arr.reduce((a, b) => (b.sides >= a.sides ? b : a)).value;
+            };
+
+            let poolTotal = 0;
+            let resultsHTML = '';
+            poolSnapshot.forEach((faces, index) => {
+                const vals = groupMap[index].map(groupValue).filter(v => v !== null);
+                let finalScore, droppedScore, extraHTML = '';
+                if (advMode !== 'normal' && vals.length >= 2) {
+                    if (advMode === 'adv') { finalScore = Math.max(vals[0], vals[1]); droppedScore = Math.min(vals[0], vals[1]); }
+                    else { finalScore = Math.min(vals[0], vals[1]); droppedScore = Math.max(vals[0], vals[1]); }
+                    extraHTML = `<div class="die-dropped-score" style="position:absolute; top:4px; right:6px; font-size:0.75rem; color:#888; text-decoration:line-through;">${droppedScore}</div>`;
+                } else {
+                    finalScore = (vals[0] != null) ? vals[0] : (Math.floor(Math.random() * faces) + 1);
+                }
+                poolTotal += finalScore;
+                let colorClass = '';
+                if (faces === 20 && finalScore === 20) colorClass = 'crit-success';
+                if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
+                resultsHTML += `<div class="die-result die-settle ${colorClass}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}</div>`;
+                if (index < poolSnapshot.length - 1) resultsHTML += `<div class="die-math">+</div>`;
+            });
+
+            if (resultsBox) resultsBox.innerHTML = resultsHTML;
+            if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
+
+            clearTimeout(window._diceBoxClearTimer);
+            window._diceBoxClearTimer = setTimeout(() => { try { diceBox.clear(); } catch (e) {} }, 4500);
+        }
+
+        // --- Repli : animation 2D (culbute CSS + chiffres qui défilent) ---
+        async function executeRollDOM(poolSnapshot, advMode) {
+            const resultsBox = document.getElementById('dice-results');
+            const totalBox = document.getElementById('dice-total');
+            if (totalBox) totalBox.innerHTML = '';
+
             let rollingHTML = '';
             poolSnapshot.forEach((faces, index) => {
                 rollingHTML += `<div class="die-result die-rolling-3d" id="rolling-die-${index}" style="position:relative;"><span>d${faces}</span><div class="die-main-score">?</div></div>`;
                 if (index < poolSnapshot.length - 1) rollingHTML += `<div class="die-math">+</div>`;
             });
-            if(resultsBox) resultsBox.innerHTML = rollingHTML;
+            if (resultsBox) resultsBox.innerHTML = rollingHTML;
 
-            // Défilement aléatoire des chiffres pendant le lancer
             const scramble = setInterval(() => {
                 poolSnapshot.forEach((faces, index) => {
                     const el = document.querySelector(`#rolling-die-${index} .die-main-score`);
-                    if(el) el.textContent = Math.floor(Math.random() * faces) + 1;
+                    if (el) el.textContent = Math.floor(Math.random() * faces) + 1;
                 });
             }, 60);
 
             await new Promise(resolve => setTimeout(resolve, 850));
             clearInterval(scramble);
 
-            // 2) Calcule et révèle les résultats finaux avec un rebond de stabilisation
             let poolTotal = 0;
             poolSnapshot.forEach((faces, index) => {
-                let finalScore, droppedScore;
-                let extraHTML = '';
-                if(advMode !== 'normal') {
-                    let score1 = Math.floor(Math.random() * faces) + 1;
-                    let score2 = Math.floor(Math.random() * faces) + 1;
-                    if(advMode === 'adv') { finalScore = Math.max(score1, score2); droppedScore = Math.min(score1, score2); }
-                    else { finalScore = Math.min(score1, score2); droppedScore = Math.max(score1, score2); }
+                let finalScore, droppedScore, extraHTML = '';
+                if (advMode !== 'normal') {
+                    let s1 = Math.floor(Math.random() * faces) + 1, s2 = Math.floor(Math.random() * faces) + 1;
+                    if (advMode === 'adv') { finalScore = Math.max(s1, s2); droppedScore = Math.min(s1, s2); }
+                    else { finalScore = Math.min(s1, s2); droppedScore = Math.max(s1, s2); }
                     extraHTML = `<div class="die-dropped-score" style="position:absolute; top:4px; right:6px; font-size:0.75rem; color:#888; text-decoration:line-through;">${droppedScore}</div>`;
                 } else {
                     finalScore = Math.floor(Math.random() * faces) + 1;
@@ -408,9 +498,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let colorClass = '';
                 if (faces === 20 && finalScore === 20) colorClass = 'crit-success';
                 if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
-
                 const tile = document.getElementById(`rolling-die-${index}`);
-                if(tile) {
+                if (tile) {
                     tile.className = `die-result die-settle ${colorClass}`;
                     tile.style.position = 'relative';
                     tile.style.animationDelay = (index * 0.06) + 's';
@@ -418,10 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            if(totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
-
-            dicePool = [];
-            renderDicePool();
+            if (totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
         }
 
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());

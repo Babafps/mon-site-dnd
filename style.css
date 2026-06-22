@@ -1793,3 +1793,63 @@ body.theme-dark .sheet-header::after { background: var(--sheet-bg-color); }
 }
 body.theme-dark .die-rolling-3d { background: linear-gradient(160deg, #332a20, #2a221b); }
 body.theme-dark .die-rolling-3d .die-main-score { color: var(--accent-color); }
+
+/* ============================================================
+   ✦ ONGLET « GÉNÉRAL » — HIÉRARCHIE VISUELLE STRUCTURÉE
+   ============================================================ */
+/* Grille 6 colonnes : 3 mini-stats en tête, caractéristiques pleines,
+   puis bloc inférieur en 2 colonnes équilibrées.
+   La spécificité #layout-tabs-container #tab-strict-gen prime sur la règle .tab-content. */
+#layout-tabs-container #tab-strict-gen {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+#tab-strict-gen > .draggable-widget { width: 100%; min-width: 0; }
+/* Ligne 1 — les trois indicateurs rapides côte à côte */
+#tab-strict-gen > #widget-proficiency,
+#tab-strict-gen > #widget-concentration,
+#tab-strict-gen > #widget-inspiration { grid-column: span 2; }
+/* Cœur de la fiche — pleine largeur */
+#tab-strict-gen > #widget-stats,
+#tab-strict-gen > #widget-rests { grid-column: 1 / -1; }
+/* Bloc inférieur — deux colonnes alignées */
+#tab-strict-gen > #widget-appearance,
+#tab-strict-gen > #widget-traits,
+#tab-strict-gen > #widget-training,
+#tab-strict-gen > #widget-companion { grid-column: span 3; }
+
+/* Tablette : mini-stats sur 2 lignes, le reste pleine largeur */
+@media (max-width: 1024px) and (min-width: 681px) {
+    #layout-tabs-container #tab-strict-gen { grid-template-columns: repeat(4, 1fr); }
+    #tab-strict-gen > #widget-proficiency,
+    #tab-strict-gen > #widget-concentration { grid-column: span 2; }
+    #tab-strict-gen > #widget-inspiration { grid-column: 1 / -1; }
+    #tab-strict-gen > #widget-stats,
+    #tab-strict-gen > #widget-rests,
+    #tab-strict-gen > #widget-appearance,
+    #tab-strict-gen > #widget-traits,
+    #tab-strict-gen > #widget-training,
+    #tab-strict-gen > #widget-companion { grid-column: 1 / -1; }
+}
+/* Mobile : une seule colonne */
+@media (max-width: 680px) {
+    #layout-tabs-container #tab-strict-gen { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   ✦ PLATEAU DE DÉS 3D (overlay dice-box, fond transparent)
+   ============================================================ */
+#dice-box-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    pointer-events: none;
+    background: transparent;
+}
+#dice-box-overlay canvas {
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+}

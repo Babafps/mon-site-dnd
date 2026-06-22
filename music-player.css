@@ -470,7 +470,8 @@
 .music-show-tab {
     position: fixed;
     bottom: 0;
-    left: 14px;
+    right: 16px;
+    left: auto;
     transform: none;
     background: linear-gradient(135deg, #140808 0%, #2c1a10 100%);
     border: 1px solid var(--accent-color, #C49B35);
@@ -533,4 +534,6 @@
     #music-volume-bar { width: 54px; }
     .music-controls-center { gap: 0; }
     .music-player-bar { gap: 8px; padding: 0 10px; }
+    .music-show-tab { right: 10px; max-width: 200px; padding: 5px 14px 4px; font-size: 0.72rem; }
+    #music-tab-title { max-width: 120px; }
 }
