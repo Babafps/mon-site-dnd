@@ -271,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function renderCustomSheet() { safeStoreAllWidgets(); const nav = document.getElementById('custom-tabs-nav'); if(!nav) return; nav.innerHTML = ''; if (customLayout.length <= 1) { nav.style.display = 'none'; } else { nav.style.display = 'flex'; customLayout.forEach(tab => { let btn = document.createElement('button'); btn.className = `tab-btn-strict ${tab.id === activeCustomTabId ? 'active' : ''}`; btn.textContent = tab.name; btn.onclick = () => { activeCustomTabId = tab.id; renderCustomSheet(); }; nav.appendChild(btn); }); } let activeTab = customLayout.find(t => t.id === activeCustomTabId); if(!activeTab) { activeTab = customLayout[0]; activeCustomTabId = activeTab.id; } const c1 = document.getElementById('custom-col-1'); c1.innerHTML = ''; const c2 = document.getElementById('custom-col-2'); c2.innerHTML = ''; const c3 = document.getElementById('custom-col-3'); c3.innerHTML = ''; activeTab.col1.forEach(wId => { let w = document.getElementById(wId); if(w) c1.appendChild(w); }); activeTab.col2.forEach(wId => { let w = document.getElementById(wId); if(w) c2.appendChild(w); }); activeTab.col3.forEach(wId => { let w = document.getElementById(wId); if(w) c3.appendChild(w); }); applyWidgetSizes(); }
 
-        function renderManager() { syncHiddenWidgets(); const tabsList = document.getElementById('manager-tabs-list'); if(!tabsList) return; tabsList.innerHTML = ''; customLayout.forEach(tab => { let div = document.createElement('div'); div.style.display = 'flex'; div.style.alignItems = 'center'; div.style.gap = '5px'; div.style.background = tab.id === managerActiveTabId ? 'var(--primary-color)' : 'rgba(0,0,0,0.1)'; div.style.color = tab.id === managerActiveTabId ? 'white' : 'var(--text-color)'; div.style.padding = '5px 10px'; div.style.borderRadius = '5px'; let input = document.createElement('input'); input.value = tab.name; input.style.border = 'none'; input.style.background = 'transparent'; input.style.color = 'inherit'; input.style.fontWeight = 'bold'; input.style.width = '120px'; input.onchange = (e) => { tab.name = e.target.value.trim() || 'Onglet'; saveCustomLayout(); renderManager(); renderCustomSheet(); }; div.appendChild(input); let btnSelect = document.createElement('button'); btnSelect.innerHTML = '⚙️'; btnSelect.className = 'btn-small'; btnSelect.style.background = 'transparent'; btnSelect.onclick = () => { managerActiveTabId = tab.id; renderManager(); }; div.appendChild(btnSelect); if (customLayout.length > 1) { let btnDel = document.createElement('button'); btnDel.innerHTML = 'X'; btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.onclick = () => { if(confirm(`Supprimer l'onglet "${tab.name}" ?`)) { customLayout = customLayout.filter(t => t.id !== tab.id); if(managerActiveTabId === tab.id) managerActiveTabId = customLayout[0].id; if(activeCustomTabId === tab.id) activeCustomTabId = customLayout[0].id; saveCustomLayout(); renderManager(); renderCustomSheet(); } }; div.appendChild(btnDel); } tabsList.appendChild(div); }); let activeTab = customLayout.find(t => t.id === managerActiveTabId); if(!activeTab) { activeTab = customLayout[0]; managerActiveTabId = activeTab.id; } ['col1', 'col2', 'col3'].forEach(colName => { const colContainer = document.getElementById(`manager-${colName}-list`); if(!colContainer) return; colContainer.innerHTML = ''; activeTab[colName].forEach((wId, index) => { let prettyName = wId.replace('widget-', '').toUpperCase(); colContainer.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.5); border:1px solid rgba(138,28,28,0.25); padding:4px 8px; border-radius:4px; font-size:0.8rem;"><span style="font-weight:bold; color:var(--text-color);">${prettyName}</span><div style="display:flex; gap:3px;"><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.5;"' : ''}>▲</button><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, 1)" ${index === activeTab[colName].length - 1 ? 'disabled style="opacity:0.5;"' : ''}>▼</button><button class="btn-small" style="background:#e74c3c; padding:2px 6px;" onclick="window.removeCustomWidget('${managerActiveTabId}', '${colName}', ${index})">X</button></div></div>`; }); }); const sel = document.getElementById('manager-hidden-select'); if(sel) { sel.innerHTML = hiddenCustomWidgets.length === 0 ? '<option value="">(Aucun module)</option>' : hiddenCustomWidgets.map(w => `<option value="${w}">${w.replace('widget-', '').toUpperCase()}</option>`).join(''); } }
+        function renderManager() { syncHiddenWidgets(); const tabsList = document.getElementById('manager-tabs-list'); if(!tabsList) return; tabsList.innerHTML = ''; customLayout.forEach(tab => { let div = document.createElement('div'); div.style.display = 'flex'; div.style.alignItems = 'center'; div.style.gap = '5px'; div.style.background = tab.id === managerActiveTabId ? 'var(--primary-color)' : 'rgba(0,0,0,0.1)'; div.style.color = tab.id === managerActiveTabId ? 'white' : 'var(--text-color)'; div.style.padding = '5px 10px'; div.style.borderRadius = '5px'; let input = document.createElement('input'); input.value = tab.name; input.style.border = 'none'; input.style.background = 'transparent'; input.style.color = 'inherit'; input.style.fontWeight = 'bold'; input.style.width = '120px'; input.onchange = (e) => { tab.name = e.target.value.trim() || 'Onglet'; saveCustomLayout(); renderManager(); renderCustomSheet(); }; div.appendChild(input); let btnSelect = document.createElement('button'); btnSelect.innerHTML = '⚙️'; btnSelect.className = 'btn-small'; btnSelect.style.background = 'transparent'; btnSelect.onclick = () => { managerActiveTabId = tab.id; renderManager(); }; div.appendChild(btnSelect); if (customLayout.length > 1) { let btnDel = document.createElement('button'); btnDel.innerHTML = 'X'; btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.onclick = () => { if(confirm(`Supprimer l'onglet "${tab.name}" ?`)) { customLayout = customLayout.filter(t => t.id !== tab.id); if(managerActiveTabId === tab.id) managerActiveTabId = customLayout[0].id; if(activeCustomTabId === tab.id) activeCustomTabId = customLayout[0].id; saveCustomLayout(); renderManager(); renderCustomSheet(); } }; div.appendChild(btnDel); } tabsList.appendChild(div); }); let activeTab = customLayout.find(t => t.id === managerActiveTabId); if(!activeTab) { activeTab = customLayout[0]; managerActiveTabId = activeTab.id; } ['col1', 'col2', 'col3'].forEach(colName => { const colContainer = document.getElementById(`manager-${colName}-list`); if(!colContainer) return; colContainer.innerHTML = ''; activeTab[colName].forEach((wId, index) => { let prettyName = wId.replace('widget-', '').toUpperCase(); colContainer.innerHTML += `<div class="manager-widget-row" style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; border-radius:4px; font-size:0.8rem;"><span class="manager-widget-name" style="font-weight:bold;">${prettyName}</span><div style="display:flex; gap:3px;"><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.5;"' : ''}>▲</button><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, 1)" ${index === activeTab[colName].length - 1 ? 'disabled style="opacity:0.5;"' : ''}>▼</button><button class="btn-small" style="background:#e74c3c; padding:2px 6px;" onclick="window.removeCustomWidget('${managerActiveTabId}', '${colName}', ${index})">X</button></div></div>`; }); }); const sel = document.getElementById('manager-hidden-select'); if(sel) { sel.innerHTML = hiddenCustomWidgets.length === 0 ? '<option value="">(Aucun module)</option>' : hiddenCustomWidgets.map(w => `<option value="${w}">${w.replace('widget-', '').toUpperCase()}</option>`).join(''); } }
 
         window.moveCustomWidget = (tabId, colName, index, dir) => { let tab = customLayout.find(t => t.id === tabId); let arr = tab[colName]; if (dir === -1 && index > 0) [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]; else if (dir === 1 && index < arr.length - 1) [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; saveCustomLayout(); renderManager(); renderCustomSheet(); };
         window.removeCustomWidget = (tabId, colName, index) => { let tab = customLayout.find(t => t.id === tabId); tab[colName].splice(index, 1); saveCustomLayout(); renderManager(); renderCustomSheet(); };
@@ -334,6 +334,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if(toggleSearchBtn && btnGlobalSearchTrigger) {
             let showSearch = DB.get('dnd-show-search-btn'); if(showSearch === null) showSearch = 'true'; toggleSearchBtn.checked = showSearch === 'true'; btnGlobalSearchTrigger.classList.toggle('hidden', !toggleSearchBtn.checked);
             toggleSearchBtn.addEventListener('change', (e) => { DB.set('dnd-show-search-btn', e.target.checked); btnGlobalSearchTrigger.classList.toggle('hidden', !e.target.checked); });
+        }
+
+        const toggleMusicPlayer = document.getElementById('toggle-music-player');
+        if(toggleMusicPlayer) {
+            let showMusic = DB.get('dnd-show-music-player'); if(showMusic === null) showMusic = 'true';
+            toggleMusicPlayer.checked = showMusic === 'true';
+            if(window.MusicPlayer) window.MusicPlayer.setVisible(toggleMusicPlayer.checked, false);
+            toggleMusicPlayer.addEventListener('change', (e) => { if(window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, true); else DB.set('dnd-show-music-player', e.target.checked); });
         }
 
         const btnToggleDice = document.getElementById('btn-toggle-dice'); const diceDrawer = document.getElementById('dice-drawer'); const toggleFloatingDice = document.getElementById('toggle-floating-dice');
@@ -520,15 +528,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
-        
+
+        // --- Jet de caractéristique : affiche le résultat dans la bulle ---
+        function showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2) {
+            if(!quickToast) return;
+            let secondDieHTML = '';
+            if(advMode === 'adv') { const kept = Math.max(roll1, roll2); const dropped = Math.min(roll1, roll2); secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#f1c40f; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Avantage)</span></div>`; }
+            else if(advMode === 'dis') { const kept = Math.min(roll1, roll2); const dropped = Math.max(roll1, roll2); secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#e67e22; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Désavantage)</span></div>`; }
+            const total = finalRoll + mod; const critText = finalRoll === 20 ? " 🟢 CRIT" : (finalRoll === 1 ? " 🔴 ÉCHEC" : ""); const modStr = mod >= 0 ? `+${mod}` : mod;
+            quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`;
+            quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            clearTimeout(quickToast._t); quickToast._t = setTimeout(() => { quickToast.classList.add('hidden'); }, 4000);
+        }
+
+        // Lance 1 ou 2 d20 réels en 3D (via dice-box) et renvoie les valeurs obtenues
+        async function rollD20Set3D(n) {
+            clearTimeout(window._diceBoxClearTimer);
+            try { diceBox.clear(); } catch(e) {}
+            const notation = Array.from({length: n}, () => '1d20');
+            const res = await diceBox.roll(notation);
+            if(!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');
+            const vals = res.map(d => d.value).filter(v => typeof v === 'number');
+            if(vals.length < n) throw new Error('Résultat 3D incomplet');
+            window._diceBoxClearTimer = setTimeout(() => { try { diceBox.clear(); } catch(e) {} }, 4500);
+            return vals;
+        }
+
+        // Jet de caractéristique : un vrai dé 3D roule (comme dans le plateau),
+        // avec repli sur un tirage aléatoire instantané si la 3D est indisponible.
+        async function performAbilityRoll(name, mod, advMode) {
+            const n = advMode === 'normal' ? 1 : 2;
+            let roll1, roll2 = null, used3d = false;
+            if(diceBoxReady && diceBox) {
+                try { const vals = await rollD20Set3D(n); roll1 = vals[0]; if(n === 2) roll2 = vals[1]; used3d = true; }
+                catch(e) { console.warn('Jet 3D impossible, repli sur tirage aléatoire.', e); used3d = false; }
+            }
+            if(!used3d) { roll1 = Math.floor(Math.random()*20)+1; if(n === 2) roll2 = Math.floor(Math.random()*20)+1; }
+            let finalRoll = roll1;
+            if(advMode === 'adv') finalRoll = Math.max(roll1, roll2);
+            else if(advMode === 'dis') finalRoll = Math.min(roll1, roll2);
+            showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2);
+        }
+
         document.body.addEventListener('click', (e) => {
             const el = e.target.closest('.rollable');
             if(el) {
-                let name = el.getAttribute('data-name'); let targetId = el.getAttribute('data-target'); let mod = 0; if(targetId !== "none") { let targetEl = document.getElementById(targetId); if(targetEl) mod = parseInt(targetEl.textContent || targetEl.value) || 0; }
-                let advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal'; let roll1 = Math.floor(Math.random() * 20) + 1; let finalRoll = roll1; let secondDieHTML = '';
-                if(advMode === 'adv') { let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.max(roll1, roll2); const kept = roll1 >= roll2 ? roll1 : roll2; const dropped = roll1 >= roll2 ? roll2 : roll1; secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#f1c40f; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Avantage)</span></div>`; } else if (advMode === 'dis') { let roll2 = Math.floor(Math.random() * 20) + 1; finalRoll = Math.min(roll1, roll2); const kept = roll1 <= roll2 ? roll1 : roll2; const dropped = roll1 <= roll2 ? roll2 : roll1; secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#e67e22; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Désavantage)</span></div>`; }
-                let total = finalRoll + mod; let critText = finalRoll === 20 ? " 🟢 CRIT" : (finalRoll === 1 ? " 🔴 ÉCHEC" : ""); let modStr = mod >= 0 ? `+${mod}` : mod;
-                if(quickToast) { quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4000); } return;
+                const name = el.getAttribute('data-name'); const targetId = el.getAttribute('data-target'); let mod = 0; if(targetId !== "none") { const targetEl = document.getElementById(targetId); if(targetEl) mod = parseInt(targetEl.textContent || targetEl.value) || 0; }
+                const advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal';
+                performAbilityRoll(name, mod, advMode);
+                return;
             }
             const macroBtn = e.target.closest('.macro-btn');
             if(macroBtn) {
@@ -888,17 +936,98 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); } if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); modal.classList.add('book-burning'); setTimeout(() => modal.classList.add('hidden'), 1500); } });
 
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
-        function renderAttacks() { const list = document.getElementById('attacks-list'); if(!list) return; renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); }); list.innerHTML = ''; let filtered = activeAtkTab === 'Tout' ? attacks : attacks.filter(a => (a.category || 'Général') === activeAtkTab); filtered.forEach(atk => { let originalIndex = attacks.indexOf(atk); let attuneHtml = atk.reqAttune ? `<div class="attune-check" title="Objet Lié ?"><input type="checkbox" ${atk.isAttuned ? 'checked' : ''} onchange="toggleAttune(${originalIndex})"><label>Lié</label></div>` : ''; list.innerHTML += `<div class="item-card atk-card"><div class="item-card-header"><div style="display:flex; align-items:center; gap:10px;"><h4>⚔️ ${atk.name}</h4>${attuneHtml}</div>${getCrudControlsHTML(originalIndex, 'Attack', activeAtkTab === 'Tout')}</div><div class="item-details"><span><strong>Bonus:</strong> ${atk.bonus}</span><span><strong>Dégâts:</strong> ${atk.dmg}</span></div>${atk.notes ? `<p><small>📝 ${atk.notes}</small></p>` : ''}</div>`; }); }
+        function renderAttacks() {
+            const list = document.getElementById('attacks-list'); if(!list) return;
+            renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); });
+            list.innerHTML = '';
+            const filtered = activeAtkTab === 'Tout' ? attacks : attacks.filter(a => (a.category || 'Général') === activeAtkTab);
+            if(filtered.length === 0) { list.innerHTML = `<div class="compact-empty">Aucune attaque — clique sur ➕ Ajouter ci-dessus.</div>`; return; }
+            filtered.forEach(atk => {
+                const originalIndex = attacks.indexOf(atk);
+                const attuneHtml = atk.reqAttune ? `<label class="atk-attune ${atk.isAttuned ? 'on' : ''}" title="Objet lié ?"><input type="checkbox" ${atk.isAttuned ? 'checked' : ''} onchange="toggleAttune(${originalIndex})">Lié</label>` : '';
+                list.innerHTML += `<div class="ca-row atk-row" data-i="${originalIndex}"><div class="ca-head"><span class="ca-name">⚔️ ${atk.name}</span>${attuneHtml}<span class="atk-stat" title="Bonus / DD">🎯 ${atk.bonus || '—'}</span><span class="atk-stat" title="Dégâts">💥 ${atk.dmg || '—'}</span><div class="ca-actions"><button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>${atk.notes ? `<div class="atk-notes">📝 ${atk.notes}</div>` : ''}</div>`;
+            });
+        }
+        const atkListContainer = document.getElementById('attacks-list');
+        if(atkListContainer) atkListContainer.addEventListener('click', (e) => {
+            const row = e.target.closest('.ca-row'); if(!row) return; const index = parseInt(row.dataset.i);
+            if(e.target.closest('.ci-up')) { if(window.moveAttackUp) window.moveAttackUp(index); return; }
+            if(e.target.closest('.ci-down')) { if(window.moveAttackDown) window.moveAttackDown(index); return; }
+            if(e.target.closest('.ci-edit')) { if(window.editAttack) window.editAttack(index); return; }
+            if(e.target.closest('.ci-del')) { if(window.deleteAttack) window.deleteAttack(index); return; }
+        });
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-attack-modal') { editingAttackIndex = -1; atkModal.classList.remove('hidden'); document.querySelectorAll('#attack-form-modal input[type="text"]').forEach(i => i.value = ''); document.getElementById('new-atk-req-attune').checked = false; }});
         if(document.getElementById('btn-save-atk')) { document.getElementById('btn-save-atk').addEventListener('click', () => { const atk = { name: document.getElementById('new-atk-name').value, bonus: document.getElementById('new-atk-bonus').value, dmg: document.getElementById('new-atk-dmg').value, category: document.getElementById('new-atk-category').value.trim() || 'Général', notes: document.getElementById('new-atk-notes').value, reqAttune: document.getElementById('new-atk-req-attune').checked, isAttuned: false }; if(atk.name) { if(editingAttackIndex >= 0) { atk.isAttuned = attacks[editingAttackIndex].isAttuned; attacks[editingAttackIndex] = atk; } else { attacks.push(atk); } setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden'); } }); }
         window.toggleAttune = (index) => { attacks[index].isAttuned = !attacks[index].isAttuned; setStore('dnd-attacks', attacks); }; window.deleteAttack = (index) => { if(confirm("Supprimer ?")) { attacks.splice(index, 1); setStore('dnd-attacks', attacks); renderAttacks(); }}; window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.editAttack = (index) => { const data = attacks[index]; document.getElementById('new-atk-name').value = data.name; document.getElementById('new-atk-bonus').value = data.bonus; document.getElementById('new-atk-dmg').value = data.dmg; document.getElementById('new-atk-category').value = data.category || 'Général'; document.getElementById('new-atk-notes').value = data.notes; document.getElementById('new-atk-req-attune').checked = data.reqAttune; editingAttackIndex = index; atkModal.classList.remove('hidden'); };
 
-        let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let activeInvTabModal = 'Tout'; const invModal = document.getElementById('inventory-modal');
-        function renderInventory() { const listMain = document.getElementById('pinned-inventory-list'); const listFull = document.getElementById('inventory-full-list'); if(!listMain || !listFull) return; let pinnedItems = inventory.filter(i => i.pinned); let onAddInvCat = () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !invCategories.includes(nouv.trim())) { invCategories.push(nouv.trim()); setStore('dnd-inv-categories', invCategories); updateCategorySelects(); renderInventory(); } }; renderTabs('inv-tabs-container-pinned', pinnedItems, activeInvTabPinned, invCategories, (tab) => { activeInvTabPinned = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); }); renderTabs('inv-tabs-container-modal', inventory, activeInvTabModal, invCategories, (tab) => { activeInvTabModal = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); }); listMain.innerHTML = ''; listFull.innerHTML = ''; let totalWeight = 0; inventory.forEach((item, index) => { let pinClass = item.pinned ? 'pinned' : ''; let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); let cat = item.category || 'Général'; if(activeInvTabModal === 'Tout' || cat === activeInvTabModal) { listFull.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${item.name} (x${item.qty})</h4><div class="item-controls no-print"><button title="Modifier" onclick="editInv(${index})">✎</button><button class="btn-pin ${pinClass}" onclick="toggleInvPin(${index})">📍</button><button class="btn-del" onclick="deleteInv(${index})">X</button></div></div><div class="item-details"><span style="color:#888;">Poids: ${item.weight}</span></div></div>`; } if(item.pinned && (activeInvTabPinned === 'Tout' || cat === activeInvTabPinned)) { listMain.innerHTML += `<div class="item-card"><div class="item-card-header"><h4>${item.name} (x${item.qty})</h4>${getCrudControlsHTML(index, 'Inv', activeInvTabPinned === 'Tout')}<button class="btn-pin ${pinClass}" onclick="toggleInvPin(${index})">📍</button></div></div><div class="item-details"><span style="color:#888;">Poids: ${item.weight}</span></div></div>`; } }); const weightDisplay = document.getElementById('inv-total-weight'); if(weightDisplay) weightDisplay.textContent = (totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight; }
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-inventory') { invModal.classList.remove('hidden'); renderInventory(); }});
-        if(document.getElementById('btn-add-inventory')) { document.getElementById('btn-add-inventory').addEventListener('click', () => { let name = document.getElementById('inv-name').value; if(name) { inventory.push({ name: name, qty: document.getElementById('inv-qty').value || 1, weight: document.getElementById('inv-weight').value || "-", category: document.getElementById('inv-category').value.trim() || 'Général', pinned: false }); setStore('dnd-inventory', inventory); renderInventory(); document.querySelectorAll('#inventory-modal input').forEach(i => i.value = ''); } }); }
-        window.toggleInvPin = (index) => { inventory[index].pinned = !inventory[index].pinned; setStore('dnd-inventory', inventory); renderInventory(); }; window.deleteInv = (index) => { if(confirm("Jeter ?")) { inventory.splice(index, 1); setStore('dnd-inventory', inventory); renderInventory(); }}; window.moveInvUp = (index) => { if(moveWithinFilter(inventory, index, -1, i => i.pinned && (activeInvTabPinned === 'Tout' ? true : (i.category || 'Général') === activeInvTabPinned))) { setStore('dnd-inventory', inventory); renderInventory(); } }; window.moveInvDown = (index) => { if(moveWithinFilter(inventory, index, 1, i => i.pinned && (activeInvTabPinned === 'Tout' ? true : (i.category || 'Général') === activeInvTabPinned))) { setStore('dnd-inventory', inventory); renderInventory(); } }; window.editInv = (index) => { editingInvIndex = index; const item = inventory[index]; document.getElementById('edit-inv-name').value = item.name; document.getElementById('edit-inv-qty').value = item.qty; document.getElementById('edit-inv-weight').value = item.weight; document.getElementById('edit-inv-category').value = item.category || 'Général'; document.getElementById('edit-inventory-modal').classList.remove('hidden'); }; 
-        if(document.getElementById('btn-save-edit-inv')) { document.getElementById('btn-save-edit-inv').addEventListener('click', () => { if (editingInvIndex >= 0) { inventory[editingInvIndex] = { name: document.getElementById('edit-inv-name').value, qty: document.getElementById('edit-inv-qty').value || 1, weight: document.getElementById('edit-inv-weight').value || "-", category: document.getElementById('edit-inv-category').value.trim() || 'Général', pinned: inventory[editingInvIndex].pinned }; setStore('dnd-inventory', inventory); renderInventory(); document.getElementById('edit-inventory-modal').classList.add('hidden'); editingInvIndex = -1; } }); }
+        let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let activeInvTabModal = 'Tout';
+        const invAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+
+        function renderInventory() {
+            const listEl = document.getElementById('pinned-inventory-list'); if(!listEl) return;
+            const onAddInvCat = () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !invCategories.includes(nouv.trim())) { invCategories.push(nouv.trim()); setStore('dnd-inv-categories', invCategories); updateCategorySelects(); renderInventory(); } };
+            renderTabs('inv-tabs-container-pinned', inventory, activeInvTabPinned, invCategories, (tab) => { activeInvTabPinned = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); });
+
+            let totalWeight = 0; inventory.forEach(item => { let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); });
+
+            const entries = inventory.map((item, index) => ({ item, index })).filter(({ item }) => activeInvTabPinned === 'Tout' || (item.category || 'Général') === activeInvTabPinned);
+            entries.sort((a, b) => (b.item.pinned ? 1 : 0) - (a.item.pinned ? 1 : 0)); // favoris en tête
+
+            listEl.innerHTML = '';
+            if(entries.length === 0) {
+                listEl.innerHTML = `<div class="compact-empty">${inventory.length === 0 ? 'Sac vide — ajoute un objet ci-dessus.' : 'Aucun objet dans cet onglet.'}</div>`;
+            } else {
+                entries.forEach(({ item, index }) => {
+                    if(editingInvIndex === index) {
+                        const cats = `<option value="Général">Général</option>` + invCategories.map(c => `<option value="${invAttr(c)}" ${(item.category || 'Général') === c ? 'selected' : ''}>${c}</option>`).join('');
+                        listEl.innerHTML += `<div class="ci-row ci-editing" data-i="${index}"><div class="ci-edit-form"><input class="qa-input qa-grow ci-e-name" value="${invAttr(item.name)}" placeholder="Nom"><input type="number" min="1" class="qa-input qa-num ci-e-qty" value="${parseInt(item.qty) || 1}"><input class="qa-input qa-num ci-e-weight" value="${invAttr(item.weight === '-' ? '' : item.weight)}" placeholder="Poids"><select class="qa-input qa-cat ci-e-cat">${cats}</select><button class="qa-add ci-e-save" title="Enregistrer">✓</button><button class="ci-e-cancel" title="Annuler" style="background:none; border:none; cursor:pointer; font-size:1.1rem; color:#9a8a70;">✕</button></div></div>`;
+                        return;
+                    }
+                    const weightTxt = (item.weight !== undefined && item.weight !== null && item.weight !== '-' && String(item.weight).trim() !== '') ? item.weight : '—';
+                    listEl.innerHTML += `<div class="ci-row${item.pinned ? ' is-pinned' : ''}" data-i="${index}"><button class="ci-pin" title="${item.pinned ? 'Retirer des favoris' : 'Mettre en favori'}">${item.pinned ? '📌' : '☆'}</button><span class="ci-name" title="${invAttr(item.name)}">${item.name}</span><div class="ci-qty"><button class="ci-step" data-act="dec" title="-1">−</button><span class="ci-qval">${parseInt(item.qty) || 1}</span><button class="ci-step" data-act="inc" title="+1">＋</button></div><span class="ci-weight">${weightTxt}</span><div class="ci-actions"><button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>`;
+                });
+            }
+            const weightDisplay = document.getElementById('inv-total-weight');
+            if(weightDisplay) weightDisplay.textContent = `${(totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight} • ${inventory.length} objet${inventory.length > 1 ? 's' : ''}`;
+        }
+
+        // Réordonne un objet dans l'ordre affiché (sans franchir la frontière favoris/non-favoris)
+        function moveInvInView(realIndex, dir) {
+            const entries = inventory.map((item, i) => ({ item, i })).filter(({ item }) => activeInvTabPinned === 'Tout' || (item.category || 'Général') === activeInvTabPinned);
+            entries.sort((a, b) => (b.item.pinned ? 1 : 0) - (a.item.pinned ? 1 : 0));
+            const pos = entries.findIndex(e => e.i === realIndex); if(pos === -1) return;
+            const target = pos + dir; if(target < 0 || target >= entries.length) return;
+            if(!!entries[target].item.pinned !== !!entries[pos].item.pinned) return; // garde les favoris en tête
+            const a = entries[pos].i, b = entries[target].i;
+            [inventory[a], inventory[b]] = [inventory[b], inventory[a]];
+            setStore('dnd-inventory', inventory); renderInventory();
+        }
+
+        function addInventoryFromInputs() {
+            const nameEl = document.getElementById('inv-name'); const name = (nameEl.value || '').trim(); if(!name) { nameEl.focus(); return; }
+            inventory.push({ name, qty: parseInt(document.getElementById('inv-qty').value) || 1, weight: (document.getElementById('inv-weight').value || '').trim() || '-', category: (document.getElementById('inv-category').value || '').trim() || 'Général', pinned: false });
+            setStore('dnd-inventory', inventory);
+            nameEl.value = ''; document.getElementById('inv-qty').value = ''; document.getElementById('inv-weight').value = '';
+            renderInventory(); nameEl.focus();
+        }
+        if(document.getElementById('btn-add-inventory')) document.getElementById('btn-add-inventory').addEventListener('click', addInventoryFromInputs);
+        ['inv-name', 'inv-qty', 'inv-weight'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); addInventoryFromInputs(); } }); });
+
+        const invListContainer = document.getElementById('pinned-inventory-list');
+        if(invListContainer) {
+            invListContainer.addEventListener('click', (e) => {
+                const rowEl = e.target.closest('[data-i]'); if(!rowEl) return; const index = parseInt(rowEl.dataset.i);
+                if(e.target.closest('.ci-e-cancel')) { editingInvIndex = -1; renderInventory(); return; }
+                if(e.target.closest('.ci-e-save')) { inventory[index] = { name: (rowEl.querySelector('.ci-e-name').value || '').trim() || 'Objet', qty: parseInt(rowEl.querySelector('.ci-e-qty').value) || 1, weight: (rowEl.querySelector('.ci-e-weight').value || '').trim() || '-', category: (rowEl.querySelector('.ci-e-cat').value || '').trim() || 'Général', pinned: inventory[index].pinned }; editingInvIndex = -1; setStore('dnd-inventory', inventory); updateCategorySelects(); renderInventory(); return; }
+                if(e.target.closest('.ci-up')) { moveInvInView(index, -1); return; }
+                if(e.target.closest('.ci-down')) { moveInvInView(index, 1); return; }
+                if(e.target.closest('.ci-pin')) { inventory[index].pinned = !inventory[index].pinned; setStore('dnd-inventory', inventory); renderInventory(); return; }
+                if(e.target.closest('.ci-step')) { const act = e.target.closest('.ci-step').dataset.act; let q = parseInt(inventory[index].qty) || 1; q = act === 'inc' ? q + 1 : Math.max(1, q - 1); inventory[index].qty = q; setStore('dnd-inventory', inventory); renderInventory(); return; }
+                if(e.target.closest('.ci-edit')) { editingInvIndex = index; renderInventory(); return; }
+                if(e.target.closest('.ci-del')) { if(confirm(`Jeter « ${inventory[index].name} » ?`)) { inventory.splice(index, 1); setStore('dnd-inventory', inventory); renderInventory(); } return; }
+            });
+            invListContainer.addEventListener('keydown', (e) => { if(e.key === 'Enter' && e.target.closest('.ci-edit-form')) { e.preventDefault(); const saveBtn = e.target.closest('.ci-edit-form').querySelector('.ci-e-save'); if(saveBtn) saveBtn.click(); } });
+        }
 
         function renderTraits() { 
             const listClass = document.getElementById('traits-list-class'); 
@@ -906,14 +1035,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const listFeat = document.getElementById('traits-list-feat'); 
             if(!listClass || !listRace || !listFeat) return; 
             listClass.innerHTML = ''; listRace.innerHTML = ''; listFeat.innerHTML = ''; 
-            traits.forEach((trait, index) => { 
-                let isExpandedClass = trait.pinned ? 'expanded' : ''; 
-                let html = `<div class="item-card trait-card"><div class="item-card-header" onclick="toggleTraitDesc(event, ${index})"><div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;"><span class="trait-meta">${trait.level ? 'Niv.'+trait.level : ''}</span><h4 style="margin:0;">${trait.name}</h4>${trait.pinned ? '📍' : ''}</div>${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`; 
-                if(trait.type === 'class') listClass.innerHTML += html; else if(trait.type === 'race') listRace.innerHTML += html; else listFeat.innerHTML += html; 
-            }); 
-            if(listClass.innerHTML === '') listClass.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucune capacité.</span>`; 
-            if(listRace.innerHTML === '') listRace.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun trait.</span>`; 
-            if(listFeat.innerHTML === '') listFeat.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun don.</span>`; 
+            traits.forEach((trait, index) => {
+                let isExpandedClass = trait.pinned ? 'expanded' : '';
+                let caret = trait.pinned ? '' : '<span class="trait-caret">▸</span>';
+                let metaHtml = trait.level ? `<span class="trait-meta">Niv.${trait.level}</span>` : '';
+                let html = `<div class="trait-row"><div class="trait-row-head" onclick="toggleTraitDesc(event, ${index})">${caret}${metaHtml}<span class="trait-name">${trait.name}</span>${trait.pinned ? '<span class="trait-pin">📌</span>' : ''}${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`;
+                if(trait.type === 'class') listClass.innerHTML += html; else if(trait.type === 'race') listRace.innerHTML += html; else listFeat.innerHTML += html;
+            });
+            if(listClass.innerHTML === '') listClass.innerHTML = `<div class="compact-empty">Aucune capacité.</div>`;
+            if(listRace.innerHTML === '') listRace.innerHTML = `<div class="compact-empty">Aucun trait.</div>`;
+            if(listFeat.innerHTML === '') listFeat.innerHTML = `<div class="compact-empty">Aucun don.</div>`;
         }
 
         window.toggleTraitDesc = (e, index) => { if(e.target.closest('button') || e.target.closest('.item-controls')) return; if(traits[index].pinned) return; const desc = document.getElementById(`trait-desc-${index}`); if(desc) desc.classList.toggle('expanded'); };
@@ -935,22 +1066,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-save-trait')) { document.getElementById('btn-save-trait').addEventListener('click', () => { const trait = { name: document.getElementById('new-trait-name').value.trim(), type: document.getElementById('new-trait-type').value, level: parseInt(document.getElementById('new-trait-level').value) || 0, desc: document.getElementById('new-trait-desc').value, pinned: document.getElementById('new-trait-pinned').checked }; if(trait.name) { if(editingTraitIndex >= 0) traits[editingTraitIndex] = trait; else traits.push(trait); setStore('dnd-traits', traits); renderTraits(); traitModal.classList.add('hidden'); } }); }
         window.deleteTrait = (index) => { if(confirm("Supprimer cette capacité ?")) { traits.splice(index, 1); setStore('dnd-traits', traits); renderTraits(); }}; window.moveTraitUp = (index) => { if(moveWithinFilter(traits, index, -1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.moveTraitDown = (index) => { if(moveWithinFilter(traits, index, 1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.editTrait = (index) => { const data = traits[index]; document.getElementById('new-trait-name').value = data.name; document.getElementById('new-trait-type').value = data.type; document.getElementById('new-trait-level').value = data.level || ''; document.getElementById('new-trait-desc').value = data.desc; document.getElementById('new-trait-pinned').checked = data.pinned; editingTraitIndex = index; document.getElementById('trait-modal-title').textContent = "Modifier la Capacité"; traitModal.classList.remove('hidden'); };
 
-        const crudIgnoredPrefixes = ['new-', 'edit-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll', 'hp-quick'];
+        const crudIgnoredPrefixes = ['new-', 'edit-', 'qa-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll', 'hp-quick'];
 
         let traits = getStore('dnd-traits') || []; const traitModal = document.getElementById('trait-form-modal');
         let abilities = getStore('dnd-abilities') || []; const abilityModal = document.getElementById('ability-form-modal');
 
         function renderAbilities() {
             const list = document.getElementById('abilities-list'); if(!list) return; list.innerHTML = '';
-            if(abilities.length === 0) { list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucune capacité limitée. Utilisez ➕ Ajouter pour en créer.</span>`; return; }
+            if(abilities.length === 0) { list.innerHTML = `<div class="compact-empty">Aucune capacité limitée — ajoute-en une ci-dessus.</div>`; return; }
             abilities.forEach((ab, index) => {
                 const usedCount = ab.used ? ab.used.filter(Boolean).length : 0; const available = ab.max - usedCount; let chargesHtml = '';
                 for(let i = 0; i < ab.max; i++) { const isUsed = ab.used && ab.used[i]; chargesHtml += `<button class="ability-charge-btn ${isUsed ? 'used' : ''}" data-idx="${index}" data-i="${i}" title="${isUsed ? '↩ Récupérer' : '▶ Dépenser'}"></button>`; }
-                const regenIcon = ab.regenMode === 'short_long' ? '⏳' : '🌙'; const regenText = ab.regenMode === 'short_long' ? 'Court + Long' : 'Repos Long';
-                list.innerHTML += `<div class="item-card ability-card"><div class="item-card-header"><h4>${ab.name}</h4><div style="display:flex; align-items:center; gap:8px; flex-shrink:0;"><span class="ability-counter">${available}<span style="color:#bbb; font-size:0.8em;">/${ab.max}</span></span>${getCrudControlsHTML(index, 'Ability')}</div></div><div class="ability-charges">${chargesHtml}</div><div><span class="ability-regen-badge">${regenIcon} ${regenText}</span></div></div>`;
+                const regenIcon = ab.regenMode === 'short_long' ? '⏳' : '🌙'; const regenTitle = ab.regenMode === 'short_long' ? 'Récupère au repos court ET long' : 'Récupère au repos long';
+                list.innerHTML += `<div class="ca-row" data-i="${index}"><div class="ca-head"><span class="ca-name">${ab.name}</span><span class="ability-counter">${available}<span style="opacity:0.55; font-size:0.8em;">/${ab.max}</span></span><span class="ca-regen" title="${regenTitle}">${regenIcon}</span><div class="ca-actions"><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div><div class="ca-pips ability-charges">${chargesHtml}</div></div>`;
             });
-            list.querySelectorAll('.ability-charge-btn').forEach(btn => { btn.addEventListener('click', (e) => { e.preventDefault(); const idx = parseInt(e.currentTarget.dataset.idx); const i = parseInt(e.currentTarget.dataset.i); if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false); abilities[idx].used[i] = !abilities[idx].used[i]; setStore('dnd-abilities', abilities); renderAbilities(); }); });
         }
+        const abListContainer = document.getElementById('abilities-list');
+        if(abListContainer) abListContainer.addEventListener('click', (e) => {
+            const charge = e.target.closest('.ability-charge-btn');
+            if(charge) { const idx = parseInt(charge.dataset.idx); const i = parseInt(charge.dataset.i); if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false); abilities[idx].used[i] = !abilities[idx].used[i]; setStore('dnd-abilities', abilities); renderAbilities(); return; }
+            const row = e.target.closest('.ca-row'); if(!row) return; const index = parseInt(row.dataset.i);
+            if(e.target.closest('.ci-edit')) { if(window.editAbility) window.editAbility(index); return; }
+            if(e.target.closest('.ci-del')) { if(window.deleteAbility) window.deleteAbility(index); return; }
+        });
+        function abilityQuickAdd() {
+            const nameEl = document.getElementById('qa-ab-name'); const name = (nameEl.value || '').trim(); if(!name) { nameEl.focus(); return; }
+            const max = Math.max(1, parseInt(document.getElementById('qa-ab-max').value) || 1);
+            const regenMode = document.getElementById('qa-ab-regen').value || 'long';
+            abilities.push({ name, max, used: Array(max).fill(false), regenMode, shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1 });
+            setStore('dnd-abilities', abilities);
+            nameEl.value = ''; document.getElementById('qa-ab-max').value = '';
+            renderAbilities(); nameEl.focus();
+        }
+        if(document.getElementById('btn-ab-quick-add')) document.getElementById('btn-ab-quick-add').addEventListener('click', abilityQuickAdd);
+        ['qa-ab-name', 'qa-ab-max'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); abilityQuickAdd(); } }); });
 
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-ability-modal') { editingAbilityIndex = -1; document.getElementById('new-ability-name').value = ''; document.getElementById('new-ability-max').value = ''; document.getElementById('ab-regen-mode').value = 'long'; document.getElementById('ab-short-rest-block').classList.add('hidden'); if(abilityModal) abilityModal.classList.remove('hidden'); } });
         const abRegenMode = document.getElementById('ab-regen-mode'); if(abRegenMode) { abRegenMode.addEventListener('change', () => { const shortBlock = document.getElementById('ab-short-rest-block'); if(shortBlock) shortBlock.classList.toggle('hidden', abRegenMode.value !== 'short_long'); }); }
@@ -1090,6 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { id: 'roll-dis',     label: 'Mode Désavantage',     key: 'd', action: () => { const r = document.querySelector('input[name="roll-mode"][value="dis"]'); if(r){r.checked=true;} } },
             { id: 'roll-normal',  label: 'Mode Normal',          key: 'n', action: () => { const r = document.querySelector('input[name="roll-mode"][value="normal"]'); if(r){r.checked=true;} } },
             { id: 'open-dice',    label: 'Ouvrir plateau de dés', key: 'r', action: () => { const dd = document.getElementById('dice-drawer'); if(dd) dd.classList.toggle('open'); } },
+            { id: 'open-music',   label: 'Ouvrir le lecteur musical', key: 'm', action: () => { window.MusicPlayer?.toggle(); } },
             { id: 'roll-init',    label: 'Lancer Initiative',    key: 'i', action: () => { const el = document.querySelector('[data-name="Initiative"]'); if(el) el.click(); } },
             { id: 'short-rest',   label: 'Repos Court',          key: 's', action: () => { document.getElementById('btn-short-rest')?.click(); } },
             { id: 'long-rest',    label: 'Repos Long',           key: 'l', action: () => { document.getElementById('btn-long-rest')?.click(); } },

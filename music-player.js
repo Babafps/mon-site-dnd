@@ -32,7 +32,7 @@
     let playBtn, prevBtn, nextBtn, loopBtn, shuffleBtn, volumeBtn, queueToggleBtn;
     let trackTitle, trackSource, timeCurrent, timeTotal;
     let queuePanel, addPanel, queueList;
-    let playerBar;
+    let playerBar, container, dragGrip;
 
     // =====================================================
     // INITIALISATION
@@ -88,6 +88,8 @@
 
         <!-- BARRE LECTEUR -->
         <div id="music-player-bar" class="music-player-bar">
+            <!-- Poignée de déplacement (glisser à l'horizontale) -->
+            <span id="music-drag-grip" class="music-drag-grip" title="Glisser pour déplacer le lecteur">⠿</span>
             <!-- Infos piste -->
             <div class="music-track-info">
                 <span class="music-note-icon">♪</span>
@@ -151,6 +153,13 @@
         addPanel    = document.getElementById('music-add-panel');
         queueList   = document.getElementById('music-queue-list');
         playerBar   = document.getElementById('music-player-bar');
+        container   = document.getElementById('music-player-container');
+        dragGrip    = document.getElementById('music-drag-grip');
+
+        // Déplacement horizontal du dock + restauration de la position
+        setupDock();
+        // Préférence d'affichage du module (activé / désactivé via le menu)
+        try { if (localStorage.getItem('dnd-show-music-player') === 'false') setVisible(false); } catch (e) {}
 
         // Volume initial
         audioEl.volume = volume;
@@ -197,7 +206,7 @@
         queueToggleBtn.addEventListener('click', toggleQueuePanel);
 
         document.getElementById('music-btn-hide').addEventListener('click',            hidePlayer);
-        document.getElementById('music-show-tab').addEventListener('click',            showPlayer);
+        document.getElementById('music-show-tab').addEventListener('click', (e) => { if (e.currentTarget.dataset.dragged === '1') { e.currentTarget.dataset.dragged = '0'; return; } showPlayer(); });
         document.getElementById('music-btn-add-close').addEventListener('click',       closeAddPanel);
         document.getElementById('music-btn-queue-close').addEventListener('click',     closeQueuePanel);
         document.getElementById('music-btn-add-from-queue').addEventListener('click',  openAddPanel);
@@ -554,6 +563,127 @@
     function closeAddPanel() { addPanel.classList.add('hidden'); }
 
     // =====================================================
+    // DÉPLACEMENT DU DOCK (horizontal, toujours en bas)
+    // =====================================================
+    function clampLeft(px) {
+        const w = container.offsetWidth;
+        return Math.max(8, Math.min(px, window.innerWidth - w - 8));
+    }
+
+    function applyDockLeft(px) {
+        container.style.left = clampLeft(px) + 'px';
+        container.style.transform = 'none';
+    }
+
+    function setupDock() {
+        if (!container || !dragGrip) return;
+
+        // Restaure la position sauvegardée (sinon : centré par défaut via le CSS)
+        const savedLeft = parseFloat(localStorage.getItem('dnd-music-x'));
+        if (!isNaN(savedLeft)) applyDockLeft(savedLeft);
+
+        let dragging = false, startX = 0, startLeft = 0;
+
+        const onMove = (clientX) => {
+            if (!dragging) return;
+            applyDockLeft(startLeft + (clientX - startX));
+        };
+        const onUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            container.classList.remove('music-dragging');
+            try { localStorage.setItem('dnd-music-x', parseFloat(container.style.left) || 0); } catch (e) {}
+        };
+        const onDown = (clientX) => {
+            dragging = true;
+            container.classList.add('music-dragging');
+            const rect = container.getBoundingClientRect();
+            startLeft = rect.left;
+            startX = clientX;
+            applyDockLeft(rect.left);
+        };
+
+        dragGrip.addEventListener('mousedown', (e) => { e.preventDefault(); onDown(e.clientX); });
+        window.addEventListener('mousemove', (e) => onMove(e.clientX));
+        window.addEventListener('mouseup', onUp);
+
+        dragGrip.addEventListener('touchstart', (e) => { onDown(e.touches[0].clientX); }, { passive: true });
+        window.addEventListener('touchmove', (e) => { if (dragging) { onMove(e.touches[0].clientX); } }, { passive: true });
+        window.addEventListener('touchend', onUp);
+
+        // Garde le dock dans l'écran au redimensionnement
+        window.addEventListener('resize', () => {
+            if (container.style.left && container.style.left !== '') applyDockLeft(parseFloat(container.style.left) || 0);
+        });
+
+        // --- Onglet replié : déplaçable librement à l'horizontale, en bas ---
+        const tab = document.getElementById('music-show-tab');
+        if (tab) {
+            const clampTabLeft = (px) => Math.max(8, Math.min(px, window.innerWidth - tab.offsetWidth - 8));
+            const applyTabLeft = (px) => { tab.style.left = clampTabLeft(px) + 'px'; tab.style.right = 'auto'; };
+
+            // Restaure la position sauvegardée de l'onglet
+            const savedTabLeft = parseFloat(localStorage.getItem('dnd-music-tab-x'));
+            if (!isNaN(savedTabLeft)) applyTabLeft(savedTabLeft);
+
+            let tDrag = false, tMoved = false, tStartX = 0, tStartLeft = 0;
+            const tDown = (clientX) => {
+                tDrag = true; tMoved = false;
+                const rect = tab.getBoundingClientRect();
+                tStartLeft = rect.left; tStartX = clientX;
+                tab.style.transition = 'none';
+            };
+            const tMove = (clientX) => {
+                if (!tDrag) return;
+                if (Math.abs(clientX - tStartX) > 4) tMoved = true;
+                applyTabLeft(tStartLeft + (clientX - tStartX));
+            };
+            const tUp = () => {
+                if (!tDrag) return;
+                tDrag = false;
+                tab.style.transition = '';
+                // mémorise « a bougé » pour empêcher le clic d'ouvrir le lecteur
+                tab.dataset.dragged = tMoved ? '1' : '0';
+                if (tMoved) { try { localStorage.setItem('dnd-music-tab-x', parseFloat(tab.style.left) || 0); } catch (e) {} }
+            };
+
+            tab.addEventListener('mousedown', (e) => { e.preventDefault(); tDown(e.clientX); });
+            window.addEventListener('mousemove', (e) => tMove(e.clientX));
+            window.addEventListener('mouseup', tUp);
+            tab.addEventListener('touchstart', (e) => tDown(e.touches[0].clientX), { passive: true });
+            window.addEventListener('touchmove', (e) => { if (tDrag) tMove(e.touches[0].clientX); }, { passive: true });
+            window.addEventListener('touchend', tUp);
+
+            window.addEventListener('resize', () => {
+                if (tab.style.left && tab.style.left !== '') applyTabLeft(parseFloat(tab.style.left) || 0);
+            });
+        }
+    }
+
+    // =====================================================
+    // VISIBILITÉ DU MODULE (activé / désactivé)
+    // =====================================================
+    function setVisible(on, persist) {
+        if (!container) return;
+        container.style.display = on ? 'flex' : 'none';
+        if (persist) { try { localStorage.setItem('dnd-show-music-player', on ? 'true' : 'false'); } catch (e) {} }
+    }
+
+    // API publique : pilotée par le menu des paramètres et le raccourci clavier
+    window.MusicPlayer = {
+        setVisible: (on, persist = true) => setVisible(on, persist),
+        isEnabled:  () => container && container.style.display !== 'none',
+        show:       () => { setVisible(true, true); showPlayer(); },
+        hide:       () => hidePlayer(),
+        // Bascule : ré-active si désactivé, sinon montre/masque la barre
+        toggle: () => {
+            if (!container) return;
+            if (container.style.display === 'none') { setVisible(true, true); showPlayer(); return; }
+            if (playerBar.classList.contains('music-bar-hidden')) showPlayer(); else hidePlayer();
+        }
+    };
+
+    // =====================================================
     // AJOUT DE MUSIQUE
     // =====================================================
     function addFromUrl() {
@@ -633,11 +763,13 @@
             const playing = i === currentIndex;
             const item = document.createElement('div');
             item.className = 'music-queue-item' + (playing ? ' is-playing' : '');
-            item.draggable = true;
+            // L'élément entier n'est PAS draggable : seule la poignée l'est.
+            // (sinon le navigateur tente de démarrer un drag à chaque clic, ce qui
+            //  rendait la sélection d'une piste très difficile)
             item.dataset.index = i;
 
             item.innerHTML = `
-                <span class="music-drag-handle" title="Glisser pour réordonner">⠿</span>
+                <span class="music-drag-handle" title="Glisser pour réordonner" draggable="true">⠿</span>
                 <span class="music-queue-num">${playing ? '♪' : (i + 1)}</span>
                 <span class="music-queue-item-name" title="${esc(track.title)}">${esc(track.title)}</span>
                 <span class="music-queue-item-badge">${esc(track.badge)}</span>
@@ -655,12 +787,14 @@
                 removeTrack(parseInt(item.dataset.index));
             });
 
-            // Drag & drop
-            item.addEventListener('dragstart',  onDragStart);
+            // Drag & drop : déclenché uniquement par la poignée, mais c'est bien
+            // l'item entier qui sert de zone de dépôt.
+            const handle = item.querySelector('.music-drag-handle');
+            handle.addEventListener('dragstart', onDragStart);
+            handle.addEventListener('dragend',   onDragEnd);
             item.addEventListener('dragover',   onDragOver);
             item.addEventListener('dragleave',  onDragLeave);
             item.addEventListener('drop',       onDrop);
-            item.addEventListener('dragend',    onDragEnd);
 
             queueList.appendChild(item);
         });
@@ -695,8 +829,9 @@
     // DRAG & DROP
     // =====================================================
     function onDragStart(e) {
-        dragSrcIndex = parseInt(e.currentTarget.dataset.index);
-        e.currentTarget.classList.add('is-dragging');
+        const item = e.currentTarget.closest('.music-queue-item');
+        dragSrcIndex = parseInt(item.dataset.index);
+        item.classList.add('is-dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', dragSrcIndex);
     }

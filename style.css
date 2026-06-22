@@ -485,6 +485,8 @@ h1::before, h1::after {
 .manager-item { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.03); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--soft-border); }
 .manager-item span { font-weight: bold; font-family: 'Cinzel', serif; color: var(--primary-color); font-size: 0.9rem; }
 .manager-item select { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--primary-color); background: white; font-weight: bold; cursor: pointer; }
+.manager-widget-row { background: rgba(255,255,255,0.5); border: 1px solid rgba(138,28,28,0.25); }
+.manager-widget-name { color: var(--text-color); }
 
 /* ============================================================
    TABS NAVIGATION
@@ -995,6 +997,168 @@ h1::before, h1::after {
 .currency-pay-form input { flex: 1; border: 1px solid var(--soft-border); border-radius: 6px; padding: 5px 10px; background: rgba(255,255,255,0.55); }
 .currency-pay-form select { border: 1px solid var(--soft-border); border-radius: 6px; font-weight: bold; color: var(--primary-color); background: rgba(255,255,255,0.55); }
 .inventory-weight-total { text-align: right; margin-top: 10px; padding-top: 5px; border-top: 1px dashed rgba(122,40,40,0.18); font-size: 0.9rem; color: var(--primary-color); }
+
+/* ============================================================
+   ✦ MODULES COMPACTS — Sac à dos & Capacités (refonte)
+   ============================================================ */
+/* Barre d'ajout rapide intégrée (plus besoin de fenêtre) */
+.qa-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
+.qa-input { background: rgba(0,0,0,0.03); border: 1px solid var(--soft-border); border-radius: 8px; padding: 8px 10px; font-family: 'Lora', serif; font-size: 0.85rem; color: var(--text-color); outline: none; transition: border-color .18s, background .18s; min-width: 0; }
+.qa-input:focus { border-color: var(--primary-color); background: rgba(122,40,40,0.04); }
+.qa-grow { flex: 1 1 130px; }
+.qa-num { width: 58px; flex: 0 0 auto; text-align: center; }
+.qa-cat { flex: 0 1 120px; font-weight: bold; cursor: pointer; }
+.qa-add { flex: 0 0 auto; width: 38px; height: 38px; border: none; border-radius: 10px; background: linear-gradient(135deg, var(--primary-hover), var(--primary-color)); color: var(--accent-color); font-size: 1.3rem; font-weight: bold; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center; transition: transform .15s, box-shadow .15s; box-shadow: 0 2px 8px rgba(122,40,40,0.3); }
+.qa-add:hover { transform: translateY(-1px) scale(1.05); box-shadow: 0 4px 14px rgba(122,40,40,0.45); }
+
+/* Liste compacte générique */
+.compact-list { display: flex; flex-direction: column; gap: 4px; }
+.compact-empty { text-align: center; color: #9a8a70; font-style: italic; font-size: 0.82rem; padding: 16px 8px; }
+
+/* ---- Ligne d'objet (sac à dos) ---- */
+.ci-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(0,0,0,0.025); border: 1px solid transparent; transition: background .15s, border-color .15s; }
+.ci-row:hover { background: rgba(122,40,40,0.05); border-color: var(--soft-border); }
+.ci-row.is-pinned { background: linear-gradient(120deg, rgba(196,155,53,0.13), rgba(122,40,40,0.05)); border-color: rgba(196,155,53,0.35); }
+.ci-pin { flex: 0 0 auto; background: none; border: none; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 2px 3px; border-radius: 5px; opacity: 0.45; filter: grayscale(0.6); transition: all .15s; }
+.ci-row.is-pinned .ci-pin { opacity: 1; filter: none; }
+.ci-pin:hover { opacity: 1; transform: scale(1.15); background: rgba(0,0,0,0.05); }
+.ci-name { flex: 1 1 auto; min-width: 0; font-weight: bold; color: var(--text-color); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-qty { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; background: rgba(0,0,0,0.04); border-radius: 20px; padding: 2px; }
+.ci-step { width: 22px; height: 22px; border: none; border-radius: 50%; background: transparent; color: var(--primary-color); font-size: 1rem; font-weight: bold; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center; transition: background .12s; }
+.ci-step:hover { background: rgba(122,40,40,0.15); }
+.ci-qval { min-width: 22px; text-align: center; font-weight: bold; font-size: 0.85rem; font-variant-numeric: tabular-nums; color: var(--primary-color); }
+.ci-weight { flex: 0 0 auto; min-width: 48px; text-align: right; font-size: 0.76rem; color: #9a8a70; }
+.ci-actions { flex: 0 0 auto; display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
+.ci-row:hover .ci-actions, .ci-row:focus-within .ci-actions { opacity: 1; }
+.ci-actions button { background: none; border: none; cursor: pointer; font-size: 0.85rem; padding: 3px 5px; border-radius: 5px; color: #8a7a64; transition: all .12s; }
+.ci-actions button:hover { background: rgba(0,0,0,0.06); color: var(--primary-color); }
+.ci-actions .ci-del:hover { color: #e74c3c; background: rgba(231,76,60,0.1); }
+@media (max-width: 768px) { .ci-actions { opacity: 1; } }
+.ci-edit-form { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; width: 100%; }
+.ci-edit-form .qa-input { padding: 6px 8px; }
+
+/* ---- Ligne de capacité ---- */
+.ca-row { padding: 8px 11px; border-radius: 9px; background: rgba(0,0,0,0.025); border: 1px solid var(--soft-border); transition: background .15s; }
+.ca-row:hover { background: rgba(122,40,40,0.04); }
+.ca-head { display: flex; align-items: center; gap: 8px; }
+.ca-name { flex: 1 1 auto; min-width: 0; font-weight: bold; color: var(--primary-color); font-family: 'Cinzel', serif; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ca-regen { flex: 0 0 auto; font-size: 0.95rem; opacity: 0.85; cursor: default; }
+.ca-actions { flex: 0 0 auto; display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
+.ca-row:hover .ca-actions, .ca-row:focus-within .ca-actions { opacity: 1; }
+.ca-actions button { background: none; border: none; cursor: pointer; font-size: 0.85rem; padding: 3px 5px; border-radius: 5px; color: #8a7a64; transition: all .12s; }
+.ca-actions button:hover { background: rgba(0,0,0,0.06); color: var(--primary-color); }
+.ca-actions .ci-del:hover { color: #e74c3c; background: rgba(231,76,60,0.1); }
+.ca-pips { margin-top: 8px; }
+@media (max-width: 768px) { .ca-actions { opacity: 1; } }
+
+/* ---- Ligne d'attaque / équipement ---- */
+.atk-row .ca-name { flex: 1 1 auto; }
+.atk-stat { flex: 0 0 auto; font-size: 0.78rem; color: #6a5440; background: rgba(0,0,0,0.05); border-radius: 6px; padding: 2px 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.atk-notes { margin-top: 6px; font-size: 0.78rem; color: #7a6855; font-style: italic; padding-left: 2px; }
+.atk-attune { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: bold; color: #6a5440; cursor: pointer; background: rgba(0,0,0,0.04); padding: 2px 7px; border-radius: 12px; }
+.atk-attune.on { color: var(--primary-color); background: rgba(122,40,40,0.1); }
+
+/* ---- Ligne de capacité / don (traits) ---- */
+.trait-row { border-radius: 8px; background: rgba(0,0,0,0.025); border: 1px solid var(--soft-border); margin-bottom: 4px; }
+.trait-row-head { display: flex; align-items: center; gap: 7px; padding: 6px 9px; cursor: pointer; transition: background .15s; border-radius: 8px; }
+.trait-row-head:hover { background: rgba(122,40,40,0.05); }
+.trait-caret { flex: 0 0 auto; font-size: 0.7rem; color: var(--primary-color); opacity: 0.55; }
+.trait-row .trait-name { flex: 1 1 auto; min-width: 0; font-weight: bold; color: var(--primary-color); font-family: 'Cinzel', serif; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trait-row .trait-pin { flex: 0 0 auto; font-size: 0.85rem; }
+.trait-row .item-controls { flex: 0 0 auto; }
+.trait-row .trait-desc { margin: 0 9px; padding-bottom: 8px; }
+
+/* ---- Variantes mode nuit (attaques / traits) ---- */
+body.theme-dark .atk-stat { background: rgba(255,255,255,0.06); color: #c2b094; }
+body.theme-dark .atk-notes { color: #b6a484; }
+body.theme-dark .atk-attune { color: #c2b094; background: rgba(255,255,255,0.06); }
+body.theme-dark .atk-attune.on { color: var(--accent-color); background: rgba(196,155,53,0.12); }
+body.theme-dark .trait-row { background: rgba(255,255,255,0.03); }
+body.theme-dark .trait-row .trait-name { color: var(--accent-color); }
+body.theme-dark .trait-row-head:hover { background: rgba(196,155,53,0.08); }
+
+/* ---- Variantes mode nuit ---- */
+body.theme-dark .qa-input { background: rgba(255,255,255,0.05) !important; }
+body.theme-dark .ci-row, body.theme-dark .ca-row { background: rgba(255,255,255,0.03); }
+body.theme-dark .ci-row:hover { background: rgba(196,155,53,0.08); }
+body.theme-dark .ci-name { color: var(--text-color); }
+body.theme-dark .ci-weight, body.theme-dark .compact-empty { color: #b6a484; }
+body.theme-dark .ci-qty { background: rgba(255,255,255,0.06); }
+body.theme-dark .ci-qval, body.theme-dark .ci-step { color: var(--accent-color); }
+body.theme-dark .ci-row.is-pinned { background: linear-gradient(120deg, rgba(196,155,53,0.18), rgba(255,255,255,0.03)); border-color: rgba(196,155,53,0.4); }
+body.theme-dark .ca-name { color: var(--accent-color); }
+body.theme-dark .ca-actions button:hover, body.theme-dark .ci-actions button:hover { background: rgba(255,255,255,0.08); color: var(--accent-color); }
+
+/* ============================================================
+   ✦ MODE NUIT — LISIBILITÉ GLOBALE (menus, cases, widgets)
+   ============================================================ */
+/* Menus déroulants (select) partout */
+body.theme-dark select { background-color: #2a2118 !important; color: var(--text-color); border-color: rgba(196,155,53,0.35); }
+body.theme-dark select option { background-color: #241d17; color: var(--text-color); }
+body.theme-dark .select-layout { background: #2a2118 !important; color: var(--text-color); }
+/* Placeholders plus clairs */
+body.theme-dark input::placeholder, body.theme-dark textarea::placeholder { color: #a8957a; }
+/* Cases à cocher & boutons radio : coche dorée bien visible */
+body.theme-dark input[type="checkbox"], body.theme-dark input[type="radio"] { accent-color: var(--accent-color); }
+/* Bourse : champ "Payer…" + sélecteur de pièce */
+body.theme-dark .currency-pay-form input,
+body.theme-dark .currency-pay-form select { background: rgba(255,255,255,0.06) !important; color: var(--text-color); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .currency-table th { color: var(--accent-color); }
+body.theme-dark .currency-table td { color: #c2b094; }
+/* Tracker d'initiative : "Round :" + numéro */
+body.theme-dark #init-round-display { color: var(--accent-color) !important; }
+body.theme-dark #init-round-val { background: rgba(196,155,53,0.16) !important; color: var(--accent-color) !important; }
+body.theme-dark .init-item { color: var(--text-color); }
+/* Calculatrice : boutons chiffres (le fond clair restait avec texte clair) */
+body.theme-dark .btn-calc { background: linear-gradient(160deg, #332a20, #2a221b); color: var(--text-color); border-color: rgba(196,155,53,0.22); box-shadow: 0 2px 5px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
+body.theme-dark .btn-calc:not(.btn-calc-op):not(.btn-calc-eq):not(.btn-calc-clear):hover { background: linear-gradient(160deg, #3d3226, #332a20); border-color: rgba(196,155,53,0.4); }
+/* Métadonnées & textes secondaires des widgets */
+body.theme-dark .trait-meta { color: var(--accent-color); }
+body.theme-dark .trait-section-title { color: var(--accent-color); }
+body.theme-dark .trait-desc { color: #d6c7a8; }
+body.theme-dark .prepared-spell-row, body.theme-dark .spell-name { color: var(--text-color); }
+
+/* Boutons monter/modifier/supprimer des traits (révélés au survol de la ligne) */
+.trait-row:hover .item-controls, .trait-row:focus-within .item-controls { opacity: 1; transform: translateY(0); pointer-events: auto; }
+@media (max-width: 768px) { .trait-row .item-controls { opacity: 1; pointer-events: auto; transform: none; } }
+
+/* Cases à cocher & radios : look soigné en mode nuit (plus de carré blanc) */
+body.theme-dark input[type="checkbox"] {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; flex-shrink: 0; margin: 0 2px;
+    border: 1.5px solid rgba(196,155,53,0.55); border-radius: 4px;
+    background: rgba(255,255,255,0.06); cursor: pointer; position: relative; vertical-align: middle;
+    transition: background .15s, border-color .15s;
+}
+body.theme-dark input[type="checkbox"]:hover { border-color: var(--accent-color); }
+body.theme-dark input[type="checkbox"]:checked { background: var(--accent-color); border-color: var(--accent-color); }
+body.theme-dark input[type="checkbox"]:checked::after {
+    content: ''; position: absolute; left: 4.5px; top: 1px; width: 4px; height: 8px;
+    border: solid #1d1712; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+body.theme-dark input[type="radio"] {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; flex-shrink: 0;
+    border: 1.5px solid rgba(196,155,53,0.55); border-radius: 50%;
+    background: rgba(255,255,255,0.06); cursor: pointer; vertical-align: middle;
+}
+body.theme-dark input[type="radio"]:checked { border-color: var(--accent-color); background: radial-gradient(circle, var(--accent-color) 0 42%, rgba(255,255,255,0.06) 47%); }
+
+/* Fenêtres (modales) : champs & panneaux qui restaient gris/clairs en mode nuit */
+body.theme-dark .modal-box input[type="text"],
+body.theme-dark .modal-box input[type="number"],
+body.theme-dark .modal-box input:not([type]),
+body.theme-dark .modal-box textarea,
+body.theme-dark .modal-box select { background: #2a2118 !important; color: var(--text-color); border-color: rgba(196,155,53,0.3); }
+/* Fenêtre des emplacements de sorts */
+body.theme-dark .spell-slot-config-row { background: rgba(255,255,255,0.04); border-color: rgba(196,155,53,0.2); }
+body.theme-dark .spell-slot-mini-field { color: #c2b094; }
+body.theme-dark .spell-slot-mini-field input,
+body.theme-dark .spell-slot-mini-field select { background: #2a2118 !important; color: var(--text-color); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .spell-recovery-pill { background: rgba(196,155,53,0.1); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .spell-recovery-pill span { color: var(--accent-color); }
+body.theme-dark .spell-recovery-pill select,
+body.theme-dark .spell-recovery-pill input { background: #2a2118 !important; color: var(--text-color); border-color: rgba(196,155,53,0.3); }
 
 /* ============================================================
    SPELL STATS
@@ -1526,6 +1690,10 @@ h1::before, h1::after {
     .slot-info { font-size: 7pt !important; }
     .slot-check { transform: scale(1) !important; }
     .ability-card { break-inside: avoid; page-break-inside: avoid; }
+    .ca-row, .ci-row { break-inside: avoid; page-break-inside: avoid; }
+    .ci-actions, .ci-step, .ci-pin, .ca-actions, .qa-row { display: none !important; }
+    .ci-qty { background: none !important; padding: 0 !important; }
+    .ci-row, .ca-row { border: 0.5pt solid rgba(122,40,40,0.25) !important; padding: 3px 6px !important; }
     .ability-charge-btn { width: 16px !important; height: 16px !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .ability-charge-btn::after { width: 6px !important; height: 6px !important; }
     .ability-counter { font-size: 0.8rem !important; padding: 1px 8px !important; }
@@ -1769,6 +1937,39 @@ body.theme-dark .hp-quick-amount { background: rgba(255,255,255,0.06); }
 body.theme-dark .currency-table td { color: #c2b094; }
 /* Petit halo lunaire sur l'en-tête en mode nuit */
 body.theme-dark .sheet-header::after { background: var(--sheet-bg-color); }
+
+/* — Lisibilité des menus / panneaux / onglets en mode nuit — */
+/* Onglets (mode onglets, mode personnalisé, sac à dos, attaques) */
+body.theme-dark .tab-btn-strict,
+body.theme-dark .cat-tab,
+body.theme-dark .cat-tab-edit { color: #ecdcb4; }
+body.theme-dark .tab-btn-strict:hover,
+body.theme-dark .cat-tab:hover,
+body.theme-dark .cat-tab-edit:hover { color: #fff3d4; background: rgba(196,155,53,0.14); }
+body.theme-dark .tab-btn-strict.active,
+body.theme-dark .cat-tab.active { color: #ffe9ad; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+body.theme-dark .cat-tab-edit { border-color: rgba(196,155,53,0.3); }
+/* Onglets éditables du gestionnaire (Mode Perso) : champ-nom toujours lisible */
+body.theme-dark #manager-tabs-list input { color: #ecdcb4; }
+
+/* Gestionnaire de disposition (mode personnalisé) */
+body.theme-dark #custom-layout-manager { background: linear-gradient(158deg, #261e18, #211a14); }
+body.theme-dark .manager-item { background: rgba(255,255,255,0.05); }
+body.theme-dark .manager-item select,
+body.theme-dark #manager-hidden-select { background: #2a2118; color: var(--text-color); border-color: var(--accent-color); }
+body.theme-dark .manager-widget-row { background: rgba(255,255,255,0.05); border-color: rgba(196,155,53,0.2); }
+body.theme-dark .manager-widget-row .manager-widget-name { color: #e0d2b2; }
+
+/* Emplacements de sorts & infos */
+body.theme-dark .spell-slot-empty { color: #cbb892; background: rgba(255,255,255,0.05); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .slot-info { color: #c2b094; }
+body.theme-dark .ability-regen-badge { color: var(--accent-color); background: rgba(255,255,255,0.05); border-color: rgba(196,155,53,0.4); }
+body.theme-dark .prepared-spell-meta { color: #b6a484; }
+body.theme-dark #avatar-placeholder { color: #a8957a; }
+
+/* Listes vides / textes secondaires génériques sur la fiche */
+body.theme-dark .empty-list-msg,
+body.theme-dark .empty-state { color: #b7a484; }
 
 /* ============================================================
    ✦ DÉS — VRAIE ANIMATION DE ROULEMENT 3D

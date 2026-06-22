@@ -2,32 +2,56 @@
    MODULE MUSIQUE — D&D Theme
    ===================================================== */
 
-/* ---- CONTENEUR GLOBAL ---- */
+/* ---- CONTENEUR GLOBAL (dock flottant, déplaçable à l'horizontale) ---- */
 #music-player-container {
     position: fixed;
-    bottom: 0; left: 0; right: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(800px, calc(100vw - 16px));
     z-index: 4000;
     font-family: 'Lora', serif;
+    display: flex;
+    flex-direction: column;
 }
 
 /* ---- BARRE PRINCIPALE ---- */
 .music-player-bar {
     background: linear-gradient(135deg, #140808 0%, #2c1a10 55%, #1a1614 100%);
-    border-top: 2px solid var(--accent-color, #C49B35);
-    box-shadow: 0 -4px 28px rgba(0,0,0,0.7), 0 -1px 0 rgba(196,155,53,0.35);
+    border: 2px solid var(--accent-color, #C49B35);
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -2px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,155,53,0.18);
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 18px;
+    gap: 12px;
+    padding: 0 14px;
     height: 62px;
 }
+
+/* ---- POIGNÉE DE DÉPLACEMENT ---- */
+.music-drag-grip {
+    flex-shrink: 0;
+    color: #8a6d4a;
+    cursor: grab;
+    font-size: 1.15rem;
+    line-height: 1;
+    padding: 6px 2px;
+    user-select: none;
+    touch-action: none;
+    transition: color 0.18s;
+}
+.music-drag-grip:hover { color: var(--accent-color, #C49B35); }
+.music-drag-grip:active { cursor: grabbing; }
+#music-player-container.music-dragging { transition: none; }
+#music-player-container.music-dragging .music-player-bar { box-shadow: 0 12px 38px rgba(0,0,0,0.75), 0 0 0 2px rgba(196,155,53,0.5); }
 
 /* ---- INFOS PISTE ---- */
 .music-track-info {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex: 0 0 200px;
+    flex: 0 1 150px;
     min-width: 0;
 }
 
@@ -129,8 +153,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 130px;
+    min-width: 110px;
 }
 
 .music-time {
@@ -176,7 +200,7 @@
     border: none;
 }
 
-#music-seek-bar { flex: 1; }
+#music-seek-bar { flex: 1; min-width: 0; }
 
 /* ---- CONTROLES DROITE ---- */
 .music-controls-right {
@@ -186,13 +210,15 @@
     flex-shrink: 0;
 }
 
-#music-volume-bar { width: 72px; }
+#music-volume-bar { width: 56px; min-width: 0; }
 
 /* ---- PANNEAU FILE D'ATTENTE ---- */
 .music-panel {
     background: linear-gradient(180deg, #190c08 0%, #251610 100%);
-    border-top: 1px solid rgba(196,155,53,0.38);
-    box-shadow: 0 -8px 36px rgba(0,0,0,0.6);
+    border: 1px solid rgba(196,155,53,0.38);
+    border-radius: 14px;
+    margin-bottom: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
     overflow: hidden;
     transition: max-height 0.3s cubic-bezier(0.2,0.8,0.2,1);
 }
@@ -459,12 +485,13 @@
 
 /* ---- CACHER / AFFICHER ---- */
 .music-bar-hidden {
-    transform: translateY(100%);
+    transform: translateY(calc(100% + 24px));
+    opacity: 0;
     pointer-events: none;
 }
 
 .music-player-bar {
-    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease, box-shadow 0.18s ease;
 }
 
 .music-show-tab {
@@ -478,7 +505,8 @@
     border-bottom: none;
     border-radius: 10px 10px 0 0;
     padding: 6px 18px 5px;
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -498,6 +526,7 @@
     border-color: #f5e6c8;
     padding-bottom: 8px;
 }
+.music-show-tab:active { cursor: grabbing; }
 
 #music-tab-note {
     color: var(--accent-color, #C49B35);
