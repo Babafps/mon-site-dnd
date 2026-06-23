@@ -2419,3 +2419,96 @@ body.theme-dark .ds-tool, body.theme-dark .ds-size, body.theme-dark #ds-undo, bo
 body.theme-dark .ds-header h2, body.theme-dark .ds-side-label, body.theme-dark .ds-color-row, body.theme-dark .ds-bg-row { color: var(--accent-color); }
 body.theme-dark .ds-header { border-bottom-color: rgba(196,155,53,0.3); }
 body.theme-dark .ds-save-row input { background: rgba(255,255,255,0.06); color: var(--text-color); }
+
+/* ============================================================
+   ✦ BADGE « BÊTA » (atelier de dés 3D)
+   ============================================================ */
+.beta-badge {
+    display: inline-block;
+    font-family: 'Lora', serif;
+    font-size: 0.58rem;
+    font-weight: bold;
+    letter-spacing: 0.09em;
+    color: #8a5a00;
+    background: rgba(230,160,30,0.22);
+    border: 1px solid rgba(230,160,30,0.55);
+    border-radius: 6px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.ds-header .beta-badge { font-size: 0.7rem; }
+body.theme-dark .beta-badge { color: #f0c060; background: rgba(230,160,30,0.16); border-color: rgba(230,160,30,0.5); }
+
+/* ============================================================
+   ✦ IMPRESSION ÉCO-ENCRE : noir profond sur blanc pur, avatar préservé
+   ============================================================ */
+@media print {
+    /* Fond global blanc pur (annule aussi l'image de fond et le mode nuit) */
+    html, body, body.theme-dark { background: #fff !important; background-image: none !important; }
+
+    /* La feuille : cadre noir fin, fond blanc, sans ombre */
+    .sheet-container {
+        background: #fff !important;
+        border: 1.5pt solid #000 !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+    }
+    .sheet-container::before, .sheet-container::after { display: none !important; }
+
+    /* Tout le contenu : noir, zéro fond/ombre/dégradé — SAUF avatar, images et canvas */
+    .sheet-container *:not(#header-avatar):not(.avatar-mini):not(#main-avatar-preview):not(img):not(canvas) {
+        background: #fff !important;
+        background-image: none !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        color: #000 !important;
+        border-color: #000 !important;
+        filter: none !important;
+    }
+    .sheet-container *::before, .sheet-container *::after {
+        background: none !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    /* Hiérarchie nette : titres soulignés, blocs délimités finement */
+    .sheet-container h1 { font-size: 16pt !important; border-bottom: 1.5pt solid #000 !important; }
+    .sheet-container h1::before, .sheet-container h1::after { display: none !important; }
+    .section-title, .section-title-row { border-bottom: 0.75pt solid #000 !important; }
+    .dynamic-box, .full-width-notes, .mini-stat-box, .attribute-block, .combat-box,
+    .health-block, .item-card, .coin-box, .spell-slot-row, .init-item, .rest-summary-card,
+    .stat-score-circle, .prof-bonus-box, .conditions-track, .conditions-track label,
+    .ability-counter, .ability-regen-badge, .trait-meta, .stat-mod-box, .attune-check {
+        border: 0.75pt solid #000 !important;
+        border-radius: 4px !important;
+    }
+
+    /* EXCEPTION COULEUR : portrait / avatar du personnage + illustrations conservés */
+    #header-avatar, .avatar-mini, #main-avatar-preview, .sheet-container img {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        filter: none !important;
+    }
+    #header-avatar, .avatar-mini { border: 1pt solid #000 !important; }
+
+    /* SAUTS DE PAGE propres : aucun bloc majeur coupé entre deux pages */
+    .draggable-widget, .dynamic-box, .full-width-notes, .attribute-block, .item-card,
+    .health-block, .combat-stats, .spell-slot-row, .trait-card, .ability-card,
+    .rest-summary-grid, table {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+    .sheet-col, .full-width-zone { break-inside: auto !important; }
+
+    /* Masquer tout le superflu d'interface (ceinture + bretelles) */
+    #music-player-container, #dice-studio-modal, #dice-theme-panel, .dice-theme-toggle,
+    #btn-toggle-dice, #dice-drawer, #dice-box-overlay, .settings-container, #btn-go-home,
+    #btn-global-search-trigger, #concentration-glow, #status-fx-overlay, #status-fx-labels,
+    #quick-roll-toast, #app-toast, #sync-toast, .beta-badge {
+        display: none !important;
+    }
+}
