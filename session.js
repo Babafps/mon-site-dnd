@@ -91,19 +91,111 @@
         state.pushTimer = setTimeout(doPush, DEBOUNCE);
     }
 
-    // ---------- Présence ----------
+    // ---------- Présence + réception des broadcasts MJ ----------
     function openPresence() {
         if (!window.SupaAuth || !state.code) return;
         try {
             const ch = window.SupaAuth.presenceChannel(state.code);
-            ch.subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
-                }
-            });
+            ch.on('broadcast', { event: 'scene' }, ({ payload }) => applyIncomingScene(payload))
+              .on('broadcast', { event: 'ping' }, ({ payload }) => showPing(payload))
+              .on('broadcast', { event: 'gift' }, ({ payload }) => receiveGift(payload))
+              .subscribe(async (status) => {
+                  if (status === 'SUBSCRIBED') {
+                      try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
+                  }
+              });
             state.channel = ch;
         } catch (e) { console.warn('presence:', e); }
     }
+
+    function myUid() { return (window.SupaAuth && window.SupaAuth.currentUser && window.SupaAuth.currentUser.id) || null; }
+    function sendToGm(event, payload) { if (state.channel) { try { state.channel.send({ type: 'broadcast', event, payload }); } catch (e) {} } }
+    function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    // --- Scène diffusée par le MJ : change le fond + lance l'ambiance ---
+    function applyIncomingScene(p) {
+        if (!p) return;
+        if (p.bg) { document.body.style.backgroundImage = 'url(' + p.bg + ')'; document.body.classList.add('scene-active'); }
+        if (p.music && window.MusicPlayer && window.MusicPlayer.playUrl) { try { window.MusicPlayer.playUrl(p.music, '🎬 ' + (p.name || 'Scène')); } catch (e) {} }
+        if (window.showAppToast) window.showAppToast('🎬 ' + (p.name ? ('Scène : ' + p.name) : 'Nouvelle ambiance'), '#8a6320');
+    }
+
+    // --- Ping visuel envoyé par le MJ ---
+    function showPing(p) {
+        if (!p) return;
+        const ping = document.createElement('div');
+        ping.className = 'session-ping no-print';
+        ping.style.left = ((p.x || 0.5) * 100) + 'vw';
+        ping.style.top = ((p.y || 0.5) * 100) + 'vh';
+        if (p.color) ping.style.setProperty('--ping-color', p.color);
+        document.body.appendChild(ping);
+        setTimeout(() => ping.remove(), 1700);
+    }
+
+    // --- Troc / Murmure reçu ---
+    function receiveGift(p) {
+        if (!p) return;
+        if (p.targetUserId && p.targetUserId !== 'all' && p.targetUserId !== myUid()) return; // pas destiné à moi
+        showGiftNotification(p);
+    }
+    function mkBtn(label, cls, fn) { const b = document.createElement('button'); b.className = 'session-notif-btn ' + cls; b.textContent = label; b.addEventListener('click', fn); return b; }
+    function showGiftNotification(p) {
+        let wrap = document.getElementById('session-notifs');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'session-notif';
+        const isItem = p.type === 'item' && p.item;
+        const icon = isItem ? '🎁' : '🤫';
+        const title = isItem ? "Le MJ t'offre un objet" : 'Murmure du MJ';
+        const body = isItem
+            ? `<b>${escHtml(p.item.name)}</b>${(p.item.qty > 1) ? (' ×' + p.item.qty) : ''}${p.message ? ('<div class="session-notif-msg">' + escHtml(p.message) + '</div>') : ''}`
+            : `<div class="session-notif-msg">${escHtml(p.message || '')}</div>`;
+        card.innerHTML = `<div class="session-notif-head">${icon} ${title}</div><div class="session-notif-body">${body}</div><div class="session-notif-actions"></div>`;
+        const actions = card.querySelector('.session-notif-actions');
+        if (isItem) {
+            actions.appendChild(mkBtn('✔ Accepter', 'accept', () => {
+                if (window.PlayerInventory) window.PlayerInventory.add(p.item);
+                sendToGm('gift-response', { accepted: true, by: snapName(), item: p.item.name, giftId: p.giftId });
+                if (window.showAppToast) window.showAppToast('🎁 « ' + p.item.name + ' » ajouté au sac', '#27ae60');
+                card.remove();
+            }));
+            actions.appendChild(mkBtn('✖ Refuser', 'refuse', () => {
+                sendToGm('gift-response', { accepted: false, by: snapName(), item: p.item.name, giftId: p.giftId });
+                card.remove();
+            }));
+        } else {
+            actions.appendChild(mkBtn('Compris', 'accept', () => {
+                sendToGm('gift-response', { accepted: true, by: snapName(), whisper: true, giftId: p.giftId });
+                card.remove();
+            }));
+        }
+        wrap.appendChild(card);
+    }
+
+    // --- Styles du module (ping + notifications) ---
+    function injectStyles() {
+        if (document.getElementById('session-styles')) return;
+        const st = document.createElement('style'); st.id = 'session-styles';
+        st.textContent = `
+        @keyframes session-ping-anim { 0%{ transform:translate(-50%,-50%) scale(0.2); opacity:0.95; } 100%{ transform:translate(-50%,-50%) scale(2.4); opacity:0; } }
+        .session-ping { position:fixed; width:120px; height:120px; border-radius:50%; border:4px solid var(--ping-color,#C49B35); box-shadow:0 0 26px var(--ping-color,#C49B35); pointer-events:none; z-index:9998; transform:translate(-50%,-50%); animation:session-ping-anim 1.6s ease-out forwards; }
+        .session-ping::after { content:''; position:absolute; inset:32%; border-radius:50%; background:var(--ping-color,#C49B35); opacity:0.55; }
+        #session-notifs { position:fixed; right:18px; bottom:100px; z-index:9999; display:flex; flex-direction:column; gap:10px; max-width:340px; }
+        @keyframes session-notif-in { from{ transform:translateX(40px); opacity:0; } to{ transform:none; opacity:1; } }
+        .session-notif { background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:12px; box-shadow:0 8px 28px rgba(0,0,0,0.32); padding:12px 14px; font-family:'Lora',serif; color:#3a2e1f; animation:session-notif-in 0.25s ease-out; }
+        .session-notif-head { font-family:'Cinzel',serif; font-weight:bold; color:var(--primary-color,#7A2828); margin-bottom:6px; }
+        .session-notif-body { font-size:0.92rem; }
+        .session-notif-body b { color:var(--primary-color,#7A2828); }
+        .session-notif-msg { margin-top:6px; font-style:italic; color:#5a4a36; line-height:1.4; }
+        .session-notif-actions { display:flex; gap:8px; margin-top:10px; }
+        .session-notif-btn { flex:1; border:none; border-radius:8px; padding:8px; font-family:'Cinzel',serif; font-weight:bold; cursor:pointer; font-size:0.85rem; }
+        .session-notif-btn.accept { background:#27ae60; color:#fff; }
+        .session-notif-btn.accept:hover { filter:brightness(1.08); }
+        .session-notif-btn.refuse { background:#f0e6d8; color:#c0392b; }
+        .session-notif-btn.refuse:hover { background:#e7d8c4; }`;
+        document.head.appendChild(st);
+    }
+
+    // ---------- API publique ----------
 
     async function closePresence() {
         if (state.channel) {
@@ -167,6 +259,7 @@
 
     // ---------- Câblage des changements de fiche ----------
     function init() {
+        injectStyles();
         const app = document.getElementById('app-screen') || document.body;
         const onChange = () => pushSnapshot(false);
         app.addEventListener('input', onChange, true);

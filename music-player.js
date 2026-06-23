@@ -690,8 +690,29 @@
             if (!container) return;
             if (container.style.display === 'none') { setVisible(true, true); showPlayer(); return; }
             if (playerBar.classList.contains('music-bar-hidden')) showPlayer(); else hidePlayer();
-        }
+        },
+        // Joue immédiatement une URL (YouTube ou audio direct) — utilisé par les scènes MJ
+        playUrl: (url, title) => playUrl(url, title)
     };
+
+    // Ajoute une piste depuis une URL et la lance aussitôt (ambiance de scène diffusée)
+    function playUrl(url, title) {
+        if (!url) return;
+        const ytId = extractYTId(url);
+        let track;
+        if (ytId) {
+            track = { id: uid(), type: 'youtube', videoId: ytId, title: title || ('YouTube – ' + ytId), badge: '▶ YouTube' };
+            loadYTApi();
+        } else {
+            const ext = url.split('?')[0].split('#')[0].split('.').pop().toLowerCase();
+            track = { id: uid(), type: 'audio', src: url, title: title || 'Ambiance', badge: ext ? ext.toUpperCase() : '🔗 URL' };
+        }
+        queue.push(track);
+        renderQueue();
+        if (isShuffle) buildShuffleOrder();
+        setVisible(true, true);
+        playAtIndex(queue.length - 1);
+    }
 
     // =====================================================
     // AJOUT DE MUSIQUE

@@ -196,8 +196,45 @@
                             <label class="gm-btn" id="gm-scene-img-label" style="flex:0 0 auto;" title="Image de fond (optionnel)">🖼️<input type="file" id="gm-scene-img" accept="image/*" style="display:none;"></label>
                             <button id="gm-scene-add" class="gm-add" title="Créer la scène">＋</button>
                         </div>
+                        <input id="gm-scene-music" class="gm-input" placeholder="🎵 Lien musique/ambiance (YouTube ou .mp3, optionnel)">
                         <div id="gm-scene-list" class="gm-scene-list"></div>
-                        <div class="gm-readonly-note">ⓘ « Appliquer » change le fond localement ; la diffusion à tous les joueurs arrive en Phase 2.</div>
+                        <div class="gm-readonly-note">ⓘ « Appliquer » change le fond ET la musique de tous les joueurs connectés, en direct.</div>
+                    </div>
+                </div>
+
+                <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">📍</span> Vue partagée &amp; Ping
+                        <span class="gm-spacer"></span>
+                        <span class="gm-readonly-note">Clic prolongé = ping</span>
+                    </div>
+                    <div class="gm-card-body">
+                        <div id="gm-shared-view" class="gm-shared-view"><span class="gm-shared-hint">Applique une scène avec image, puis fais un <b>clic prolongé</b> ici pour envoyer un ping lumineux à tous les joueurs.</span></div>
+                    </div>
+                </div>
+
+                <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">✉️</span> Murmure &amp; Troc</div>
+                    <div class="gm-card-body">
+                        <div class="gm-row">
+                            <label class="gm-trade-label">Destinataire :</label>
+                            <select id="gm-trade-target" class="gm-select" style="flex:1;"><option value="all">📢 Tous les joueurs</option></select>
+                        </div>
+                        <div class="gm-trade-tabs">
+                            <button class="gm-trade-tab active" data-trade="whisper">🤫 Murmure</button>
+                            <button class="gm-trade-tab" data-trade="item">🎁 Objet</button>
+                        </div>
+                        <div id="gm-trade-whisper" class="gm-trade-pane">
+                            <textarea id="gm-whisper-text" class="gm-textarea" placeholder="Note secrète à envoyer au joueur…"></textarea>
+                            <button id="gm-send-whisper" class="gm-btn gm-btn-primary" style="width:100%;">🤫 Envoyer le murmure</button>
+                        </div>
+                        <div id="gm-trade-item" class="gm-trade-pane hidden">
+                            <div class="gm-row">
+                                <input id="gm-gift-name" class="gm-input" placeholder="Nom de l'objet offert">
+                                <input id="gm-gift-qty" class="gm-input gm-num" type="number" min="1" value="1" title="Quantité">
+                            </div>
+                            <input id="gm-gift-note" class="gm-input" placeholder="Petit mot (optionnel)…">
+                            <button id="gm-send-gift" class="gm-btn gm-btn-primary" style="width:100%;">🎁 Offrir l'objet</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -365,7 +402,36 @@
             </div>
         </div>`).join('');
     }
-    function applyScene(s) { if (s && s.bg) document.body.style.backgroundImage = `url(${s.bg})`; if (window.showAppToast) window.showAppToast('🎬 Scène « ' + (s ? s.name : '') + ' » appliquée', '#8a6320'); }
+    function applyScene(s) {
+        if (!s) return;
+        if (s.bg) document.body.style.backgroundImage = `url(${s.bg})`;
+        updateSharedView(s.bg);
+        if (s.music && window.MusicPlayer && window.MusicPlayer.playUrl) { try { window.MusicPlayer.playUrl(s.music, '🎬 ' + (s.name || 'Scène')); } catch (e) {} }
+        if (window.showAppToast) window.showAppToast('🎬 Scène « ' + (s.name || '') + ' » appliquée', '#8a6320');
+    }
+    function updateSharedView(bg) {
+        const sv = byId('gm-shared-view'); if (!sv) return;
+        if (bg) { sv.style.backgroundImage = `url(${bg})`; sv.classList.add('has-bg'); const h = sv.querySelector('.gm-shared-hint'); if (h) h.remove(); }
+    }
+    function showLocalPing(container, x, y, color) {
+        const ping = document.createElement('div'); ping.className = 'gm-ping-local';
+        ping.style.left = (x * 100) + '%'; ping.style.top = (y * 100) + '%';
+        if (color) ping.style.setProperty('--ping-color', color);
+        container.appendChild(ping);
+        setTimeout(() => ping.remove(), 1500);
+    }
+    function renderTradeTargets() {
+        const sel = byId('gm-trade-target'); if (!sel) return;
+        const prev = sel.value;
+        const opts = ['<option value="all">📢 Tous les joueurs</option>'].concat(live.players.map(p => {
+            const s = p.snapshot || {};
+            const nm = s.name || p.character_name || 'Aventurier';
+            const dot = live.online.has(p.user_id) ? '🟢' : '⚪';
+            return `<option value="${p.user_id}">${dot} ${esc(nm)}</option>`;
+        }));
+        sel.innerHTML = opts.join('');
+        if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+    }
     function fileToDataURL(file, cb) {
         const reader = new FileReader();
         reader.onload = ev => { const img = new Image(); img.onload = () => { const cv = document.createElement('canvas'); const MAX = 1280; let w = img.width, h = img.height; if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); try { cb(cv.toDataURL('image/jpeg', 0.7)); } catch (e) { cb(null); } }; img.src = ev.target.result; };
@@ -395,6 +461,7 @@
 
     // ---------- Joueurs connectés (lecture seule, temps réel) ----------
     function renderLivePlayers() {
+        renderTradeTargets();
         const el = byId('gm-live-list'); if (!el) return;
         const statusEl = byId('gm-live-status');
         if (!state.sessionId) {
@@ -442,6 +509,18 @@
     }
 
     // ---------- Couche réseau (MJ) ----------
+    function gmBroadcast(event, payload) {
+        if (!live.presChannel) { if (window.showAppToast) window.showAppToast('Ouvre une session pour diffuser aux joueurs.', '#c0392b'); return false; }
+        try { live.presChannel.send({ type: 'broadcast', event, payload }); return true; } catch (e) { console.warn('broadcast:', e); return false; }
+    }
+    function onGiftResponse(p) {
+        if (!p) return;
+        const who = p.by || 'Un joueur';
+        if (p.whisper) return; // accusé de lecture d'un murmure : pas de toast
+        const what = p.item ? (' « ' + p.item + ' »') : '';
+        if (p.accepted) { if (window.showAppToast) window.showAppToast('✅ ' + who + ' a accepté' + what, '#27ae60'); }
+        else { if (window.showAppToast) window.showAppToast('✖ ' + who + ' a refusé' + what, '#c0392b'); }
+    }
     function stopNetwork() {
         if (live.netChannel) { try { live.netChannel.unsubscribe(); } catch (e) {} live.netChannel = null; }
         if (live.presChannel) { try { live.presChannel.untrack(); } catch (e) {} try { live.presChannel.unsubscribe(); } catch (e) {} live.presChannel = null; }
@@ -473,8 +552,9 @@
             live.presChannel
                 .on('presence', { event: 'sync' }, () => {
                     live.online = new Set(Object.keys(live.presChannel.presenceState()));
-                    updatePresenceCount(); renderLivePlayers();
+                    updatePresenceCount(); renderLivePlayers(); renderTradeTargets();
                 })
+                .on('broadcast', { event: 'gift-response' }, ({ payload }) => onGiftResponse(payload))
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
         } catch (e) { console.warn('presence GM:', e); }
     }
@@ -632,6 +712,65 @@
             if (b.dataset.act === 'music-show') window.MusicPlayer.show(); else window.MusicPlayer.toggle();
         }));
 
+        // --- Scènes : création (image + musique) ---
+        let pendingSceneBg = null;
+        byId('gm-scene-img').addEventListener('change', (e) => {
+            const f = e.target.files && e.target.files[0]; if (!f) return;
+            fileToDataURL(f, (data) => { pendingSceneBg = data; const lbl = byId('gm-scene-img-label'); if (lbl) lbl.classList.add('has-img'); });
+        });
+        byId('gm-scene-add').addEventListener('click', () => {
+            const name = byId('gm-scene-name').value.trim(); if (!name) return;
+            const music = byId('gm-scene-music').value.trim();
+            state.scenes.push({ id: uid(), name, bg: pendingSceneBg || null, music: music || null });
+            byId('gm-scene-name').value = ''; byId('gm-scene-music').value = ''; pendingSceneBg = null;
+            const lbl = byId('gm-scene-img-label'); if (lbl) lbl.classList.remove('has-img');
+            save(); renderScenes();
+        });
+        byId('gm-scene-name').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-scene-add').click(); } });
+
+        // --- Ping : clic prolongé sur la vue partagée ---
+        (function wirePing() {
+            const sv = byId('gm-shared-view'); if (!sv) return;
+            let timer = null, downX = 0, downY = 0;
+            const fire = () => {
+                const rect = sv.getBoundingClientRect();
+                const x = Math.max(0, Math.min(1, (downX - rect.left) / rect.width));
+                const y = Math.max(0, Math.min(1, (downY - rect.top) / rect.height));
+                const color = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '#C49B35').trim();
+                showLocalPing(sv, x, y, color);
+                if (live.presChannel) gmBroadcast('ping', { x, y, color });
+                else if (window.showAppToast) window.showAppToast('Ouvre une session pour pinguer les joueurs.', '#c0392b');
+            };
+            sv.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; clearTimeout(timer); timer = setTimeout(fire, 350); });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => sv.addEventListener(ev, () => clearTimeout(timer)));
+        })();
+
+        // --- Murmure & Troc ---
+        document.querySelectorAll('.gm-trade-tab').forEach(tab => tab.addEventListener('click', () => {
+            document.querySelectorAll('.gm-trade-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
+            const isItem = tab.dataset.trade === 'item';
+            byId('gm-trade-whisper').classList.toggle('hidden', isItem);
+            byId('gm-trade-item').classList.toggle('hidden', !isItem);
+        }));
+        byId('gm-send-whisper').addEventListener('click', () => {
+            const txt = byId('gm-whisper-text').value.trim(); if (!txt) return;
+            const target = byId('gm-trade-target').value || 'all';
+            if (gmBroadcast('gift', { targetUserId: target, type: 'whisper', message: txt, giftId: uid() })) {
+                byId('gm-whisper-text').value = '';
+                if (window.showAppToast) window.showAppToast('🤫 Murmure envoyé', '#2c3e50');
+            }
+        });
+        byId('gm-send-gift').addEventListener('click', () => {
+            const name = byId('gm-gift-name').value.trim(); if (!name) return;
+            const qty = parseInt(byId('gm-gift-qty').value) || 1;
+            const note = byId('gm-gift-note').value.trim();
+            const target = byId('gm-trade-target').value || 'all';
+            if (gmBroadcast('gift', { targetUserId: target, type: 'item', item: { name, qty }, message: note, giftId: uid() })) {
+                byId('gm-gift-name').value = ''; byId('gm-gift-qty').value = '1'; byId('gm-gift-note').value = '';
+                if (window.showAppToast) window.showAppToast('🎁 Objet envoyé', '#2c3e50');
+            }
+        });
+
         // --- Délégation : clics sur éléments générés ---
         document.getElementById('gm-overlay').addEventListener('click', (e) => {
             const t = e.target.closest('[data-act]'); if (!t) return;
@@ -658,6 +797,8 @@
                 }
                 case 'npc-del': state.npcs = state.npcs.filter(n => n.id !== id); save(); renderNpcs(); break;
                 case 'quest-del': state.quests = state.quests.filter(q => q.id !== id); save(); renderQuests(); break;
+                case 'scene-apply': { const s = find(state.scenes, id); if (s) { applyScene(s); if (live.presChannel) gmBroadcast('scene', { bg: s.bg || null, name: s.name, music: s.music || null }); } break; }
+                case 'scene-del': state.scenes = state.scenes.filter(x => x.id !== id); save(); renderScenes(); break;
             }
         });
         // Délégation : changements (checkboxes, champs de stats joueurs, secrets PNJ)

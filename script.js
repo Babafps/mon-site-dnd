@@ -1537,6 +1537,24 @@ document.addEventListener('DOMContentLoaded', () => {
             nameEl.value = ''; document.getElementById('inv-qty').value = ''; document.getElementById('inv-weight').value = '';
             renderInventory(); nameEl.focus();
         }
+
+        // Réception d'un objet via le troc MJ (session.js) → ajout au sac
+        window.PlayerInventory = {
+            add(item) {
+                if (!item || !item.name) return false;
+                inventory.push({
+                    name: String(item.name),
+                    qty: parseInt(item.qty) || 1,
+                    weight: (item.weight != null && String(item.weight).trim()) ? String(item.weight).trim() : '-',
+                    category: item.category || 'Cadeaux',
+                    pinned: false
+                });
+                setStore('dnd-inventory', inventory);
+                renderInventory();
+                return true;
+            }
+        };
+
         if(document.getElementById('btn-add-inventory')) document.getElementById('btn-add-inventory').addEventListener('click', addInventoryFromInputs);
         ['inv-name', 'inv-qty', 'inv-weight'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); addInventoryFromInputs(); } }); });
 

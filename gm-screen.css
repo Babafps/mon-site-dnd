@@ -232,6 +232,29 @@
 /* ---- Lanceur (bouton d'accueil de l'écran MJ) ---- */
 #btn-open-gm-screen.gm-launch { background: linear-gradient(160deg, #7A2828, #5a1c1c); color: #f0e6d2; }
 
+/* ---- Phase 2 : Vue partagée, Ping, Murmure & Troc ---- */
+.gm-shared-view {
+    position: relative; width: 100%; min-height: 180px; border-radius: 10px;
+    background-color: rgba(122,40,40,0.04);
+    background-image: repeating-linear-gradient(45deg, rgba(122,40,40,0.05), rgba(122,40,40,0.05) 12px, rgba(196,155,53,0.06) 12px, rgba(196,155,53,0.06) 24px);
+    background-size: cover; background-position: center;
+    border: 1px dashed rgba(122,40,40,0.35); cursor: crosshair; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; user-select: none; touch-action: none;
+}
+.gm-shared-view.has-bg { border-style: solid; background-blend-mode: normal; }
+.gm-shared-hint { font-size: 0.82rem; color: #8a7a5e; font-style: italic; text-align: center; padding: 14px; max-width: 82%; }
+.gm-shared-hint b { color: var(--primary-color, #7A2828); }
+.gm-ping-local { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--ping-color, #C49B35); box-shadow: 0 0 16px var(--ping-color, #C49B35); transform: translate(-50%, -50%); pointer-events: none; animation: gm-ping-anim 1.3s ease-out forwards; }
+.gm-ping-local::after { content: ''; position: absolute; inset: 32%; border-radius: 50%; background: var(--ping-color, #C49B35); opacity: 0.6; }
+@keyframes gm-ping-anim { 0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; } }
+#gm-scene-img-label.has-img { background: rgba(39,174,96,0.18); border-color: #27ae60; }
+.gm-trade-label { font-size: 0.8rem; color: #6a5a3e; font-weight: bold; flex: 0 0 auto; }
+.gm-trade-tabs { display: flex; gap: 6px; }
+.gm-trade-tab { flex: 1; background: #fffdf9; border: 1px solid rgba(196,155,53,0.4); color: #8a7a5e; border-radius: 8px; padding: 7px; cursor: pointer; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem; }
+.gm-trade-tab.active { background: rgba(196,155,53,0.2); color: var(--primary-color, #7A2828); border-color: var(--accent-color, #C49B35); }
+.gm-trade-pane { display: flex; flex-direction: column; gap: 8px; }
+.gm-trade-pane.hidden { display: none; }
+
 /* ---- Responsive ---- */
 @media (max-width: 1100px) {
     .gm-main { grid-template-columns: 1fr; }
