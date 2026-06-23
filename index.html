@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="music-player.css">
+    <link rel="stylesheet" href="gm-screen.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
@@ -78,7 +79,7 @@
         <label class="btn-menu-item" style="color:#27ae60; cursor:pointer; display:block;">
             📤 Importer sauvegarde <input type="file" id="btn-import-json" accept=".json" class="hidden">
         </label>
-        <button id="btn-export-pdf" class="btn-menu-item">💾 Imprimer (PDF)</button>
+        <button id="btn-export-pdf" class="btn-menu-item">💾 Imprimer (PDF) <span class="beta-badge">Bêta</span></button>
         <hr>
         <button id="btn-change-bg" class="btn-menu-item">🖼️ Changer image de fond</button>
         <button id="btn-reset-bg" class="btn-menu-item" style="color:var(--primary-hover);">↺ Supprimer image fond</button>
@@ -100,11 +101,26 @@
 <div id="home-screen" class="screen-view">
     <div class="home-container">
         <h1 class="home-title">Dungeons & Dragons</h1>
-        <h2>Mes Personnages</h2>
-        <div id="character-list" class="char-list"></div>
-        <div class="new-char-box">
-            <input type="text" id="new-char-name" placeholder="Nom du nouveau personnage...">
-            <button id="btn-create-char" class="btn">Créer</button>
+        <div class="home-tabs">
+            <button class="home-tab active" data-htab="player">🧝 Joueur</button>
+            <button class="home-tab" data-htab="gm">🛡️ Maître du Jeu <span class="beta-badge">Bêta</span></button>
+        </div>
+        <div id="home-panel-player" class="home-panel">
+            <h2>Mes Personnages</h2>
+            <div id="character-list" class="char-list"></div>
+            <div class="new-char-box">
+                <input type="text" id="new-char-name" placeholder="Nom du nouveau personnage...">
+                <button id="btn-create-char" class="btn">Créer</button>
+            </div>
+        </div>
+        <div id="home-panel-gm" class="home-panel hidden">
+            <h2>Mes Campagnes</h2>
+            <div id="gm-campaign-list" class="char-list"></div>
+            <div class="new-char-box">
+                <input type="text" id="new-campaign-name" placeholder="Nom de la nouvelle campagne...">
+                <button id="btn-create-campaign" class="btn">Créer</button>
+            </div>
+            <label class="home-archived-toggle"><input type="checkbox" id="gm-show-archived"> Afficher les campagnes archivées</label>
         </div>
     </div>
 </div>
@@ -123,7 +139,7 @@
             <div id="dice-theme-swatches" class="dice-theme-swatches"></div>
             <div class="dice-theme-custom"><span>🎨 Perso :</span><input type="color" id="dice-theme-custom-color" value="#7A2828"><button id="btn-dice-theme-custom" class="btn-small">Appliquer</button></div>
             <label class="dice-theme-random-row"><input type="checkbox" id="dice-theme-random"> 🎲 Couleur aléatoire à chaque lancer</label>
-            <button id="btn-open-dice-studio" class="btn-small" style="width:100%; margin-top:10px; background:linear-gradient(160deg,#2980b9,#1f6391);">✏️ Créer mes propres dés <span class="beta-badge">BÊTA</span></button>
+            <button id="btn-open-dice-studio" class="btn-small" style="width:100%; margin-top:10px; background:linear-gradient(160deg,#2980b9,#1f6391);">✏️ Créer mes propres dés <span class="beta-badge">Bêta</span></button>
         </div>
         <div class="dice-options">
             <label class="radio-pill"><input type="radio" name="roll-mode" value="normal" checked> <span>Normal</span></label>
@@ -308,7 +324,7 @@
 <div id="dice-studio-modal" class="modal-overlay hidden no-print" style="z-index:9500;">
     <div class="dice-studio">
         <div class="ds-header">
-            <h2>✏️ Atelier de Dés <span class="beta-badge">BÊTA</span></h2>
+            <h2>✏️ Atelier de Dés <span class="beta-badge">Bêta</span></h2>
             <button id="ds-close" class="btn-close-modal">✕</button>
         </div>
         <div class="ds-body">
@@ -352,8 +368,8 @@
                 </div>
             </div>
             <div class="ds-side">
-                <div class="ds-side-label">Aperçu 3D <span style="font-size:0.7rem; font-weight:normal; opacity:0.7;">(tourne en direct)</span></div>
-                <div class="ds-preview" id="ds-preview"><canvas id="ds-3d-canvas"></canvas></div>
+                <div class="ds-side-label">Aperçu 3D <span style="font-size:0.7rem; font-weight:normal; opacity:0.7;">(clique une face pour l'éditer)</span></div>
+                <div class="ds-preview" id="ds-preview"><canvas id="ds-3d-canvas"></canvas><button id="ds-3d-spin" title="Rotation libre / fixer la face">⟳</button></div>
                 <div class="ds-save-row">
                     <input type="text" id="ds-name" placeholder="Nom de ta création…">
                     <button id="ds-save" class="btn-small" style="background:#27ae60;">💾</button>
@@ -369,5 +385,6 @@
 <script src="auth.js"></script>
 <script src="script.js"></script>
 <script src="music-player.js"></script>
+<script src="gm-screen.js"></script>
 </body>
 </html>

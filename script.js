@@ -707,7 +707,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-4, -3, -2); scene.add(d2);
                 const raycaster = new THREE.Raycaster(); const ndc = new THREE.Vector2();
 
-                let mesh = null, faceCanvases = [], faceTextures = [], materials = [], triFace = [], running = false, raf = null;
+                let mesh = null, faceCanvases = [], faceTextures = [], materials = [], triFace = [], faceNormals = [], running = false, raf = null;
+                // Rotation : libre (idle) OU focus sur une face (snap fluide vers la caméra)
+                let autoRotate = true, focused = false, dirty = false;
+                const targetQuat = new THREE.Quaternion();
+                const spinDelta = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0.25, 1, 0.12).normalize(), 0.018);
 
                 function pentaBipyramid(r, h) {
                     const eq = []; for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; eq.push([Math.cos(a) * r, 0, Math.sin(a) * r]); }
@@ -733,12 +737,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(pos.count * 2), 2));
                     const uv = g.attributes.uv;
                     const key = n => `${Math.round(n.x * 100)},${Math.round(n.y * 100)},${Math.round(n.z * 100)}`;
-                    const fmap = new Map(), tf = [], ftris = [];
+                    const fmap = new Map(), tf = [], ftris = [], fnormals = [];
                     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3(), nm = new THREE.Vector3();
                     for (let t = 0; t < tri; t++) {
                         a.fromBufferAttribute(pos, t * 3); b.fromBufferAttribute(pos, t * 3 + 1); c.fromBufferAttribute(pos, t * 3 + 2);
                         ab.subVectors(b, a); ac.subVectors(c, a); nm.crossVectors(ab, ac).normalize();
-                        const k = key(nm); let id = fmap.get(k); if (id === undefined) { id = fmap.size; fmap.set(k, id); ftris[id] = []; }
+                        const k = key(nm); let id = fmap.get(k); if (id === undefined) { id = fmap.size; fmap.set(k, id); ftris[id] = []; fnormals[id] = nm.clone(); }
                         tf[t] = id; ftris[id].push(t);
                     }
                     const U = new THREE.Vector3(), V = new THREE.Vector3(), N = new THREE.Vector3(), p = new THREE.Vector3();
@@ -755,7 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     g.clearGroups();
                     const allMode = (studioScope === 'all');
                     for (let t = 0; t < tri; t++) g.addGroup(t * 3, 3, allMode ? 0 : tf[t]);
-                    return { g, faceCount: fmap.size, tf };
+                    return { g, faceCount: fmap.size, tf, normals: fnormals };
                 }
                 function composeInto(i, url) {
                     const fctx = faceCanvases[i].getContext('2d');
@@ -768,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
                     disposeMats();
                     const built = buildFacesUV(makeGeometry(studioScope));
-                    triFace = built.tf;
+                    triFace = built.tf; faceNormals = built.normals;
                     const allMode = (studioScope === 'all');
                     const matCount = allMode ? 1 : built.faceCount;
                     faceCanvases = []; faceTextures = []; materials = [];
@@ -780,9 +784,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     mesh = new THREE.Mesh(built.g, materials); scene.add(mesh);
                     if (allMode) composeInto(0, studioData.all);
                     else { ensureSlots(studioScope); for (let i = 0; i < built.faceCount; i++) composeInto(i, (studioData[studioScope] || [])[i]); }
-                    highlight(studioFace); refresh();
+                    // Après reconstruction : rotation libre (le snap n'arrive qu'au choix d'une FACE)
+                    highlight(studioFace); dirty = true; focused = false; autoRotate = true;
                 }
-                function refresh() { // met à jour la face en cours depuis le canvas live
+                // Recompose réellement la texture de la face courante (depuis le canvas live)
+                function recomposeCurrent() {
                     if (!materials.length) return;
                     const i = (studioScope === 'all') ? 0 : Math.min(studioFace, materials.length - 1);
                     const fctx = faceCanvases[i] && faceCanvases[i].getContext('2d'); if (!fctx) return;
@@ -790,23 +796,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     try { fctx.drawImage(canvas, 0, 0, 128, 128); } catch (e) {}
                     faceTextures[i].needsUpdate = true;
                 }
+                // Coalescé : on ne fait l'upload de texture qu'1×/frame (perf & chaleur mobile)
+                function refresh() { dirty = true; }
                 function highlight(i) { materials.forEach((m, k) => m.emissive.setHex((k === i && studioScope !== 'all') ? 0x3a2f12 : 0x000000)); }
+                // Oriente en douceur la face i face à la caméra (parallèle à l'écran) et fige la rotation
+                function focusFace(i) {
+                    if (studioScope === 'all' || !faceNormals[i]) { focused = false; autoRotate = true; return; }
+                    targetQuat.setFromUnitVectors(faceNormals[i].clone().normalize(), new THREE.Vector3(0, 0, 1));
+                    focused = true; autoRotate = false;
+                }
+                function resumeSpin() { focused = false; autoRotate = true; }
+                function toggleSpin() { if (autoRotate) { if (studioScope !== 'all') focusFace(studioFace); } else { resumeSpin(); } }
                 function fitSize() { const w = cvs.clientWidth || 220, h = cvs.clientHeight || 220; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-                function loop() { if (!running) return; if (mesh) { mesh.rotation.y += 0.011; mesh.rotation.x += 0.005; } renderer.render(scene, camera); raf = requestAnimationFrame(loop); }
+                function loop() {
+                    if (!running) return;
+                    if (dirty) { recomposeCurrent(); dirty = false; }
+                    if (mesh) {
+                        if (focused) mesh.quaternion.slerp(targetQuat, 0.2);          // snap fluide
+                        else if (autoRotate) mesh.quaternion.multiply(spinDelta);     // rotation libre
+                    }
+                    renderer.render(scene, camera);
+                    raf = requestAnimationFrame(loop);
+                }
                 function start() { if (running) return; running = true; fitSize(); if (!mesh) rebuild(); loop(); }
                 function stop() { running = false; if (raf) cancelAnimationFrame(raf); raf = null; }
 
-                // Clic sur une face du dé 3D → la sélectionne pour l'édition
+                // Clic sur une face du dé 3D → la sélectionne, l'oriente face caméra et verrouille la rotation
                 cvs.addEventListener('pointerdown', (e) => {
                     if (studioScope === 'all' || !mesh) return;
                     const r = cvs.getBoundingClientRect();
                     ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1; ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
                     raycaster.setFromCamera(ndc, camera);
                     const hit = raycaster.intersectObject(mesh)[0];
-                    if (hit && triFace[hit.faceIndex] != null) { saveCanvasToFace(); studioFace = triFace[hit.faceIndex]; renderFaceTabs(); loadFaceToCanvas(); highlight(studioFace); }
+                    if (hit && triFace[hit.faceIndex] != null) { saveCanvasToFace(); studioFace = triFace[hit.faceIndex]; renderFaceTabs(); loadFaceToCanvas(); highlight(studioFace); focusFace(studioFace); }
                 });
                 window.addEventListener('resize', () => { if (running) fitSize(); });
-                return { refresh, rebuild, start, stop, highlight };
+                return { refresh, rebuild, start, stop, highlight, focusFace, resumeSpin, toggleSpin };
             }
             function renderTypeTabs() {
                 const wrap = document.getElementById('ds-type-tabs'); if (!wrap) return; wrap.innerHTML = '';
@@ -835,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const b = document.createElement('button');
                     b.className = 'ds-face-tab' + (i === studioFace ? ' active' : '') + (studioData[studioScope][i] ? ' has-design' : '');
                     b.textContent = (i + 1);
-                    b.addEventListener('click', () => { saveCanvasToFace(); studioFace = i; renderFaceTabs(); loadFaceToCanvas(); if (dice3D) dice3D.highlight(i); });
+                    b.addEventListener('click', () => { saveCanvasToFace(); studioFace = i; renderFaceTabs(); loadFaceToCanvas(); if (dice3D) { dice3D.highlight(i); dice3D.focusFace(i); } });
                     wrap.appendChild(b);
                 }
             }
@@ -941,6 +966,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.showAppToast) window.showAppToast('🎲 Création enregistrée et activée', '#27ae60');
             });
             document.getElementById('ds-deactivate').addEventListener('click', () => { activeDesignId = null; DB.set('dnd-dice-active-design', ''); renderGallery(); });
+            { const spinBtn = document.getElementById('ds-3d-spin'); if (spinBtn) spinBtn.addEventListener('click', () => { if (dice3D) dice3D.toggleSpin(); }); }
             document.getElementById('ds-close').addEventListener('click', () => { modal.classList.add('hidden'); if (dice3D) dice3D.stop(); });
             modal.addEventListener('click', (e) => { if (e.target === modal) { modal.classList.add('hidden'); if (dice3D) dice3D.stop(); } });
 
