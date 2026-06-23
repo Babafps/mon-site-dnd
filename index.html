@@ -75,6 +75,21 @@
         <button id="btn-reset-theme" class="btn-small" style="width:100%; margin-bottom:10px;">Réinitialiser couleurs</button>
         <label class="toggle-label" style="font-size:0.85rem; color:#555; justify-content:center; background:rgba(0,0,0,0.04); padding:6px; border-radius:8px;"><input type="checkbox" id="toggle-dark-mode"> 🌙 Mode Nuit (fiche)</label>
         <hr>
+        <label style="font-weight:bold; font-size:0.85rem; color:var(--primary-color);">🔗 Session de jeu :</label>
+        <div id="player-session-disconnected">
+            <p style="font-size:0.74rem; color:#777; margin:4px 0;">Entre le code à 6 caractères fourni par ton MJ pour qu'il suive ta fiche.</p>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="session-code-input" maxlength="6" placeholder="CODE" autocomplete="off" style="flex:1; min-width:0; text-transform:uppercase; letter-spacing:0.18em; font-family:monospace; font-weight:bold; text-align:center; padding:8px; border:1px solid var(--primary-color); border-radius:6px;">
+                <button id="btn-join-session" class="btn-small" style="background:#2c3e50; flex-shrink:0;">Rejoindre</button>
+            </div>
+            <div id="session-join-msg" style="font-size:0.74rem; margin-top:5px;"></div>
+        </div>
+        <div id="player-session-connected" class="hidden" style="text-align:center; background:rgba(39,174,96,0.1); border:1px solid #27ae60; border-radius:8px; padding:8px; margin-top:4px;">
+            <div style="font-size:0.8rem; color:#1e8449;">🟢 Connecté — ta fiche est partagée en direct</div>
+            <div id="session-current-code" style="font-family:monospace; font-weight:bold; letter-spacing:0.18em; font-size:1.15rem; color:var(--primary-color); margin:3px 0;"></div>
+            <button id="btn-leave-session" class="btn-small" style="background:#e74c3c; width:100%;">Quitter la session</button>
+        </div>
+        <hr>
         <button id="btn-export-json" class="btn-menu-item" style="color:#2980b9;">📥 Exporter la sauvegarde</button>
         <label class="btn-menu-item" style="color:#27ae60; cursor:pointer; display:block;">
             📤 Importer sauvegarde <input type="file" id="btn-import-json" accept=".json" class="hidden">
@@ -383,6 +398,7 @@
 </div>
 
 <script src="auth.js"></script>
+<script src="session.js"></script>
 <script src="script.js"></script>
 <script src="music-player.js"></script>
 <script src="gm-screen.js"></script>

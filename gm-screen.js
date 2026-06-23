@@ -27,6 +27,24 @@
         'Un anneau de cuivre gravé de runes', 'Une fiole de poison (CD 13)', 'Des bottes de marche silencieuse', 'Un médaillon avec un portrait inconnu'];
     const DICE = [4, 6, 8, 10, 12, 20, 100];
 
+    // ---------- Référence rapide (Compendium) ----------
+    const CONDITIONS_REF = [
+        { name: 'Aveuglé', text: 'Ne voit pas, rate les jets liés à la vue. Désavantage aux attaques ; les attaques contre lui ont l\'avantage.' },
+        { name: 'Charmé', text: 'Ne peut attaquer le charmeur ni le cibler par un effet néfaste. Le charmeur a l\'avantage aux interactions sociales.' },
+        { name: 'Assourdi', text: 'N\'entend pas et rate les jets liés à l\'ouïe.' },
+        { name: 'Effrayé', text: 'Désavantage aux jets tant que la source de peur est en vue ; ne peut s\'en approcher volontairement.' },
+        { name: 'Empoigné', text: 'Vitesse à 0. Prend fin si l\'empoigneur est neutralisé ou éloigné.' },
+        { name: 'Neutralisé', text: 'Ne peut effectuer ni action ni réaction.' },
+        { name: 'Invisible', text: 'Impossible à voir sans aide. Avantage aux attaques ; les attaques contre lui ont le désavantage.' },
+        { name: 'Paralysé', text: 'Neutralisé, ne peut bouger ni parler. Rate DEX/FOR. Attaques avec avantage ; coup au contact = critique.' },
+        { name: 'Pétrifié', text: 'Transformé en matière solide, neutralisé, résistance à tous les dégâts, immunité poison/maladie.' },
+        { name: 'Empoisonné', text: 'Désavantage aux jets d\'attaque et de caractéristique.' },
+        { name: 'À terre', text: 'Ne peut que ramper. Désavantage aux attaques. Attaques au contact avec avantage, à distance avec désavantage.' },
+        { name: 'Entravé', text: 'Vitesse à 0. Attaques avec désavantage ; attaques contre lui avec avantage. Désavantage aux jets de DEX.' },
+        { name: 'Étourdi', text: 'Neutralisé, ne peut bouger, parle avec peine. Rate DEX/FOR. Attaques contre lui avec avantage.' },
+        { name: 'Inconscient', text: 'Neutralisé, lâche ce qu\'il tient, tombe à terre. Attaques avec avantage ; coup au contact = critique.' }
+    ];
+
     // ---------- État (multi-campagnes) ----------
     const CAMP_KEY = 'dnd-gm-campaigns';
     let campaigns = loadCampaigns();
@@ -36,13 +54,16 @@
     function stateKey() { return 'dnd-gm-state-' + activeCampaignId; }
     function defaultState() {
         return {
-            roomCode: null,
+            roomCode: null, sessionId: null,
             party: [], initiative: [], round: 1, turnIndex: 0,
             monsters: [], npcs: [], quests: [], notes: '', scenes: [],
             env: { time: '', weather: '☀️ Dégagé' }, diceLog: []
         };
     }
     let state = defaultState();
+
+    // ---------- Données réseau (non persistées : rechargées depuis Supabase) ----------
+    const live = { players: [], online: new Set(), netChannel: null, presChannel: null };
     function load() { if (!activeCampaignId) return defaultState(); try { const s = JSON.parse(localStorage.getItem(stateKey())); return Object.assign(defaultState(), s || {}); } catch (e) { return defaultState(); } }
     function save() { if (!activeCampaignId) return; try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} }
 
@@ -85,22 +106,27 @@
             <div class="gm-room">
                 <span id="gm-room-label" class="gm-readonly-note">Session locale</span>
                 <span id="gm-room-code" class="gm-room-code" style="display:none;"></span>
+                <span id="gm-presence-count" class="gm-presence-count" style="display:none;">👥 0</span>
                 <button id="gm-room-btn" class="gm-btn gm-btn-primary">➕ Créer une session</button>
             </div>
+            <button id="gm-sidebar-toggle" class="gm-btn gm-icon-btn" title="Afficher / masquer le panneau latéral">📜</button>
             <button id="gm-close" class="gm-btn gm-close" title="Fermer">✕</button>
         </div>
 
-        <div class="gm-tabs">
-            <button class="gm-tab active" data-tab="dash">Groupe</button>
-            <button class="gm-tab" data-tab="combat">Combat</button>
-            <button class="gm-tab" data-tab="lore">Narration</button>
-        </div>
+        <div class="gm-workspace">
+            <!-- ===== ZONE CENTRALE MODULABLE ===== -->
+            <div class="gm-main">
 
-        <div class="gm-body">
-            <!-- COLONNE A : DASHBOARD -->
-            <div class="gm-col gm-col-dash gm-show">
+                <div class="gm-card gm-card-live gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">📡</span> Joueurs connectés
+                        <span class="gm-spacer"></span>
+                        <span id="gm-live-status" class="gm-readonly-note">Hors ligne</span>
+                    </div>
+                    <div class="gm-card-body"><div id="gm-live-list" class="gm-live-list"></div></div>
+                </div>
+
                 <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">👥</span> Statut du groupe</div>
+                    <div class="gm-card-head"><span class="gm-card-icon">👥</span> Groupe (manuel)</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
                             <input id="gm-party-name" class="gm-input" placeholder="Nom du personnage">
@@ -108,41 +134,10 @@
                             <button id="gm-party-add" class="gm-add" title="Ajouter">＋</button>
                         </div>
                         <div id="gm-party-list"></div>
-                        <div class="gm-readonly-note">ⓘ En Phase 2, les fiches des joueurs liés s'afficheront ici automatiquement (lecture seule).</div>
+                        <div class="gm-readonly-note">ⓘ Suivi manuel (PNJ alliés, joueurs hors-ligne…). Les joueurs reliés par le code apparaissent en haut, en direct.</div>
                     </div>
                 </div>
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">🌤️</span> Environnement</div>
-                    <div class="gm-card-body">
-                        <div class="gm-env-row"><label>🕑 Heure</label><input id="gm-env-time" class="gm-input" placeholder="ex : Crépuscule, 18h…"></div>
-                        <div class="gm-env-row"><label>🌦️ Météo</label>
-                            <select id="gm-env-weather" class="gm-select">
-                                <option>☀️ Dégagé</option><option>⛅ Nuageux</option><option>🌧️ Pluie</option>
-                                <option>⛈️ Orage</option><option>🌫️ Brouillard</option><option>❄️ Neige</option><option>🌙 Nuit</option>
-                            </select>
-                        </div>
-                        <div class="gm-music-mini">
-                            <button class="gm-btn" data-act="music-toggle">🎵 Lecteur</button>
-                            <button class="gm-btn" data-act="music-show">▶ Afficher</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
-                    <div class="gm-card-body">
-                        <div class="gm-row">
-                            <input id="gm-scene-name" class="gm-input" placeholder="Nom (Taverne, Forêt…)">
-                            <label class="gm-btn" id="gm-scene-img-label" style="flex:0 0 auto;" title="Image de fond (optionnel)">🖼️<input type="file" id="gm-scene-img" accept="image/*" style="display:none;"></label>
-                            <button id="gm-scene-add" class="gm-add" title="Créer la scène">＋</button>
-                        </div>
-                        <div id="gm-scene-list" class="gm-scene-list"></div>
-                        <div class="gm-readonly-note">ⓘ « Appliquer » change le fond localement ; la diffusion à tous les joueurs viendra avec le réseau.</div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- COLONNE B : COMBAT -->
-            <div class="gm-col gm-col-combat">
                 <div class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">⚔️</span> Initiative
                         <span class="gm-spacer"></span>
@@ -162,7 +157,8 @@
                         </div>
                     </div>
                 </div>
-                <div class="gm-card">
+
+                <div class="gm-card gm-span-2">
                     <div class="gm-card-head"><span class="gm-card-icon">👹</span> Monstres</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -174,45 +170,91 @@
                         <div id="gm-mon-list"></div>
                     </div>
                 </div>
+
                 <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">🎲</span> Lanceur de dés MJ</div>
+                    <div class="gm-card-head"><span class="gm-card-icon">🌤️</span> Environnement</div>
                     <div class="gm-card-body">
+                        <div class="gm-env-row"><label>🕑 Heure</label><input id="gm-env-time" class="gm-input" placeholder="ex : Crépuscule, 18h…"></div>
+                        <div class="gm-env-row"><label>🌦️ Météo</label>
+                            <select id="gm-env-weather" class="gm-select">
+                                <option>☀️ Dégagé</option><option>⛅ Nuageux</option><option>🌧️ Pluie</option>
+                                <option>⛈️ Orage</option><option>🌫️ Brouillard</option><option>❄️ Neige</option><option>🌙 Nuit</option>
+                            </select>
+                        </div>
+                        <div class="gm-music-mini">
+                            <button class="gm-btn" data-act="music-toggle">🎵 Lecteur</button>
+                            <button class="gm-btn" data-act="music-show">▶ Afficher</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="gm-card">
+                    <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
+                    <div class="gm-card-body">
+                        <div class="gm-row">
+                            <input id="gm-scene-name" class="gm-input" placeholder="Nom (Taverne, Forêt…)">
+                            <label class="gm-btn" id="gm-scene-img-label" style="flex:0 0 auto;" title="Image de fond (optionnel)">🖼️<input type="file" id="gm-scene-img" accept="image/*" style="display:none;"></label>
+                            <button id="gm-scene-add" class="gm-add" title="Créer la scène">＋</button>
+                        </div>
+                        <div id="gm-scene-list" class="gm-scene-list"></div>
+                        <div class="gm-readonly-note">ⓘ « Appliquer » change le fond localement ; la diffusion à tous les joueurs arrive en Phase 2.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== SIDEBAR DROITE RÉTRACTABLE ===== -->
+            <aside class="gm-sidebar">
+                <div class="gm-side-tabs">
+                    <button class="gm-side-tab active" data-side="chat">🎲 Dés</button>
+                    <button class="gm-side-tab" data-side="journal">📖 Journal</button>
+                    <button class="gm-side-tab" data-side="compendium">🔎 Compendium</button>
+                </div>
+
+                <!-- Panneau Chat / Dés -->
+                <div class="gm-side-panel gm-side-chat gm-side-show">
+                    <div class="gm-side-card">
+                        <div class="gm-side-card-head">🎲 Lanceur de dés</div>
                         <div class="gm-dice-quick">${DICE.map(d => `<button class="gm-die" data-die="${d}">d${d}</button>`).join('')}</div>
                         <div class="gm-row">
                             <input id="gm-dice-formula" class="gm-input" placeholder="ex : 2d6+3, 1d20+5…">
                             <button id="gm-dice-roll" class="gm-add" title="Lancer">🎲</button>
                         </div>
                         <div id="gm-dice-result" class="gm-dice-result"></div>
+                    </div>
+                    <div class="gm-side-card gm-side-grow">
+                        <div class="gm-side-card-head">📜 Historique des lancers</div>
                         <div id="gm-dice-log" class="gm-dice-log"></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- COLONNE C : NARRATION -->
-            <div class="gm-col gm-col-lore">
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">🎭</span> PNJ présents</div>
-                    <div class="gm-card-body">
+                <!-- Panneau Journal -->
+                <div class="gm-side-panel gm-side-journal">
+                    <div class="gm-side-card">
+                        <div class="gm-side-card-head">🎭 PNJ présents</div>
                         <div class="gm-row">
                             <input id="gm-npc-name" class="gm-input" placeholder="Nom du PNJ">
                             <button id="gm-npc-add" class="gm-add" title="Ajouter">＋</button>
                         </div>
                         <div id="gm-npc-list"></div>
                     </div>
-                </div>
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">📜</span> Quêtes en cours</div>
-                    <div class="gm-card-body">
+                    <div class="gm-side-card">
+                        <div class="gm-side-card-head">📜 Quêtes en cours</div>
                         <div class="gm-row">
                             <input id="gm-quest-name" class="gm-input" placeholder="Objectif des joueurs…">
                             <button id="gm-quest-add" class="gm-add" title="Ajouter">＋</button>
                         </div>
                         <div id="gm-quest-list"></div>
                     </div>
+                    <div class="gm-side-card gm-side-grow">
+                        <div class="gm-side-card-head">📝 Bloc-notes</div>
+                        <textarea id="gm-notes" class="gm-textarea" placeholder="Notes à la volée…"></textarea>
+                    </div>
                 </div>
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">🎲</span> Générateur d'urgence</div>
-                    <div class="gm-card-body">
+
+                <!-- Panneau Compendium -->
+                <div class="gm-side-panel gm-side-compendium">
+                    <div class="gm-side-card">
+                        <div class="gm-side-card-head">🎲 Générateur d'urgence</div>
                         <div class="gm-gen-btns">
                             <button class="gm-btn" data-gen="name">PNJ</button>
                             <button class="gm-btn" data-gen="rumor">Rumeur</button>
@@ -220,14 +262,13 @@
                         </div>
                         <div id="gm-gen-out" class="gm-gen-out">Clique pour générer…</div>
                     </div>
-                </div>
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">📝</span> Bloc-notes</div>
-                    <div class="gm-card-body">
-                        <textarea id="gm-notes" class="gm-textarea" placeholder="Notes à la volée…"></textarea>
+                    <div class="gm-side-card gm-side-grow">
+                        <div class="gm-side-card-head">🔎 Recherche rapide</div>
+                        <input id="gm-comp-search" class="gm-input" placeholder="Condition, monstre, PNJ, quête…">
+                        <div id="gm-comp-results" class="gm-comp-results"></div>
                     </div>
                 </div>
-            </div>
+            </aside>
         </div>`;
         document.body.appendChild(ov);
     }
@@ -330,12 +371,136 @@
         reader.onload = ev => { const img = new Image(); img.onload = () => { const cv = document.createElement('canvas'); const MAX = 1280; let w = img.width, h = img.height; if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h); try { cb(cv.toDataURL('image/jpeg', 0.7)); } catch (e) { cb(null); } }; img.src = ev.target.result; };
         reader.readAsDataURL(file);
     }
-    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes();
+    // ---------- État de la session dans l'en-tête ----------
+    function updateRoomUI() {
+        const rc = byId('gm-room-code'), rb = byId('gm-room-btn'), rl = byId('gm-room-label'), pc = byId('gm-presence-count');
+        if (!rc || !rb) return;
+        if (state.roomCode) {
+            rc.style.display = ''; rc.textContent = state.roomCode;
+            rb.textContent = '✕ Fermer la session';
+            if (rl) rl.textContent = 'Code :';
+            if (pc) pc.style.display = '';
+        } else {
+            rc.style.display = 'none';
+            rb.textContent = '➕ Créer une session';
+            if (rl) rl.textContent = 'Session locale';
+            if (pc) pc.style.display = 'none';
+        }
+    }
+    function updatePresenceCount() {
+        const pc = byId('gm-presence-count'); if (!pc) return;
+        const n = live.players.filter(p => live.online.has(p.user_id)).length;
+        pc.textContent = '👥 ' + n;
+    }
+
+    // ---------- Joueurs connectés (lecture seule, temps réel) ----------
+    function renderLivePlayers() {
+        const el = byId('gm-live-list'); if (!el) return;
+        const statusEl = byId('gm-live-status');
+        if (!state.sessionId) {
+            el.innerHTML = `<div class="gm-empty">Crée une session puis communique le code aux joueurs pour suivre leurs fiches en direct.</div>`;
+            if (statusEl) statusEl.textContent = 'Hors ligne';
+            return;
+        }
+        const onlineCount = live.players.filter(p => live.online.has(p.user_id)).length;
+        if (statusEl) statusEl.textContent = live.players.length ? (onlineCount + ' en ligne / ' + live.players.length) : 'En attente';
+        if (!live.players.length) {
+            el.innerHTML = `<div class="gm-empty">En attente de joueurs… Donne-leur le code <b>${esc(state.roomCode || '')}</b> (menu ☰ → « Rejoindre une session »).</div>`;
+            return;
+        }
+        el.innerHTML = live.players.map(p => {
+            const s = p.snapshot || {};
+            const online = live.online.has(p.user_id);
+            const hpMax = Number(s.hpMax) || 0, hpCur = Number(s.hpCur) || 0;
+            const ratio = hpMax > 0 ? Math.max(0, Math.min(1, hpCur / hpMax)) : 0;
+            const low = ratio > 0 && ratio <= 0.33;
+            const sub = [s.cls, s.level ? ('Niv ' + s.level) : '', s.race].filter(Boolean).join(' · ');
+            const conds = (s.conditions || []).map(c => `<span class="gm-live-cond">${esc(c)}</span>`).join('');
+            const death = (s.deathSaves && (s.deathSaves.s || s.deathSaves.f))
+                ? `<span class="gm-stat-pill">☠️ ${s.deathSaves.s || 0}✓ / ${s.deathSaves.f || 0}✗</span>` : '';
+            return `<div class="gm-live-item${online ? '' : ' is-offline'}">
+                <div class="gm-live-top">
+                    <span class="gm-live-dot ${online ? 'on' : ''}" title="${online ? 'En ligne' : 'Hors ligne — dernier état connu'}"></span>
+                    <span class="gm-live-name">${esc(s.name || p.character_name || 'Aventurier')}</span>
+                    ${s.concentrating ? '<span class="gm-live-conc" title="Concentration active">🌀</span>' : ''}
+                    <span class="gm-spacer"></span>
+                    <span class="gm-party-sub">${esc(sub || '—')}</span>
+                </div>
+                <div class="gm-live-stats">
+                    <span class="gm-stat-pill">🛡️ CA ${s.ac != null ? s.ac : '—'}</span>
+                    <span class="gm-stat-pill">👁️ ${s.passivePerception != null ? s.passivePerception : '—'}</span>
+                    ${s.spellDC ? `<span class="gm-stat-pill">✨ DD ${s.spellDC}</span>` : ''}
+                    ${death}
+                </div>
+                <div class="gm-live-hp">
+                    <span class="gm-live-hp-num${low ? ' is-low' : ''}">❤️ ${s.hpCur != null ? s.hpCur : '?'} / ${s.hpMax != null ? s.hpMax : '?'}${s.hpTemp ? ` <span class="gm-live-temp">+${s.hpTemp}</span>` : ''}</span>
+                    <div class="gm-hp-bar"><div class="gm-hp-fill" style="width:${ratio * 100}%;"></div></div>
+                </div>
+                ${conds ? `<div class="gm-live-conds">${conds}</div>` : ''}
+            </div>`;
+        }).join('');
+    }
+
+    // ---------- Couche réseau (MJ) ----------
+    function stopNetwork() {
+        if (live.netChannel) { try { live.netChannel.unsubscribe(); } catch (e) {} live.netChannel = null; }
+        if (live.presChannel) { try { live.presChannel.untrack(); } catch (e) {} try { live.presChannel.unsubscribe(); } catch (e) {} live.presChannel = null; }
+        live.players = []; live.online = new Set();
+    }
+    function startNetwork() {
+        if (!window.SupaAuth || !window.SupaAuth.currentUser || !state.sessionId) return;
+        stopNetwork();
+        const sid = state.sessionId, code = state.roomCode;
+        window.SupaAuth.loadSessionPlayers(sid).then(rows => {
+            // protège contre une session qui aurait changé entre-temps
+            if (state.sessionId !== sid) return;
+            live.players = rows || []; renderLivePlayers(); updatePresenceCount();
+        });
+        live.netChannel = window.SupaAuth.subscribeSessionPlayers(sid, (payload) => {
+            const row = (payload.new && payload.new.user_id) ? payload.new : payload.old;
+            if (!row) return;
+            if (payload.eventType === 'DELETE') {
+                const uid2 = payload.old && payload.old.user_id;
+                live.players = live.players.filter(p => p.user_id !== uid2);
+            } else {
+                const i = live.players.findIndex(p => p.user_id === row.user_id);
+                if (i >= 0) live.players[i] = row; else live.players.push(row);
+            }
+            renderLivePlayers(); updatePresenceCount();
+        });
+        try {
+            live.presChannel = window.SupaAuth.presenceChannel(code);
+            live.presChannel
+                .on('presence', { event: 'sync' }, () => {
+                    live.online = new Set(Object.keys(live.presChannel.presenceState()));
+                    updatePresenceCount(); renderLivePlayers();
+                })
+                .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
+        } catch (e) { console.warn('presence GM:', e); }
+    }
+
+    // ---------- Compendium (recherche rapide) ----------
+    function renderCompendium(query) {
+        const el = byId('gm-comp-results'); if (!el) return;
+        const q = (query || '').toLowerCase().trim();
+        if (!q) { el.innerHTML = `<div class="gm-readonly-note">Tape un mot-clé : règle de condition, ou un de tes monstres / PNJ / quêtes.</div>`; return; }
+        const blocks = [];
+        CONDITIONS_REF.filter(c => c.name.toLowerCase().includes(q) || c.text.toLowerCase().includes(q))
+            .forEach(c => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">⚠️ ${esc(c.name)}</div><div class="gm-comp-text">${esc(c.text)}</div></div>`));
+        state.monsters.filter(m => m.name.toLowerCase().includes(q))
+            .forEach(m => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">👹 ${esc(m.name)}</div><div class="gm-comp-text">PV ${m.hpCur}/${m.hpMax}${m.ac ? ' · CA ' + m.ac : ''}${(m.attacks || []).length ? ' · ' + m.attacks.map(a => esc(a.name) + ' (' + esc(a.formula) + ')').join(', ') : ''}</div></div>`));
+        state.npcs.filter(n => n.name.toLowerCase().includes(q) || (n.secret || '').toLowerCase().includes(q))
+            .forEach(n => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">🎭 ${esc(n.name)}</div>${n.secret ? `<div class="gm-comp-text">${esc(n.secret)}</div>` : ''}</div>`));
+        state.quests.filter(t => t.text.toLowerCase().includes(q))
+            .forEach(t => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">📜 ${t.done ? '✅ ' : ''}${esc(t.text)}</div></div>`));
+        el.innerHTML = blocks.length ? blocks.join('') : `<div class="gm-empty">Aucun résultat pour « ${esc(query)} ».</div>`;
+    }
+
+    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderLivePlayers();
         const t = document.getElementById('gm-env-time'); if (t) t.value = state.env.time || '';
         const w = document.getElementById('gm-env-weather'); if (w) w.value = state.env.weather || '☀️ Dégagé';
         const n = document.getElementById('gm-notes'); if (n) n.value = state.notes || '';
-        const rc = document.getElementById('gm-room-code'); const rb = document.getElementById('gm-room-btn'); const rl = document.getElementById('gm-room-label');
-        if (state.roomCode && rc && rb) { rc.style.display = ''; rc.textContent = state.roomCode; rb.textContent = '✕ Fermer la session'; if (rl) rl.textContent = 'Code :'; }
+        updateRoomUI();
     }
 
     // ---------- Câblage ----------
@@ -345,24 +510,58 @@
     function wire() {
         byId('gm-close').addEventListener('click', close);
 
-        // Session (placeholder Phase 2)
-        byId('gm-room-btn').addEventListener('click', () => {
-            if (state.roomCode) { state.roomCode = null; }
-            else { state.roomCode = Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join(''); }
-            save(); renderAll();
-            const rc = byId('gm-room-code'), rb = byId('gm-room-btn'), rl = byId('gm-room-label');
-            if (!state.roomCode) { rc.style.display = 'none'; rb.textContent = '➕ Créer une session'; rl.textContent = 'Session locale'; }
-            if (state.roomCode && window.showAppToast) window.showAppToast('Session ' + state.roomCode + ' créée (réseau à venir)', '#2c3e50');
+        // Session temps réel (Supabase)
+        byId('gm-room-btn').addEventListener('click', async () => {
+            const btn = byId('gm-room-btn');
+            if (state.roomCode) {
+                // Fermer la session
+                if (!confirm('Fermer la session ? Les joueurs seront déconnectés.')) return;
+                const sid = state.sessionId;
+                stopNetwork();
+                state.roomCode = null; state.sessionId = null; save(); updateRoomUI(); renderLivePlayers();
+                if (sid && window.SupaAuth) { try { await window.SupaAuth.closeSession(sid); } catch (e) {} }
+                if (window.showAppToast) window.showAppToast('Session fermée', '#7A2828');
+                return;
+            }
+            // Créer une session
+            if (!window.SupaAuth || !window.SupaAuth.currentUser) {
+                if (window.showAppToast) window.showAppToast('Connecte-toi pour créer une session en ligne.', '#c0392b');
+                return;
+            }
+            btn.disabled = true; btn.textContent = 'Création…';
+            try {
+                const camp = campaigns.find(c => c.id === activeCampaignId);
+                const sess = await window.SupaAuth.createSession(camp ? camp.name : 'Partie');
+                if (!sess) throw new Error('createSession a échoué');
+                state.roomCode = sess.code; state.sessionId = sess.id; save();
+                updateRoomUI(); startNetwork(); renderLivePlayers();
+                if (window.showAppToast) window.showAppToast('🟢 Session ' + sess.code + ' ouverte ! Donne ce code aux joueurs.', '#2c3e50');
+            } catch (e) {
+                console.warn(e);
+                if (window.showAppToast) window.showAppToast('Échec de création de session.', '#c0392b');
+                updateRoomUI();
+            } finally { btn.disabled = false; }
         });
 
-        // Onglets mobile
-        document.querySelectorAll('.gm-tab').forEach(tab => tab.addEventListener('click', () => {
-            document.querySelectorAll('.gm-tab').forEach(t => t.classList.remove('active'));
+        // Bascule de la sidebar droite
+        byId('gm-sidebar-toggle').addEventListener('click', () => {
+            const ov = byId('gm-overlay'); if (ov) ov.classList.toggle('gm-sidebar-collapsed');
+        });
+
+        // Onglets de la sidebar (Dés / Journal / Compendium)
+        document.querySelectorAll('.gm-side-tab').forEach(tab => tab.addEventListener('click', () => {
+            document.querySelectorAll('.gm-side-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            const map = { dash: '.gm-col-dash', combat: '.gm-col-combat', lore: '.gm-col-lore' };
-            document.querySelectorAll('.gm-col').forEach(c => c.classList.remove('gm-show'));
-            const target = document.querySelector(map[tab.dataset.tab]); if (target) target.classList.add('gm-show');
+            const map = { chat: '.gm-side-chat', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
+            document.querySelectorAll('.gm-side-panel').forEach(p => p.classList.remove('gm-side-show'));
+            const target = document.querySelector(map[tab.dataset.side]); if (target) target.classList.add('gm-side-show');
+            // Si on n'a pas la sidebar ouverte, l'ouvrir
+            const ov = byId('gm-overlay'); if (ov) ov.classList.remove('gm-sidebar-collapsed');
         }));
+
+        // Compendium : recherche
+        const compInput = byId('gm-comp-search');
+        if (compInput) compInput.addEventListener('input', (e) => renderCompendium(e.target.value));
 
         // --- Ajouts ---
         byId('gm-party-add').addEventListener('click', () => {
@@ -515,12 +714,14 @@
 
     // ---------- Ouverture / fermeture ----------
     function open(campaignId) {
+        if (campaignId && campaignId !== activeCampaignId) stopNetwork(); // on change de campagne → coupe l'ancien flux
         if (campaignId) { activeCampaignId = campaignId; state = load(); }
         else if (!activeCampaignId) { const c = createCampaign('Partie rapide'); activeCampaignId = c.id; state = load(); }
         const ov = document.getElementById('gm-overlay'); if (!ov) return;
         const camp = campaigns.find(c => c.id === activeCampaignId);
         const tEl = document.getElementById('gm-campaign-title'); if (tEl) tEl.textContent = camp ? '— ' + camp.name : '';
         ov.classList.add('gm-open'); renderAll();
+        if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte
     }
     function close() { const ov = document.getElementById('gm-overlay'); if (ov) ov.classList.remove('gm-open'); }
 

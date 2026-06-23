@@ -7,6 +7,12 @@ const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Code de session lisible (sans caractères ambigus : pas de 0/O, 1/I/L)
+function genSessionCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
 window.SupaAuth = {
     client: _supabase,
     currentUser: null,
@@ -100,7 +106,93 @@ window.SupaAuth = {
         const { error } = await _supabase
             .from('character_data')
             .upsert(rows, { onConflict: 'character_id,key' });
-        if (error) throw error; 
+        if (error) throw error;
+    },
+
+    // =====================================================
+    // SESSIONS TEMPS RÉEL (MJ ↔ joueurs)
+    // =====================================================
+
+    // --- Côté MJ ---
+    async createSession(name) {
+        if (!this.currentUser) return null;
+        // Quelques tentatives en cas de collision de code (contrainte unique)
+        for (let i = 0; i < 5; i++) {
+            const code = genSessionCode();
+            const { data, error } = await _supabase
+                .from('sessions')
+                .insert({ code, gm_id: this.currentUser.id, name: name || 'Partie', active: true })
+                .select().single();
+            if (!error) return data;            // { id, code, name, ... }
+            if (error.code !== '23505') { console.warn('createSession:', error); return null; }
+        }
+        return null;
+    },
+
+    async closeSession(sessionId) {
+        if (!this.currentUser || !sessionId) return;
+        await _supabase.from('sessions')
+            .update({ active: false })
+            .eq('id', sessionId).eq('gm_id', this.currentUser.id);
+    },
+
+    async loadSessionPlayers(sessionId) {
+        if (!this.currentUser || !sessionId) return [];
+        const { data, error } = await _supabase
+            .from('session_players')
+            .select('user_id, character_id, character_name, snapshot, updated_at')
+            .eq('session_id', sessionId)
+            .order('updated_at', { ascending: true });
+        if (error) { console.warn('loadSessionPlayers:', error); return []; }
+        return data || [];
+    },
+
+    // S'abonne aux changements de fiches des joueurs (Postgres Changes). Renvoie le canal.
+    subscribeSessionPlayers(sessionId, onChange) {
+        return _supabase
+            .channel('db-session-' + sessionId)
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'session_players', filter: 'session_id=eq.' + sessionId },
+                (payload) => { try { onChange(payload); } catch (e) { console.warn(e); } })
+            .subscribe();
+    },
+
+    // --- Côté joueur ---
+    async joinSession(code, charId, charName) {
+        if (!this.currentUser) throw new Error('NOT_LOGGED_IN');
+        const { data, error } = await _supabase.rpc('join_session', {
+            p_code: String(code || '').toUpperCase().trim(),
+            p_char_id: String(charId),
+            p_char_name: charName || ''
+        });
+        if (error) throw error;
+        return data; // id (uuid) de la session rejointe
+    },
+
+    async leaveSession(sessionId) {
+        if (!this.currentUser || !sessionId) return;
+        await _supabase.from('session_players')
+            .delete().eq('session_id', sessionId).eq('user_id', this.currentUser.id);
+    },
+
+    async upsertSnapshot(sessionId, charId, charName, snapshot) {
+        if (!this.currentUser || !sessionId) return;
+        const { error } = await _supabase.from('session_players')
+            .upsert({
+                session_id: sessionId,
+                user_id: this.currentUser.id,
+                character_id: String(charId),
+                character_name: charName || '',
+                snapshot: snapshot || {},
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'session_id,user_id' });
+        if (error) console.warn('upsertSnapshot:', error);
+    },
+
+    // --- Commun : canal de présence keyé par le code de session ---
+    presenceChannel(code) {
+        const key = (this.currentUser && this.currentUser.id) || 'anon-' + Math.random().toString(36).slice(2);
+        return _supabase.channel('session:' + code, { config: { presence: { key } } });
     }
 };
 

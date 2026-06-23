@@ -134,6 +134,57 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', (e) => { if (!settingsDropdown.classList.contains('hidden') && !e.target.closest('.settings-container')) { settingsDropdown.classList.add('hidden'); } });
     }
 
+    // ==========================================
+    // SESSION DE JEU (côté joueur) — UI du menu ☰
+    // ==========================================
+    (function wirePlayerSessionUI() {
+        const codeInput = document.getElementById('session-code-input');
+        const btnJoin   = document.getElementById('btn-join-session');
+        const btnLeave  = document.getElementById('btn-leave-session');
+        const msgEl     = document.getElementById('session-join-msg');
+        const boxDisc   = document.getElementById('player-session-disconnected');
+        const boxConn   = document.getElementById('player-session-connected');
+        const codeShow  = document.getElementById('session-current-code');
+        if (!btnJoin || !boxDisc || !boxConn) return;
+
+        function setMsg(text, color) { if (msgEl) { msgEl.textContent = text || ''; msgEl.style.color = color || '#777'; } }
+        function renderState(s) {
+            const connected = !!(s && s.connected);
+            boxDisc.classList.toggle('hidden', connected);
+            boxConn.classList.toggle('hidden', !connected);
+            if (connected && codeShow) codeShow.textContent = s.code || '';
+            if (!connected) setMsg('');
+        }
+
+        document.addEventListener('playersession:change', (e) => renderState(e.detail));
+        if (window.PlayerSession) renderState(window.PlayerSession.getState());
+
+        btnJoin.addEventListener('click', async () => {
+            const code = (codeInput.value || '').toUpperCase().trim();
+            if (!code) { setMsg('Entre un code.', '#c0392b'); return; }
+            if (!ACTIVE_CHAR_ID) { setMsg("Ouvre d'abord une fiche de personnage.", '#c0392b'); return; }
+            if (!window.SupaAuth || !window.SupaAuth.currentUser) { setMsg('Connecte-toi pour rejoindre.', '#c0392b'); return; }
+            btnJoin.disabled = true; setMsg('Connexion…', '#777');
+            try {
+                await window.PlayerSession.join(code);
+                codeInput.value = '';
+            } catch (err) {
+                const m = String((err && (err.message || err.code)) || err);
+                if (m.includes('SESSION_NOT_FOUND'))      setMsg('Code invalide ou session fermée.', '#c0392b');
+                else if (m.includes('AUCUNE_FICHE'))      setMsg("Ouvre d'abord une fiche.", '#c0392b');
+                else if (m.includes('NON_CONNECTE'))      setMsg('Connecte-toi pour rejoindre.', '#c0392b');
+                else if (m.includes('CODE_INVALIDE'))     setMsg('Code à 6 caractères attendu.', '#c0392b');
+                else                                       setMsg('Échec : ' + m, '#c0392b');
+            } finally { btnJoin.disabled = false; }
+        });
+
+        if (codeInput) codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); btnJoin.click(); } });
+        if (btnLeave) btnLeave.addEventListener('click', async () => {
+            btnLeave.disabled = true;
+            try { await window.PlayerSession.leave(); } finally { btnLeave.disabled = false; }
+        });
+    })();
+
     const btnExportJson = document.getElementById('btn-export-json');
     if (btnExportJson) {
         btnExportJson.addEventListener('click', async () => {
