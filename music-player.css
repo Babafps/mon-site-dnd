@@ -231,6 +231,14 @@
 
 .music-panel.hidden { display: none !important; }
 
+/* ===== Mode JOUEUR : contrôles désactivés, seul le volume reste actif ===== */
+.music-restricted .music-btn[disabled] { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+.music-restricted .music-progress-area { opacity: 0.4; pointer-events: none; }
+.music-restricted .music-track-details::after {
+    content: "🔒 contrôlé par le MJ"; display: block;
+    font-size: 0.62rem; opacity: 0.7; font-style: italic; letter-spacing: 0.02em;
+}
+
 .music-panel-header {
     display: flex;
     align-items: center;

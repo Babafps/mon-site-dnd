@@ -13,6 +13,20 @@ function genSessionCode() {
     return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+// =====================================================
+// NAVIGATION GLOBALE ENTRE ÉCRANS (routeur léger)
+// Tous les écrans plein page sont des .screen-view ; on bascule
+// .hidden. `gm-active` sur <body> permet d'adapter le menu ☰.
+// =====================================================
+const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'gm-screen'];
+window.navTo = function (id) {
+    APP_SCREENS.forEach(s => {
+        const el = document.getElementById(s);
+        if (el) el.classList.toggle('hidden', s !== id);
+    });
+    document.body.classList.toggle('gm-active', id === 'gm-screen');
+};
+
 window.SupaAuth = {
     client: _supabase,
     currentUser: null,
@@ -193,6 +207,92 @@ window.SupaAuth = {
     presenceChannel(code) {
         const key = (this.currentUser && this.currentUser.id) || 'anon-' + Math.random().toString(36).slice(2);
         return _supabase.channel('session:' + code, { config: { presence: { key } } });
+    },
+
+    // =====================================================
+    // STORAGE — médias MJ (soundboard, images, maps) → bucket gm-assets
+    // =====================================================
+    async uploadAsset(file, folder) {
+        if (!this.currentUser) throw new Error('NOT_LOGGED_IN');
+        const safe = String(folder || 'misc').replace(/[^a-z0-9_-]/gi, '') || 'misc';
+        const ext = (String(file.name || 'f').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+        const path = this.currentUser.id + '/' + safe + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+        const { error } = await _supabase.storage.from('gm-assets').upload(path, file, { contentType: file.type || undefined, upsert: false });
+        if (error) throw error;
+        const { data } = _supabase.storage.from('gm-assets').getPublicUrl(path);
+        return { path, url: data.publicUrl };
+    },
+
+    assetPublicUrl(path) {
+        if (!path) return null;
+        const { data } = _supabase.storage.from('gm-assets').getPublicUrl(path);
+        return data ? data.publicUrl : null;
+    },
+
+    async deleteAsset(path) {
+        if (!this.currentUser || !path) return;
+        try { await _supabase.storage.from('gm-assets').remove([path]); } catch (e) { console.warn('deleteAsset:', e); }
+    },
+
+    // =====================================================
+    // ÉTAT LIVE DE SESSION (carte / tokens / combat) — table session_state
+    // =====================================================
+    async loadSessionState(sessionId) {
+        if (!sessionId) return null;
+        const { data, error } = await _supabase
+            .from('session_state').select('*').eq('session_id', sessionId).maybeSingle();
+        if (error) { console.warn('loadSessionState:', error); return null; }
+        return data;
+    },
+
+    async saveSessionState(sessionId, patch) {
+        if (!this.currentUser || !sessionId) return;
+        const row = Object.assign({ session_id: sessionId, updated_at: new Date().toISOString() }, patch || {});
+        const { error } = await _supabase.from('session_state').upsert(row, { onConflict: 'session_id' });
+        if (error) console.warn('saveSessionState:', error);
+    },
+
+    subscribeSessionState(sessionId, onChange) {
+        return _supabase.channel('db-state-' + sessionId)
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'session_state', filter: 'session_id=eq.' + sessionId },
+                (payload) => { try { onChange(payload.new || null); } catch (e) { console.warn(e); } })
+            .subscribe();
+    },
+
+    // =====================================================
+    // ARBORESCENCE DE PRÉPARATION (gm_tree)
+    // =====================================================
+    async treeList(campaignId) {
+        if (!this.currentUser) return [];
+        const { data, error } = await _supabase
+            .from('gm_tree').select('*')
+            .eq('gm_id', this.currentUser.id).eq('campaign_id', String(campaignId))
+            .order('sort', { ascending: true });
+        if (error) { console.warn('treeList:', error); return []; }
+        return data || [];
+    },
+
+    async treeInsert(node) {
+        if (!this.currentUser) return null;
+        const row = Object.assign({ gm_id: this.currentUser.id }, node);
+        const { data, error } = await _supabase.from('gm_tree').insert(row).select().single();
+        if (error) { console.warn('treeInsert:', error); return null; }
+        return data;
+    },
+
+    async treeUpdate(id, fields) {
+        if (!this.currentUser || !id) return;
+        const { error } = await _supabase.from('gm_tree')
+            .update(Object.assign({ updated_at: new Date().toISOString() }, fields))
+            .eq('id', id).eq('gm_id', this.currentUser.id);
+        if (error) console.warn('treeUpdate:', error);
+    },
+
+    async treeDelete(id) {
+        if (!this.currentUser || !id) return;
+        const { error } = await _supabase.from('gm_tree').delete().eq('id', id).eq('gm_id', this.currentUser.id);
+        if (error) console.warn('treeDelete:', error);
     }
 };
 
@@ -291,16 +391,11 @@ function translateAuthError(msg) {
 // INIT PAGE
 // =====================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    const screens = ['loading-screen', 'login-screen', 'home-screen', 'app-screen'];
-
     function showScreen(id) {
         if (id === 'home-screen' && localStorage.getItem('dnd-active-char')) {
             id = 'app-screen';
         }
-        screens.forEach(s => {
-            const el = document.getElementById(s);
-            if (el) el.classList.toggle('hidden', s !== id);
-        });
+        window.navTo(id);
     }
 
     showScreen('loading-screen');

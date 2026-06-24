@@ -15,6 +15,8 @@
     const state = { code: null, sessionId: null, charId: null, channel: null, pushTimer: null };
 
     function activeCharId() { try { return localStorage.getItem('dnd-active-char'); } catch (e) { return null; } }
+    // Permissions audio : joueur en session = volume seul (contrôles MJ désactivés)
+    function setMusicRole(r) { if (window.MusicPlayer && window.MusicPlayer.setRole) window.MusicPlayer.setRole(r); }
 
     function emit() {
         const detail = { connected: !!state.sessionId, code: state.code };
@@ -99,6 +101,10 @@
             ch.on('broadcast', { event: 'scene' }, ({ payload }) => applyIncomingScene(payload))
               .on('broadcast', { event: 'ping' }, ({ payload }) => showPing(payload))
               .on('broadcast', { event: 'gift' }, ({ payload }) => receiveGift(payload))
+              .on('broadcast', { event: 'sfx' }, ({ payload }) => { if (payload && payload.url && window.MusicPlayer && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(payload.url); })
+              .on('broadcast', { event: 'combat' }, ({ payload }) => applyCombat(payload))
+              .on('broadcast', { event: 'map' }, ({ payload }) => { if (payload) applyMap(payload.map, payload.tokens); })
+              .on('broadcast', { event: 'session-closed' }, () => onSessionClosed())
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
                       try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
@@ -171,6 +177,235 @@
         wrap.appendChild(card);
     }
 
+    // =====================================================
+    // COMBAT (joueur) : bouton flottant (FAB) + initiative
+    // =====================================================
+    let combatState = { active: false, round: 1, turnIndex: 0, order: [] };
+    let fabEl = null, fabPanel = null, fabBadge = null;
+
+    function clampN(v, a, b) { return Math.max(a, Math.min(v, b)); }
+
+    function ensureFab() {
+        if (fabEl) return;
+        fabBadge = document.createElement('div');
+        fabBadge.id = 'session-combat-badge'; fabBadge.className = 'no-print';
+        fabBadge.textContent = '⚔️ Pas de combat pour le moment';
+        document.body.appendChild(fabBadge);
+
+        fabEl = document.createElement('button');
+        fabEl.id = 'session-fab'; fabEl.className = 'no-print'; fabEl.type = 'button';
+        fabEl.innerHTML = '<span class="session-fab-ic">⚔️</span>';
+        fabEl.title = 'Actions de combat (glisse-moi le long des bords)';
+        document.body.appendChild(fabEl);
+
+        fabPanel = document.createElement('div');
+        fabPanel.id = 'session-fab-panel'; fabPanel.className = 'no-print hidden';
+        document.body.appendChild(fabPanel);
+
+        fabEl.addEventListener('click', () => { if (fabEl.dataset.dragged === '1') { fabEl.dataset.dragged = '0'; return; } toggleFabPanel(); });
+        setupFabDrag();
+        restoreFabPos();
+    }
+
+    function toggleFabPanel() {
+        if (!fabPanel) return;
+        if (fabPanel.classList.contains('hidden')) { renderFabPanel(); fabPanel.classList.remove('hidden'); placePanel(); }
+        else fabPanel.classList.add('hidden');
+    }
+
+    function placePanel() {
+        if (!fabEl || !fabPanel) return;
+        const r = fabEl.getBoundingClientRect();
+        const pw = fabPanel.offsetWidth || 250, ph = fabPanel.offsetHeight || 200, m = 8;
+        let left = r.right + m; if (left + pw > window.innerWidth) left = r.left - pw - m;
+        left = clampN(left, m, window.innerWidth - pw - m);
+        let top = clampN(r.top, m, window.innerHeight - ph - m);
+        fabPanel.style.left = left + 'px'; fabPanel.style.top = top + 'px';
+    }
+
+    function renderFabPanel() {
+        if (!fabPanel) return;
+        const order = combatState.order || [];
+        const rows = order.map((c, i) => `<div class="sfp-row${i === combatState.turnIndex ? ' is-turn' : ''}">
+            <span class="sfp-init">${c.init == null ? '—' : c.init}</span>
+            <span class="sfp-type">${c.type === 'monster' ? '👹' : '🧝'}</span>
+            <span class="sfp-name">${escHtml(c.name)}</span>
+        </div>`).join('') || '<div class="sfp-empty">En attente de l\'ordre d\'initiative…</div>';
+        fabPanel.innerHTML = `
+            <div class="sfp-head">⚔️ Combat — Round <b>${combatState.round || 1}</b></div>
+            <button id="sfp-roll-init" class="sfp-btn">🎲 Lancer mon initiative</button>
+            <div class="sfp-order">${rows}</div>`;
+        const rb = document.getElementById('sfp-roll-init');
+        if (rb) rb.addEventListener('click', rollInitiative);
+    }
+
+    function rollInitiative() {
+        const modEl = document.getElementById('initiative');
+        const mod = modEl ? (parseInt(modEl.value, 10) || 0) : 0;
+        const d = Math.floor(Math.random() * 20) + 1;
+        const total = d + mod;
+        sendToGm('initiative-roll', { charId: state.charId, name: snapName(), total: total });
+        if (window.showAppToast) window.showAppToast('🎲 Initiative : ' + d + (mod ? (mod > 0 ? ' +' + mod : ' ' + mod) : '') + ' = ' + total, '#2c3e50');
+        renderFabPanel(); placePanel();
+    }
+
+    function applyCombat(p) {
+        if (!p) return;
+        combatState = { active: !!p.active, round: p.round || 1, turnIndex: p.turnIndex || 0, order: p.order || [] };
+        ensureFab();
+        updateFabVisibility();
+        if (fabPanel && !fabPanel.classList.contains('hidden')) { renderFabPanel(); placePanel(); }
+        document.body.classList.toggle('session-combat-active', combatState.active);
+    }
+
+    function updateFabVisibility() {
+        if (!fabEl) return;
+        const connected = !!state.sessionId;
+        fabEl.style.display = (connected && combatState.active) ? 'flex' : 'none';
+        if (fabBadge) fabBadge.style.display = (connected && !combatState.active) ? 'block' : 'none';
+        if (!combatState.active && fabPanel) fabPanel.classList.add('hidden');
+    }
+
+    function teardownCombatUI() {
+        combatState = { active: false, round: 1, turnIndex: 0, order: [] };
+        if (fabEl) fabEl.style.display = 'none';
+        if (fabBadge) fabBadge.style.display = 'none';
+        if (fabPanel) fabPanel.classList.add('hidden');
+        document.body.classList.remove('session-combat-active');
+    }
+
+    // Drag du FAB : libre, puis ancrage (snap) au bord le plus proche
+    function setupFabDrag() {
+        let dragging = false, moved = false, startX = 0, startY = 0, offX = 0, offY = 0;
+        const margin = 10;
+        fabEl.style.touchAction = 'none';
+        fabEl.addEventListener('pointerdown', (e) => {
+            if (e.button != null && e.button !== 0) return;
+            dragging = true; moved = false;
+            const r = fabEl.getBoundingClientRect();
+            offX = e.clientX - r.left; offY = e.clientY - r.top; startX = e.clientX; startY = e.clientY;
+            fabEl.style.transition = 'none';
+            try { fabEl.setPointerCapture(e.pointerId); } catch (_) {}
+        });
+        fabEl.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) moved = true;
+            const w = fabEl.offsetWidth, h = fabEl.offsetHeight;
+            const x = clampN(e.clientX - offX, margin, window.innerWidth - w - margin);
+            const y = clampN(e.clientY - offY, margin, window.innerHeight - h - margin);
+            fabEl.style.left = x + 'px'; fabEl.style.top = y + 'px'; fabEl.style.right = 'auto'; fabEl.style.bottom = 'auto';
+            if (fabPanel && !fabPanel.classList.contains('hidden')) placePanel();
+        });
+        const up = (e) => {
+            if (!dragging) return; dragging = false;
+            fabEl.style.transition = '';
+            fabEl.dataset.dragged = moved ? '1' : '0';
+            if (moved) snapToEdge();
+            try { fabEl.releasePointerCapture(e.pointerId); } catch (_) {}
+        };
+        fabEl.addEventListener('pointerup', up);
+        fabEl.addEventListener('pointercancel', up);
+        window.addEventListener('resize', () => { const p = readFabPos(); if (p) applyFabEdge(p.edge, p.offset); });
+    }
+
+    function snapToEdge() {
+        const w = fabEl.offsetWidth, h = fabEl.offsetHeight, margin = 10;
+        const r = fabEl.getBoundingClientRect();
+        const cx = r.left + w / 2, cy = r.top + h / 2;
+        const dl = cx, dr = window.innerWidth - cx, dt = cy, db = window.innerHeight - cy;
+        const min = Math.min(dl, dr, dt, db);
+        let edge, offset;
+        if (min === dl) { edge = 'left'; offset = clampN(r.top, margin, window.innerHeight - h - margin); }
+        else if (min === dr) { edge = 'right'; offset = clampN(r.top, margin, window.innerHeight - h - margin); }
+        else if (min === dt) { edge = 'top'; offset = clampN(r.left, margin, window.innerWidth - w - margin); }
+        else { edge = 'bottom'; offset = clampN(r.left, margin, window.innerWidth - w - margin); }
+        applyFabEdge(edge, offset);
+        try { localStorage.setItem('dnd-fab-pos', JSON.stringify({ edge, offset })); } catch (e) {}
+    }
+
+    function applyFabEdge(edge, offset) {
+        if (!fabEl) return;
+        const margin = 10, w = fabEl.offsetWidth || 58, h = fabEl.offsetHeight || 58;
+        fabEl.style.left = fabEl.style.right = fabEl.style.top = fabEl.style.bottom = 'auto';
+        if (edge === 'left') { fabEl.style.left = margin + 'px'; fabEl.style.top = clampN(offset, margin, window.innerHeight - h - margin) + 'px'; }
+        else if (edge === 'right') { fabEl.style.right = margin + 'px'; fabEl.style.top = clampN(offset, margin, window.innerHeight - h - margin) + 'px'; }
+        else if (edge === 'top') { fabEl.style.top = margin + 'px'; fabEl.style.left = clampN(offset, margin, window.innerWidth - w - margin) + 'px'; }
+        else { fabEl.style.bottom = margin + 'px'; fabEl.style.left = clampN(offset, margin, window.innerWidth - w - margin) + 'px'; }
+    }
+
+    function readFabPos() { try { return JSON.parse(localStorage.getItem('dnd-fab-pos') || 'null'); } catch (e) { return null; } }
+    function restoreFabPos() {
+        const pos = readFabPos();
+        if (pos && pos.edge) applyFabEdge(pos.edge, pos.offset || 60);
+        else applyFabEdge('right', Math.round(window.innerHeight * 0.45));
+    }
+
+    async function loadLiveState() {
+        if (!state.sessionId || !window.SupaAuth || !window.SupaAuth.loadSessionState) return;
+        try {
+            const st = await window.SupaAuth.loadSessionState(state.sessionId);
+            if (st) { if (st.combat) applyCombat(st.combat); if (st.map && typeof applyMap === 'function') applyMap(st.map, st.tokens); }
+        } catch (e) {}
+    }
+
+    // =====================================================
+    // CARTE TACTIQUE (joueur) : vue lecture seule synchronisée
+    // =====================================================
+    let mapState = { map: {}, tokens: [] };
+    let mapPanel = null, mapToggle = null;
+
+    function ensureMapUI() {
+        if (mapToggle) return;
+        mapToggle = document.createElement('button');
+        mapToggle.id = 'session-map-toggle'; mapToggle.className = 'no-print'; mapToggle.type = 'button';
+        mapToggle.textContent = '🗺️'; mapToggle.title = 'Carte tactique';
+        document.body.appendChild(mapToggle);
+
+        mapPanel = document.createElement('div');
+        mapPanel.id = 'session-map'; mapPanel.className = 'no-print hidden';
+        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><button id="smap-close" title="Fermer">✕</button></div><div id="smap-view" class="smap-view"></div>';
+        document.body.appendChild(mapPanel);
+
+        mapToggle.addEventListener('click', () => { mapPanel.classList.toggle('hidden'); });
+        mapPanel.querySelector('#smap-close').addEventListener('click', () => mapPanel.classList.add('hidden'));
+    }
+
+    function applyMap(map, tokens) {
+        mapState = { map: map || {}, tokens: tokens || [] };
+        ensureMapUI();
+        const hasMap = !!(mapState.map && mapState.map.bg) || (mapState.tokens && mapState.tokens.length);
+        mapToggle.style.display = (state.sessionId && hasMap) ? 'flex' : 'none';
+        if (!(state.sessionId && hasMap)) mapPanel.classList.add('hidden');
+        renderPlayerMap();
+    }
+
+    function renderPlayerMap() {
+        const view = document.getElementById('smap-view'); if (!view) return;
+        const m = mapState.map || {};
+        view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        view.classList.toggle('show-grid', m.showGrid !== false);
+        view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
+        view.innerHTML = (mapState.tokens || []).map(t => `<div class="smap-token" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')};" title="${escHtml(t.name)}"><span>${escHtml((t.name || '?').slice(0, 2))}</span></div>`).join('');
+    }
+
+    function teardownMapUI() {
+        mapState = { map: {}, tokens: [] };
+        if (mapToggle) mapToggle.style.display = 'none';
+        if (mapPanel) mapPanel.classList.add('hidden');
+    }
+
+    // --- Fermeture forcée par le MJ : déconnexion + retour accueil ---
+    function onSessionClosed() {
+        if (window.showAppToast) window.showAppToast('🚪 La session a été fermée par le MJ.', '#7A2828');
+        leave().finally(() => {
+            // Nettoyage visuel de l'ambiance diffusée + retour à l'accueil
+            document.body.style.backgroundImage = '';
+            document.body.classList.remove('scene-active');
+            if (window.navTo) window.navTo('home-screen');
+            try { if ((location.hash || '').indexOf('#gm') !== 0) location.hash = '#home'; } catch (e) {}
+        });
+    }
+
     // --- Styles du module (ping + notifications) ---
     function injectStyles() {
         if (document.getElementById('session-styles')) return;
@@ -191,7 +426,40 @@
         .session-notif-btn.accept { background:#27ae60; color:#fff; }
         .session-notif-btn.accept:hover { filter:brightness(1.08); }
         .session-notif-btn.refuse { background:#f0e6d8; color:#c0392b; }
-        .session-notif-btn.refuse:hover { background:#e7d8c4; }`;
+        .session-notif-btn.refuse:hover { background:#e7d8c4; }
+        /* --- FAB de combat (joueur) --- */
+        #session-fab { position:fixed; z-index:9990; width:58px; height:58px; border-radius:50%; border:none; cursor:grab; display:none; align-items:center; justify-content:center; font-size:1.6rem; color:#fff; background:linear-gradient(160deg, var(--primary-hover,#9c3333), var(--primary-color,#7A2828)); box-shadow:0 6px 20px rgba(0,0,0,0.4); touch-action:none; animation:session-fab-in 0.3s ease-out; }
+        #session-fab:active { cursor:grabbing; }
+        #session-fab:hover { filter:brightness(1.08); }
+        @keyframes session-fab-in { from{ transform:scale(0.4); opacity:0; } to{ transform:none; opacity:1; } }
+        #session-fab-panel { position:fixed; z-index:9991; width:250px; max-height:62vh; overflow-y:auto; background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:14px; box-shadow:0 10px 32px rgba(0,0,0,0.4); padding:12px; font-family:'Lora',serif; color:#3a2e1f; }
+        #session-fab-panel.hidden { display:none; }
+        .sfp-head { font-family:'Cinzel',serif; font-weight:bold; color:var(--primary-color,#7A2828); margin-bottom:8px; }
+        .sfp-head b { font-size:1.1rem; }
+        .sfp-btn { width:100%; border:none; border-radius:9px; padding:10px; font-family:'Cinzel',serif; font-weight:bold; cursor:pointer; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; margin-bottom:10px; }
+        .sfp-btn:hover { filter:brightness(1.06); }
+        .sfp-order { display:flex; flex-direction:column; gap:4px; }
+        .sfp-row { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:7px; background:rgba(196,155,53,0.12); font-size:0.85rem; }
+        .sfp-row.is-turn { background:rgba(196,155,53,0.3); box-shadow:inset 0 0 0 1px var(--accent-color,#C49B35); font-weight:bold; }
+        .sfp-init { font-family:'Courier New',monospace; font-weight:bold; min-width:22px; text-align:center; color:var(--primary-color,#7A2828); }
+        .sfp-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sfp-empty { font-style:italic; color:#8a7a5e; font-size:0.82rem; text-align:center; padding:6px; }
+        #session-combat-badge { position:fixed; right:14px; bottom:150px; z-index:9980; display:none; background:rgba(40,30,20,0.82); color:#e8dcc2; font-family:'Lora',serif; font-size:0.74rem; padding:6px 12px; border-radius:20px; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:none; }
+        body.session-combat-active #btn-init-next, body.session-combat-active #btn-init-clear { opacity:0.4 !important; pointer-events:none !important; }
+        body.theme-dark #session-fab-panel { background:#241c16; color:var(--text-color,#ece3d2); }
+        body.theme-dark .sfp-row { background:rgba(196,155,53,0.1); }
+        body.theme-dark .sfp-empty { color:#9a8a70; }
+        /* --- Carte tactique (joueur, lecture seule) --- */
+        #session-map-toggle { position:fixed; right:14px; bottom:210px; z-index:9982; width:46px; height:46px; border-radius:50%; border:none; cursor:pointer; display:none; align-items:center; justify-content:center; font-size:1.3rem; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+        #session-map-toggle:hover { filter:brightness(1.07); }
+        #session-map { position:fixed; z-index:9985; right:14px; bottom:14px; width:min(540px,92vw); background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,0.45); padding:10px; }
+        #session-map.hidden { display:none; }
+        .smap-head { display:flex; justify-content:space-between; align-items:center; font-family:'Cinzel',serif; font-weight:bold; color:var(--primary-color,#7A2828); margin-bottom:6px; }
+        .smap-head button { background:none; border:none; cursor:pointer; font-size:1rem; color:var(--primary-color,#7A2828); }
+        .smap-view { position:relative; width:100%; aspect-ratio:16/9; background:#11100e; background-size:contain; background-position:center; background-repeat:no-repeat; border-radius:8px; overflow:hidden; }
+        .smap-view.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
+        .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); }
+        body.theme-dark #session-map { background:#241c16; }`;
         document.head.appendChild(st);
     }
 
@@ -218,6 +486,8 @@
         persist(); emit();
         openPresence();
         pushSnapshot(true);
+        setMusicRole('player');
+        ensureFab(); updateFabVisibility(); loadLiveState();
         if (window.showAppToast) window.showAppToast('🔗 Connecté à la session ' + code, '#2c3e50');
         return sessionId;
     }
@@ -227,6 +497,8 @@
         await closePresence();
         state.code = null; state.sessionId = null;
         persist(); emit();
+        setMusicRole('free');
+        teardownCombatUI(); teardownMapUI();
         if (sid && window.SupaAuth) { try { await window.SupaAuth.leaveSession(sid); } catch (e) {} }
         if (window.showAppToast) window.showAppToast('Session quittée', '#7A2828');
     }
@@ -254,6 +526,8 @@
             emit();
             openPresence();
             pushSnapshot(true);
+            setMusicRole('player');
+            ensureFab(); updateFabVisibility(); loadLiveState();
         });
     }
 

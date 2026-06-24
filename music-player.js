@@ -26,6 +26,8 @@
     let ytReadyTimeout = null;
     let seekInterval = null;
     let dragSrcIndex = -1;
+    // Rôle : 'free' = contrôle total (défaut / MJ) ; 'player' = volume seul (joueur en session)
+    let role = 'free';
 
     // DOM
     let audioEl, seekBar, volumeBar;
@@ -220,6 +222,29 @@
         window.addEventListener('beforeunload', () => {
             if (currentType === 'youtube' && ytPlayer && ytPlayerReady) ytPlayer.stopVideo();
         });
+
+        applyRole();
+    }
+
+    // =====================================================
+    // RÔLE (permissions audio) — joueur = volume seul
+    // =====================================================
+    function applyRole() {
+        if (!container) return;
+        const restricted = role === 'player';
+        container.classList.toggle('music-restricted', restricted);
+        // Boutons de transport / playlist désactivés pour les joueurs
+        [playBtn, prevBtn, nextBtn, loopBtn, shuffleBtn, queueToggleBtn].forEach(b => { if (b) b.disabled = restricted; });
+        ['music-btn-add-from-queue', 'music-btn-add-url'].forEach(id => { const e = document.getElementById(id); if (e) e.disabled = restricted; });
+        const fileInput = document.getElementById('music-file-input'); if (fileInput) fileInput.disabled = restricted;
+        if (restricted) { if (queuePanel) queuePanel.classList.add('hidden'); if (addPanel) addPanel.classList.add('hidden'); }
+    }
+
+    // Joue un effet sonore ponctuel (soundboard) sans perturber la file en cours.
+    // Respecte le volume / mute local choisi par l'utilisateur.
+    function playSfx(url) {
+        if (!url) return;
+        try { const a = new Audio(url); a.volume = isMuted ? 0 : volume; a.play().catch(() => {}); } catch (e) {}
     }
 
     // =====================================================
@@ -692,7 +717,13 @@
             if (playerBar.classList.contains('music-bar-hidden')) showPlayer(); else hidePlayer();
         },
         // Joue immédiatement une URL (YouTube ou audio direct) — utilisé par les scènes MJ
-        playUrl: (url, title) => playUrl(url, title)
+        playUrl: (url, title) => playUrl(url, title),
+        // Effet sonore ponctuel (soundboard MJ → joueurs)
+        playSfx: (url) => playSfx(url),
+        // Permissions : 'free' (contrôle total) | 'player' (volume seul)
+        setRole: (r) => { role = (r === 'player') ? 'player' : 'free'; applyRole(); },
+        getRole: () => role,
+        getVolume: () => (isMuted ? 0 : volume)
     };
 
     // Ajoute une piste depuis une URL et la lance aussitôt (ambiance de scène diffusée)

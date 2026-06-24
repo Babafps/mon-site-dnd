@@ -3,22 +3,41 @@
    Refonte parchemin (charte fiche D&D 5e) + layout Roll20
    (zone centrale modulable + sidebar droite rétractable)
    ===================================================== */
-#gm-overlay {
-    position: fixed; inset: 0; z-index: 6000;
+/* L'écran MJ est désormais une vraie page (.screen-view), plus une superposition.
+   La visibilité est gérée par .hidden (comme les autres écrans). */
+#gm-screen { font-family: 'Lora', serif; color: var(--text-color); }
+.gm-shell {
+    max-width: 1500px; margin: 0 auto;
+    min-height: calc(100vh - 40px);
+    display: flex; flex-direction: column;
     background:
         radial-gradient(circle at 50% -10%, rgba(196,155,53,0.10), transparent 60%),
         var(--sheet-bg-color, #FAF3E0);
-    display: none; flex-direction: column;
-    font-family: 'Lora', serif; color: #3a2e1f;
+    border: 1px solid var(--soft-border, rgba(122,40,40,0.22));
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg, 0 16px 48px rgba(0,0,0,0.17));
 }
-#gm-overlay.gm-open { display: flex; }
+
+/* Bouton Accueil fixe en haut à gauche (parité avec la fiche joueur, à côté du ☰) */
+.gm-nav-home {
+    position: fixed; top: 15px; left: 64px; z-index: 3000;
+    background: #fffdf7; border: 1px solid rgba(122,40,40,0.35);
+    color: var(--primary-color, #7A2828); border-radius: 8px; padding: 8px 10px;
+    cursor: pointer; font-family: 'Cinzel', serif; font-weight: bold; font-size: 1rem;
+    min-height: 38px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.gm-nav-home:hover { background: #f6ecd4; border-color: var(--primary-color, #7A2828); }
+/* Icône seule (le ☰ voisin est fixe) — le tooltip indique « Retour à l'accueil » */
+.gm-nav-home-txt { display: none; }
 
 /* ---- En-tête ---- */
 .gm-header {
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 18px;
-    background: linear-gradient(180deg, #fffdf7, #f3e8cf);
+    padding: 10px 18px 10px 120px;
+    background: linear-gradient(180deg, var(--widget-bg, #fffdf7), #f3e8cf);
     border-bottom: 3px double var(--primary-color, #7A2828);
+    border-radius: 16px 16px 0 0;
     box-shadow: 0 3px 12px rgba(0,0,0,0.12);
     flex-shrink: 0;
 }
@@ -52,15 +71,16 @@
 .gm-close { width: 40px; height: 40px; font-size: 1.1rem; padding: 0; border-radius: 50%; }
 .gm-close:hover { background: rgba(231,76,60,0.14); border-color: #c0392b; color: #c0392b; }
 
-/* ---- Espace de travail : zone centrale + sidebar ---- */
-.gm-workspace { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+/* ---- Espace de travail : zone centrale + sidebar (flux normal, anti-chevauchement) ---- */
+.gm-workspace { flex: 1; display: flex; gap: 16px; align-items: flex-start; padding: 16px; }
 .gm-main {
-    flex: 1; min-width: 0; min-height: 0; overflow-y: auto;
-    padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px; align-content: start; grid-auto-flow: row dense;
-    scrollbar-width: thin;
+    flex: 1; min-width: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 14px; align-content: start; align-items: start; grid-auto-flow: row dense;
 }
-.gm-span-2 { grid-column: 1 / -1; }
+/* Carte « large » : occupe 2 colonnes quand l'espace le permet, 1 sinon (jamais de chevauchement) */
+.gm-span-2 { grid-column: span 2; }
+@media (max-width: 760px) { .gm-span-2 { grid-column: auto; } }
 
 /* ---- Cartouche générique ---- */
 .gm-card {
@@ -146,6 +166,8 @@
 /* ---- Initiative ---- */
 .gm-round { font-family: 'Cinzel', serif; font-weight: bold; color: #6a5a3e; }
 .gm-round b { color: var(--primary-color, #7A2828); font-size: 1.15rem; }
+.gm-combat-status { font-size: 0.72rem; font-weight: bold; color: #9a8a6e; background: rgba(0,0,0,0.05); border-radius: 12px; padding: 2px 9px; white-space: nowrap; }
+.gm-combat-status.is-active { color: #1e8449; background: rgba(39,174,96,0.16); }
 .gm-init-item { display: flex; align-items: center; gap: 8px; background: #fffdf9; border: 1px solid rgba(122,40,40,0.16); border-left: 4px solid transparent; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }
 .gm-init-item.is-active { border-left-color: var(--accent-color, #C49B35); background: rgba(196,155,53,0.14); box-shadow: inset 0 0 0 1px rgba(196,155,53,0.35); }
 .gm-init-item.is-mj-hidden { opacity: 0.6; border-style: dashed; }
@@ -179,14 +201,17 @@
 
 /* ---- SIDEBAR DROITE ---- */
 .gm-sidebar {
-    flex: 0 0 350px; max-width: 350px; min-height: 0;
+    flex: 0 0 350px; max-width: 350px;
+    position: sticky; top: 16px; align-self: flex-start;
+    max-height: calc(100vh - 32px);
     display: flex; flex-direction: column;
-    background: linear-gradient(180deg, #fbf4e2, #f3e8cf);
-    border-left: 3px double var(--primary-color, #7A2828);
+    background: linear-gradient(180deg, var(--widget-bg, #fbf4e2), #f3e8cf);
+    border: 1px solid var(--soft-border, rgba(122,40,40,0.25));
+    border-radius: 12px;
     transition: flex-basis 0.25s ease, max-width 0.25s ease, opacity 0.2s ease;
     overflow: hidden;
 }
-#gm-overlay.gm-sidebar-collapsed .gm-sidebar { flex-basis: 0; max-width: 0; opacity: 0; border-left-width: 0; }
+#gm-screen.gm-sidebar-collapsed .gm-sidebar { flex-basis: 0; max-width: 0; opacity: 0; border-width: 0; padding: 0; }
 .gm-side-tabs { display: flex; gap: 0; padding: 10px 10px 0; flex-shrink: 0; }
 .gm-side-tab { flex: 1; background: transparent; border: 1px solid transparent; border-bottom: 2px solid transparent; color: #8a7a5e; border-radius: 8px 8px 0 0; padding: 9px 6px; cursor: pointer; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem; white-space: nowrap; }
 .gm-side-tab:hover { color: var(--primary-color, #7A2828); }
@@ -255,27 +280,146 @@
 .gm-trade-pane { display: flex; flex-direction: column; gap: 8px; }
 .gm-trade-pane.hidden { display: none; }
 
+/* ---- Soundboard ---- */
+.gm-soundboard-import { text-align: center; cursor: pointer; }
+.gm-soundboard-pads { display: flex; flex-wrap: wrap; gap: 8px; }
+.gm-pad {
+    position: relative; display: flex; align-items: center; gap: 6px;
+    background: rgba(196,155,53,0.14); border: 1px solid var(--accent-color, #C49B35);
+    border-radius: 10px; padding: 8px 26px 8px 10px; cursor: pointer;
+    font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem; color: var(--primary-color, #7A2828);
+    transition: transform 0.08s, background 0.15s;
+}
+.gm-pad:hover { background: rgba(196,155,53,0.26); }
+.gm-pad:active { transform: scale(0.96); }
+.gm-pad-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-pad .gm-del-x { position: absolute; top: 3px; right: 2px; font-size: 0.75rem; padding: 0 4px; }
+
+/* ---- Carte tactique ---- */
+.gm-map-ctl { font-size: 0.8rem; color: #6a5a3e; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.gm-map-view {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background-color: #11100e; background-size: contain; background-position: center; background-repeat: no-repeat;
+    border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); border-radius: 10px; overflow: hidden; touch-action: none;
+}
+.gm-map-view.show-grid::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.13) 1px, transparent 1px);
+    background-size: var(--gm-grid, 48px) var(--gm-grid, 48px);
+}
+.gm-token {
+    position: absolute; width: 34px; height: 34px; transform: translate(-50%, -50%);
+    border-radius: 50%; background: var(--tok, #2980b9); border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.55); cursor: grab; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.72rem; user-select: none;
+}
+.gm-token.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); }
+
+/* ---- Préparation (arbre) ---- */
+.gm-tree-toolbar .gm-input { flex: 1; }
+.gm-tree { display: flex; flex-direction: column; gap: 2px; max-height: 440px; overflow-y: auto; }
+.gm-tree-row { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }
+.gm-tree-row:hover { background: rgba(196,155,53,0.12); }
+.gm-tree-node.is-target > .gm-tree-row { background: rgba(196,155,53,0.18); }
+.gm-tree-node.is-selected > .gm-tree-row { box-shadow: inset 0 0 0 1px var(--accent-color, #C49B35); }
+.gm-tree-caret { width: 14px; text-align: center; color: var(--primary-color, #7A2828); font-size: 0.8rem; flex-shrink: 0; }
+.gm-tree-leaf { visibility: hidden; }
+.gm-tree-ic { flex-shrink: 0; }
+.gm-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-tree-thumb { width: 30px; height: 30px; object-fit: cover; border-radius: 5px; border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); flex-shrink: 0; }
+.gm-tree-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.gm-tree-act { background: none; border: none; cursor: pointer; font-size: 0.82rem; padding: 2px 5px; border-radius: 5px; color: #9a8a6e; }
+.gm-tree-act:hover { background: rgba(122,40,40,0.12); color: var(--primary-color, #7A2828); }
+.gm-tree-children { display: flex; flex-direction: column; gap: 2px; }
+.gm-tree-empty { font-size: 0.76rem; font-style: italic; color: #9a8a6e; padding: 4px 8px; }
+.gm-tree-editor { padding: 8px 10px 10px 26px; display: flex; flex-direction: column; gap: 6px; }
+.gm-tree-thumb-lg { max-width: 100%; max-height: 200px; border-radius: 8px; border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); object-fit: contain; }
+
 /* ---- Responsive ---- */
 @media (max-width: 1100px) {
+    .gm-workspace { display: block; padding: 12px; }
     .gm-main { grid-template-columns: 1fr; }
     .gm-span-2 { grid-column: auto; }
+    /* Sidebar = tiroir plein écran à droite (la page MJ n'est plus une superposition) */
     .gm-sidebar {
-        position: absolute; top: 0; right: 0; height: 100%;
-        flex-basis: min(380px, 92%); max-width: min(380px, 92%);
-        z-index: 6; box-shadow: -8px 0 24px rgba(0,0,0,0.22);
-        transition: transform 0.25s ease;
+        position: fixed; top: 0; right: 0; height: 100vh; max-height: none;
+        flex-basis: min(380px, 92vw); max-width: min(380px, 92vw); width: min(380px, 92vw);
+        z-index: 6500; box-shadow: -8px 0 24px rgba(0,0,0,0.3);
+        border-radius: 0; border-left: 3px double var(--primary-color, #7A2828);
+        transform: translateX(0); opacity: 1; transition: transform 0.25s ease;
     }
-    #gm-overlay.gm-sidebar-collapsed .gm-sidebar {
-        flex-basis: min(380px, 92%); max-width: min(380px, 92%);
-        opacity: 1; border-left-width: 3px; transform: translateX(100%);
+    #gm-screen.gm-sidebar-collapsed .gm-sidebar {
+        flex-basis: min(380px, 92vw); max-width: min(380px, 92vw);
+        opacity: 1; border-width: 0 0 0 3px; transform: translateX(100%);
     }
 }
 @media (max-width: 560px) {
-    .gm-header { flex-wrap: wrap; gap: 8px; }
+    .gm-header { flex-wrap: wrap; gap: 8px; padding-left: 110px; }
     .gm-room { margin-left: 0; width: 100%; order: 3; }
     .gm-die { min-width: 38px; }
     .gm-live-list { grid-template-columns: 1fr; }
 }
 
+/* ---- Masquage des réglages joueur dans le menu ☰ quand on est sur la page MJ ---- */
+body.gm-active .player-only-setting { display: none !important; }
+
 /* ---- Impression ---- */
-@media print { #gm-overlay { display: none !important; } }
+@media print { #gm-screen { display: none !important; } }
+
+/* =====================================================
+   MODE NUIT — l'écran MJ hérite des variables de thème, mais
+   plusieurs cartes utilisent des tons « parchemin clair » codés
+   en dur : on les neutralise ici pour une parité complète.
+   (Les nouveaux composants des phases suivantes utilisent les variables.)
+   ===================================================== */
+body.theme-dark .gm-shell {
+    background:
+        radial-gradient(circle at 50% -10%, rgba(196,155,53,0.06), transparent 60%),
+        linear-gradient(172deg, #1d1712, #241c16);
+    border-color: rgba(196,155,53,0.28);
+}
+body.theme-dark .gm-header { background: linear-gradient(180deg, #2c231b, #241d17); }
+body.theme-dark .gm-nav-home { background: #2a2118; color: var(--accent-color, #C49B35); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .gm-nav-home:hover { background: #332a20; }
+body.theme-dark .gm-btn { background: #2a2118; color: #d6c7a8; border-color: rgba(196,155,53,0.25); }
+body.theme-dark .gm-btn:hover { background: #332a20; border-color: var(--accent-color, #C49B35); }
+body.theme-dark .gm-input,
+body.theme-dark .gm-select,
+body.theme-dark .gm-textarea { background: #2a2118; color: var(--text-color); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .gm-input::placeholder,
+body.theme-dark .gm-textarea::placeholder { color: #9a8a70; }
+body.theme-dark .gm-card { border-color: rgba(196,155,53,0.18); }
+body.theme-dark .gm-live-item,
+body.theme-dark .gm-party-item,
+body.theme-dark .gm-init-item,
+body.theme-dark .gm-monster,
+body.theme-dark .gm-npc,
+body.theme-dark .gm-quest,
+body.theme-dark .gm-comp-item,
+body.theme-dark .gm-die,
+body.theme-dark .gm-hp-btn { background: linear-gradient(158deg, #2c231b, #251e18); border-color: rgba(196,155,53,0.18); }
+body.theme-dark .gm-hp-btn { color: var(--accent-color, #C49B35); }
+body.theme-dark .gm-hp-val,
+body.theme-dark .gm-init-name,
+body.theme-dark .gm-live-hp-num { color: var(--text-color); }
+body.theme-dark .gm-stat-pill { color: #d6c7a8; }
+body.theme-dark .gm-sidebar { background: linear-gradient(180deg, #241c16, #2c231b); }
+body.theme-dark .gm-room-code { background: #2a2118; }
+body.theme-dark .gm-scene::before { background: linear-gradient(90deg, rgba(29,23,18,0.92), rgba(29,23,18,0.5)); }
+body.theme-dark .gm-trade-tab { background: #2a2118; color: #b6a484; }
+body.theme-dark .gm-dice-log-item,
+body.theme-dark .gm-gen-out { background: rgba(196,155,53,0.1); color: var(--text-color); }
+body.theme-dark .gm-comp-text { color: #c2b094; }
+body.theme-dark .gm-readonly-note,
+body.theme-dark .gm-empty,
+body.theme-dark .gm-party-sub,
+body.theme-dark .gm-env-row label,
+body.theme-dark .gm-trade-label { color: #9a8a70; }
+body.theme-dark .gm-atk-btn { background: rgba(196,155,53,0.12); color: var(--accent-color, #C49B35); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .gm-pad { color: var(--accent-color, #C49B35); background: rgba(196,155,53,0.12); }
+body.theme-dark .gm-pad:hover { background: rgba(196,155,53,0.22); }
+body.theme-dark .gm-combat-status { color: #b6a484; background: rgba(255,255,255,0.06); }
+body.theme-dark .gm-combat-status.is-active { color: #2ecc71; background: rgba(39,174,96,0.16); }
+body.theme-dark .gm-map-ctl { color: #b6a484; }
+body.theme-dark .gm-tree-row:hover { background: rgba(196,155,53,0.1); }
+body.theme-dark .gm-tree-act, body.theme-dark .gm-tree-empty { color: #9a8a70; }

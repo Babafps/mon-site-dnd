@@ -14,9 +14,16 @@
         { key: 'charm', icon: '💖', label: 'Charmé' }, { key: 'grap', icon: '✊', label: 'Empoigné' },
         { key: 'uncon', icon: '💤', label: 'Inconscient' }, { key: 'dead', icon: '☠️', label: 'Mort' }
     ];
-    const GEN_NAMES = ['Aldric le Borgne', 'Maelle Scombreaube', 'Garrik Pierre-Poing', 'Sylphine Vent-d\'Argent',
-        'Thorin Barbe-de-Fer', 'Élora la Murmurante', 'Brann Tisse-Ombre', 'Wynn Cœur-Vaillant', 'Dame Cécile d\'Aubéron',
-        'Vasco le Trompeur', 'Nessa Feuille-Rousse', 'Kaeleth Grise-Lune', 'Bourg le Tavernier', 'Sœur Aldwena', 'Le vieux Tobias'];
+    // Générateur de PNJ : prénom + nom de famille (toujours les deux)
+    const GEN_FIRST = ['Aldric', 'Maelle', 'Garrik', 'Sylphine', 'Thorin', 'Élora', 'Brann', 'Wynn', 'Cécile',
+        'Vasco', 'Nessa', 'Kaeleth', 'Tobias', 'Aldwena', 'Roland', 'Lysandre', 'Gunnar', 'Mira', 'Edric', 'Yseult',
+        'Bram', 'Ophélie', 'Dorn', 'Selene', 'Hadrien', 'Faylen', 'Osric', 'Rowena'];
+    const GEN_LAST = ['Pierre-Poing', 'Vent-d\'Argent', 'Barbe-de-Fer', 'Tisse-Ombre', 'Cœur-Vaillant', 'd\'Aubéron',
+        'Feuille-Rousse', 'Grise-Lune', 'le Borgne', 'la Murmurante', 'Sang-Noir', 'Haute-Tour', 'des Marais',
+        'Forge-Tonnerre', 'Brise-Lame', 'Aile-de-Corbeau', 'Or-en-Bouche', 'le Sombre', 'Val-Profond', 'Croc-Gelé'];
+    function genNpcName() {
+        return GEN_FIRST[Math.floor(Math.random() * GEN_FIRST.length)] + ' ' + GEN_LAST[Math.floor(Math.random() * GEN_LAST.length)];
+    }
     const GEN_RUMORS = ['Une lumière étrange flotte chaque nuit au-dessus du vieux moulin.',
         'Le seigneur local n\'a plus été vu depuis trois lunes…', 'On dit qu\'un dragon dort sous la colline aux Corbeaux.',
         'Des marchands disparaissent sur la route de l\'Est.', 'La fille du forgeron parlerait aux morts.',
@@ -55,8 +62,9 @@
     function defaultState() {
         return {
             roomCode: null, sessionId: null,
-            party: [], initiative: [], round: 1, turnIndex: 0,
-            monsters: [], npcs: [], quests: [], notes: '', scenes: [],
+            party: [], initiative: [], round: 1, turnIndex: 0, combatActive: false,
+            monsters: [], npcs: [], quests: [], notes: '', scenes: [], soundboard: [],
+            map: { bg: null, gridSize: 48, showGrid: true }, tokens: [],
             env: { time: '', weather: '☀️ Dégagé' }, diceLog: []
         };
     }
@@ -64,6 +72,14 @@
 
     // ---------- Données réseau (non persistées : rechargées depuis Supabase) ----------
     const live = { players: [], online: new Set(), netChannel: null, presChannel: null };
+
+    // Arborescence de préparation (cloud gm_tree)
+    let tree = [];                 // nœuds plats { id, parent_id, kind, name, data, sort }
+    let treeTarget = null;         // dossier cible des ajouts (null = racine)
+    let treeSelected = null;       // nœud déplié (éditeur inline)
+    const treeExpanded = new Set();
+    let pendingTreeUpload = null;
+    let treeTextTimer = null;
     function load() { if (!activeCampaignId) return defaultState(); try { const s = JSON.parse(localStorage.getItem(stateKey())); return Object.assign(defaultState(), s || {}); } catch (e) { return defaultState(); } }
     function save() { if (!activeCampaignId) return; try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} }
 
@@ -98,9 +114,11 @@
     // ---------- Injection HTML ----------
     function injectHTML() {
         const ov = document.createElement('div');
-        ov.id = 'gm-overlay'; ov.className = 'no-print';
+        ov.id = 'gm-screen'; ov.className = 'screen-view hidden no-print';
         ov.innerHTML = `
+        <div class="gm-shell">
         <div class="gm-header">
+            <button id="gm-go-home" class="gm-nav-home" title="Retour à l'accueil">🏠 <span class="gm-nav-home-txt">Accueil</span></button>
             <h2 class="gm-title">🛡️ Écran du Maître <span class="beta-badge">Bêta</span></h2>
             <span id="gm-campaign-title" class="gm-campaign-title"></span>
             <div class="gm-room">
@@ -125,6 +143,29 @@
                     <div class="gm-card-body"><div id="gm-live-list" class="gm-live-list"></div></div>
                 </div>
 
+                <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">📁</span> Préparation
+                        <span class="gm-spacer"></span>
+                        <span id="gm-tree-target" class="gm-readonly-note">Cible : Racine</span>
+                    </div>
+                    <div class="gm-card-body">
+                        <div class="gm-row gm-tree-toolbar">
+                            <input id="gm-tree-name" class="gm-input" placeholder="Nom de l'élément…">
+                            <select id="gm-tree-kind" class="gm-select" style="flex:0 0 auto; width:auto;">
+                                <option value="folder">📁 Dossier</option>
+                                <option value="text">📝 Texte</option>
+                                <option value="link">🔗 Lien</option>
+                                <option value="image">🖼️ Image</option>
+                                <option value="map">🗺️ Map</option>
+                                <option value="monster">👹 Monstre</option>
+                            </select>
+                            <button id="gm-tree-add" class="gm-add" title="Ajouter dans la cible">＋</button>
+                        </div>
+                        <div id="gm-tree-root" class="gm-tree"></div>
+                        <input type="file" id="gm-tree-file" accept="image/*" style="display:none;">
+                    </div>
+                </div>
+
                 <div class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">👥</span> Groupe (manuel)</div>
                     <div class="gm-card-body">
@@ -139,11 +180,17 @@
                 </div>
 
                 <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">⚔️</span> Initiative
+                    <div class="gm-card-head"><span class="gm-card-icon">⚔️</span> Combat &amp; Initiative
                         <span class="gm-spacer"></span>
+                        <span id="gm-combat-status" class="gm-combat-status">Hors combat</span>
                         <span class="gm-round">Round <b id="gm-round-val">1</b></span>
                     </div>
                     <div class="gm-card-body">
+                        <div class="gm-row" style="gap:6px;">
+                            <button id="gm-combat-toggle" class="gm-btn gm-btn-primary" style="flex:1;">⚔️ Lancer le combat</button>
+                            <button id="gm-combat-addplayers" class="gm-btn" title="Ajouter les joueurs connectés à l'ordre">➕🧝</button>
+                            <button id="gm-combat-addmonsters" class="gm-btn" title="Ajouter les monstres à l'ordre">➕👹</button>
+                        </div>
                         <div class="gm-row">
                             <input id="gm-init-name" class="gm-input" placeholder="Nom (joueur / monstre)">
                             <input id="gm-init-val" class="gm-input gm-num" type="number" placeholder="Init">
@@ -155,6 +202,7 @@
                             <button id="gm-init-next" class="gm-btn gm-btn-primary">⏭ Tour suivant</button>
                             <button id="gm-init-reset" class="gm-btn gm-btn-danger">↺ Réinitialiser</button>
                         </div>
+                        <div class="gm-readonly-note">ⓘ Lance le combat : les joueurs connectés voient un bouton flottant pour lancer leur initiative, qui peuple et trie cet ordre automatiquement.</div>
                     </div>
                 </div>
 
@@ -189,6 +237,15 @@
                 </div>
 
                 <div class="gm-card">
+                    <div class="gm-card-head"><span class="gm-card-icon">🔊</span> Soundboard</div>
+                    <div class="gm-card-body">
+                        <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer des sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
+                        <div id="gm-soundboard-pads" class="gm-soundboard-pads"></div>
+                        <div class="gm-readonly-note">ⓘ Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
+                    </div>
+                </div>
+
+                <div class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -199,6 +256,28 @@
                         <input id="gm-scene-music" class="gm-input" placeholder="🎵 Lien musique/ambiance (YouTube ou .mp3, optionnel)">
                         <div id="gm-scene-list" class="gm-scene-list"></div>
                         <div class="gm-readonly-note">ⓘ « Appliquer » change le fond ET la musique de tous les joueurs connectés, en direct.</div>
+                    </div>
+                </div>
+
+                <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">🗺️</span> Carte tactique
+                        <span class="gm-spacer"></span>
+                        <button id="gm-map-sync" class="gm-btn" title="Placer les combattants (joueurs + monstres) sur la carte">⟳ Jetons combat</button>
+                    </div>
+                    <div class="gm-card-body">
+                        <div class="gm-row">
+                            <input id="gm-map-url" class="gm-input" placeholder="URL d'une image de fond / map…">
+                            <label class="gm-btn" title="Importer une image de carte">🖼️<input type="file" id="gm-map-file" accept="image/*" style="display:none;"></label>
+                            <button id="gm-map-seturl" class="gm-add" title="Appliquer le fond">＋</button>
+                        </div>
+                        <div class="gm-row" style="gap:14px; align-items:center;">
+                            <label class="gm-map-ctl">Grille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
+                            <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
+                            <button id="gm-map-addtoken" class="gm-btn">➕ Jeton</button>
+                            <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
+                        </div>
+                        <div id="gm-map-view" class="gm-map-view show-grid"></div>
+                        <div class="gm-readonly-note">ⓘ Glisse les jetons : positions et fond sont synchronisés en direct avec les joueurs.</div>
                     </div>
                 </div>
 
@@ -306,6 +385,7 @@
                     </div>
                 </div>
             </aside>
+        </div>
         </div>`;
         document.body.appendChild(ov);
     }
@@ -331,11 +411,12 @@
         }).join('');
     }
     function renderInit() {
+        renderCombatStatus();
         const el = document.getElementById('gm-init-list'); if (!el) return;
         const rv = document.getElementById('gm-round-val'); if (rv) rv.textContent = state.round;
         if (!state.initiative.length) { el.innerHTML = `<div class="gm-empty">Personne dans l'ordre d'initiative.</div>`; return; }
         el.innerHTML = state.initiative.map((c, i) => `<div class="gm-init-item ${i === state.turnIndex ? 'is-active' : ''}${c.hidden ? ' is-mj-hidden' : ''}">
-            <span class="gm-init-init">${c.init}</span>
+            <span class="gm-init-init">${c.init == null ? '—' : c.init}</span>
             <span class="gm-init-type">${c.type === 'pj' ? '🧝' : '👹'}</span>
             <span class="gm-init-name">${esc(c.name)}</span>
             <button class="gm-eye${c.hidden ? ' is-hidden' : ''}" data-act="init-eye" data-id="${c.id}" title="${c.hidden ? 'Caché des joueurs' : 'Masquer aux joueurs'}">${c.hidden ? '🙈' : '👁️'}</button>
@@ -400,6 +481,14 @@
                 <button class="gm-btn" data-act="scene-apply" data-id="${s.id}">Appliquer</button>
                 <button class="gm-del-x" data-act="scene-del" data-id="${s.id}">✕</button>
             </div>
+        </div>`).join('');
+    }
+    function renderSoundboard() {
+        const el = byId('gm-soundboard-pads'); if (!el) return;
+        if (!state.soundboard || !state.soundboard.length) { el.innerHTML = `<div class="gm-empty">Aucun son. Importe des effets (.mp3, .wav…).</div>`; return; }
+        el.innerHTML = state.soundboard.map(s => `<div class="gm-pad" data-act="sfx-play" data-id="${s.id}" title="${esc(s.name)}${s.local ? ' (local, non diffusé)' : ''}">
+            <span class="gm-pad-ic">${s.local ? '🔇' : '🔊'}</span><span class="gm-pad-name">${esc(s.name)}</span>
+            <button class="gm-del-x" data-act="sfx-del" data-id="${s.id}" title="Retirer">✕</button>
         </div>`).join('');
     }
     function applyScene(s) {
@@ -553,8 +642,12 @@
                 .on('presence', { event: 'sync' }, () => {
                     live.online = new Set(Object.keys(live.presChannel.presenceState()));
                     updatePresenceCount(); renderLivePlayers(); renderTradeTargets();
+                    // Resynchronise les nouveaux arrivants (combat + carte) sans réécrire la base
+                    try { gmBroadcast('combat', combatPayload()); } catch (e) {}
+                    if (typeof broadcastMap === 'function') { try { broadcastMap(false); } catch (e) {} }
                 })
                 .on('broadcast', { event: 'gift-response' }, ({ payload }) => onGiftResponse(payload))
+                .on('broadcast', { event: 'initiative-roll' }, ({ payload }) => onInitiativeRoll(payload))
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
         } catch (e) { console.warn('presence GM:', e); }
     }
@@ -576,11 +669,192 @@
         el.innerHTML = blocks.length ? blocks.join('') : `<div class="gm-empty">Aucun résultat pour « ${esc(query)} ».</div>`;
     }
 
-    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderLivePlayers();
+    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers();
         const t = document.getElementById('gm-env-time'); if (t) t.value = state.env.time || '';
         const w = document.getElementById('gm-env-weather'); if (w) w.value = state.env.weather || '☀️ Dégagé';
         const n = document.getElementById('gm-notes'); if (n) n.value = state.notes || '';
         updateRoomUI();
+    }
+
+    // ---------- Combat temps réel ----------
+    function sortInit() { state.initiative.sort((a, b) => ((b.init == null ? -1 : b.init) - (a.init == null ? -1 : a.init))); }
+    function combatPayload() {
+        return {
+            active: !!state.combatActive,
+            round: state.round,
+            turnIndex: state.turnIndex,
+            order: state.initiative.filter(c => !c.hidden).map(c => ({ name: c.name, init: c.init, type: c.type }))
+        };
+    }
+    function broadcastCombat() {
+        const payload = combatPayload();
+        if (live.presChannel) gmBroadcast('combat', payload);
+        if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { combat: payload }); } catch (e) {} }
+    }
+    function renderCombatStatus() {
+        const el = byId('gm-combat-status'), btn = byId('gm-combat-toggle');
+        if (el) { el.textContent = state.combatActive ? '🟢 En combat' : 'Hors combat'; el.classList.toggle('is-active', !!state.combatActive); }
+        if (btn) {
+            btn.textContent = state.combatActive ? '⏹ Terminer le combat' : '⚔️ Lancer le combat';
+            btn.classList.toggle('gm-btn-danger', !!state.combatActive);
+            btn.classList.toggle('gm-btn-primary', !state.combatActive);
+        }
+    }
+    function addPlayersToInit() {
+        (live.players || []).forEach(p => {
+            const s = p.snapshot || {};
+            const nm = s.name || p.character_name || 'Aventurier';
+            const exists = state.initiative.find(c => (p.character_id && c.charId === p.character_id) || (c.type === 'pj' && c.name.toLowerCase() === nm.toLowerCase()));
+            if (!exists) state.initiative.push({ id: uid(), name: nm, init: null, type: 'pj', charId: p.character_id || null });
+        });
+        sortInit();
+    }
+    function onInitiativeRoll(p) {
+        if (!p || !p.name) return;
+        let entry = null;
+        if (p.charId) entry = state.initiative.find(c => c.charId === p.charId);
+        if (!entry) entry = state.initiative.find(c => c.type === 'pj' && c.name.toLowerCase() === String(p.name).toLowerCase());
+        if (entry) entry.init = p.total;
+        else state.initiative.push({ id: uid(), name: p.name, init: p.total, type: 'pj', charId: p.charId || null });
+        sortInit(); save(); renderInit(); broadcastCombat();
+        if (window.showAppToast) window.showAppToast('🎲 ' + p.name + ' — initiative ' + p.total, '#2c3e50');
+    }
+
+    // ---------- Carte tactique ----------
+    let mapThrottle = 0;
+    function tokenColor(t) { return t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9'); }
+    function renderMap() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const m = state.map || {};
+        view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        view.classList.toggle('show-grid', m.showGrid !== false);
+        view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
+        view.innerHTML = (state.tokens || []).map(t => `<div class="gm-token" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${tokenColor(t)};" title="${esc(t.name)}"><span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span></div>`).join('');
+        const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
+        const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
+    }
+    function broadcastMap(persist) {
+        if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens });
+        if (persist && state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: state.map, tokens: state.tokens }); } catch (e) {} }
+    }
+    function throttleBroadcastMap() {
+        const now = Date.now();
+        if (now - mapThrottle < 70) return;
+        mapThrottle = now;
+        if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens });
+    }
+    function addTokensFromCombat() {
+        const add = (name, type, ref) => { if (!state.tokens.find(t => t.ref === ref)) state.tokens.push({ id: uid(), ref, name, type, x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8 }); };
+        (live.players || []).forEach(p => { const s = p.snapshot || {}; add(s.name || p.character_name || 'PJ', 'pj', 'pj:' + p.user_id); });
+        state.monsters.forEach(m => add(m.name, 'monster', 'mon:' + m.id));
+        save(); renderMap(); broadcastMap(true);
+    }
+    function setupMapDrag() {
+        const view = byId('gm-map-view'); if (!view) return;
+        let cur = null, tokenEl = null;
+        view.addEventListener('pointerdown', (e) => {
+            const el = e.target.closest('.gm-token'); if (!el) return;
+            cur = find(state.tokens, el.dataset.token); tokenEl = el; if (!cur) return;
+            try { el.setPointerCapture(e.pointerId); } catch (_) {}
+            el.classList.add('dragging'); e.preventDefault();
+        });
+        view.addEventListener('pointermove', (e) => {
+            if (!cur || !tokenEl) return;
+            const r = view.getBoundingClientRect();
+            const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+            const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+            cur.x = x; cur.y = y;
+            tokenEl.style.left = (x * 100) + '%'; tokenEl.style.top = (y * 100) + '%';
+            throttleBroadcastMap();
+        });
+        const up = () => { if (!cur) return; if (tokenEl) tokenEl.classList.remove('dragging'); cur = null; tokenEl = null; save(); broadcastMap(true); };
+        view.addEventListener('pointerup', up);
+        view.addEventListener('pointercancel', up);
+    }
+
+    // ---------- Préparation (arbre cloud gm_tree) ----------
+    function treeKindIcon(k) { return ({ folder: '📁', text: '📝', link: '🔗', image: '🖼️', map: '🗺️', monster: '👹' })[k] || '📄'; }
+    function treeNode(id) { return tree.find(n => n.id === id); }
+    function treeChildren(pid) { return tree.filter(n => (n.parent_id || null) === (pid || null)).sort((a, b) => (a.sort || 0) - (b.sort || 0)); }
+    async function loadTree() {
+        if (!window.SupaAuth || !window.SupaAuth.currentUser || !window.SupaAuth.treeList) { tree = []; renderTree(); return; }
+        try { tree = (await window.SupaAuth.treeList(activeCampaignId)) || []; } catch (e) { console.warn('loadTree', e); tree = []; }
+        renderTree();
+    }
+    function renderTree() {
+        const root = byId('gm-tree-root'); if (!root) return;
+        const tgt = byId('gm-tree-target'); if (tgt) { const f = treeNode(treeTarget); tgt.textContent = 'Cible : ' + (f ? f.name : 'Racine'); }
+        const kids = treeChildren(null);
+        root.innerHTML = kids.length ? kids.map(n => treeNodeHtml(n, 0)).join('') : `<div class="gm-empty">Crée des dossiers et fichiers (textes, liens, images, maps, monstres) pour préparer ta partie.</div>`;
+    }
+    function treeNodeHtml(n, depth) {
+        const isFolder = n.kind === 'folder';
+        const expanded = treeExpanded.has(n.id), selected = treeSelected === n.id, isTarget = treeTarget === n.id;
+        const d = n.data || {};
+        const thumb = (n.kind === 'image' || n.kind === 'map') && d.url ? `<img class="gm-tree-thumb" src="${esc(d.url)}" alt="">` : '';
+        const acts = [];
+        if (n.kind === 'monster') acts.push(`<button class="gm-tree-act" data-act="tree-to-combat" data-id="${n.id}" title="Ajouter au combat">⚔️</button>`);
+        if (n.kind === 'map') acts.push(`<button class="gm-tree-act" data-act="tree-to-map" data-id="${n.id}" title="Mettre sur la table">🗺️</button>`);
+        if (n.kind === 'link' && d.url) acts.push(`<button class="gm-tree-act" data-act="tree-open-link" data-id="${n.id}" title="Ouvrir le lien">↗</button>`);
+        acts.push(`<button class="gm-tree-act" data-act="tree-rename" data-id="${n.id}" title="Renommer">✏️</button>`);
+        acts.push(`<button class="gm-tree-act" data-act="tree-del" data-id="${n.id}" title="Supprimer">✕</button>`);
+        let html = `<div class="gm-tree-node${selected ? ' is-selected' : ''}${isTarget ? ' is-target' : ''}" data-node="${n.id}">
+            <div class="gm-tree-row" data-act="tree-click" data-id="${n.id}" style="padding-left:${depth * 16 + 6}px;">
+                ${isFolder ? `<span class="gm-tree-caret">${expanded ? '▾' : '▸'}</span>` : '<span class="gm-tree-caret gm-tree-leaf"></span>'}
+                <span class="gm-tree-ic">${treeKindIcon(n.kind)}</span>
+                <span class="gm-tree-name">${esc(n.name)}</span>
+                ${thumb}
+                <span class="gm-tree-actions">${acts.join('')}</span>
+            </div>`;
+        if (!isFolder && selected) html += treeEditorHtml(n);
+        if (isFolder && expanded) {
+            const kids = treeChildren(n.id);
+            html += `<div class="gm-tree-children">${kids.length ? kids.map(c => treeNodeHtml(c, depth + 1)).join('') : `<div class="gm-tree-empty" style="padding-left:${(depth + 1) * 16 + 24}px;">Dossier vide</div>`}</div>`;
+        }
+        return html + `</div>`;
+    }
+    function treeEditorHtml(n) {
+        const d = n.data || {};
+        if (n.kind === 'text') return `<div class="gm-tree-editor"><textarea class="gm-textarea" data-tree-text="${n.id}" placeholder="Contenu de la note…">${esc(d.text || '')}</textarea></div>`;
+        if (n.kind === 'link') return `<div class="gm-tree-editor"><input class="gm-input" data-tree-link="${n.id}" value="${esc(d.url || '')}" placeholder="https://…"></div>`;
+        if (n.kind === 'image' || n.kind === 'map') return `<div class="gm-tree-editor">${d.url ? `<img class="gm-tree-thumb-lg" src="${esc(d.url)}">` : '<div class="gm-readonly-note">Aucune image importée.</div>'}<div class="gm-row" style="margin-top:6px;"><button class="gm-btn" data-act="tree-upload" data-id="${n.id}">📤 Importer une image</button>${n.kind === 'map' ? `<button class="gm-btn" data-act="tree-to-map" data-id="${n.id}">🗺️ Sur la table</button>` : ''}</div></div>`;
+        if (n.kind === 'monster') {
+            const m = d.monster || {};
+            return `<div class="gm-tree-editor">
+                <div class="gm-row"><input class="gm-input gm-num" type="number" data-tree-mon="${n.id}" data-f="hp" value="${m.hp != null ? m.hp : ''}" placeholder="PV"><input class="gm-input gm-num" type="number" data-tree-mon="${n.id}" data-f="ac" value="${m.ac != null ? m.ac : ''}" placeholder="CA"></div>
+                <textarea class="gm-textarea" data-tree-mon="${n.id}" data-f="notes" placeholder="Attaques, capacités, notes…">${esc(m.notes || '')}</textarea>
+                <button class="gm-btn gm-btn-primary" data-act="tree-to-combat" data-id="${n.id}" style="margin-top:6px;">⚔️ Ajouter au combat</button>
+            </div>`;
+        }
+        return '';
+    }
+    function treePersist(id, fields) { const n = treeNode(id); if (n) Object.assign(n, fields); if (window.SupaAuth && window.SupaAuth.treeUpdate) window.SupaAuth.treeUpdate(id, fields); }
+    // Mise à jour locale immédiate du data + écriture base débauncée (édition de champs)
+    function treePatchData(id, patch) {
+        const n = treeNode(id); if (n) n.data = Object.assign({}, n.data, patch);
+        clearTimeout(treeTextTimer);
+        treeTextTimer = setTimeout(() => { const nn = treeNode(id); if (nn && window.SupaAuth && window.SupaAuth.treeUpdate) window.SupaAuth.treeUpdate(id, { data: nn.data }); }, 500);
+    }
+    function treeDescendants(id) { let ids = [id]; treeChildren(id).forEach(c => { ids = ids.concat(treeDescendants(c.id)); }); return ids; }
+    async function treeAdd() {
+        const name = byId('gm-tree-name').value.trim(); const kind = byId('gm-tree-kind').value;
+        if (!name) return;
+        if (!window.SupaAuth || !window.SupaAuth.currentUser) { if (window.showAppToast) window.showAppToast('Connecte-toi pour la préparation cloud.', '#c0392b'); return; }
+        const node = { campaign_id: String(activeCampaignId), parent_id: treeTarget || null, kind, name, data: {}, sort: treeChildren(treeTarget).length };
+        const created = await window.SupaAuth.treeInsert(node);
+        if (!created) { if (window.showAppToast) window.showAppToast('⚠️ Échec — table gm_tree absente ? Lance le SQL Phase 0.', '#c0392b'); return; }
+        tree.push(created);
+        byId('gm-tree-name').value = '';
+        if (kind === 'folder') treeExpanded.add(created.id); else treeSelected = created.id;
+        if (treeTarget) treeExpanded.add(treeTarget);
+        renderTree();
+    }
+    function treeAddMonsterToCombat(n) {
+        const m = (n.data && n.data.monster) || {};
+        const hp = parseInt(m.hp) || 1;
+        state.monsters.push({ id: uid(), name: n.name, hpCur: hp, hpMax: hp, ac: parseInt(m.ac) || 0, conditions: [], attacks: [] });
+        save(); renderMonsters();
+        if (window.showAppToast) window.showAppToast('👹 « ' + n.name + ' » ajouté au combat', '#2c3e50');
     }
 
     // ---------- Câblage ----------
@@ -589,6 +863,7 @@
 
     function wire() {
         byId('gm-close').addEventListener('click', close);
+        const homeBtn = byId('gm-go-home'); if (homeBtn) homeBtn.addEventListener('click', close);
 
         // Session temps réel (Supabase)
         byId('gm-room-btn').addEventListener('click', async () => {
@@ -597,10 +872,14 @@
                 // Fermer la session
                 if (!confirm('Fermer la session ? Les joueurs seront déconnectés.')) return;
                 const sid = state.sessionId;
-                stopNetwork();
-                state.roomCode = null; state.sessionId = null; save(); updateRoomUI(); renderLivePlayers();
-                if (sid && window.SupaAuth) { try { await window.SupaAuth.closeSession(sid); } catch (e) {} }
-                if (window.showAppToast) window.showAppToast('Session fermée', '#7A2828');
+                // Kick : prévenir les joueurs AVANT de couper le réseau, puis nettoyer après le flush
+                gmBroadcast('session-closed', {});
+                setTimeout(async () => {
+                    stopNetwork();
+                    state.roomCode = null; state.sessionId = null; save(); updateRoomUI(); renderLivePlayers();
+                    if (sid && window.SupaAuth) { try { await window.SupaAuth.closeSession(sid); } catch (e) {} }
+                }, 250);
+                if (window.showAppToast) window.showAppToast('Session fermée — joueurs déconnectés', '#7A2828');
                 return;
             }
             // Créer une session
@@ -625,7 +904,7 @@
 
         // Bascule de la sidebar droite
         byId('gm-sidebar-toggle').addEventListener('click', () => {
-            const ov = byId('gm-overlay'); if (ov) ov.classList.toggle('gm-sidebar-collapsed');
+            const ov = byId('gm-screen'); if (ov) ov.classList.toggle('gm-sidebar-collapsed');
         });
 
         // Onglets de la sidebar (Dés / Journal / Compendium)
@@ -636,7 +915,7 @@
             document.querySelectorAll('.gm-side-panel').forEach(p => p.classList.remove('gm-side-show'));
             const target = document.querySelector(map[tab.dataset.side]); if (target) target.classList.add('gm-side-show');
             // Si on n'a pas la sidebar ouverte, l'ouvrir
-            const ov = byId('gm-overlay'); if (ov) ov.classList.remove('gm-sidebar-collapsed');
+            const ov = byId('gm-screen'); if (ov) ov.classList.remove('gm-sidebar-collapsed');
         }));
 
         // Compendium : recherche
@@ -652,18 +931,33 @@
         byId('gm-init-add').addEventListener('click', () => {
             const name = byId('gm-init-name').value.trim(); if (!name) return;
             state.initiative.push({ id: uid(), name, init: parseInt(byId('gm-init-val').value) || 0, type: byId('gm-init-type').value });
-            state.initiative.sort((a, b) => b.init - a.init);
-            byId('gm-init-name').value = ''; byId('gm-init-val').value = ''; save(); renderInit();
+            sortInit();
+            byId('gm-init-name').value = ''; byId('gm-init-val').value = ''; save(); renderInit(); broadcastCombat();
         });
         byId('gm-init-next').addEventListener('click', () => {
             if (!state.initiative.length) return;
             state.turnIndex++;
             if (state.turnIndex >= state.initiative.length) { state.turnIndex = 0; state.round++; }
-            save(); renderInit();
+            save(); renderInit(); broadcastCombat();
         });
         byId('gm-init-reset').addEventListener('click', () => {
             if (!confirm('Réinitialiser l\'ordre d\'initiative et le compteur de round ?')) return;
-            state.initiative = []; state.round = 1; state.turnIndex = 0; save(); renderInit();
+            state.initiative = []; state.round = 1; state.turnIndex = 0; state.combatActive = false; save(); renderInit(); broadcastCombat();
+        });
+
+        // --- Contrôle du combat (MJ) ---
+        byId('gm-combat-toggle').addEventListener('click', () => {
+            state.combatActive = !state.combatActive;
+            if (state.combatActive) { addPlayersToInit(); if (!state.round) state.round = 1; }
+            save(); renderInit(); broadcastCombat();
+            if (window.showAppToast) window.showAppToast(state.combatActive ? '⚔️ Combat lancé ! Les joueurs peuvent lancer leur initiative.' : '⏹ Combat terminé', state.combatActive ? '#2c3e50' : '#7A2828');
+        });
+        byId('gm-combat-addplayers').addEventListener('click', () => { addPlayersToInit(); save(); renderInit(); broadcastCombat(); });
+        byId('gm-combat-addmonsters').addEventListener('click', () => {
+            state.monsters.forEach(m => {
+                if (!state.initiative.find(c => c.monId === m.id)) state.initiative.push({ id: uid(), name: m.name, init: Math.floor(Math.random() * 20) + 1, type: 'monster', monId: m.id });
+            });
+            sortInit(); save(); renderInit(); broadcastCombat();
         });
         byId('gm-mon-add').addEventListener('click', () => {
             const name = byId('gm-mon-name').value.trim(); if (!name) return;
@@ -697,7 +991,8 @@
 
         // Générateurs
         document.querySelectorAll('[data-gen]').forEach(b => b.addEventListener('click', () => {
-            const pool = b.dataset.gen === 'name' ? GEN_NAMES : b.dataset.gen === 'rumor' ? GEN_RUMORS : GEN_LOOT;
+            if (b.dataset.gen === 'name') { byId('gm-gen-out').textContent = genNpcName(); return; }
+            const pool = b.dataset.gen === 'rumor' ? GEN_RUMORS : GEN_LOOT;
             byId('gm-gen-out').textContent = pool[Math.floor(Math.random() * pool.length)];
         }));
 
@@ -711,6 +1006,55 @@
             if (!window.MusicPlayer) return;
             if (b.dataset.act === 'music-show') window.MusicPlayer.show(); else window.MusicPlayer.toggle();
         }));
+
+        // --- Soundboard : import de fichiers audio (upload Storage → pads diffusables) ---
+        const sfxFileEl = byId('gm-sfx-file');
+        if (sfxFileEl) sfxFileEl.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files || []); e.target.value = '';
+            for (const f of files) {
+                const name = f.name.replace(/\.[^/.]+$/, '');
+                try {
+                    const res = await window.SupaAuth.uploadAsset(f, 'sfx');
+                    state.soundboard.push({ id: uid(), name, url: res.url, path: res.path });
+                } catch (err) {
+                    console.warn('upload sfx:', err);
+                    // Repli : son jouable localement par le MJ, mais non diffusable (pas d'URL publique)
+                    state.soundboard.push({ id: uid(), name, url: URL.createObjectURL(f), local: true });
+                    if (window.showAppToast) window.showAppToast('⚠️ Upload Supabase échoué — son local (non diffusé). As-tu lancé le SQL Phase 0 ?', '#c0392b');
+                }
+                save(); renderSoundboard();
+            }
+        });
+
+        // --- Carte tactique : fond, grille, jetons ---
+        setupMapDrag();
+        const mapApplyUrl = () => { const u = byId('gm-map-url').value.trim(); if (!u) return; state.map.bg = u; byId('gm-map-url').value = ''; save(); renderMap(); broadcastMap(true); };
+        byId('gm-map-seturl').addEventListener('click', mapApplyUrl);
+        byId('gm-map-url').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); mapApplyUrl(); } });
+        byId('gm-map-file').addEventListener('change', async (e) => {
+            const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+            try { const res = await window.SupaAuth.uploadAsset(f, 'maps'); state.map.bg = res.url; save(); renderMap(); broadcastMap(true); }
+            catch (err) {
+                console.warn(err);
+                fileToDataURL(f, (data) => { state.map.bg = data; save(); renderMap(); broadcastMap(true); });
+                if (window.showAppToast) window.showAppToast('⚠️ Upload échoué — fond local (non diffusé). SQL Phase 0 lancé ?', '#c0392b');
+            }
+        });
+        byId('gm-map-grid').addEventListener('input', e => { state.map.gridSize = parseInt(e.target.value) || 48; save(); renderMap(); broadcastMap(true); });
+        byId('gm-map-showgrid').addEventListener('change', e => { state.map.showGrid = e.target.checked; save(); renderMap(); broadcastMap(true); });
+        byId('gm-map-addtoken').addEventListener('click', () => { const n = prompt('Nom du jeton :'); if (!n || !n.trim()) return; state.tokens.push({ id: uid(), name: n.trim(), type: 'npc', x: 0.5, y: 0.5 }); save(); renderMap(); broadcastMap(true); });
+        byId('gm-map-clear').addEventListener('click', () => { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); });
+        byId('gm-map-sync').addEventListener('click', addTokensFromCombat);
+
+        // --- Préparation (arbre) ---
+        byId('gm-tree-add').addEventListener('click', treeAdd);
+        byId('gm-tree-name').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); treeAdd(); } });
+        byId('gm-tree-file').addEventListener('change', async (e) => {
+            const f = e.target.files && e.target.files[0]; e.target.value = ''; const id = pendingTreeUpload; pendingTreeUpload = null;
+            if (!f || !id) return;
+            try { const res = await window.SupaAuth.uploadAsset(f, 'images'); const n = treeNode(id); treePersist(id, { data: Object.assign({}, n ? n.data : {}, { url: res.url, path: res.path }) }); renderTree(); }
+            catch (err) { console.warn(err); if (window.showAppToast) window.showAppToast('⚠️ Upload échoué — Storage absent ? Lance le SQL Phase 0.', '#c0392b'); }
+        });
 
         // --- Scènes : création (image + musique) ---
         let pendingSceneBg = null;
@@ -772,7 +1116,7 @@
         });
 
         // --- Délégation : clics sur éléments générés ---
-        document.getElementById('gm-overlay').addEventListener('click', (e) => {
+        document.getElementById('gm-screen').addEventListener('click', (e) => {
             const t = e.target.closest('[data-act]'); if (!t) return;
             const id = t.dataset.id, act = t.dataset.act;
             switch (act) {
@@ -799,16 +1143,43 @@
                 case 'quest-del': state.quests = state.quests.filter(q => q.id !== id); save(); renderQuests(); break;
                 case 'scene-apply': { const s = find(state.scenes, id); if (s) { applyScene(s); if (live.presChannel) gmBroadcast('scene', { bg: s.bg || null, name: s.name, music: s.music || null }); } break; }
                 case 'scene-del': state.scenes = state.scenes.filter(x => x.id !== id); save(); renderScenes(); break;
+                case 'sfx-play': { const s = find(state.soundboard, id); if (s) { if (window.MusicPlayer && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(s.url); if (!s.local && live.presChannel) gmBroadcast('sfx', { url: s.url, name: s.name }); } break; }
+                case 'sfx-del': { const s = find(state.soundboard, id); if (s && s.local && s.url) { try { URL.revokeObjectURL(s.url); } catch (e) {} } if (s && s.path && window.SupaAuth) { try { window.SupaAuth.deleteAsset(s.path); } catch (e) {} } state.soundboard = state.soundboard.filter(x => x.id !== id); save(); renderSoundboard(); break; }
+                case 'tree-click': {
+                    const n = treeNode(id); if (!n) break;
+                    if (n.kind === 'folder') { if (treeExpanded.has(id)) treeExpanded.delete(id); else treeExpanded.add(id); treeTarget = id; }
+                    else { treeSelected = (treeSelected === id) ? null : id; treeTarget = n.parent_id || null; }
+                    renderTree(); break;
+                }
+                case 'tree-del': {
+                    const n = treeNode(id); if (!n) break;
+                    if (!confirm('Supprimer « ' + n.name + ' »' + (n.kind === 'folder' ? ' et tout son contenu' : '') + ' ?')) break;
+                    const ids = treeDescendants(id);
+                    if (window.SupaAuth && window.SupaAuth.treeDelete) window.SupaAuth.treeDelete(id); // cascade côté serveur
+                    tree = tree.filter(x => ids.indexOf(x.id) === -1);
+                    if (ids.indexOf(treeSelected) !== -1) treeSelected = null;
+                    if (ids.indexOf(treeTarget) !== -1) treeTarget = null;
+                    renderTree(); break;
+                }
+                case 'tree-rename': { const n = treeNode(id); if (!n) break; const nm = prompt('Nouveau nom :', n.name); if (nm && nm.trim()) { treePersist(id, { name: nm.trim() }); renderTree(); } break; }
+                case 'tree-to-combat': { const n = treeNode(id); if (n) treeAddMonsterToCombat(n); break; }
+                case 'tree-to-map': { const n = treeNode(id); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » sur la table', '#2c3e50'); } else if (window.showAppToast) window.showAppToast('Importe d\'abord une image dans ce nœud.', '#c0392b'); break; }
+                case 'tree-open-link': { const n = treeNode(id); if (n && n.data && n.data.url) window.open(n.data.url, '_blank', 'noopener'); break; }
+                case 'tree-upload': { pendingTreeUpload = id; byId('gm-tree-file').click(); break; }
             }
         });
         // Délégation : changements (checkboxes, champs de stats joueurs, secrets PNJ)
-        document.getElementById('gm-overlay').addEventListener('change', (e) => {
+        document.getElementById('gm-screen').addEventListener('change', (e) => {
             const t = e.target.closest('[data-act]'); if (!t) return;
             const id = t.dataset.id;
             if (t.dataset.act === 'npc-present') { const n = find(state.npcs, id); if (n) { n.present = t.checked; save(); } }
             if (t.dataset.act === 'quest-done') { const q = find(state.quests, id); if (q) { q.done = t.checked; save(); renderQuests(); } }
         });
-        document.getElementById('gm-overlay').addEventListener('input', (e) => {
+        document.getElementById('gm-screen').addEventListener('input', (e) => {
+            // Champs de l'arbre de préparation (interceptés avant le groupe, à cause de data-f)
+            const tt = e.target.closest('[data-tree-text]'); if (tt) { treePatchData(tt.dataset.treeText, { text: e.target.value }); return; }
+            const tl = e.target.closest('[data-tree-link]'); if (tl) { treePatchData(tl.dataset.treeLink, { url: e.target.value }); return; }
+            const tm = e.target.closest('[data-tree-mon]'); if (tm) { const id = tm.dataset.treeMon, f = tm.dataset.f, n = treeNode(id); const mon = Object.assign({}, (n && n.data && n.data.monster) || {}); mon[f] = (f === 'notes') ? e.target.value : (parseInt(e.target.value) || 0); treePatchData(id, { monster: mon }); return; }
             const pf = e.target.closest('[data-f]');
             if (pf) { const p = find(state.party, pf.dataset.id); if (p) { p[pf.dataset.f] = parseInt(e.target.value) || 0; save(); const item = pf.closest('.gm-party-item'); const fill = item && item.querySelector('.gm-hp-fill'); if (fill && p.hpMax > 0) fill.style.width = Math.max(0, Math.min(1, p.hpCur / p.hpMax)) * 100 + '%'; } return; }
             const sec = e.target.closest('[data-act="npc-secret"]');
@@ -858,17 +1229,54 @@
         if (campaignId && campaignId !== activeCampaignId) stopNetwork(); // on change de campagne → coupe l'ancien flux
         if (campaignId) { activeCampaignId = campaignId; state = load(); }
         else if (!activeCampaignId) { const c = createCampaign('Partie rapide'); activeCampaignId = c.id; state = load(); }
-        const ov = document.getElementById('gm-overlay'); if (!ov) return;
+        const ov = document.getElementById('gm-screen'); if (!ov) return;
         const camp = campaigns.find(c => c.id === activeCampaignId);
         const tEl = document.getElementById('gm-campaign-title'); if (tEl) tEl.textContent = camp ? '— ' + camp.name : '';
-        ov.classList.add('gm-open'); renderAll();
+        // Sur mobile, on démarre avec la sidebar repliée pour ne pas masquer le contenu
+        if (window.innerWidth <= 1100) ov.classList.add('gm-sidebar-collapsed');
+        else ov.classList.remove('gm-sidebar-collapsed');
+        if (window.navTo) window.navTo('gm-screen'); else ov.classList.remove('hidden');
+        try { if (location.hash !== '#gm/' + activeCampaignId) location.hash = '#gm/' + activeCampaignId; } catch (e) {}
+        renderAll();
+        loadTree();
         if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte
     }
-    function close() { const ov = document.getElementById('gm-overlay'); if (ov) ov.classList.remove('gm-open'); }
+    function close() {
+        // Retour à l'accueil (onglet MJ), sans toucher à la fiche éventuellement active
+        try { if ((location.hash || '').indexOf('#gm/') === 0) location.hash = '#home'; } catch (e) {}
+        if (window.navTo) window.navTo('home-screen');
+        const gmTab = document.querySelector('.home-tab[data-htab="gm"]');
+        if (gmTab) gmTab.click(); else renderCampaigns();
+    }
+
+    // ---------- Routage par hash (#gm/<campaignId>) ----------
+    function waitForUserGM(cb, tries) {
+        tries = tries == null ? 30 : tries;
+        if (window.SupaAuth && window.SupaAuth.currentUser) return cb();
+        if (tries <= 0) return;
+        setTimeout(() => waitForUserGM(cb, tries - 1), 200);
+    }
+    function gmRouteId() { const m = (location.hash || '').match(/^#gm\/(.+)$/); return m ? m[1] : null; }
+    function onHashChange() {
+        const id = gmRouteId();
+        if (id) {
+            if (id !== activeCampaignId || !document.body.classList.contains('gm-active')) {
+                if (campaigns.find(c => c.id === id)) open(id);
+            }
+        } else if (document.body.classList.contains('gm-active')) {
+            // On a quitté la route MJ (retour navigateur) alors que l'écran MJ est affiché
+            if (window.navTo) window.navTo('home-screen');
+        }
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         injectHTML();
-        setTimeout(() => { wire(); wireHome(); }, 60);
+        setTimeout(() => {
+            wire(); wireHome();
+            window.addEventListener('hashchange', onHashChange);
+            // Restauration au chargement : #gm/<id> rouvre la campagne une fois connecté
+            if (gmRouteId()) waitForUserGM(onHashChange);
+        }, 60);
     });
 
     window.GMScreen = { open, close };
