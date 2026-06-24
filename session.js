@@ -48,12 +48,20 @@
             if (lbl) conditions.push(lbl);
         });
 
+        const abilities = {};
+        ['str', 'dex', 'con', 'int', 'wis', 'cha'].forEach(a => {
+            const sc = document.getElementById('stat-' + a), md = document.getElementById('mod-' + a);
+            abilities[a] = { score: sc ? (parseInt(sc.value, 10) || null) : null, mod: md ? md.textContent.trim() : '' };
+        });
+
         return {
             name: v('char-name'),
             level: num('char-level'),
             cls: v('char-class'),
             subclass: v('char-subclass'),
             race: v('char-race'),
+            abilities: abilities,
+            prof: num('prof-bonus'),
             hpCur: num('hp-current'),
             hpMax: num('hp-max'),
             hpTemp: num('hp-temp'),
@@ -101,10 +109,12 @@
             ch.on('broadcast', { event: 'scene' }, ({ payload }) => applyIncomingScene(payload))
               .on('broadcast', { event: 'ping' }, ({ payload }) => showPing(payload))
               .on('broadcast', { event: 'gift' }, ({ payload }) => receiveGift(payload))
-              .on('broadcast', { event: 'sfx' }, ({ payload }) => { if (payload && payload.url && window.MusicPlayer && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(payload.url); })
+              .on('broadcast', { event: 'sfx' }, ({ payload }) => { if (!payload || !window.MusicPlayer) return; if (payload.builtin && window.MusicPlayer.playBuiltinSfx) window.MusicPlayer.playBuiltinSfx(payload.builtin); else if (payload.url && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(payload.url); })
+              .on('broadcast', { event: 'music' }, ({ payload }) => { if (window.MusicPlayer && window.MusicPlayer.applyRemoteMusic) window.MusicPlayer.applyRemoteMusic(payload); })
               .on('broadcast', { event: 'combat' }, ({ payload }) => applyCombat(payload))
               .on('broadcast', { event: 'map' }, ({ payload }) => { if (payload) applyMap(payload.map, payload.tokens); })
               .on('broadcast', { event: 'session-closed' }, () => onSessionClosed())
+              .on('broadcast', { event: 'kick' }, ({ payload }) => onKicked(payload))
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
                       try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
@@ -256,6 +266,27 @@
         updateFabVisibility();
         if (fabPanel && !fabPanel.classList.contains('hidden')) { renderFabPanel(); placePanel(); }
         document.body.classList.toggle('session-combat-active', combatState.active);
+        maybeNotifyTurn();
+    }
+
+    // Notification d'anticipation : prévient le joueur juste avant son tour
+    let lastTurnNotice = -1;
+    function maybeNotifyTurn() {
+        if (!combatState.active || !combatState.order || !combatState.order.length) { lastTurnNotice = -1; return; }
+        const order = combatState.order, n = order.length;
+        const myId = state.charId, myName = (snapName() || '').toLowerCase();
+        const isMe = (c) => !!c && ((myId && c.charId && c.charId === myId) || (!!c.name && c.name.toLowerCase() === myName));
+        const nextIdx = (combatState.turnIndex + 1) % n;
+        if (isMe(order[nextIdx]) && !isMe(order[combatState.turnIndex]) && lastTurnNotice !== nextIdx) {
+            lastTurnNotice = nextIdx;
+            showTurnNotice('⏳ Votre tour approche — préparez votre action !');
+        }
+    }
+    function showTurnNotice(msg) {
+        let el = document.getElementById('session-turn-notice');
+        if (!el) { el = document.createElement('div'); el.id = 'session-turn-notice'; el.className = 'no-print'; document.body.appendChild(el); }
+        el.textContent = msg; el.classList.add('show');
+        clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3500);
     }
 
     function updateFabVisibility() {
@@ -363,11 +394,13 @@
 
         mapPanel = document.createElement('div');
         mapPanel.id = 'session-map'; mapPanel.className = 'no-print hidden';
-        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><button id="smap-close" title="Fermer">✕</button></div><div id="smap-view" class="smap-view"></div>';
+        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
         document.body.appendChild(mapPanel);
 
         mapToggle.addEventListener('click', () => { mapPanel.classList.toggle('hidden'); });
         mapPanel.querySelector('#smap-close').addEventListener('click', () => mapPanel.classList.add('hidden'));
+        mapPanel.querySelector('#smap-full').addEventListener('click', () => mapPanel.classList.toggle('smap-fullscreen'));
+        setupPlayerTokenDrag(document.getElementById('smap-view'));
     }
 
     function applyMap(map, tokens) {
@@ -382,16 +415,63 @@
     function renderPlayerMap() {
         const view = document.getElementById('smap-view'); if (!view) return;
         const m = mapState.map || {};
+        const uid = myUid(), locked = !!m.tokensLocked;
         view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         view.classList.toggle('show-grid', m.showGrid !== false);
         view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
-        view.innerHTML = (mapState.tokens || []).map(t => `<div class="smap-token" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')};" title="${escHtml(t.name)}"><span>${escHtml((t.name || '?').slice(0, 2))}</span></div>`).join('');
+        view.innerHTML = (mapState.tokens || []).map(t => {
+            const mine = !locked && t.owner && t.owner === uid;
+            return `<div class="smap-token${mine ? ' smap-token-mine' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')};" title="${escHtml(t.name)}"><span>${escHtml((t.name || '?').slice(0, 2))}</span></div>`;
+        }).join('');
+    }
+
+    // Déplacement par le joueur de SON jeton (envoyé au MJ qui fait autorité)
+    let tokenSendThrottle = 0;
+    function sendTokenMove(t, final) {
+        const now = Date.now();
+        if (!final && now - tokenSendThrottle < 70) return;
+        tokenSendThrottle = now;
+        sendToGm('token-move', { id: t.id, x: t.x, y: t.y, fromUid: myUid(), final: !!final });
+    }
+    function setupPlayerTokenDrag(view) {
+        if (!view) return;
+        let cur = null, el = null;
+        view.addEventListener('pointerdown', (e) => {
+            const tEl = e.target.closest('.smap-token'); if (!tEl) return;
+            const t = (mapState.tokens || []).find(x => x.id === tEl.dataset.token); if (!t) return;
+            if (mapState.map && mapState.map.tokensLocked) return;
+            if (!t.owner || t.owner !== myUid()) return;   // un joueur ne bouge que son jeton
+            cur = t; el = tEl; try { tEl.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
+        });
+        view.addEventListener('pointermove', (e) => {
+            if (!cur || !el) return;
+            const r = view.getBoundingClientRect();
+            const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+            const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+            cur.x = x; cur.y = y; el.style.left = (x * 100) + '%'; el.style.top = (y * 100) + '%';
+            sendTokenMove(cur, false);
+        });
+        const up = () => { if (!cur) return; sendTokenMove(cur, true); cur = null; el = null; };
+        view.addEventListener('pointerup', up);
+        view.addEventListener('pointercancel', up);
     }
 
     function teardownMapUI() {
         mapState = { map: {}, tokens: [] };
         if (mapToggle) mapToggle.style.display = 'none';
         if (mapPanel) mapPanel.classList.add('hidden');
+    }
+
+    // --- Exclusion ciblée d'un joueur (kick + ban temporaire) ---
+    function onKicked(p) {
+        if (!p) return;
+        const me = myUid();
+        if (p.targetUserId && p.targetUserId !== 'all' && p.targetUserId !== me) return; // pas destiné à moi
+        const code = state.code;
+        if (p.until && code) { try { localStorage.setItem('dnd-session-ban', JSON.stringify({ code: code, until: p.until })); } catch (e) {} }
+        const mins = p.until ? Math.max(1, Math.round((p.until - Date.now()) / 60000)) : 0;
+        if (window.showAppToast) window.showAppToast(mins ? ('🚫 Exclu par le MJ (' + mins + ' min)') : '🚪 Exclu de la session par le MJ', '#c0392b');
+        leave().finally(() => { document.body.style.backgroundImage = ''; document.body.classList.remove('scene-active'); if (window.navTo) window.navTo('home-screen'); });
     }
 
     // --- Fermeture forcée par le MJ : déconnexion + retour accueil ---
@@ -446,6 +526,10 @@
         .sfp-empty { font-style:italic; color:#8a7a5e; font-size:0.82rem; text-align:center; padding:6px; }
         #session-combat-badge { position:fixed; right:14px; bottom:150px; z-index:9980; display:none; background:rgba(40,30,20,0.82); color:#e8dcc2; font-family:'Lora',serif; font-size:0.74rem; padding:6px 12px; border-radius:20px; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:none; }
         body.session-combat-active #btn-init-next, body.session-combat-active #btn-init-clear { opacity:0.4 !important; pointer-events:none !important; }
+        /* UI combat allégée côté joueur : on masque le tracker complet (le FAB suffit) */
+        body.session-combat-active #widget-initiative { display:none !important; }
+        #session-turn-notice { position:fixed; top:70px; left:50%; transform:translateX(-50%) translateY(-20px); z-index:9993; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; font-family:'Cinzel',serif; font-weight:bold; font-size:0.9rem; padding:10px 18px; border-radius:30px; box-shadow:0 8px 24px rgba(0,0,0,0.4); opacity:0; pointer-events:none; transition:opacity 0.3s, transform 0.3s; max-width:90vw; text-align:center; }
+        #session-turn-notice.show { opacity:1; transform:translateX(-50%) translateY(0); }
         body.theme-dark #session-fab-panel { background:#241c16; color:var(--text-color,#ece3d2); }
         body.theme-dark .sfp-row { background:rgba(196,155,53,0.1); }
         body.theme-dark .sfp-empty { color:#9a8a70; }
@@ -458,7 +542,12 @@
         .smap-head button { background:none; border:none; cursor:pointer; font-size:1rem; color:var(--primary-color,#7A2828); }
         .smap-view { position:relative; width:100%; aspect-ratio:16/9; background:#11100e; background-size:contain; background-position:center; background-repeat:no-repeat; border-radius:8px; overflow:hidden; }
         .smap-view.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
-        .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); }
+        .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; }
+        .smap-token-mine { cursor:grab; box-shadow:0 0 0 2px #fff, 0 0 10px var(--accent-color,#C49B35); }
+        .smap-token-mine:active { cursor:grabbing; }
+        .smap-head-btns { display:flex; gap:4px; }
+        #session-map.smap-fullscreen { right:0; bottom:0; top:0; left:0; width:100vw; height:100vh; border-radius:0; z-index:9995; display:flex; flex-direction:column; }
+        #session-map.smap-fullscreen .smap-view { flex:1; aspect-ratio:auto; height:auto; }
         body.theme-dark #session-map { background:#241c16; }`;
         document.head.appendChild(st);
     }
@@ -477,6 +566,8 @@
     async function join(code) {
         code = String(code || '').toUpperCase().trim();
         if (!code || code.length < 4) throw new Error('CODE_INVALIDE');
+        // Bannissement temporaire en cours pour cette session ?
+        try { const b = JSON.parse(localStorage.getItem('dnd-session-ban') || 'null'); if (b && b.code === code && b.until > Date.now()) { const mins = Math.max(1, Math.round((b.until - Date.now()) / 60000)); if (window.showAppToast) window.showAppToast('🚫 Banni de cette session pour encore ~' + mins + ' min.', '#c0392b'); throw new Error('BANNI'); } } catch (e) { if (e && e.message === 'BANNI') throw e; }
         if (!window.SupaAuth || !window.SupaAuth.currentUser) throw new Error('NON_CONNECTE');
         const charId = activeCharId();
         if (!charId) throw new Error('AUCUNE_FICHE');
@@ -518,6 +609,7 @@
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) {}
         if (!saved || !saved.sessionId) return;
+        try { const b = JSON.parse(localStorage.getItem('dnd-session-ban') || 'null'); if (b && b.code === saved.code && b.until > Date.now()) return; } catch (e) {}
         waitForUser(() => {
             // La fiche active doit correspondre à celle liée à la session
             const charId = activeCharId();

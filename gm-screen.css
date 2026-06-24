@@ -294,6 +294,7 @@
 .gm-pad:active { transform: scale(0.96); }
 .gm-pad-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gm-pad .gm-del-x { position: absolute; top: 3px; right: 2px; font-size: 0.75rem; padding: 0 4px; }
+.gm-pad-native { padding: 8px 12px; border: none; }
 
 /* ---- Carte tactique ---- */
 .gm-map-ctl { font-size: 0.8rem; color: #6a5a3e; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -334,6 +335,32 @@
 .gm-tree-empty { font-size: 0.76rem; font-style: italic; color: #9a8a6e; padding: 4px 8px; }
 .gm-tree-editor { padding: 8px 10px 10px 26px; display: flex; flex-direction: column; gap: 6px; }
 .gm-tree-thumb-lg { max-width: 100%; max-height: 200px; border-radius: 8px; border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); object-fit: contain; }
+
+/* ---- Modale fiche joueur (modération) ---- */
+.gm-clickable { cursor: pointer; text-decoration: underline dotted transparent; }
+.gm-clickable:hover { text-decoration-color: currentColor; }
+.gm-modal-overlay { position: fixed; inset: 0; z-index: 7000; background: rgba(20,14,8,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.gm-modal-overlay.hidden { display: none; }
+.gm-modal-box { position: relative; width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; background: var(--sheet-bg-color, #FAF3E0); border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); border-radius: 16px; box-shadow: var(--shadow-lg, 0 16px 48px rgba(0,0,0,0.4)); padding: 22px; color: var(--text-color); }
+.gm-modal-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); background: var(--widget-bg, #fffdf7); color: var(--primary-color, #7A2828); cursor: pointer; font-size: 0.95rem; }
+.gm-modal-close:hover { background: rgba(231,76,60,0.14); color: #c0392b; }
+.gm-pm-name { font-family: 'Cinzel', serif; color: var(--primary-color, #7A2828); margin: 0 30px 2px 0; }
+.gm-pm-sub { font-style: italic; color: #8a7a5e; margin-bottom: 12px; }
+.gm-pm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.gm-pm-stat { background: var(--widget-bg, #fffdf9); border: 1px solid var(--soft-border, rgba(122,40,40,0.18)); border-radius: 9px; padding: 7px 10px; font-size: 0.76rem; color: #6a5a3e; display: flex; flex-direction: column; }
+.gm-pm-stat b { color: var(--text-color); font-size: 1rem; }
+.gm-pm-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 12px; }
+.gm-pm-ab { background: rgba(196,155,53,0.12); border-radius: 8px; padding: 6px 2px; text-align: center; }
+.gm-pm-ab-l { display: block; font-size: 0.62rem; font-weight: bold; color: var(--primary-color, #7A2828); }
+.gm-pm-ab-s { display: block; font-size: 1.05rem; font-weight: bold; color: var(--text-color); }
+.gm-pm-ab-m { display: block; font-size: 0.72rem; color: #8a7a5e; }
+.gm-pm-flag { font-size: 0.85rem; color: var(--primary-color, #7A2828); margin-bottom: 6px; }
+.gm-pm-section { font-size: 0.85rem; margin-bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.gm-pm-mod { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--soft-border, rgba(122,40,40,0.22)); padding-top: 12px; }
+body.theme-dark .gm-modal-box { background: linear-gradient(172deg, #1d1712, #241c16); }
+body.theme-dark .gm-pm-stat { background: linear-gradient(158deg, #2c231b, #251e18); }
+body.theme-dark .gm-pm-sub, body.theme-dark .gm-pm-stat, body.theme-dark .gm-pm-ab-m { color: #b6a484; }
+body.theme-dark .gm-modal-close { background: #2a2118; }
 
 /* ---- Responsive ---- */
 @media (max-width: 1100px) {

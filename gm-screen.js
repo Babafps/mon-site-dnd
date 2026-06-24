@@ -52,6 +52,42 @@
         { name: 'Inconscient', text: 'Neutralisé, lâche ce qu\'il tient, tombe à terre. Attaques avec avantage ; coup au contact = critique.' }
     ];
 
+    // ---------- Référence rapide : mécaniques globales D&D 5e ----------
+    const RULES_REF = [
+        { name: 'Action : Attaquer', text: 'Une attaque au corps à corps ou à distance contre une cible. Certaines classes ont des attaques supplémentaires (Attaque supplémentaire).' },
+        { name: 'Action : Foncer (Dash)', text: 'Gagne un déplacement supplémentaire égal à ta vitesse pour le tour.' },
+        { name: 'Action : Se désengager', text: 'Ton déplacement ne provoque pas d\'attaques d\'opportunité pour le reste du tour.' },
+        { name: 'Action : Esquiver', text: 'Les attaques contre toi ont le désavantage (si tu les vois) et tu as l\'avantage aux jets de DEX, jusqu\'à ton prochain tour. Annulé si vitesse à 0.' },
+        { name: 'Action : Se cacher', text: 'Jet de Discrétion (DEX) opposé à la Perception passive. En cas de succès, tu es caché (invisible de fait).' },
+        { name: 'Action : Préparer', text: 'Choisis un déclencheur et une action/déplacement à effectuer en réaction quand il survient. Lancer un sort préparé coûte un emplacement et exige la concentration.' },
+        { name: 'Action : Aider', text: 'Donne l\'avantage au prochain jet d\'un allié sur une tâche, ou à sa prochaine attaque contre une créature à 1,50 m de toi.' },
+        { name: 'Action : Chercher', text: 'Test de Sagesse (Perception) ou d\'Intelligence (Investigation) pour repérer quelque chose.' },
+        { name: 'Action : Utiliser un objet', text: 'Interagir avec un second objet, ou utiliser un objet qui le nécessite (une interaction gratuite par tour est incluse dans le déplacement/action).' },
+        { name: 'Action bonus', text: 'Action supplémentaire accordée par une capacité/sort spécifique. Une seule par tour.' },
+        { name: 'Réaction', text: 'Action instantanée déclenchée par un événement (ex : attaque d\'opportunité). Une seule par round, récupérée au début de ton tour.' },
+        { name: 'Attaque d\'opportunité', text: 'Réaction : quand une créature hostile que tu vois sort de ton allonge en se déplaçant, une attaque au contact contre elle.' },
+        { name: 'Avantage / Désavantage', text: 'Lance 2d20 et garde le meilleur (avantage) ou le pire (désavantage). Ils ne se cumulent pas ; un de chaque s\'annule.' },
+        { name: 'Couverture', text: 'À demi (+2 CA et DEX), aux trois quarts (+5 CA et DEX), totale (impossible à cibler directement).' },
+        { name: 'Test de caractéristique', text: '1d20 + mod. de carac (+ maîtrise si compétence maîtrisée) contre un Degré de Difficulté (DD). 10 = moyen, 15 = difficile, 20 = très difficile.' },
+        { name: 'Jet de sauvegarde', text: '1d20 + mod. de carac (+ maîtrise si maîtrisé) pour résister à un effet. Le DD de sort = 8 + maîtrise + mod. d\'incantation.' },
+        { name: 'Coup critique', text: 'Un 20 naturel à l\'attaque touche toujours et double les dés de dégâts (pas les bonus fixes).' },
+        { name: 'Concentration', text: 'Subir des dégâts : jet de sauvegarde de CON (DD 10 ou la moitié des dégâts, le plus élevé). Un seul sort de concentration à la fois.' },
+        { name: 'Repos court', text: '≥ 1 heure. Dépense de dés de vie (1d + mod. CON chacun) pour récupérer des PV ; récupère certaines capacités.' },
+        { name: 'Repos long', text: '≥ 8 heures. Récupère tous les PV, la moitié des dés de vie (mini 1) et la plupart des ressources. Un seul repos long par 24 h.' },
+        { name: 'Épuisement', text: '6 niveaux cumulatifs : 1) désavantage aux tests ; 2) vitesse /2 ; 3) désavantage attaques & sauvegardes ; 4) PV max /2 ; 5) vitesse 0 ; 6) mort. Un repos long retire 1 niveau.' },
+        { name: 'Chute', text: '1d6 dégâts contondants par tranche de 3 m de chute (max 20d6). La créature atterrit à terre.' },
+        { name: 'Empoigner (grapple)', text: 'À la place d\'une attaque : Athlétisme (FOR) opposé à l\'Athlétisme ou l\'Acrobaties de la cible. Réussite = cible empoignée (vitesse 0).' },
+        { name: 'Bousculer', text: 'À la place d\'une attaque : Athlétisme (FOR) opposé. Réussite = mettre à terre OU repousser de 1,50 m.' },
+        { name: 'Jets contre la mort', text: 'À 0 PV : à ton tour, 1d20. ≥10 = succès, <10 = échec. 3 succès = stabilisé ; 3 échecs = mort. 1 = 2 échecs, 20 = 1 PV. Subir des dégâts = 1 échec (critique au contact = 2).' },
+        { name: 'Stabiliser', text: 'Un test de Sagesse (Médecine) DD 10 stabilise une créature à 0 PV (réussites/échecs remis à zéro).' },
+        { name: 'Surprise', text: 'Une créature surprise ne peut ni agir ni réagir lors de son premier tour du combat.' },
+        { name: 'Initiative', text: 'Au début du combat : 1d20 + mod. de DEX. On agit dans l\'ordre décroissant.' },
+        { name: 'Terrain difficile', text: 'Chaque 1,50 m coûte 3 m de déplacement (déplacement divisé par deux dans la zone).' },
+        { name: 'Attaque à distance au contact', text: 'Tirer sur une cible à 1,50 m d\'un ennemi hostile valide donne le désavantage à l\'attaque.' },
+        { name: 'Lumière & vision', text: 'Vision dans le noir : voit dans le noir comme une faible luminosité (zone éclairée faiblement = test de perception avec désavantage). Obscurité = zone d\'aveuglement.' },
+        { name: 'Inspiration', text: 'Ressource accordée par le MJ : à dépenser pour obtenir l\'avantage sur un jet de ton choix.' }
+    ];
+
     // ---------- État (multi-campagnes) ----------
     const CAMP_KEY = 'dnd-gm-campaigns';
     let campaigns = loadCampaigns();
@@ -71,7 +107,7 @@
     let state = defaultState();
 
     // ---------- Données réseau (non persistées : rechargées depuis Supabase) ----------
-    const live = { players: [], online: new Set(), netChannel: null, presChannel: null };
+    const live = { players: [], online: new Set(), netChannel: null, presChannel: null, bans: {} };
 
     // Arborescence de préparation (cloud gm_tree)
     let tree = [];                 // nœuds plats { id, parent_id, kind, name, data, sort }
@@ -239,6 +275,22 @@
                 <div class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🔊</span> Soundboard</div>
                     <div class="gm-card-body">
+                        <div class="gm-side-card-head" style="font-size:0.82rem; border:none; padding:0; margin-bottom:2px;">🎚️ Sons natifs</div>
+                        <div class="gm-soundboard-pads">
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="sword">⚔️ Épées</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="arrow">🏹 Flèche</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="magic">✨ Magie</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="fire">🔥 Feu</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="thunder">⚡ Tonnerre</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="heal">💚 Soin</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="bell">🔔 Cloche</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="horn">📯 Cor</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="coins">🪙 Pièces</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="dice">🎲 Dés</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="door">🚪 Porte</button>
+                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="tavern">🍺 Taverne</button>
+                        </div>
+                        <div class="gm-side-card-head" style="font-size:0.82rem; border:none; padding:0; margin:6px 0 2px;">📂 Mes sons importés</div>
                         <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer des sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
                         <div id="gm-soundboard-pads" class="gm-soundboard-pads"></div>
                         <div class="gm-readonly-note">ⓘ Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
@@ -270,9 +322,14 @@
                             <label class="gm-btn" title="Importer une image de carte">🖼️<input type="file" id="gm-map-file" accept="image/*" style="display:none;"></label>
                             <button id="gm-map-seturl" class="gm-add" title="Appliquer le fond">＋</button>
                         </div>
+                        <div class="gm-row" style="align-items:center;">
+                            <label class="gm-map-ctl">📚 Banque</label>
+                            <select id="gm-map-bank" class="gm-select" style="flex:1;"><option value="">— Charger une carte préparée —</option></select>
+                        </div>
                         <div class="gm-row" style="gap:14px; align-items:center;">
                             <label class="gm-map-ctl">Grille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
                             <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
+                            <button id="gm-map-lock" class="gm-btn" title="Verrouiller / déverrouiller le déplacement des jetons par les joueurs">🔓 Jetons libres</button>
                             <button id="gm-map-addtoken" class="gm-btn">➕ Jeton</button>
                             <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
                         </div>
@@ -577,10 +634,11 @@
             return `<div class="gm-live-item${online ? '' : ' is-offline'}">
                 <div class="gm-live-top">
                     <span class="gm-live-dot ${online ? 'on' : ''}" title="${online ? 'En ligne' : 'Hors ligne — dernier état connu'}"></span>
-                    <span class="gm-live-name">${esc(s.name || p.character_name || 'Aventurier')}</span>
+                    <span class="gm-live-name gm-clickable" data-act="player-sheet" data-uid="${esc(p.user_id)}" title="Voir la fiche complète">${esc(s.name || p.character_name || 'Aventurier')}</span>
                     ${s.concentrating ? '<span class="gm-live-conc" title="Concentration active">🌀</span>' : ''}
                     <span class="gm-spacer"></span>
                     <span class="gm-party-sub">${esc(sub || '—')}</span>
+                    <button class="gm-del-x" data-act="player-kick" data-uid="${esc(p.user_id)}" title="Modérer / exclure ce joueur">✕</button>
                 </div>
                 <div class="gm-live-stats">
                     <span class="gm-stat-pill">🛡️ CA ${s.ac != null ? s.ac : '—'}</span>
@@ -595,6 +653,73 @@
                 ${conds ? `<div class="gm-live-conds">${conds}</div>` : ''}
             </div>`;
         }).join('');
+    }
+
+    // ---------- Modération des joueurs (fiche modale + kick/ban) ----------
+    function findLivePlayer(uid) { return (live.players || []).find(p => p.user_id === uid); }
+    function ensurePlayerModal() {
+        let m = byId('gm-player-modal');
+        if (m) return m;
+        m = document.createElement('div'); m.id = 'gm-player-modal'; m.className = 'gm-modal-overlay hidden no-print';
+        m.innerHTML = '<div class="gm-modal-box"><button class="gm-modal-close" data-act="player-modal-close" title="Fermer">✕</button><div id="gm-player-modal-body"></div></div>';
+        document.body.appendChild(m);
+        m.addEventListener('click', (e) => {
+            if (e.target === m || e.target.closest('[data-act="player-modal-close"]')) { m.classList.add('hidden'); return; }
+            const c = e.target.closest('[data-act="player-kick-confirm"]');
+            if (c) { const v = (byId('gm-kick-duration') || {}).value || '0'; kickPlayer(c.dataset.uid, v); }
+        });
+        return m;
+    }
+    function openPlayerModal(uid) {
+        const p = findLivePlayer(uid); if (!p) return;
+        const s = p.snapshot || {}, ab = s.abilities || {};
+        const labels = { str: 'FOR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'SAG', cha: 'CHA' };
+        const abRow = ['str', 'dex', 'con', 'int', 'wis', 'cha'].map(k => { const a = ab[k] || {}; return `<div class="gm-pm-ab"><span class="gm-pm-ab-l">${labels[k]}</span><span class="gm-pm-ab-s">${a.score != null ? a.score : '—'}</span><span class="gm-pm-ab-m">${esc(a.mod || '')}</span></div>`; }).join('');
+        const conds = (s.conditions || []).map(c => `<span class="gm-live-cond">${esc(c)}</span>`).join('') || '<span class="gm-readonly-note">Aucun</span>';
+        byId('gm-player-modal-body').innerHTML = `
+            <h2 class="gm-pm-name">${esc(s.name || p.character_name || 'Aventurier')}</h2>
+            <div class="gm-pm-sub">${esc([s.cls, s.subclass, s.race, s.level ? ('Niv ' + s.level) : '', s.prof ? ('Maîtrise +' + s.prof) : ''].filter(Boolean).join(' · ') || '—')}</div>
+            <div class="gm-pm-stats">
+                <div class="gm-pm-stat">❤️ PV<b>${s.hpCur != null ? s.hpCur : '?'} / ${s.hpMax != null ? s.hpMax : '?'}${s.hpTemp ? (' (+' + s.hpTemp + ')') : ''}</b></div>
+                <div class="gm-pm-stat">🛡️ CA<b>${s.ac != null ? s.ac : '—'}</b></div>
+                <div class="gm-pm-stat">⚡ Init<b>${s.initiative != null ? s.initiative : '—'}</b></div>
+                <div class="gm-pm-stat">👁️ Perc.P<b>${s.passivePerception != null ? s.passivePerception : '—'}</b></div>
+                <div class="gm-pm-stat">🏃 Vitesse<b>${esc(s.speed || '—')}</b></div>
+                ${s.spellDC ? `<div class="gm-pm-stat">✨ DD<b>${s.spellDC}</b></div>` : ''}
+            </div>
+            <div class="gm-pm-abilities">${abRow}</div>
+            ${s.concentrating ? '<div class="gm-pm-flag">🌀 Concentration active</div>' : ''}
+            ${(s.deathSaves && (s.deathSaves.s || s.deathSaves.f)) ? `<div class="gm-pm-flag">☠️ Jets contre la mort : ${s.deathSaves.s || 0}✓ / ${s.deathSaves.f || 0}✗</div>` : ''}
+            <div class="gm-pm-section"><strong>États :</strong> ${conds}</div>
+            <div class="gm-pm-mod">
+                <label class="gm-trade-label">Modération :</label>
+                <select id="gm-kick-duration" class="gm-select" style="flex:1; min-width:140px;">
+                    <option value="0">Kick simple (peut revenir)</option>
+                    <option value="5m">Ban 5 minutes</option>
+                    <option value="30m">Ban 30 minutes</option>
+                    <option value="60m">Ban 1 heure</option>
+                    <option value="perm">Ban (toute la session)</option>
+                </select>
+                <button class="gm-btn gm-btn-danger" data-act="player-kick-confirm" data-uid="${esc(uid)}">🚪 Exclure</button>
+            </div>
+            <div class="gm-readonly-note">Fiche en lecture seule (données partagées en direct par le joueur).</div>`;
+        ensurePlayerModal().classList.remove('hidden');
+    }
+    function kickDurationMs(v) { if (v === '5m') return 5 * 60000; if (v === '30m') return 30 * 60000; if (v === '60m') return 60 * 60000; if (v === 'perm') return 100 * 365 * 24 * 60 * 60000; return 0; }
+    function kickPlayer(uid, v) {
+        const ms = kickDurationMs(v), until = ms > 0 ? Date.now() + ms : 0;
+        if (until) live.bans[uid] = until;
+        gmBroadcast('kick', { targetUserId: uid, until: until });
+        const p = findLivePlayer(uid), nm = (p && (p.snapshot && p.snapshot.name || p.character_name)) || 'Joueur';
+        if (window.showAppToast) window.showAppToast('🚪 ' + nm + (until ? ' banni temporairement' : ' exclu'), '#7A2828');
+        const m = byId('gm-player-modal'); if (m) m.classList.add('hidden');
+    }
+    function enforceBans() {
+        const now = Date.now();
+        Object.keys(live.bans).forEach(uid => {
+            if (live.bans[uid] <= now) { delete live.bans[uid]; return; }
+            if (live.online.has(uid)) gmBroadcast('kick', { targetUserId: uid, until: live.bans[uid] });
+        });
     }
 
     // ---------- Couche réseau (MJ) ----------
@@ -614,10 +739,13 @@
         if (live.netChannel) { try { live.netChannel.unsubscribe(); } catch (e) {} live.netChannel = null; }
         if (live.presChannel) { try { live.presChannel.untrack(); } catch (e) {} try { live.presChannel.unsubscribe(); } catch (e) {} live.presChannel = null; }
         live.players = []; live.online = new Set();
+        if (window.MusicPlayer && window.MusicPlayer.setBroadcaster) window.MusicPlayer.setBroadcaster(null);
     }
     function startNetwork() {
         if (!window.SupaAuth || !window.SupaAuth.currentUser || !state.sessionId) return;
         stopNetwork();
+        // Le lecteur du MJ diffuse désormais sa lecture aux joueurs de la session
+        if (window.MusicPlayer && window.MusicPlayer.setBroadcaster) { window.MusicPlayer.setRole('free'); window.MusicPlayer.setBroadcaster((p) => gmBroadcast('music', p)); }
         const sid = state.sessionId, code = state.roomCode;
         window.SupaAuth.loadSessionPlayers(sid).then(rows => {
             // protège contre une session qui aurait changé entre-temps
@@ -641,13 +769,16 @@
             live.presChannel
                 .on('presence', { event: 'sync' }, () => {
                     live.online = new Set(Object.keys(live.presChannel.presenceState()));
+                    enforceBans();
                     updatePresenceCount(); renderLivePlayers(); renderTradeTargets();
-                    // Resynchronise les nouveaux arrivants (combat + carte) sans réécrire la base
+                    // Resynchronise les nouveaux arrivants (combat + carte + musique) sans réécrire la base
                     try { gmBroadcast('combat', combatPayload()); } catch (e) {}
                     if (typeof broadcastMap === 'function') { try { broadcastMap(false); } catch (e) {} }
+                    if (window.MusicPlayer && window.MusicPlayer.resync) { try { window.MusicPlayer.resync(); } catch (e) {} }
                 })
                 .on('broadcast', { event: 'gift-response' }, ({ payload }) => onGiftResponse(payload))
                 .on('broadcast', { event: 'initiative-roll' }, ({ payload }) => onInitiativeRoll(payload))
+                .on('broadcast', { event: 'token-move' }, ({ payload }) => onTokenMove(payload))
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
         } catch (e) { console.warn('presence GM:', e); }
     }
@@ -656,10 +787,12 @@
     function renderCompendium(query) {
         const el = byId('gm-comp-results'); if (!el) return;
         const q = (query || '').toLowerCase().trim();
-        if (!q) { el.innerHTML = `<div class="gm-readonly-note">Tape un mot-clé : règle de condition, ou un de tes monstres / PNJ / quêtes.</div>`; return; }
+        if (!q) { el.innerHTML = `<div class="gm-readonly-note">Tape un mot-clé : règle 5e (action, avantage, couverture, repos, épuisement, chute, sauvegarde…), condition, ou un de tes monstres / PNJ / quêtes.</div>`; return; }
         const blocks = [];
         CONDITIONS_REF.filter(c => c.name.toLowerCase().includes(q) || c.text.toLowerCase().includes(q))
             .forEach(c => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">⚠️ ${esc(c.name)}</div><div class="gm-comp-text">${esc(c.text)}</div></div>`));
+        RULES_REF.filter(r => r.name.toLowerCase().includes(q) || r.text.toLowerCase().includes(q))
+            .forEach(r => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">📖 ${esc(r.name)}</div><div class="gm-comp-text">${esc(r.text)}</div></div>`));
         state.monsters.filter(m => m.name.toLowerCase().includes(q))
             .forEach(m => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">👹 ${esc(m.name)}</div><div class="gm-comp-text">PV ${m.hpCur}/${m.hpMax}${m.ac ? ' · CA ' + m.ac : ''}${(m.attacks || []).length ? ' · ' + m.attacks.map(a => esc(a.name) + ' (' + esc(a.formula) + ')').join(', ') : ''}</div></div>`));
         state.npcs.filter(n => n.name.toLowerCase().includes(q) || (n.secret || '').toLowerCase().includes(q))
@@ -683,7 +816,7 @@
             active: !!state.combatActive,
             round: state.round,
             turnIndex: state.turnIndex,
-            order: state.initiative.filter(c => !c.hidden).map(c => ({ name: c.name, init: c.init, type: c.type }))
+            order: state.initiative.filter(c => !c.hidden).map(c => ({ name: c.name, init: c.init, type: c.type, charId: c.charId || null }))
         };
     }
     function broadcastCombat() {
@@ -732,6 +865,15 @@
         view.innerHTML = (state.tokens || []).map(t => `<div class="gm-token" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${tokenColor(t)};" title="${esc(t.name)}"><span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span></div>`).join('');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
+        const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
+        renderMapBank();
+    }
+    function renderMapBank() {
+        const sel = byId('gm-map-bank'); if (!sel) return;
+        const maps = (tree || []).filter(n => n.kind === 'map' && n.data && n.data.url);
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— Charger une carte préparée —</option>' + maps.map(n => `<option value="${n.id}">🗺️ ${esc(n.name)}</option>`).join('');
+        if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
     }
     function broadcastMap(persist) {
         if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens });
@@ -744,10 +886,23 @@
         if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens });
     }
     function addTokensFromCombat() {
-        const add = (name, type, ref) => { if (!state.tokens.find(t => t.ref === ref)) state.tokens.push({ id: uid(), ref, name, type, x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8 }); };
-        (live.players || []).forEach(p => { const s = p.snapshot || {}; add(s.name || p.character_name || 'PJ', 'pj', 'pj:' + p.user_id); });
-        state.monsters.forEach(m => add(m.name, 'monster', 'mon:' + m.id));
+        const add = (name, type, ref, owner) => { if (!state.tokens.find(t => t.ref === ref)) state.tokens.push({ id: uid(), ref, name, type, owner: owner || null, x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8 }); };
+        (live.players || []).forEach(p => { const s = p.snapshot || {}; add(s.name || p.character_name || 'PJ', 'pj', 'pj:' + p.user_id, p.user_id); });
+        state.monsters.forEach(m => add(m.name, 'monster', 'mon:' + m.id, null));
         save(); renderMap(); broadcastMap(true);
+    }
+    // Déplacement d'un jeton demandé par un joueur (broadcast 'token-move')
+    let tokenMovePersistTimer = null;
+    function onTokenMove(p) {
+        if (!p || !p.id) return;
+        if (state.map && state.map.tokensLocked) return;            // déplacements verrouillés par le MJ
+        const tok = find(state.tokens, p.id); if (!tok) return;
+        if (tok.owner && p.fromUid && tok.owner !== p.fromUid) return; // un joueur ne bouge que SON jeton
+        tok.x = Math.max(0, Math.min(1, p.x)); tok.y = Math.max(0, Math.min(1, p.y));
+        renderMap();
+        if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens }); // relaye aux autres
+        clearTimeout(tokenMovePersistTimer);
+        tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: state.map, tokens: state.tokens }); } catch (e) {} } }, 400);
     }
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
@@ -786,6 +941,7 @@
         const tgt = byId('gm-tree-target'); if (tgt) { const f = treeNode(treeTarget); tgt.textContent = 'Cible : ' + (f ? f.name : 'Racine'); }
         const kids = treeChildren(null);
         root.innerHTML = kids.length ? kids.map(n => treeNodeHtml(n, 0)).join('') : `<div class="gm-empty">Crée des dossiers et fichiers (textes, liens, images, maps, monstres) pour préparer ta partie.</div>`;
+        if (typeof renderMapBank === 'function') renderMapBank();
     }
     function treeNodeHtml(n, depth) {
         const isFolder = n.kind === 'folder';
@@ -1045,6 +1201,8 @@
         byId('gm-map-addtoken').addEventListener('click', () => { const n = prompt('Nom du jeton :'); if (!n || !n.trim()) return; state.tokens.push({ id: uid(), name: n.trim(), type: 'npc', x: 0.5, y: 0.5 }); save(); renderMap(); broadcastMap(true); });
         byId('gm-map-clear').addEventListener('click', () => { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); });
         byId('gm-map-sync').addEventListener('click', addTokensFromCombat);
+        byId('gm-map-lock').addEventListener('click', () => { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); });
+        byId('gm-map-bank').addEventListener('change', (e) => { const n = treeNode(e.target.value); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); } });
 
         // --- Préparation (arbre) ---
         byId('gm-tree-add').addEventListener('click', treeAdd);
@@ -1141,10 +1299,11 @@
                 }
                 case 'npc-del': state.npcs = state.npcs.filter(n => n.id !== id); save(); renderNpcs(); break;
                 case 'quest-del': state.quests = state.quests.filter(q => q.id !== id); save(); renderQuests(); break;
-                case 'scene-apply': { const s = find(state.scenes, id); if (s) { applyScene(s); if (live.presChannel) gmBroadcast('scene', { bg: s.bg || null, name: s.name, music: s.music || null }); } break; }
+                case 'scene-apply': { const s = find(state.scenes, id); if (s) { applyScene(s); if (live.presChannel) gmBroadcast('scene', { bg: s.bg || null, name: s.name }); } break; }
                 case 'scene-del': state.scenes = state.scenes.filter(x => x.id !== id); save(); renderScenes(); break;
                 case 'sfx-play': { const s = find(state.soundboard, id); if (s) { if (window.MusicPlayer && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(s.url); if (!s.local && live.presChannel) gmBroadcast('sfx', { url: s.url, name: s.name }); } break; }
                 case 'sfx-del': { const s = find(state.soundboard, id); if (s && s.local && s.url) { try { URL.revokeObjectURL(s.url); } catch (e) {} } if (s && s.path && window.SupaAuth) { try { window.SupaAuth.deleteAsset(s.path); } catch (e) {} } state.soundboard = state.soundboard.filter(x => x.id !== id); save(); renderSoundboard(); break; }
+                case 'sfx-native': { const k = t.dataset.sfx; if (window.MusicPlayer && window.MusicPlayer.playBuiltinSfx) window.MusicPlayer.playBuiltinSfx(k); if (live.presChannel) gmBroadcast('sfx', { builtin: k }); break; }
                 case 'tree-click': {
                     const n = treeNode(id); if (!n) break;
                     if (n.kind === 'folder') { if (treeExpanded.has(id)) treeExpanded.delete(id); else treeExpanded.add(id); treeTarget = id; }
@@ -1166,6 +1325,7 @@
                 case 'tree-to-map': { const n = treeNode(id); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » sur la table', '#2c3e50'); } else if (window.showAppToast) window.showAppToast('Importe d\'abord une image dans ce nœud.', '#c0392b'); break; }
                 case 'tree-open-link': { const n = treeNode(id); if (n && n.data && n.data.url) window.open(n.data.url, '_blank', 'noopener'); break; }
                 case 'tree-upload': { pendingTreeUpload = id; byId('gm-tree-file').click(); break; }
+                case 'player-sheet': case 'player-kick': openPlayerModal(t.dataset.uid); break;
             }
         });
         // Délégation : changements (checkboxes, champs de stats joueurs, secrets PNJ)

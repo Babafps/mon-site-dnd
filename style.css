@@ -2546,3 +2546,33 @@ body.theme-dark .ds-save-row input { background: rgba(255,255,255,0.06); color: 
     .ds-gallery { grid-template-columns: repeat(4, 1fr); max-height: 110px; }
     body.theme-dark .ds-toolbar { background: linear-gradient(0deg, #2a211a, #221b15); border-color: rgba(196,155,53,0.3); }
 }
+
+/* ============================================================
+   ✦ MODE NUIT — FILET DE SÉCURITÉ (derniers fonds/textes clairs)
+   ============================================================ */
+/* Éditeurs de texte riche Quill (journal & description de sort) :
+   les conteneurs ont un fond blanc en style inline → on force le sombre. */
+body.theme-dark #new-journal-content,
+body.theme-dark #new-spell-desc,
+body.theme-dark .ql-container,
+body.theme-dark .ql-toolbar { background: #241c16 !important; border-color: rgba(196,155,53,0.3) !important; }
+body.theme-dark .ql-editor { color: var(--text-color) !important; }
+body.theme-dark .ql-editor.ql-blank::before { color: #9a8a70 !important; }
+body.theme-dark .ql-snow .ql-stroke { stroke: #c2b094 !important; }
+body.theme-dark .ql-snow .ql-fill { fill: #c2b094 !important; }
+body.theme-dark .ql-snow .ql-picker, body.theme-dark .ql-snow .ql-picker-label { color: #c2b094 !important; }
+body.theme-dark .ql-snow .ql-picker-options { background: #2a2118 !important; }
+
+/* Modale de repos */
+body.theme-dark .rest-summary-card,
+body.theme-dark .rest-roll-log { background: rgba(255,255,255,0.05); border-color: rgba(196,155,53,0.3); }
+body.theme-dark .rest-summary-card span { color: #b6a484; }
+body.theme-dark .rest-roll-log { color: var(--accent-color); }
+body.theme-dark .rest-rule-text { color: #c2b094; }
+
+/* Bourse : table des taux dépliable */
+body.theme-dark #currency-inline-rules { background: rgba(255,255,255,0.05); border-color: rgba(196,155,53,0.3); }
+
+/* Champs de paiement / divers translucides à fort alpha restants */
+body.theme-dark .currency-pay-form input,
+body.theme-dark .hp-quick-amount { background: rgba(255,255,255,0.06) !important; }

@@ -416,8 +416,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             SupaAuth.currentUser = session.user;
             const emailEl = document.getElementById('auth-user-display');
             if (emailEl) emailEl.textContent = session.user.email;
-            showScreen('home-screen');
-            loadUserDataIntoLocalStorage(session.user.id);
+            // IMPORTANT : Supabase relance SIGNED_IN au rafraîchissement de jeton
+            // (notamment quand l'onglet/fenêtre regagne le focus). On ne redirige
+            // et on ne recharge les données QUE lors d'une vraie connexion, c.-à-d.
+            // quand un écran d'authentification est encore affiché — sinon on
+            // réinitialisait l'écran MJ/joueur à chaque retour de focus (+ risque
+            // d'écraser des modifications locales non sauvegardées).
+            const loginVisible = !document.getElementById('login-screen').classList.contains('hidden');
+            const loadingVisible = !document.getElementById('loading-screen').classList.contains('hidden');
+            if (loginVisible || loadingVisible) {
+                showScreen('home-screen');
+                loadUserDataIntoLocalStorage(session.user.id);
+            }
         }
         if (event === 'SIGNED_OUT') {
             showScreen('login-screen');
