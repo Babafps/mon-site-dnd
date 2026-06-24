@@ -54,6 +54,30 @@
             abilities[a] = { score: sc ? (parseInt(sc.value, 10) || null) : null, mod: md ? md.textContent.trim() : '' };
         });
 
+        // ----- Fiche COMPLÈTE (pour la vue MJ : tout le personnage) -----
+        const jstore = (key) => { try { const raw = localStorage.getItem(state.charId + '_' + key); return raw && raw !== 'undefined' ? JSON.parse(raw) : null; } catch (e) { return null; } };
+        const skills = [];
+        document.querySelectorAll('#attributes-list .skill-row').forEach(row => {
+            const lbl = row.querySelector('label'); const md = row.querySelector('.skill-mod'); const pf = row.querySelector('.skill-prof');
+            if (lbl && md) skills.push({ name: lbl.textContent.trim(), mod: md.textContent.trim(), prof: pf ? (parseInt(pf.value, 10) || 0) : 0, save: row.classList.contains('saving-throw'), stat: pf ? (pf.dataset.stat || '') : '' });
+        });
+        const full = {
+            identity: { background: v('char-background'), alignment: v('char-alignment'), languages: v('char-languages'), xp: v('char-xp'), size: v('char-size'), appearance: v('char-appearance') },
+            skills: skills,
+            // On envoie l'essentiel (pas les descriptions HTML complètes) pour garder le snapshot léger.
+            attacks: (jstore('dnd-attacks') || []).map(a => ({ name: a.name, bonus: a.bonus, dmg: a.dmg, notes: a.notes })),
+            spells: (jstore('dnd-spells') || []).map(sp => ({ name: sp.name, level: sp.level, notes: sp.notes })),
+            spellSlots: jstore('dnd-spell-slots') || [],
+            spellInfo: { ability: v('spellcasting-ability'), mod: v('spell-modifier'), dc: v('spell-save-dc'), atk: v('spell-attack-bonus') },
+            abilitiesLimited: (jstore('dnd-abilities') || []).map(c => ({ name: c.name, max: c.max, used: c.used })),
+            inventory: (jstore('dnd-inventory') || []).map(it => ({ name: it.name, qty: it.qty, weight: it.weight })),
+            currency: { pc: v('coin-pc'), pa: v('coin-pa'), pe: v('coin-pe'), po: v('coin-po'), pp: v('coin-pp') },
+            traits: (jstore('dnd-traits') || []).map(t => ({ name: t.name, type: t.type, desc: String(t.desc || '').replace(/<[^>]+>/g, '').slice(0, 240) })),
+            hitDice: { spent: v('hd-spent'), max: v('hd-max'), size: (document.getElementById('hd-size') || {}).value || '' },
+            companion: { name: v('comp-name'), ac: v('comp-ac'), hp: v('comp-hp'), notes: v('comp-notes') },
+            notes: { quick: v('quick-note'), quests: v('quest-log'), npcs: v('npc-log') }
+        };
+
         return {
             name: v('char-name'),
             level: num('char-level'),
@@ -76,6 +100,7 @@
                 f: ['death-f1', 'death-f2', 'death-f3'].filter(chk).length
             },
             conditions: conditions,
+            full: full,
             ts: Date.now()
         };
     }

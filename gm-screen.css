@@ -331,7 +331,7 @@
 .gm-clickable:hover { text-decoration-color: currentColor; }
 .gm-modal-overlay { position: fixed; inset: 0; z-index: 7000; background: rgba(20,14,8,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .gm-modal-overlay.hidden { display: none; }
-.gm-modal-box { position: relative; width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; background: var(--sheet-bg-color, #FAF3E0); border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); border-radius: 16px; box-shadow: var(--shadow-lg, 0 16px 48px rgba(0,0,0,0.4)); padding: 22px; color: var(--text-color); }
+.gm-modal-box { position: relative; width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto; background: var(--sheet-bg-color, #FAF3E0); border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); border-radius: 16px; box-shadow: var(--shadow-lg, 0 16px 48px rgba(0,0,0,0.4)); padding: 22px; color: var(--text-color); }
 .gm-modal-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); background: var(--widget-bg, #fffdf7); color: var(--primary-color, #7A2828); cursor: pointer; font-size: 0.95rem; }
 .gm-modal-close:hover { background: rgba(231,76,60,0.14); color: #c0392b; }
 .gm-pm-name { font-family: 'Cinzel', serif; color: var(--primary-color, #7A2828); margin: 0 30px 2px 0; }
@@ -346,7 +346,26 @@
 .gm-pm-ab-m { display: block; font-size: 0.72rem; color: #8a7a5e; }
 .gm-pm-flag { font-size: 0.85rem; color: var(--primary-color, #7A2828); margin-bottom: 6px; }
 .gm-pm-section { font-size: 0.85rem; margin-bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.gm-pm-mod { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--soft-border, rgba(122,40,40,0.22)); padding-top: 12px; }
+.gm-pm-mod { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--soft-border, rgba(122,40,40,0.22)); padding-top: 12px; margin-top: 10px; }
+.gm-pm-pills-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+/* ---- Fiche joueur complète (sections) ---- */
+.gm-sheet-sec { border-top: 1px solid var(--soft-border, rgba(122,40,40,0.18)); padding-top: 10px; margin-top: 10px; }
+.gm-sheet-sec-h { font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.86rem; color: var(--primary-color, #7A2828); margin-bottom: 7px; }
+.gm-sheet-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.gm-sheet-pills .gm-stat-pill.is-prof { background: rgba(196,155,53,0.28); font-weight: bold; }
+.gm-sheet-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 5px; }
+.gm-sheet-kv { display: flex; justify-content: space-between; gap: 8px; background: var(--widget-bg, #fffdf9); border: 1px solid var(--soft-border, rgba(122,40,40,0.14)); border-radius: 7px; padding: 5px 9px; font-size: 0.8rem; }
+.gm-sheet-kv.is-prof { border-color: var(--accent-color, #C49B35); }
+.gm-sheet-kv b { color: var(--text-color); }
+.gm-sheet-list { display: flex; flex-direction: column; gap: 5px; }
+.gm-sheet-row { background: var(--widget-bg, #fffdf9); border: 1px solid var(--soft-border, rgba(122,40,40,0.14)); border-radius: 8px; padding: 6px 10px; font-size: 0.82rem; display: flex; flex-direction: column; gap: 1px; }
+.gm-sheet-row b { color: var(--primary-color, #7A2828); }
+.gm-sheet-row span { color: var(--text-color); }
+.gm-sheet-row small { color: #8a7a5e; font-size: 0.74rem; }
+.gm-sheet-text { font-size: 0.82rem; color: var(--text-color); margin-bottom: 6px; line-height: 1.4; white-space: pre-wrap; }
+.gm-sheet-text strong { color: var(--primary-color, #7A2828); }
+body.theme-dark .gm-sheet-kv, body.theme-dark .gm-sheet-row { background: linear-gradient(158deg, #2c231b, #251e18); }
+body.theme-dark .gm-sheet-row small, body.theme-dark .gm-sheet-text { color: #b6a484; }
 body.theme-dark .gm-modal-box { background: linear-gradient(172deg, #1d1712, #241c16); }
 body.theme-dark .gm-pm-stat { background: linear-gradient(158deg, #2c231b, #251e18); }
 body.theme-dark .gm-pm-sub, body.theme-dark .gm-pm-stat, body.theme-dark .gm-pm-ab-m { color: #b6a484; }

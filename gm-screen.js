@@ -744,12 +744,56 @@
         });
         return m;
     }
-    // Corps de fiche (lecture seule) partagé entre joueur en ligne et fiche hors-ligne.
+    // Corps de fiche COMPLÈTE (lecture seule) — joueur en ligne ou fiche hors-ligne.
     function sheetBodyHtml(s, fallbackName) {
+        const f = s.full || {};
         const ab = s.abilities || {};
         const labels = { str: 'FOR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'SAG', cha: 'CHA' };
         const abRow = ['str', 'dex', 'con', 'int', 'wis', 'cha'].map(k => { const a = ab[k] || {}; return `<div class="gm-pm-ab"><span class="gm-pm-ab-l">${labels[k]}</span><span class="gm-pm-ab-s">${a.score != null ? a.score : '—'}</span><span class="gm-pm-ab-m">${esc(a.mod || '')}</span></div>`; }).join('');
         const conds = (s.conditions || []).map(c => `<span class="gm-live-cond">${esc(c)}</span>`).join('') || '<span class="gm-readonly-note">Aucun</span>';
+        const sec = (title, inner) => inner ? `<div class="gm-sheet-sec"><div class="gm-sheet-sec-h">${title}</div>${inner}</div>` : '';
+        const profMark = (p) => p >= 2 ? ' ◆◆' : (p >= 1 ? ' ◆' : '');
+
+        // Sauvegardes
+        const saves = (f.skills || []).filter(k => k.save);
+        const savesHtml = saves.length ? `<div class="gm-sheet-pills">${saves.map(k => `<span class="gm-stat-pill${k.prof ? ' is-prof' : ''}">${labels[k.stat] || k.stat || '—'} ${esc(k.mod)}${profMark(k.prof)}</span>`).join('')}</div>` : '';
+        // Compétences
+        const sk = (f.skills || []).filter(k => !k.save);
+        const skillsHtml = sk.length ? `<div class="gm-sheet-grid2">${sk.map(k => `<div class="gm-sheet-kv${k.prof ? ' is-prof' : ''}"><span>${esc(k.name)}${profMark(k.prof)}</span><b>${esc(k.mod)}</b></div>`).join('')}</div>` : '';
+        // Attaques
+        const atk = f.attacks || [];
+        const atkHtml = atk.length ? `<div class="gm-sheet-list">${atk.map(a => `<div class="gm-sheet-row"><b>${esc(a.name || '—')}</b><span>${esc(a.bonus || '')}${a.dmg ? ' · ' + esc(a.dmg) : ''}</span>${a.notes ? `<small>${esc(a.notes)}</small>` : ''}</div>`).join('')}</div>` : '';
+        // Magie : infos + emplacements + sorts
+        const si = f.spellInfo || {};
+        const spellInfoHtml = (si.ability || si.dc || si.atk || si.mod) ? `<div class="gm-sheet-pills"><span class="gm-stat-pill">Incant. ${esc(si.ability || '—')}</span><span class="gm-stat-pill">DD ${esc(si.dc || '—')}</span><span class="gm-stat-pill">Atk ${esc(si.atk || '—')}</span></div>` : '';
+        const slots = (f.spellSlots || []).map((d, i) => ({ d, lvl: i })).filter(x => x.d && x.d.total > 0);
+        const slotsHtml = slots.length ? `<div class="gm-sheet-pills">${slots.map(x => { const used = (x.d.used || []).filter(Boolean).length; return `<span class="gm-stat-pill">Niv ${x.lvl + 1} : ${Math.max(0, x.d.total - used)}/${x.d.total}</span>`; }).join('')}</div>` : '';
+        const spells = f.spells || [];
+        const spellsHtml = spells.length ? `<div class="gm-sheet-list">${spells.slice().sort((a, b) => (a.level || 0) - (b.level || 0)).map(sp => `<div class="gm-sheet-row"><b>${(sp.level ? 'N' + sp.level + ' · ' : 'Tour · ')}${esc(sp.name || '—')}</b>${sp.notes ? `<small>${esc(sp.notes)}</small>` : ''}</div>`).join('')}</div>` : '';
+        const magicHtml = (spellInfoHtml || slotsHtml || spellsHtml) ? (spellInfoHtml + slotsHtml + spellsHtml) : '';
+        // Capacités limitées
+        const lim = f.abilitiesLimited || [];
+        const limHtml = lim.length ? `<div class="gm-sheet-pills">${lim.map(c => { const used = (c.used || []).filter(Boolean).length; return `<span class="gm-stat-pill">${esc(c.name)} ${Math.max(0, (c.max || 0) - used)}/${c.max || 0}</span>`; }).join('')}</div>` : '';
+        // Inventaire + bourse
+        const inv = f.inventory || [];
+        const invHtml = inv.length ? `<div class="gm-sheet-list">${inv.map(it => `<div class="gm-sheet-row"><b>${esc(it.name || '—')}${(it.qty && it.qty > 1) ? ' ×' + it.qty : ''}</b>${it.weight ? `<small>${esc(it.weight)}</small>` : ''}</div>`).join('')}</div>` : '';
+        const cur = f.currency || {};
+        const curHtml = (cur.pc || cur.pa || cur.pe || cur.po || cur.pp) ? `<div class="gm-sheet-pills">${[['po', cur.po], ['pa', cur.pa], ['pc', cur.pc], ['pe', cur.pe], ['pp', cur.pp]].filter(c => c[1] && c[1] !== '0').map(c => `<span class="gm-stat-pill">${c[1]} ${c[0].toUpperCase()}</span>`).join('')}</div>` : '';
+        // Traits & dons
+        const tr = f.traits || [];
+        const trHtml = tr.length ? `<div class="gm-sheet-list">${tr.map(t => `<div class="gm-sheet-row"><b>${esc(t.name || '—')}</b>${t.desc ? `<small>${esc(String(t.desc).replace(/<[^>]+>/g, '').slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
+        // Compagnon
+        const cp = f.companion || {};
+        const cpHtml = (cp.name || cp.notes) ? `<div class="gm-sheet-row"><b>${esc(cp.name || 'Compagnon')}</b><span>CA ${esc(cp.ac || '—')} · PV ${esc(cp.hp || '—')}</span>${cp.notes ? `<small>${esc(cp.notes)}</small>` : ''}</div>` : '';
+        // Identité & notes
+        const id = f.identity || {}, nt = f.notes || {};
+        const idRows = [['Historique', id.background], ['Alignement', id.alignment], ['Langues', id.languages], ['Taille', id.size], ['XP', id.xp]].filter(r => r[1]);
+        const idHtml = idRows.length ? `<div class="gm-sheet-grid2">${idRows.map(r => `<div class="gm-sheet-kv"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>` : '';
+        const txtBlock = (lbl, val) => val ? `<div class="gm-sheet-text"><strong>${lbl} :</strong> ${esc(val)}</div>` : '';
+        const notesHtml = [txtBlock('Apparence', id.appearance), txtBlock('Note rapide', nt.quick), txtBlock('Quêtes', nt.quests), txtBlock('PNJ', nt.npcs)].join('');
+        const hd = f.hitDice || {};
+        const hdHtml = (hd.max) ? `<span class="gm-stat-pill">🎲 Dés de vie ${Math.max(0, (parseInt(hd.max) || 0) - (parseInt(hd.spent) || 0))}/${esc(hd.max)} ${esc(hd.size ? 'd' + hd.size : '')}</span>` : '';
+
         return `
             <h2 class="gm-pm-name">${esc(s.name || fallbackName || 'Aventurier')}</h2>
             <div class="gm-pm-sub">${esc([s.cls, s.subclass, s.race, s.level ? ('Niv ' + s.level) : '', s.prof ? ('Maîtrise +' + s.prof) : ''].filter(Boolean).join(' · ') || '—')}</div>
@@ -762,9 +806,23 @@
                 ${s.spellDC ? `<div class="gm-pm-stat">✨ DD<b>${s.spellDC}</b></div>` : ''}
             </div>
             <div class="gm-pm-abilities">${abRow}</div>
-            ${s.concentrating ? '<div class="gm-pm-flag">🌀 Concentration active</div>' : ''}
-            ${(s.deathSaves && (s.deathSaves.s || s.deathSaves.f)) ? `<div class="gm-pm-flag">☠️ Jets contre la mort : ${s.deathSaves.s || 0}✓ / ${s.deathSaves.f || 0}✗</div>` : ''}
-            <div class="gm-pm-section"><strong>États :</strong> ${conds}</div>`;
+            <div class="gm-pm-pills-row">
+                ${s.concentrating ? '<span class="gm-pm-flag">🌀 Concentration</span>' : ''}
+                ${(s.deathSaves && (s.deathSaves.s || s.deathSaves.f)) ? `<span class="gm-pm-flag">☠️ Mort ${s.deathSaves.s || 0}✓/${s.deathSaves.f || 0}✗</span>` : ''}
+                ${hdHtml}
+            </div>
+            <div class="gm-pm-section"><strong>États :</strong> ${conds}</div>
+            ${sec('🛡️ Jets de sauvegarde', savesHtml)}
+            ${sec('🎯 Compétences', skillsHtml)}
+            ${sec('⚔️ Attaques', atkHtml)}
+            ${sec('✨ Magie', magicHtml)}
+            ${sec('🔋 Capacités limitées', limHtml)}
+            ${sec('🎒 Inventaire', invHtml)}
+            ${sec('💰 Bourse', curHtml)}
+            ${sec('📜 Capacités & Dons', trHtml)}
+            ${sec('🐾 Compagnon', cpHtml)}
+            ${sec('👤 Identité', idHtml)}
+            ${notesHtml ? sec('📝 Notes', notesHtml) : ''}`;
     }
     // opts.kickUid → bloc de modération (joueur en ligne) ; opts.offlineUid → bouton retrait (fiche hors-ligne).
     function openSheetModal(s, fallbackName, opts) {
@@ -795,8 +853,12 @@
         ensurePlayerModal().classList.remove('hidden');
     }
     function openPlayerModal(uid) {
-        const p = findLivePlayer(uid); if (!p) return;
-        openSheetModal(p.snapshot || {}, p.character_name, { kickUid: uid });
+        const p = findLivePlayer(uid);
+        if (p) { openSheetModal(p.snapshot || {}, p.character_name, { kickUid: uid }); return; }
+        // Repli : le joueur n'est plus en ligne → on ouvre sa dernière fiche connue.
+        const o = (state.offlineSheets || []).find(x => x.user_id === uid);
+        if (o) { openSheetModal(o.snapshot || {}, o.character_name, { offlineUid: uid }); return; }
+        if (window.showAppToast) window.showAppToast('Fiche indisponible (joueur déconnecté).', '#c0392b');
     }
     function kickDurationMs(v) { if (v === '5m') return 5 * 60000; if (v === '30m') return 30 * 60000; if (v === '60m') return 60 * 60000; if (v === 'perm') return 100 * 365 * 24 * 60 * 60000; return 0; }
     function kickPlayer(uid, v) {

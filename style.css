@@ -1455,6 +1455,10 @@ body.theme-dark .auth-tab.active { color: var(--accent-color); }
 .search-result-item:hover .result-path { color: rgba(255,255,255,0.75); }
 .result-title { font-family: 'Cinzel', serif; font-weight: bold; font-size: 1.05rem; }
 .result-path { font-size: 0.8rem; color: #777; margin-top: 2px; }
+.search-group-head { font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 2px 3px; padding-bottom: 3px; border-bottom: 1px solid rgba(196,180,135,0.5); }
+.search-group-head:first-child { margin-top: 0; }
+.rule-widget-body { font-family: 'Lora', serif; font-size: 0.96rem; line-height: 1.6; color: var(--text-color); white-space: pre-wrap; }
+body.theme-dark .search-group-head { color: var(--accent-color); border-color: rgba(196,155,53,0.3); }
 @keyframes highlightFlash { 0% { background: rgba(230,126,34,0.5); box-shadow: 0 0 16px rgba(230,126,34,0.7); transform: scale(1.02); } 100% { background: transparent; box-shadow: none; transform: scale(1); } }
 .search-highlight-active { animation: highlightFlash 1.2s ease-out 2 !important; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
@@ -1544,6 +1548,16 @@ body.theme-dark .auth-tab.active { color: var(--accent-color); }
 .spell-slot-level-badge { background: linear-gradient(135deg, var(--primary-hover), var(--primary-color)); color: var(--accent-color); border-radius: 999px; text-align: center; padding: 7px 8px; font-family: 'Cinzel', serif; font-size: 0.85rem; font-weight: bold; }
 .spell-slot-mini-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; font-weight: bold; color: #5b4a35; text-transform: uppercase; }
 .spell-slot-mini-field input, .spell-slot-mini-field select { width: 100%; background: white; border: 1px solid var(--soft-border); border-radius: 6px; padding: 6px; outline: none; }
+/* Capacités limitées : ligne de config (nom variable) → flex au lieu de la grille fixe */
+.ability-config-row .spell-slot-config-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.ability-config-row .ab-cfg-name { flex: 1 1 160px; min-width: 140px; align-self: stretch; margin-top: auto; background: white; border: 1px solid var(--soft-border); border-radius: 6px; padding: 8px; font-weight: bold; outline: none; }
+.ability-config-row .ab-cfg-name:focus { border-color: var(--primary-color); }
+.ability-config-row .spell-slot-mini-field { flex: 0 0 auto; }
+.ability-config-row .ab-cfg-max { width: 74px; }
+.ability-config-row .spell-slot-regen-field { flex: 0 1 auto; min-width: 150px; }
+.ability-config-row .ab-cfg-del { flex: 0 0 auto; align-self: center; background: none; border: none; cursor: pointer; font-size: 1rem; color: #c0392b; padding: 4px; }
+.ability-config-row .ab-cfg-del:hover { transform: scale(1.15); }
+body.theme-dark .ability-config-row .ab-cfg-name { background: #2a2118; color: var(--text-color); border-color: rgba(196,155,53,0.3); }
 .spell-slot-config-details { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(122,40,40,0.25); }
 .spell-recovery-pill { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; flex: 1; min-width: 210px; background: rgba(244,232,193,0.85); border: 1px solid #d8c89b; border-radius: 999px; padding: 6px 8px; }
 .spell-recovery-pill span { font-family: 'Cinzel', serif; color: var(--primary-color); font-size: 0.8rem; font-weight: bold; }
