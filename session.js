@@ -107,7 +107,6 @@
         try {
             const ch = window.SupaAuth.presenceChannel(state.code);
             ch.on('broadcast', { event: 'scene' }, ({ payload }) => applyIncomingScene(payload))
-              .on('broadcast', { event: 'ping' }, ({ payload }) => showPing(payload))
               .on('broadcast', { event: 'gift' }, ({ payload }) => receiveGift(payload))
               .on('broadcast', { event: 'sfx' }, ({ payload }) => { if (!payload || !window.MusicPlayer) return; if (payload.builtin && window.MusicPlayer.playBuiltinSfx) window.MusicPlayer.playBuiltinSfx(payload.builtin); else if (payload.url && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(payload.url); })
               .on('broadcast', { event: 'music' }, ({ payload }) => { if (window.MusicPlayer && window.MusicPlayer.applyRemoteMusic) window.MusicPlayer.applyRemoteMusic(payload); })
@@ -134,18 +133,6 @@
         if (p.bg) { document.body.style.backgroundImage = 'url(' + p.bg + ')'; document.body.classList.add('scene-active'); }
         if (p.music && window.MusicPlayer && window.MusicPlayer.playUrl) { try { window.MusicPlayer.playUrl(p.music, '🎬 ' + (p.name || 'Scène')); } catch (e) {} }
         if (window.showAppToast) window.showAppToast('🎬 ' + (p.name ? ('Scène : ' + p.name) : 'Nouvelle ambiance'), '#8a6320');
-    }
-
-    // --- Ping visuel envoyé par le MJ ---
-    function showPing(p) {
-        if (!p) return;
-        const ping = document.createElement('div');
-        ping.className = 'session-ping no-print';
-        ping.style.left = ((p.x || 0.5) * 100) + 'vw';
-        ping.style.top = ((p.y || 0.5) * 100) + 'vh';
-        if (p.color) ping.style.setProperty('--ping-color', p.color);
-        document.body.appendChild(ping);
-        setTimeout(() => ping.remove(), 1700);
     }
 
     // --- Troc / Murmure reçu ---
@@ -244,9 +231,17 @@
         fabPanel.innerHTML = `
             <div class="sfp-head">⚔️ Combat — Round <b>${combatState.round || 1}</b></div>
             <button id="sfp-roll-init" class="sfp-btn">🎲 Lancer mon initiative</button>
+            <div class="sfp-manual">
+                <input type="number" id="sfp-init-manual" class="sfp-manual-input" inputmode="numeric" placeholder="Score réel (dé IRL)">
+                <button id="sfp-init-manual-btn" class="sfp-btn sfp-btn-alt" title="Saisir manuellement mon initiative">✍️</button>
+            </div>
             <div class="sfp-order">${rows}</div>`;
         const rb = document.getElementById('sfp-roll-init');
         if (rb) rb.addEventListener('click', rollInitiative);
+        const mb = document.getElementById('sfp-init-manual-btn');
+        if (mb) mb.addEventListener('click', submitManualInit);
+        const mi = document.getElementById('sfp-init-manual');
+        if (mi) mi.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitManualInit(); } });
     }
 
     function rollInitiative() {
@@ -256,6 +251,17 @@
         const total = d + mod;
         sendToGm('initiative-roll', { charId: state.charId, name: snapName(), total: total });
         if (window.showAppToast) window.showAppToast('🎲 Initiative : ' + d + (mod ? (mod > 0 ? ' +' + mod : ' ' + mod) : '') + ' = ' + total, '#2c3e50');
+        renderFabPanel(); placePanel();
+    }
+
+    // Saisie manuelle (pour ceux qui lancent un vrai dé) : on envoie le score tel quel au MJ.
+    function submitManualInit() {
+        const inp = document.getElementById('sfp-init-manual'); if (!inp) return;
+        const total = parseInt(inp.value, 10);
+        if (isNaN(total)) { inp.focus(); return; }
+        sendToGm('initiative-roll', { charId: state.charId, name: snapName(), total: total });
+        if (window.showAppToast) window.showAppToast('✍️ Initiative envoyée : ' + total, '#2c3e50');
+        inp.value = '';
         renderFabPanel(); placePanel();
     }
 
@@ -486,14 +492,11 @@
         });
     }
 
-    // --- Styles du module (ping + notifications) ---
+    // --- Styles du module (notifications) ---
     function injectStyles() {
         if (document.getElementById('session-styles')) return;
         const st = document.createElement('style'); st.id = 'session-styles';
         st.textContent = `
-        @keyframes session-ping-anim { 0%{ transform:translate(-50%,-50%) scale(0.2); opacity:0.95; } 100%{ transform:translate(-50%,-50%) scale(2.4); opacity:0; } }
-        .session-ping { position:fixed; width:120px; height:120px; border-radius:50%; border:4px solid var(--ping-color,#C49B35); box-shadow:0 0 26px var(--ping-color,#C49B35); pointer-events:none; z-index:9998; transform:translate(-50%,-50%); animation:session-ping-anim 1.6s ease-out forwards; }
-        .session-ping::after { content:''; position:absolute; inset:32%; border-radius:50%; background:var(--ping-color,#C49B35); opacity:0.55; }
         #session-notifs { position:fixed; right:18px; bottom:100px; z-index:9999; display:flex; flex-direction:column; gap:10px; max-width:340px; }
         @keyframes session-notif-in { from{ transform:translateX(40px); opacity:0; } to{ transform:none; opacity:1; } }
         .session-notif { background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:12px; box-shadow:0 8px 28px rgba(0,0,0,0.32); padding:12px 14px; font-family:'Lora',serif; color:#3a2e1f; animation:session-notif-in 0.25s ease-out; }
@@ -518,6 +521,11 @@
         .sfp-head b { font-size:1.1rem; }
         .sfp-btn { width:100%; border:none; border-radius:9px; padding:10px; font-family:'Cinzel',serif; font-weight:bold; cursor:pointer; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; margin-bottom:10px; }
         .sfp-btn:hover { filter:brightness(1.06); }
+        .sfp-manual { display:flex; gap:6px; margin-bottom:10px; }
+        .sfp-manual-input { flex:1; min-width:0; border:1px solid var(--accent-color,#C49B35); border-radius:9px; padding:9px 10px; font-family:'Lora',serif; font-size:0.9rem; background:#fffdf7; color:#3a2e1f; }
+        .sfp-manual-input:focus { outline:none; border-color:var(--primary-color,#7A2828); box-shadow:0 0 0 2px rgba(196,155,53,0.25); }
+        .sfp-btn-alt { width:auto; flex:0 0 auto; margin-bottom:0; padding:9px 14px; background:linear-gradient(160deg,#4a6b53,#3a5642); color:#eef6ef; }
+        body.theme-dark .sfp-manual-input { background:#2a221b; color:var(--text-color,#ece3d2); }
         .sfp-order { display:flex; flex-direction:column; gap:4px; }
         .sfp-row { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:7px; background:rgba(196,155,53,0.12); font-size:0.85rem; }
         .sfp-row.is-turn { background:rgba(196,155,53,0.3); box-shadow:inset 0 0 0 1px var(--accent-color,#C49B35); font-weight:bold; }

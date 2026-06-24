@@ -570,6 +570,17 @@ h1::before, h1::after {
 .widget-third { width: calc(33.333% - 10px); flex-grow: 1; min-width: 90px; }
 @media (max-width: 800px) { .widget-third { width: 100%; } }
 
+/* ============================================================
+   TABLETTE EN MODE PORTRAIT (≈ 700–1024 px) :
+   on force la disposition multi-colonnes « comme PC » au lieu de
+   l'empilement en 1 colonne (cf. point 4a du cahier des charges).
+   ============================================================ */
+@media (min-width: 700px) and (max-width: 1024px) and (orientation: portrait) {
+    .classic-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) !important; gap: 14px; }
+    #layout-tabs-container .tab-content { grid-template-columns: 1fr 1fr !important; }
+    .widget-third { width: calc(33.333% - 10px) !important; }
+}
+
 .collapsible-header {
     cursor: pointer;
     transition: background 0.2s;
@@ -1267,6 +1278,15 @@ body.theme-dark .auth-tab.active { color: var(--accent-color); }
 }
 #btn-toggle-dice:hover { background: linear-gradient(135deg, #b03a3a, var(--primary-hover)); box-shadow: var(--shadow-crimson); animation: none; }
 #btn-toggle-dice:active { cursor: grabbing !important; }
+/* Mobile & tablette (écrans tactiles) : bouton compact (icône ronde) et déplaçable. */
+@media (hover: none) and (pointer: coarse) {
+    #btn-toggle-dice {
+        width: 48px; height: 48px; padding: 0; border-radius: 50%;
+        font-size: 0; line-height: 0; animation: none;
+        display: flex; align-items: center; justify-content: center;
+    }
+    #btn-toggle-dice::before { content: '🎲'; font-size: 1.5rem; line-height: 1; }
+}
 
 #dice-drawer {
     position: fixed; right: -390px; top: 100px; width: 385px;
