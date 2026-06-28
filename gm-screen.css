@@ -257,7 +257,21 @@
 /* ---- Lanceur (bouton d'accueil de l'écran MJ) ---- */
 #btn-open-gm-screen.gm-launch { background: linear-gradient(160deg, #7A2828, #5a1c1c); color: #f0e6d2; }
 
-/* ---- Phase 2 : Murmure & Troc ---- */
+/* ---- Phase 2 : Vue partagée, Ping, Murmure & Troc ---- */
+.gm-shared-view {
+    position: relative; width: 100%; min-height: 180px; border-radius: 10px;
+    background-color: rgba(122,40,40,0.04);
+    background-image: repeating-linear-gradient(45deg, rgba(122,40,40,0.05), rgba(122,40,40,0.05) 12px, rgba(196,155,53,0.06) 12px, rgba(196,155,53,0.06) 24px);
+    background-size: cover; background-position: center;
+    border: 1px dashed rgba(122,40,40,0.35); cursor: crosshair; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; user-select: none; touch-action: none;
+}
+.gm-shared-view.has-bg { border-style: solid; background-blend-mode: normal; }
+.gm-shared-hint { font-size: 0.82rem; color: #8a7a5e; font-style: italic; text-align: center; padding: 14px; max-width: 82%; }
+.gm-shared-hint b { color: var(--primary-color, #7A2828); }
+.gm-ping-local { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--ping-color, #C49B35); box-shadow: 0 0 16px var(--ping-color, #C49B35); transform: translate(-50%, -50%); pointer-events: none; animation: gm-ping-anim 1.3s ease-out forwards; }
+.gm-ping-local::after { content: ''; position: absolute; inset: 32%; border-radius: 50%; background: var(--ping-color, #C49B35); opacity: 0.6; }
+@keyframes gm-ping-anim { 0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; } }
 #gm-scene-img-label.has-img { background: rgba(39,174,96,0.18); border-color: #27ae60; }
 .gm-trade-label { font-size: 0.8rem; color: #6a5a3e; font-weight: bold; flex: 0 0 auto; }
 .gm-trade-tabs { display: flex; gap: 6px; }
@@ -304,13 +318,9 @@
 
 /* ---- Préparation (arbre) ---- */
 .gm-tree-toolbar .gm-input { flex: 1; }
-.gm-tree { display: flex; flex-direction: column; gap: 2px; max-height: 440px; min-height: 120px; overflow-y: auto; }
-.gm-tree-row { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 7px; cursor: grab; }
+.gm-tree { display: flex; flex-direction: column; gap: 2px; max-height: 440px; overflow-y: auto; }
+.gm-tree-row { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 7px; cursor: pointer; }
 .gm-tree-row:hover { background: rgba(196,155,53,0.12); }
-/* États du glisser-déposer (rangement dans les dossiers / sortie à la racine) */
-.gm-tree-row.gm-tree-dragging { opacity: 0.45; }
-.gm-tree-row.gm-tree-dragover { box-shadow: inset 0 -2px 0 var(--accent-color, #C49B35); }
-.gm-tree-row.gm-tree-dropinto { background: rgba(196,155,53,0.28); outline: 1px dashed var(--accent-color, #C49B35); outline-offset: -2px; }
 .gm-tree-node.is-target > .gm-tree-row { background: rgba(196,155,53,0.18); }
 .gm-tree-node.is-selected > .gm-tree-row { box-shadow: inset 0 0 0 1px var(--accent-color, #C49B35); }
 .gm-tree-caret { width: 14px; text-align: center; color: var(--primary-color, #7A2828); font-size: 0.8rem; flex-shrink: 0; }
@@ -331,7 +341,7 @@
 .gm-clickable:hover { text-decoration-color: currentColor; }
 .gm-modal-overlay { position: fixed; inset: 0; z-index: 7000; background: rgba(20,14,8,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .gm-modal-overlay.hidden { display: none; }
-.gm-modal-box { position: relative; width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto; background: var(--sheet-bg-color, #FAF3E0); border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); border-radius: 16px; box-shadow: var(--shadow-lg, 0 16px 48px rgba(0,0,0,0.4)); padding: 22px; color: var(--text-color); }
+.gm-modal-box { position: relative; width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; background: var(--sheet-bg-color, #FAF3E0); border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); border-radius: 16px; box-shadow: var(--shadow-lg, 0 16px 48px rgba(0,0,0,0.4)); padding: 22px; color: var(--text-color); }
 .gm-modal-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); background: var(--widget-bg, #fffdf7); color: var(--primary-color, #7A2828); cursor: pointer; font-size: 0.95rem; }
 .gm-modal-close:hover { background: rgba(231,76,60,0.14); color: #c0392b; }
 .gm-pm-name { font-family: 'Cinzel', serif; color: var(--primary-color, #7A2828); margin: 0 30px 2px 0; }
@@ -346,30 +356,38 @@
 .gm-pm-ab-m { display: block; font-size: 0.72rem; color: #8a7a5e; }
 .gm-pm-flag { font-size: 0.85rem; color: var(--primary-color, #7A2828); margin-bottom: 6px; }
 .gm-pm-section { font-size: 0.85rem; margin-bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.gm-pm-mod { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--soft-border, rgba(122,40,40,0.22)); padding-top: 12px; margin-top: 10px; }
-.gm-pm-pills-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-/* ---- Fiche joueur complète (sections) ---- */
-.gm-sheet-sec { border-top: 1px solid var(--soft-border, rgba(122,40,40,0.18)); padding-top: 10px; margin-top: 10px; }
-.gm-sheet-sec-h { font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.86rem; color: var(--primary-color, #7A2828); margin-bottom: 7px; }
-.gm-sheet-pills { display: flex; flex-wrap: wrap; gap: 5px; }
-.gm-sheet-pills .gm-stat-pill.is-prof { background: rgba(196,155,53,0.28); font-weight: bold; }
-.gm-sheet-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 5px; }
-.gm-sheet-kv { display: flex; justify-content: space-between; gap: 8px; background: var(--widget-bg, #fffdf9); border: 1px solid var(--soft-border, rgba(122,40,40,0.14)); border-radius: 7px; padding: 5px 9px; font-size: 0.8rem; }
-.gm-sheet-kv.is-prof { border-color: var(--accent-color, #C49B35); }
-.gm-sheet-kv b { color: var(--text-color); }
-.gm-sheet-list { display: flex; flex-direction: column; gap: 5px; }
-.gm-sheet-row { background: var(--widget-bg, #fffdf9); border: 1px solid var(--soft-border, rgba(122,40,40,0.14)); border-radius: 8px; padding: 6px 10px; font-size: 0.82rem; display: flex; flex-direction: column; gap: 1px; }
-.gm-sheet-row b { color: var(--primary-color, #7A2828); }
-.gm-sheet-row span { color: var(--text-color); }
-.gm-sheet-row small { color: #8a7a5e; font-size: 0.74rem; }
-.gm-sheet-text { font-size: 0.82rem; color: var(--text-color); margin-bottom: 6px; line-height: 1.4; white-space: pre-wrap; }
-.gm-sheet-text strong { color: var(--primary-color, #7A2828); }
-body.theme-dark .gm-sheet-kv, body.theme-dark .gm-sheet-row { background: linear-gradient(158deg, #2c231b, #251e18); }
-body.theme-dark .gm-sheet-row small, body.theme-dark .gm-sheet-text { color: #b6a484; }
+.gm-pm-mod { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--soft-border, rgba(122,40,40,0.22)); padding-top: 12px; }
 body.theme-dark .gm-modal-box { background: linear-gradient(172deg, #1d1712, #241c16); }
 body.theme-dark .gm-pm-stat { background: linear-gradient(158deg, #2c231b, #251e18); }
 body.theme-dark .gm-pm-sub, body.theme-dark .gm-pm-stat, body.theme-dark .gm-pm-ab-m { color: #b6a484; }
 body.theme-dark .gm-modal-close { background: #2a2118; }
+
+/* --- Fiche joueur enrichie (statut, ban, sections détaillées) --- */
+.gm-modal-box { max-width: 540px; }
+.gm-pm-statusrow { margin: -6px 0 10px; }
+.gm-pm-status { font-size: 0.78rem; font-weight: bold; }
+.gm-pm-status.on { color: #27ae60; }
+.gm-pm-status.off { color: #8a7a5e; }
+.gm-pm-ban { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: rgba(192,57,43,0.1); border: 1px solid rgba(192,57,43,0.3); color: #c0392b; border-radius: 9px; padding: 7px 11px; font-size: 0.82rem; font-weight: bold; margin-bottom: 12px; }
+.gm-pm-ban .gm-btn { margin-left: auto; }
+.gm-live-ban { font-size: 0.85rem; }
+
+.gm-pm-details { margin: 4px 0 14px; border-top: 1px dashed var(--soft-border, rgba(122,40,40,0.22)); padding-top: 10px; }
+.gm-pm-det { border: 1px solid var(--soft-border, rgba(122,40,40,0.18)); border-radius: 9px; margin-bottom: 7px; background: var(--widget-bg, #fffdf9); overflow: hidden; }
+.gm-pm-det > summary { cursor: pointer; padding: 8px 12px; font-family: 'Cinzel', serif; font-size: 0.82rem; font-weight: bold; color: var(--primary-color, #7A2828); list-style: none; user-select: none; }
+.gm-pm-det > summary::-webkit-details-marker { display: none; }
+.gm-pm-det > summary::after { content: '▾'; float: right; opacity: 0.6; transition: transform 0.2s; }
+.gm-pm-det[open] > summary::after { transform: rotate(180deg); }
+.gm-pm-det-body { padding: 4px 12px 11px; font-size: 0.82rem; color: var(--text-color); }
+.gm-pm-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 5px 0; border-top: 1px solid var(--soft-border, rgba(122,40,40,0.1)); }
+.gm-pm-row:first-child { border-top: none; }
+.gm-pm-row-n { font-weight: bold; }
+.gm-pm-tag { font-size: 0.68rem; font-weight: bold; color: var(--primary-color, #7A2828); background: rgba(196,155,53,0.16); border-radius: 20px; padding: 2px 9px; }
+.gm-pm-row-x { font-size: 0.74rem; color: #8a7a5e; margin-left: auto; }
+.gm-pm-row-sub { flex-basis: 100%; font-size: 0.76rem; color: #6a5a3e; font-style: italic; margin-top: 2px; }
+.gm-pm-note { white-space: pre-wrap; font-size: 0.8rem; color: #5a4a36; line-height: 1.45; }
+body.theme-dark .gm-pm-det { background: linear-gradient(158deg, #2c231b, #251e18); }
+body.theme-dark .gm-pm-det-body, body.theme-dark .gm-pm-row-x, body.theme-dark .gm-pm-row-sub, body.theme-dark .gm-pm-note { color: #b6a484; }
 
 /* ---- Responsive ---- */
 @media (max-width: 1100px) {

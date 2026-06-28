@@ -171,6 +171,39 @@ window.SupaAuth = {
             .subscribe();
     },
 
+    // --- Bannissement serveur (table session_bans + trigger anti-join) ---
+    // Bannit un joueur jusqu'à `untilMs` (timestamp ms). until=0 → kick simple (lève le ban).
+    async banPlayer(sessionId, userId, untilMs) {
+        if (!this.currentUser || !sessionId || !userId) return;
+        if (!untilMs) return this.unbanPlayer(sessionId, userId);
+        const { error } = await _supabase.from('session_bans')
+            .upsert({
+                session_id: sessionId,
+                user_id: userId,
+                until: new Date(untilMs).toISOString(),
+                created_by: this.currentUser.id
+            }, { onConflict: 'session_id,user_id' });
+        if (error) console.warn('banPlayer:', error);
+    },
+
+    async unbanPlayer(sessionId, userId) {
+        if (!this.currentUser || !sessionId || !userId) return;
+        const { error } = await _supabase.from('session_bans')
+            .delete().eq('session_id', sessionId).eq('user_id', userId);
+        if (error) console.warn('unbanPlayer:', error);
+    },
+
+    // Renvoie { userId: untilMs } des bans actifs de la session (pour l'UI MJ).
+    async loadSessionBans(sessionId) {
+        if (!this.currentUser || !sessionId) return {};
+        const { data, error } = await _supabase.from('session_bans')
+            .select('user_id, until').eq('session_id', sessionId);
+        if (error) { console.warn('loadSessionBans:', error); return {}; }
+        const now = Date.now(), out = {};
+        (data || []).forEach(r => { const t = new Date(r.until).getTime(); if (t > now) out[r.user_id] = t; });
+        return out;
+    },
+
     // --- Côté joueur ---
     async joinSession(code, charId, charName) {
         if (!this.currentUser) throw new Error('NOT_LOGGED_IN');
@@ -293,64 +326,6 @@ window.SupaAuth = {
         if (!this.currentUser || !id) return;
         const { error } = await _supabase.from('gm_tree').delete().eq('id', id).eq('gm_id', this.currentUser.id);
         if (error) console.warn('treeDelete:', error);
-    },
-
-    // =====================================================
-    // PROFIL MJ DANS LE CLOUD (table gm_campaigns)
-    // Métadonnées de campagne + état complet de l'écran MJ (JSONB).
-    // =====================================================
-    // Renvoie null si la table est injoignable (ex. SQL pas encore lancé), [] si vide.
-    async gmCampaignsList() {
-        if (!this.currentUser) return null;
-        const { data, error } = await _supabase
-            .from('gm_campaigns')
-            .select('id, name, archived, created_at, updated_at')
-            .eq('gm_id', this.currentUser.id)
-            .order('created_at', { ascending: true });
-        if (error) { console.warn('gmCampaignsList:', error); return null; }
-        return data || [];
-    },
-
-    async gmCampaignState(id) {
-        if (!this.currentUser || !id) return null;
-        const { data, error } = await _supabase
-            .from('gm_campaigns').select('state')
-            .eq('id', String(id)).eq('gm_id', this.currentUser.id).maybeSingle();
-        if (error) { console.warn('gmCampaignState:', error); return null; }
-        return data ? data.state : null;
-    },
-
-    // Upsert complet d'une campagne (création / synchro métadonnées + état).
-    async gmCampaignUpsert(camp) {
-        if (!this.currentUser || !camp || !camp.id) return null;
-        const row = {
-            id: String(camp.id),
-            gm_id: this.currentUser.id,
-            name: camp.name || 'Partie',
-            archived: !!camp.archived,
-            updated_at: new Date().toISOString()
-        };
-        if (camp.state !== undefined) row.state = camp.state || {};
-        const { data, error } = await _supabase
-            .from('gm_campaigns').upsert(row, { onConflict: 'id' }).select().single();
-        if (error) { console.warn('gmCampaignUpsert:', error); return null; }
-        return data;
-    },
-
-    // Écriture rapide du seul état (sauvegardes fréquentes débauncées).
-    async gmCampaignSaveState(id, state) {
-        if (!this.currentUser || !id) return;
-        const { error } = await _supabase.from('gm_campaigns')
-            .update({ state: state || {}, updated_at: new Date().toISOString() })
-            .eq('id', String(id)).eq('gm_id', this.currentUser.id);
-        if (error) console.warn('gmCampaignSaveState:', error);
-    },
-
-    async gmCampaignDelete(id) {
-        if (!this.currentUser || !id) return;
-        const { error } = await _supabase.from('gm_campaigns')
-            .delete().eq('id', String(id)).eq('gm_id', this.currentUser.id);
-        if (error) console.warn('gmCampaignDelete:', error);
     }
 };
 

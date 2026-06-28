@@ -89,20 +89,11 @@
     ];
 
     // ---------- État (multi-campagnes) ----------
-    // localStorage sert de CACHE rapide / repli hors-ligne ; la source de
-    // vérité est le cloud (table gm_campaigns), pour retrouver ses profils
-    // MJ depuis n'importe quel appareil (cf. point 1d du cahier des charges).
     const CAMP_KEY = 'dnd-gm-campaigns';
     let campaigns = loadCampaigns();
     let activeCampaignId = null;
     function loadCampaigns() { try { return JSON.parse(localStorage.getItem(CAMP_KEY)) || []; } catch (e) { return []; } }
-    function saveCampaigns() {
-        try { localStorage.setItem(CAMP_KEY, JSON.stringify(campaigns)); } catch (e) {}
-        // Synchro des métadonnées (nom / archivée) vers le cloud, sans toucher à l'état.
-        if (window.SupaAuth && window.SupaAuth.currentUser && window.SupaAuth.gmCampaignUpsert) {
-            campaigns.forEach(c => window.SupaAuth.gmCampaignUpsert({ id: c.id, name: c.name, archived: !!c.archived }));
-        }
-    }
+    function saveCampaigns() { try { localStorage.setItem(CAMP_KEY, JSON.stringify(campaigns)); } catch (e) {} }
     function stateKey() { return 'dnd-gm-state-' + activeCampaignId; }
     function defaultState() {
         return {
@@ -110,30 +101,10 @@
             party: [], initiative: [], round: 1, turnIndex: 0, combatActive: false,
             monsters: [], npcs: [], quests: [], notes: '', scenes: [], soundboard: [],
             map: { bg: null, gridSize: 48, showGrid: true }, tokens: [],
-            env: { time: '', weather: '☀️ Dégagé' }, diceLog: [], offlineSheets: []
+            env: { time: '', weather: '☀️ Dégagé' }, diceLog: []
         };
     }
     let state = defaultState();
-
-    // ---------- Synchro cloud de l'état MJ (débauncée) ----------
-    // On ne pousse PAS roomCode/sessionId (données de session éphémères,
-    // propres à l'appareil) : ce sont l'état « profil » et non la partie en cours.
-    function exportState(st) { const o = Object.assign({}, st); delete o.roomCode; delete o.sessionId; return o; }
-    const GmCloud = {
-        timer: null, pendingId: null,
-        queueState(id) {
-            if (!window.SupaAuth || !window.SupaAuth.currentUser || !window.SupaAuth.gmCampaignSaveState) return;
-            this.pendingId = id;
-            clearTimeout(this.timer);
-            this.timer = setTimeout(() => this.flush(), 1200);
-        },
-        flush() {
-            const id = this.pendingId; this.pendingId = null;
-            if (!id || id !== activeCampaignId) return;             // campagne changée → déjà en cache local
-            try { window.SupaAuth.gmCampaignSaveState(id, exportState(state)); } catch (e) { console.warn('gm state save:', e); }
-        },
-        flushNow() { clearTimeout(this.timer); this.flush(); }
-    };
 
     // ---------- Données réseau (non persistées : rechargées depuis Supabase) ----------
     const live = { players: [], online: new Set(), netChannel: null, presChannel: null, bans: {} };
@@ -146,7 +117,7 @@
     let pendingTreeUpload = null;
     let treeTextTimer = null;
     function load() { if (!activeCampaignId) return defaultState(); try { const s = JSON.parse(localStorage.getItem(stateKey())); return Object.assign(defaultState(), s || {}); } catch (e) { return defaultState(); } }
-    function save() { if (!activeCampaignId) return; try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} GmCloud.queueState(activeCampaignId); }
+    function save() { if (!activeCampaignId) return; try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} }
 
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -208,12 +179,27 @@
                     <div class="gm-card-body"><div id="gm-live-list" class="gm-live-list"></div></div>
                 </div>
 
-                <div class="gm-card gm-span-2 gm-card-offline">
-                    <div class="gm-card-head"><span class="gm-card-icon">💤</span> Fiches hors-ligne
+                <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">📁</span> Préparation
                         <span class="gm-spacer"></span>
-                        <span class="gm-readonly-note">Dernière version vue — conservée même après déconnexion</span>
+                        <span id="gm-tree-target" class="gm-readonly-note">Cible : Racine</span>
                     </div>
-                    <div class="gm-card-body"><div id="gm-offline-list" class="gm-live-list"></div></div>
+                    <div class="gm-card-body">
+                        <div class="gm-row gm-tree-toolbar">
+                            <input id="gm-tree-name" class="gm-input" placeholder="Nom de l'élément…">
+                            <select id="gm-tree-kind" class="gm-select" style="flex:0 0 auto; width:auto;">
+                                <option value="folder">📁 Dossier</option>
+                                <option value="text">📝 Texte</option>
+                                <option value="link">🔗 Lien</option>
+                                <option value="image">🖼️ Image</option>
+                                <option value="map">🗺️ Map</option>
+                                <option value="monster">👹 Monstre</option>
+                            </select>
+                            <button id="gm-tree-add" class="gm-add" title="Ajouter dans la cible">＋</button>
+                        </div>
+                        <div id="gm-tree-root" class="gm-tree"></div>
+                        <input type="file" id="gm-tree-file" accept="image/*" style="display:none;">
+                    </div>
                 </div>
 
                 <div class="gm-card">
@@ -353,6 +339,16 @@
                 </div>
 
                 <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">📍</span> Vue partagée &amp; Ping
+                        <span class="gm-spacer"></span>
+                        <span class="gm-readonly-note">Clic prolongé = ping</span>
+                    </div>
+                    <div class="gm-card-body">
+                        <div id="gm-shared-view" class="gm-shared-view"><span class="gm-shared-hint">Applique une scène avec image, puis fais un <b>clic prolongé</b> ici pour envoyer un ping lumineux à tous les joueurs.</span></div>
+                    </div>
+                </div>
+
+                <div class="gm-card gm-span-2">
                     <div class="gm-card-head"><span class="gm-card-icon">✉️</span> Murmure &amp; Troc</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -383,7 +379,6 @@
             <aside class="gm-sidebar">
                 <div class="gm-side-tabs">
                     <button class="gm-side-tab active" data-side="chat">🎲 Dés</button>
-                    <button class="gm-side-tab" data-side="prep">📁 Prépa</button>
                     <button class="gm-side-tab" data-side="journal">📖 Journal</button>
                     <button class="gm-side-tab" data-side="compendium">🔎 Compendium</button>
                 </div>
@@ -402,28 +397,6 @@
                     <div class="gm-side-card gm-side-grow">
                         <div class="gm-side-card-head">📜 Historique des lancers</div>
                         <div id="gm-dice-log" class="gm-dice-log"></div>
-                    </div>
-                </div>
-
-                <!-- Panneau Préparation (arbre de prépa, déplaçable par glisser-déposer) -->
-                <div class="gm-side-panel gm-side-prep">
-                    <div class="gm-side-card gm-side-grow">
-                        <div class="gm-side-card-head" style="display:flex; align-items:center; gap:6px;">📁 Préparation <span id="gm-tree-target" class="gm-readonly-note" style="margin-left:auto; font-weight:normal;">Cible : Racine</span></div>
-                        <div class="gm-row gm-tree-toolbar">
-                            <input id="gm-tree-name" class="gm-input" placeholder="Nom de l'élément…">
-                            <select id="gm-tree-kind" class="gm-select" style="flex:0 0 auto; width:auto;">
-                                <option value="folder">📁 Dossier</option>
-                                <option value="text">📝 Texte</option>
-                                <option value="link">🔗 Lien</option>
-                                <option value="image">🖼️ Image</option>
-                                <option value="map">🗺️ Map</option>
-                                <option value="monster">👹 Monstre</option>
-                            </select>
-                            <button id="gm-tree-add" class="gm-add" title="Ajouter dans la cible">＋</button>
-                        </div>
-                        <div class="gm-readonly-note" style="margin:2px 0 6px;">↕ Glisse un élément sur un <b>dossier</b> pour l'y ranger, ou dans la zone vide pour le sortir à la racine.</div>
-                        <div id="gm-tree-root" class="gm-tree"></div>
-                        <input type="file" id="gm-tree-file" accept="image/*" style="display:none;">
                     </div>
                 </div>
 
@@ -578,8 +551,20 @@
     function applyScene(s) {
         if (!s) return;
         if (s.bg) document.body.style.backgroundImage = `url(${s.bg})`;
+        updateSharedView(s.bg);
         if (s.music && window.MusicPlayer && window.MusicPlayer.playUrl) { try { window.MusicPlayer.playUrl(s.music, '🎬 ' + (s.name || 'Scène')); } catch (e) {} }
         if (window.showAppToast) window.showAppToast('🎬 Scène « ' + (s.name || '') + ' » appliquée', '#8a6320');
+    }
+    function updateSharedView(bg) {
+        const sv = byId('gm-shared-view'); if (!sv) return;
+        if (bg) { sv.style.backgroundImage = `url(${bg})`; sv.classList.add('has-bg'); const h = sv.querySelector('.gm-shared-hint'); if (h) h.remove(); }
+    }
+    function showLocalPing(container, x, y, color) {
+        const ping = document.createElement('div'); ping.className = 'gm-ping-local';
+        ping.style.left = (x * 100) + '%'; ping.style.top = (y * 100) + '%';
+        if (color) ping.style.setProperty('--ping-color', color);
+        container.appendChild(ping);
+        setTimeout(() => ping.remove(), 1500);
     }
     function renderTradeTargets() {
         const sel = byId('gm-trade-target'); if (!sel) return;
@@ -630,16 +615,17 @@
             if (statusEl) statusEl.textContent = 'Hors ligne';
             return;
         }
-        const onlinePlayers = live.players.filter(p => live.online.has(p.user_id));
-        if (statusEl) statusEl.textContent = live.players.length ? (onlinePlayers.length + ' en ligne / ' + live.players.length) : 'En attente';
-        if (!onlinePlayers.length) {
-            el.innerHTML = `<div class="gm-empty">${live.players.length ? 'Aucun joueur en ligne — leurs dernières fiches restent dans « Fiches hors-ligne » ci-dessous.' : ('En attente de joueurs… Donne-leur le code <b>' + esc(state.roomCode || '') + '</b> (menu ☰ → « Rejoindre une session »).')}</div>`;
-            renderOfflineSheets();
+        const onlineCount = live.players.filter(p => live.online.has(p.user_id)).length;
+        if (statusEl) statusEl.textContent = live.players.length ? (onlineCount + ' en ligne / ' + live.players.length) : 'En attente';
+        if (!live.players.length) {
+            el.innerHTML = `<div class="gm-empty">En attente de joueurs… Donne-leur le code <b>${esc(state.roomCode || '')}</b> (menu ☰ → « Rejoindre une session »).</div>`;
             return;
         }
-        el.innerHTML = onlinePlayers.map(p => {
+        el.innerHTML = live.players.map(p => {
             const s = p.snapshot || {};
-            const online = true;
+            const online = live.online.has(p.user_id);
+            const banned = live.bans[p.user_id] && live.bans[p.user_id] > Date.now();
+            const seen = (!online && p.updated_at) ? timeAgo(p.updated_at) : '';
             const hpMax = Number(s.hpMax) || 0, hpCur = Number(s.hpCur) || 0;
             const ratio = hpMax > 0 ? Math.max(0, Math.min(1, hpCur / hpMax)) : 0;
             const low = ratio > 0 && ratio <= 0.33;
@@ -651,9 +637,10 @@
                 <div class="gm-live-top">
                     <span class="gm-live-dot ${online ? 'on' : ''}" title="${online ? 'En ligne' : 'Hors ligne — dernier état connu'}"></span>
                     <span class="gm-live-name gm-clickable" data-act="player-sheet" data-uid="${esc(p.user_id)}" title="Voir la fiche complète">${esc(s.name || p.character_name || 'Aventurier')}</span>
+                    ${banned ? '<span class="gm-live-ban" title="Joueur banni">🚫</span>' : ''}
                     ${s.concentrating ? '<span class="gm-live-conc" title="Concentration active">🌀</span>' : ''}
                     <span class="gm-spacer"></span>
-                    <span class="gm-party-sub">${esc(sub || '—')}</span>
+                    <span class="gm-party-sub">${seen ? esc('⚪ vu ' + seen) : esc(sub || '—')}</span>
                     <button class="gm-del-x" data-act="player-kick" data-uid="${esc(p.user_id)}" title="Modérer / exclure ce joueur">✕</button>
                 </div>
                 <div class="gm-live-stats">
@@ -669,62 +656,6 @@
                 ${conds ? `<div class="gm-live-conds">${conds}</div>` : ''}
             </div>`;
         }).join('');
-        renderOfflineSheets();
-    }
-
-    // ---------- Fiches hors-ligne (dernière version vue, conservée) ----------
-    // Met à jour le cache du dernier snapshot connu pour un joueur.
-    function stashOfflineSheet(p) {
-        if (!p || !p.user_id) return;
-        const snap = p.snapshot || null;
-        if (!snap || !Object.keys(snap).length) return;
-        if (!Array.isArray(state.offlineSheets)) state.offlineSheets = [];
-        const entry = { user_id: p.user_id, character_name: (snap.name || p.character_name || 'Aventurier'), snapshot: snap, ts: Date.now() };
-        const i = state.offlineSheets.findIndex(o => o.user_id === p.user_id);
-        if (i >= 0) state.offlineSheets[i] = entry; else state.offlineSheets.push(entry);
-    }
-    function removeOfflineSheet(uid) {
-        if (!Array.isArray(state.offlineSheets)) return;
-        state.offlineSheets = state.offlineSheets.filter(o => o.user_id !== uid);
-        save(); renderOfflineSheets();
-    }
-    function renderOfflineSheets() {
-        const el = byId('gm-offline-list'); if (!el) return;
-        const sheets = (state.offlineSheets || []).filter(o => !live.online.has(o.user_id)); // pas ceux actuellement en ligne
-        if (!sheets.length) {
-            el.innerHTML = `<div class="gm-empty">Aucune fiche hors-ligne mémorisée. Quand un joueur se déconnecte, sa dernière fiche apparaît ici.</div>`;
-            return;
-        }
-        sheets.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-        el.innerHTML = sheets.map(o => {
-            const s = o.snapshot || {};
-            const hpMax = Number(s.hpMax) || 0, hpCur = Number(s.hpCur) || 0;
-            const ratio = hpMax > 0 ? Math.max(0, Math.min(1, hpCur / hpMax)) : 0;
-            const sub = [s.cls, s.level ? ('Niv ' + s.level) : '', s.race].filter(Boolean).join(' · ');
-            const when = o.ts ? new Date(o.ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-            return `<div class="gm-live-item is-offline">
-                <div class="gm-live-top">
-                    <span class="gm-live-dot" title="Hors ligne — dernière version vue"></span>
-                    <span class="gm-live-name gm-clickable" data-act="offline-sheet" data-uid="${esc(o.user_id)}" title="Voir la dernière fiche connue">${esc(s.name || o.character_name || 'Aventurier')}</span>
-                    <span class="gm-spacer"></span>
-                    <span class="gm-party-sub">${esc(sub || '—')}</span>
-                    <button class="gm-del-x" data-act="offline-remove" data-uid="${esc(o.user_id)}" title="Retirer cette fiche">✕</button>
-                </div>
-                <div class="gm-live-stats">
-                    <span class="gm-stat-pill">🛡️ CA ${s.ac != null ? s.ac : '—'}</span>
-                    <span class="gm-stat-pill">👁️ ${s.passivePerception != null ? s.passivePerception : '—'}</span>
-                    ${when ? `<span class="gm-stat-pill">🕓 ${esc(when)}</span>` : ''}
-                </div>
-                <div class="gm-live-hp">
-                    <span class="gm-live-hp-num">❤️ ${s.hpCur != null ? s.hpCur : '?'} / ${s.hpMax != null ? s.hpMax : '?'}${s.hpTemp ? ` <span class="gm-live-temp">+${s.hpTemp}</span>` : ''}</span>
-                    <div class="gm-hp-bar"><div class="gm-hp-fill" style="width:${ratio * 100}%;"></div></div>
-                </div>
-            </div>`;
-        }).join('');
-    }
-    function openOfflineSheet(uid) {
-        const o = (state.offlineSheets || []).find(x => x.user_id === uid); if (!o) return;
-        openSheetModal(o.snapshot || {}, o.character_name, { offlineUid: uid });
     }
 
     // ---------- Modération des joueurs (fiche modale + kick/ban) ----------
@@ -739,64 +670,94 @@
             if (e.target === m || e.target.closest('[data-act="player-modal-close"]')) { m.classList.add('hidden'); return; }
             const c = e.target.closest('[data-act="player-kick-confirm"]');
             if (c) { const v = (byId('gm-kick-duration') || {}).value || '0'; kickPlayer(c.dataset.uid, v); return; }
-            const r = e.target.closest('[data-act="offline-remove"]');
-            if (r) { removeOfflineSheet(r.dataset.uid); m.classList.add('hidden'); }
+            const u = e.target.closest('[data-act="player-unban"]');
+            if (u) { unbanPlayer(u.dataset.uid); }
         });
         return m;
     }
-    // Corps de fiche COMPLÈTE (lecture seule) — joueur en ligne ou fiche hors-ligne.
-    function sheetBodyHtml(s, fallbackName) {
-        const f = s.full || {};
-        const ab = s.abilities || {};
+    // Temps relatif compact ("il y a 3 min", "il y a 2 h"…)
+    function timeAgo(iso) {
+        const t = iso ? new Date(iso).getTime() : 0; if (!t) return '';
+        const d = Math.max(0, Date.now() - t), m = Math.round(d / 60000);
+        if (m < 1) return "à l'instant";
+        if (m < 60) return 'il y a ' + m + ' min';
+        const h = Math.round(m / 60); if (h < 24) return 'il y a ' + h + ' h';
+        return 'il y a ' + Math.round(h / 24) + ' j';
+    }
+
+    // Sections détaillées de la fiche (inventaire, sorts, attaques, dons, notes…).
+    function renderPlayerDetails(d) {
+        if (!d) return '<div class="gm-readonly-note">Le joueur n\'a pas encore partagé de fiche détaillée (ancienne version ou aucune donnée).</div>';
+        const sec = (title, inner) => inner ? `<details class="gm-pm-det"><summary>${title}</summary><div class="gm-pm-det-body">${inner}</div></details>` : '';
+        const pre = txt => txt ? `<div class="gm-pm-note">${esc(txt).replace(/\n/g, '<br>')}</div>` : '';
+        const id = d.identity || {}, comp = d.companion || {};
+
+        const identInner = [
+            id.alignment ? `<b>Alignement :</b> ${esc(id.alignment)}` : '',
+            id.languages ? `<b>Langues :</b> ${esc(id.languages)}` : '',
+            id.appearance ? pre(id.appearance) : ''
+        ].filter(Boolean).join('<br>');
+
+        const invInner = (d.inventory || []).length ? (d.inventory || []).map(it =>
+            `<div class="gm-pm-row"><span class="gm-pm-row-n">${esc(it.name || '?')}${(it.qty && it.qty > 1) ? ' ×' + it.qty : ''}</span>${it.category ? `<span class="gm-pm-tag">${esc(it.category)}</span>` : ''}${it.weight ? `<span class="gm-pm-row-x">${esc(it.weight)}</span>` : ''}</div>`
+        ).join('') : '';
+
+        const atkInner = (d.attacks || []).length ? (d.attacks || []).map(a =>
+            `<div class="gm-pm-row"><span class="gm-pm-row-n">⚔️ ${esc(a.name || '?')}</span>${a.bonus ? `<span class="gm-pm-tag">${esc(a.bonus)}</span>` : ''}${a.dmg ? `<span class="gm-pm-row-x">${esc(a.dmg)}</span>` : ''}${a.notes ? `<div class="gm-pm-row-sub">${esc(a.notes)}</div>` : ''}</div>`
+        ).join('') : '';
+
+        const spInner = (d.spells || []).length ? (d.spells || []).slice().sort((x, y) => (x.level || 0) - (y.level || 0)).map(sp =>
+            `<div class="gm-pm-row"><span class="gm-pm-row-n">${sp.prepared ? '📋 ' : ''}${esc(sp.name || '?')}</span><span class="gm-pm-tag">${(sp.level === 0 || sp.level === '0') ? 'Tour' : 'Niv ' + (sp.level != null ? sp.level : '?')}</span>${sp.range ? `<span class="gm-pm-row-x">${esc(sp.range)}</span>` : ''}</div>`
+        ).join('') : '';
+
+        const trInner = (d.traits || []).length ? (d.traits || []).map(t => {
+            const tag = t.type === 'race' ? 'Espèce' : (t.type === 'feat' ? 'Don' : 'Classe');
+            return `<div class="gm-pm-row"><span class="gm-pm-row-n">${esc(t.name || '?')}</span><span class="gm-pm-tag">${tag}${t.level ? ' · niv ' + t.level : ''}</span>${t.desc ? `<div class="gm-pm-row-sub">${esc(t.desc)}</div>` : ''}</div>`;
+        }).join('') : '';
+
+        const abInner = (d.abilities || []).length ? (d.abilities || []).map(a =>
+            `<div class="gm-pm-row"><span class="gm-pm-row-n">${esc(a.name || '?')}</span><span class="gm-pm-tag">${a.current != null ? a.current : (a.max != null ? a.max : '?')}${a.max != null ? ' / ' + a.max : ''}</span></div>`
+        ).join('') : '';
+
+        const compInner = (comp.name || comp.notes || comp.hp || comp.ac) ?
+            `<b>${esc(comp.name || 'Compagnon')}</b>${comp.ac ? ' · CA ' + esc(comp.ac) : ''}${comp.hp ? ' · PV ' + esc(comp.hp) : ''}${comp.notes ? pre(comp.notes) : ''}` : '';
+
+        const questInner = [d.quests ? '<b>Quêtes :</b>' + pre(d.quests) : '', d.npcs ? '<b>PNJ :</b>' + pre(d.npcs) : ''].filter(Boolean).join('');
+
+        const out = [
+            sec('🪪 Identité', identInner),
+            sec('🎒 Inventaire' + (invInner ? ' (' + (d.inventory || []).length + ')' : ''), invInner),
+            sec('⚔️ Attaques' + (atkInner ? ' (' + (d.attacks || []).length + ')' : ''), atkInner),
+            sec('✨ Sorts' + (spInner ? ' (' + (d.spells || []).length + ')' : ''), spInner),
+            sec('📜 Capacités & Dons' + (trInner ? ' (' + (d.traits || []).length + ')' : ''), trInner),
+            sec('🔋 Capacités limitées', abInner),
+            sec('🐾 Compagnon', compInner),
+            sec('🗺️ Quêtes & PNJ', questInner),
+            sec('📝 Note rapide', d.quickNote ? pre(d.quickNote) : '')
+        ].filter(Boolean).join('');
+        return out || '<div class="gm-readonly-note">Fiche détaillée vide.</div>';
+    }
+
+    function openPlayerModal(uid) {
+        const p = findLivePlayer(uid); if (!p) return;
+        const s = p.snapshot || {}, ab = s.abilities || {};
         const labels = { str: 'FOR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'SAG', cha: 'CHA' };
         const abRow = ['str', 'dex', 'con', 'int', 'wis', 'cha'].map(k => { const a = ab[k] || {}; return `<div class="gm-pm-ab"><span class="gm-pm-ab-l">${labels[k]}</span><span class="gm-pm-ab-s">${a.score != null ? a.score : '—'}</span><span class="gm-pm-ab-m">${esc(a.mod || '')}</span></div>`; }).join('');
         const conds = (s.conditions || []).map(c => `<span class="gm-live-cond">${esc(c)}</span>`).join('') || '<span class="gm-readonly-note">Aucun</span>';
-        const sec = (title, inner) => inner ? `<div class="gm-sheet-sec"><div class="gm-sheet-sec-h">${title}</div>${inner}</div>` : '';
-        const profMark = (p) => p >= 2 ? ' ◆◆' : (p >= 1 ? ' ◆' : '');
-
-        // Sauvegardes
-        const saves = (f.skills || []).filter(k => k.save);
-        const savesHtml = saves.length ? `<div class="gm-sheet-pills">${saves.map(k => `<span class="gm-stat-pill${k.prof ? ' is-prof' : ''}">${labels[k.stat] || k.stat || '—'} ${esc(k.mod)}${profMark(k.prof)}</span>`).join('')}</div>` : '';
-        // Compétences
-        const sk = (f.skills || []).filter(k => !k.save);
-        const skillsHtml = sk.length ? `<div class="gm-sheet-grid2">${sk.map(k => `<div class="gm-sheet-kv${k.prof ? ' is-prof' : ''}"><span>${esc(k.name)}${profMark(k.prof)}</span><b>${esc(k.mod)}</b></div>`).join('')}</div>` : '';
-        // Attaques
-        const atk = f.attacks || [];
-        const atkHtml = atk.length ? `<div class="gm-sheet-list">${atk.map(a => `<div class="gm-sheet-row"><b>${esc(a.name || '—')}</b><span>${esc(a.bonus || '')}${a.dmg ? ' · ' + esc(a.dmg) : ''}</span>${a.notes ? `<small>${esc(a.notes)}</small>` : ''}</div>`).join('')}</div>` : '';
-        // Magie : infos + emplacements + sorts
-        const si = f.spellInfo || {};
-        const spellInfoHtml = (si.ability || si.dc || si.atk || si.mod) ? `<div class="gm-sheet-pills"><span class="gm-stat-pill">Incant. ${esc(si.ability || '—')}</span><span class="gm-stat-pill">DD ${esc(si.dc || '—')}</span><span class="gm-stat-pill">Atk ${esc(si.atk || '—')}</span></div>` : '';
-        const slots = (f.spellSlots || []).map((d, i) => ({ d, lvl: i })).filter(x => x.d && x.d.total > 0);
-        const slotsHtml = slots.length ? `<div class="gm-sheet-pills">${slots.map(x => { const used = (x.d.used || []).filter(Boolean).length; return `<span class="gm-stat-pill">Niv ${x.lvl + 1} : ${Math.max(0, x.d.total - used)}/${x.d.total}</span>`; }).join('')}</div>` : '';
-        const spells = f.spells || [];
-        const spellsHtml = spells.length ? `<div class="gm-sheet-list">${spells.slice().sort((a, b) => (a.level || 0) - (b.level || 0)).map(sp => `<div class="gm-sheet-row"><b>${(sp.level ? 'N' + sp.level + ' · ' : 'Tour · ')}${esc(sp.name || '—')}</b>${sp.notes ? `<small>${esc(sp.notes)}</small>` : ''}</div>`).join('')}</div>` : '';
-        const magicHtml = (spellInfoHtml || slotsHtml || spellsHtml) ? (spellInfoHtml + slotsHtml + spellsHtml) : '';
-        // Capacités limitées
-        const lim = f.abilitiesLimited || [];
-        const limHtml = lim.length ? `<div class="gm-sheet-pills">${lim.map(c => { const used = (c.used || []).filter(Boolean).length; return `<span class="gm-stat-pill">${esc(c.name)} ${Math.max(0, (c.max || 0) - used)}/${c.max || 0}</span>`; }).join('')}</div>` : '';
-        // Inventaire + bourse
-        const inv = f.inventory || [];
-        const invHtml = inv.length ? `<div class="gm-sheet-list">${inv.map(it => `<div class="gm-sheet-row"><b>${esc(it.name || '—')}${(it.qty && it.qty > 1) ? ' ×' + it.qty : ''}</b>${it.weight ? `<small>${esc(it.weight)}</small>` : ''}</div>`).join('')}</div>` : '';
-        const cur = f.currency || {};
-        const curHtml = (cur.pc || cur.pa || cur.pe || cur.po || cur.pp) ? `<div class="gm-sheet-pills">${[['po', cur.po], ['pa', cur.pa], ['pc', cur.pc], ['pe', cur.pe], ['pp', cur.pp]].filter(c => c[1] && c[1] !== '0').map(c => `<span class="gm-stat-pill">${c[1]} ${c[0].toUpperCase()}</span>`).join('')}</div>` : '';
-        // Traits & dons
-        const tr = f.traits || [];
-        const trHtml = tr.length ? `<div class="gm-sheet-list">${tr.map(t => `<div class="gm-sheet-row"><b>${esc(t.name || '—')}</b>${t.desc ? `<small>${esc(String(t.desc).replace(/<[^>]+>/g, '').slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
-        // Compagnon
-        const cp = f.companion || {};
-        const cpHtml = (cp.name || cp.notes) ? `<div class="gm-sheet-row"><b>${esc(cp.name || 'Compagnon')}</b><span>CA ${esc(cp.ac || '—')} · PV ${esc(cp.hp || '—')}</span>${cp.notes ? `<small>${esc(cp.notes)}</small>` : ''}</div>` : '';
-        // Identité & notes
-        const id = f.identity || {}, nt = f.notes || {};
-        const idRows = [['Historique', id.background], ['Alignement', id.alignment], ['Langues', id.languages], ['Taille', id.size], ['XP', id.xp]].filter(r => r[1]);
-        const idHtml = idRows.length ? `<div class="gm-sheet-grid2">${idRows.map(r => `<div class="gm-sheet-kv"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div>` : '';
-        const txtBlock = (lbl, val) => val ? `<div class="gm-sheet-text"><strong>${lbl} :</strong> ${esc(val)}</div>` : '';
-        const notesHtml = [txtBlock('Apparence', id.appearance), txtBlock('Note rapide', nt.quick), txtBlock('Quêtes', nt.quests), txtBlock('PNJ', nt.npcs)].join('');
-        const hd = f.hitDice || {};
-        const hdHtml = (hd.max) ? `<span class="gm-stat-pill">🎲 Dés de vie ${Math.max(0, (parseInt(hd.max) || 0) - (parseInt(hd.spent) || 0))}/${esc(hd.max)} ${esc(hd.size ? 'd' + hd.size : '')}</span>` : '';
-
-        return `
-            <h2 class="gm-pm-name">${esc(s.name || fallbackName || 'Aventurier')}</h2>
+        const online = live.online.has(uid);
+        const banUntil = live.bans[uid];
+        const isBanned = banUntil && banUntil > Date.now();
+        const statusLine = online
+            ? '<span class="gm-pm-status on">🟢 En ligne</span>'
+            : `<span class="gm-pm-status off">⚪ Hors ligne — dernier état ${esc(timeAgo(p.updated_at))}</span>`;
+        const banLine = isBanned
+            ? `<div class="gm-pm-ban">🚫 Banni — expire à ${esc(new Date(banUntil).toLocaleTimeString())} <button class="gm-btn" data-act="player-unban" data-uid="${esc(uid)}">Lever le ban</button></div>`
+            : '';
+        byId('gm-player-modal-body').innerHTML = `
+            <h2 class="gm-pm-name">${esc(s.name || p.character_name || 'Aventurier')}</h2>
             <div class="gm-pm-sub">${esc([s.cls, s.subclass, s.race, s.level ? ('Niv ' + s.level) : '', s.prof ? ('Maîtrise +' + s.prof) : ''].filter(Boolean).join(' · ') || '—')}</div>
+            <div class="gm-pm-statusrow">${statusLine}</div>
+            ${banLine}
             <div class="gm-pm-stats">
                 <div class="gm-pm-stat">❤️ PV<b>${s.hpCur != null ? s.hpCur : '?'} / ${s.hpMax != null ? s.hpMax : '?'}${s.hpTemp ? (' (+' + s.hpTemp + ')') : ''}</b></div>
                 <div class="gm-pm-stat">🛡️ CA<b>${s.ac != null ? s.ac : '—'}</b></div>
@@ -806,30 +767,10 @@
                 ${s.spellDC ? `<div class="gm-pm-stat">✨ DD<b>${s.spellDC}</b></div>` : ''}
             </div>
             <div class="gm-pm-abilities">${abRow}</div>
-            <div class="gm-pm-pills-row">
-                ${s.concentrating ? '<span class="gm-pm-flag">🌀 Concentration</span>' : ''}
-                ${(s.deathSaves && (s.deathSaves.s || s.deathSaves.f)) ? `<span class="gm-pm-flag">☠️ Mort ${s.deathSaves.s || 0}✓/${s.deathSaves.f || 0}✗</span>` : ''}
-                ${hdHtml}
-            </div>
+            ${s.concentrating ? '<div class="gm-pm-flag">🌀 Concentration active</div>' : ''}
+            ${(s.deathSaves && (s.deathSaves.s || s.deathSaves.f)) ? `<div class="gm-pm-flag">☠️ Jets contre la mort : ${s.deathSaves.s || 0}✓ / ${s.deathSaves.f || 0}✗</div>` : ''}
             <div class="gm-pm-section"><strong>États :</strong> ${conds}</div>
-            ${sec('🛡️ Jets de sauvegarde', savesHtml)}
-            ${sec('🎯 Compétences', skillsHtml)}
-            ${sec('⚔️ Attaques', atkHtml)}
-            ${sec('✨ Magie', magicHtml)}
-            ${sec('🔋 Capacités limitées', limHtml)}
-            ${sec('🎒 Inventaire', invHtml)}
-            ${sec('💰 Bourse', curHtml)}
-            ${sec('📜 Capacités & Dons', trHtml)}
-            ${sec('🐾 Compagnon', cpHtml)}
-            ${sec('👤 Identité', idHtml)}
-            ${notesHtml ? sec('📝 Notes', notesHtml) : ''}`;
-    }
-    // opts.kickUid → bloc de modération (joueur en ligne) ; opts.offlineUid → bouton retrait (fiche hors-ligne).
-    function openSheetModal(s, fallbackName, opts) {
-        opts = opts || {};
-        let footer = '';
-        if (opts.kickUid) {
-            footer = `
+            <div class="gm-pm-details">${renderPlayerDetails(s.details)}</div>
             <div class="gm-pm-mod">
                 <label class="gm-trade-label">Modération :</label>
                 <select id="gm-kick-duration" class="gm-select" style="flex:1; min-width:140px;">
@@ -839,35 +780,33 @@
                     <option value="60m">Ban 1 heure</option>
                     <option value="perm">Ban (toute la session)</option>
                 </select>
-                <button class="gm-btn gm-btn-danger" data-act="player-kick-confirm" data-uid="${esc(opts.kickUid)}">🚪 Exclure</button>
+                <button class="gm-btn gm-btn-danger" data-act="player-kick-confirm" data-uid="${esc(uid)}">🚪 Exclure</button>
             </div>
             <div class="gm-readonly-note">Fiche en lecture seule (données partagées en direct par le joueur).</div>`;
-        } else if (opts.offlineUid) {
-            footer = `
-            <div class="gm-pm-mod">
-                <span class="gm-readonly-note" style="flex:1;">💤 Dernière version vue — joueur hors ligne.</span>
-                <button class="gm-btn gm-btn-danger" data-act="offline-remove" data-uid="${esc(opts.offlineUid)}">🗑️ Retirer cette fiche</button>
-            </div>`;
-        }
-        byId('gm-player-modal-body').innerHTML = sheetBodyHtml(s, fallbackName) + footer;
         ensurePlayerModal().classList.remove('hidden');
-    }
-    function openPlayerModal(uid) {
-        const p = findLivePlayer(uid);
-        if (p) { openSheetModal(p.snapshot || {}, p.character_name, { kickUid: uid }); return; }
-        // Repli : le joueur n'est plus en ligne → on ouvre sa dernière fiche connue.
-        const o = (state.offlineSheets || []).find(x => x.user_id === uid);
-        if (o) { openSheetModal(o.snapshot || {}, o.character_name, { offlineUid: uid }); return; }
-        if (window.showAppToast) window.showAppToast('Fiche indisponible (joueur déconnecté).', '#c0392b');
     }
     function kickDurationMs(v) { if (v === '5m') return 5 * 60000; if (v === '30m') return 30 * 60000; if (v === '60m') return 60 * 60000; if (v === 'perm') return 100 * 365 * 24 * 60 * 60000; return 0; }
     function kickPlayer(uid, v) {
         const ms = kickDurationMs(v), until = ms > 0 ? Date.now() + ms : 0;
-        if (until) live.bans[uid] = until;
+        // Ban serveur (table session_bans + trigger anti-join) : inviolable côté joueur.
+        if (window.SupaAuth && state.sessionId) {
+            if (until) { live.bans[uid] = until; window.SupaAuth.banPlayer(state.sessionId, uid, until); }
+            else { delete live.bans[uid]; window.SupaAuth.unbanPlayer(state.sessionId, uid); }
+        }
+        // Déconnexion immédiate (le ban serveur empêche tout retour, le broadcast coupe la session en cours).
         gmBroadcast('kick', { targetUserId: uid, until: until });
         const p = findLivePlayer(uid), nm = (p && (p.snapshot && p.snapshot.name || p.character_name)) || 'Joueur';
-        if (window.showAppToast) window.showAppToast('🚪 ' + nm + (until ? ' banni temporairement' : ' exclu'), '#7A2828');
+        if (window.showAppToast) window.showAppToast('🚪 ' + nm + (until ? ' banni' : ' exclu'), '#7A2828');
         const m = byId('gm-player-modal'); if (m) m.classList.add('hidden');
+        renderLivePlayers();
+    }
+    function unbanPlayer(uid) {
+        delete live.bans[uid];
+        if (window.SupaAuth && state.sessionId) window.SupaAuth.unbanPlayer(state.sessionId, uid);
+        const p = findLivePlayer(uid), nm = (p && (p.snapshot && p.snapshot.name || p.character_name)) || 'Joueur';
+        if (window.showAppToast) window.showAppToast('✅ Ban levé pour ' + nm, '#27ae60');
+        const m = byId('gm-player-modal'); if (m) m.classList.add('hidden');
+        renderLivePlayers();
     }
     function enforceBans() {
         const now = Date.now();
@@ -905,10 +844,12 @@
         window.SupaAuth.loadSessionPlayers(sid).then(rows => {
             // protège contre une session qui aurait changé entre-temps
             if (state.sessionId !== sid) return;
-            live.players = rows || [];
-            live.players.forEach(stashOfflineSheet);          // mémorise la dernière fiche vue
-            save();
-            renderLivePlayers(); updatePresenceCount();
+            live.players = rows || []; renderLivePlayers(); updatePresenceCount();
+        });
+        // Bans actifs (persistés en base) → survivent à un rechargement de l'écran MJ
+        if (window.SupaAuth.loadSessionBans) window.SupaAuth.loadSessionBans(sid).then(bans => {
+            if (state.sessionId !== sid) return;
+            live.bans = bans || {}; renderLivePlayers();
         });
         live.netChannel = window.SupaAuth.subscribeSessionPlayers(sid, (payload) => {
             const row = (payload.new && payload.new.user_id) ? payload.new : payload.old;
@@ -916,13 +857,10 @@
             if (payload.eventType === 'DELETE') {
                 const uid2 = payload.old && payload.old.user_id;
                 live.players = live.players.filter(p => p.user_id !== uid2);
-                // on conserve la dernière fiche connue dans le module hors-ligne (déjà mémorisée)
             } else {
                 const i = live.players.findIndex(p => p.user_id === row.user_id);
                 if (i >= 0) live.players[i] = row; else live.players.push(row);
-                stashOfflineSheet(row);
             }
-            save();
             renderLivePlayers(); updatePresenceCount();
         });
         try {
@@ -1116,7 +1054,7 @@
         acts.push(`<button class="gm-tree-act" data-act="tree-rename" data-id="${n.id}" title="Renommer">✏️</button>`);
         acts.push(`<button class="gm-tree-act" data-act="tree-del" data-id="${n.id}" title="Supprimer">✕</button>`);
         let html = `<div class="gm-tree-node${selected ? ' is-selected' : ''}${isTarget ? ' is-target' : ''}" data-node="${n.id}">
-            <div class="gm-tree-row" draggable="true" data-act="tree-click" data-id="${n.id}" style="padding-left:${depth * 16 + 6}px;">
+            <div class="gm-tree-row" data-act="tree-click" data-id="${n.id}" style="padding-left:${depth * 16 + 6}px;">
                 ${isFolder ? `<span class="gm-tree-caret">${expanded ? '▾' : '▸'}</span>` : '<span class="gm-tree-caret gm-tree-leaf"></span>'}
                 <span class="gm-tree-ic">${treeKindIcon(n.kind)}</span>
                 <span class="gm-tree-name">${esc(n.name)}</span>
@@ -1174,75 +1112,6 @@
         if (window.showAppToast) window.showAppToast('👹 « ' + n.name + ' » ajouté au combat', '#2c3e50');
     }
 
-    // ---------- Glisser-déposer de l'arbre de préparation ----------
-    // Déplace un nœud : dans un dossier (into=true), avant un nœud (into=false),
-    // ou à la racine (targetId=null). Réindexe et persiste l'ordre des frères.
-    function treeReorder(dragId, targetId, into) {
-        const drag = treeNode(dragId); if (!drag) return;
-        if (dragId === targetId) return;
-        if (treeDescendants(dragId).indexOf(targetId) !== -1) return;   // pas dans son propre sous-arbre
-        let newParent, beforeId = null;
-        if (into && targetId) newParent = targetId;                     // ranger DANS le dossier
-        else if (targetId) { const t = treeNode(targetId); newParent = t ? (t.parent_id || null) : null; beforeId = targetId; } // avant ce nœud
-        else newParent = null;                                          // sortir à la racine
-        if (newParent === dragId) return;
-        const sibs = tree.filter(n => (n.parent_id || null) === (newParent || null) && n.id !== dragId)
-                         .sort((a, b) => (a.sort || 0) - (b.sort || 0));
-        let pos = sibs.length;
-        if (beforeId) { const i = sibs.findIndex(n => n.id === beforeId); if (i >= 0) pos = i; }
-        sibs.splice(pos, 0, drag);
-        drag.parent_id = newParent;
-        // Réindexe et persiste (parent_id + sort) chaque frère dont la position change.
-        sibs.forEach((n, i) => {
-            const changed = (n.sort !== i) || (n.id === dragId);
-            n.sort = i;
-            if (changed && window.SupaAuth && window.SupaAuth.treeUpdate) window.SupaAuth.treeUpdate(n.id, { parent_id: n.parent_id || null, sort: i });
-        });
-        if (newParent) treeExpanded.add(newParent);
-        renderTree();
-    }
-    function setupTreeDnD() {
-        const root = byId('gm-tree-root'); if (!root || root._dndWired) return;
-        root._dndWired = true;
-        let dragId = null;
-        const clearHints = () => root.querySelectorAll('.gm-tree-dragover, .gm-tree-dropinto').forEach(el => el.classList.remove('gm-tree-dragover', 'gm-tree-dropinto'));
-        root.addEventListener('dragstart', (e) => {
-            const row = e.target.closest('.gm-tree-row'); if (!row) return;
-            const node = row.closest('.gm-tree-node'); dragId = node ? node.dataset.node : null;
-            if (!dragId) return;
-            e.dataTransfer.effectAllowed = 'move';
-            try { e.dataTransfer.setData('text/plain', dragId); } catch (_) {}
-            row.classList.add('gm-tree-dragging');
-        });
-        root.addEventListener('dragend', () => {
-            root.querySelectorAll('.gm-tree-dragging').forEach(el => el.classList.remove('gm-tree-dragging'));
-            clearHints(); dragId = null;
-        });
-        root.addEventListener('dragover', (e) => {
-            if (!dragId) return;
-            e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-            clearHints();
-            const row = e.target.closest('.gm-tree-row');
-            if (row) {
-                const node = row.closest('.gm-tree-node'); const n = node && treeNode(node.dataset.node);
-                row.classList.add(n && n.kind === 'folder' ? 'gm-tree-dropinto' : 'gm-tree-dragover');
-            }
-        });
-        root.addEventListener('drop', (e) => {
-            if (!dragId) return;
-            e.preventDefault();
-            const row = e.target.closest('.gm-tree-row');
-            if (row) {
-                const node = row.closest('.gm-tree-node'); const id = node && node.dataset.node; const n = id && treeNode(id);
-                if (n && n.kind === 'folder') treeReorder(dragId, id, true);
-                else treeReorder(dragId, id, false);
-            } else {
-                treeReorder(dragId, null, false);   // déposé dans le vide → racine
-            }
-            clearHints(); dragId = null;
-        });
-    }
-
     // ---------- Câblage ----------
     function byId(id) { return document.getElementById(id); }
     function find(arr, id) { return arr.find(x => x.id === id); }
@@ -1297,7 +1166,7 @@
         document.querySelectorAll('.gm-side-tab').forEach(tab => tab.addEventListener('click', () => {
             document.querySelectorAll('.gm-side-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            const map = { chat: '.gm-side-chat', prep: '.gm-side-prep', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
+            const map = { chat: '.gm-side-chat', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
             document.querySelectorAll('.gm-side-panel').forEach(p => p.classList.remove('gm-side-show'));
             const target = document.querySelector(map[tab.dataset.side]); if (target) target.classList.add('gm-side-show');
             // Si on n'a pas la sidebar ouverte, l'ouvrir
@@ -1435,7 +1304,6 @@
         byId('gm-map-bank').addEventListener('change', (e) => { const n = treeNode(e.target.value); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); } });
 
         // --- Préparation (arbre) ---
-        setupTreeDnD();
         byId('gm-tree-add').addEventListener('click', treeAdd);
         byId('gm-tree-name').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); treeAdd(); } });
         byId('gm-tree-file').addEventListener('change', async (e) => {
@@ -1460,6 +1328,23 @@
             save(); renderScenes();
         });
         byId('gm-scene-name').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-scene-add').click(); } });
+
+        // --- Ping : clic prolongé sur la vue partagée ---
+        (function wirePing() {
+            const sv = byId('gm-shared-view'); if (!sv) return;
+            let timer = null, downX = 0, downY = 0;
+            const fire = () => {
+                const rect = sv.getBoundingClientRect();
+                const x = Math.max(0, Math.min(1, (downX - rect.left) / rect.width));
+                const y = Math.max(0, Math.min(1, (downY - rect.top) / rect.height));
+                const color = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '#C49B35').trim();
+                showLocalPing(sv, x, y, color);
+                if (live.presChannel) gmBroadcast('ping', { x, y, color });
+                else if (window.showAppToast) window.showAppToast('Ouvre une session pour pinguer les joueurs.', '#c0392b');
+            };
+            sv.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; clearTimeout(timer); timer = setTimeout(fire, 350); });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => sv.addEventListener(ev, () => clearTimeout(timer)));
+        })();
 
         // --- Murmure & Troc ---
         document.querySelectorAll('.gm-trade-tab').forEach(tab => tab.addEventListener('click', () => {
@@ -1540,8 +1425,6 @@
                 case 'tree-open-link': { const n = treeNode(id); if (n && n.data && n.data.url) window.open(n.data.url, '_blank', 'noopener'); break; }
                 case 'tree-upload': { pendingTreeUpload = id; byId('gm-tree-file').click(); break; }
                 case 'player-sheet': case 'player-kick': openPlayerModal(t.dataset.uid); break;
-                case 'offline-sheet': openOfflineSheet(t.dataset.uid); break;
-                case 'offline-remove': removeOfflineSheet(t.dataset.uid); break;
             }
         });
         // Délégation : changements (checkboxes, champs de stats joueurs, secrets PNJ)
@@ -1563,49 +1446,6 @@
         });
     }
 
-    // ---------- Chargement / migration cloud du profil MJ ----------
-    // Rafraîchit l'état de la campagne ouverte depuis le cloud (multi-appareils).
-    async function loadStateFromCloud(id) {
-        if (!window.SupaAuth || !window.SupaAuth.currentUser || !window.SupaAuth.gmCampaignState) return;
-        let cloudState = null;
-        try { cloudState = await window.SupaAuth.gmCampaignState(id); } catch (e) { return; }
-        if (id !== activeCampaignId) return;                 // l'utilisateur a déjà changé de campagne
-        if (cloudState && typeof cloudState === 'object' && Object.keys(cloudState).length) {
-            const keepRoom = state.roomCode, keepSid = state.sessionId; // on préserve la session live de cet appareil
-            state = Object.assign(defaultState(), cloudState);
-            state.roomCode = keepRoom; state.sessionId = keepSid;
-            try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {}
-            renderAll();
-        }
-    }
-
-    // Liste les campagnes depuis le cloud ; migre les campagnes locales la 1re fois.
-    async function gmCloudInit() {
-        if (!window.SupaAuth || !window.SupaAuth.currentUser || !window.SupaAuth.gmCampaignsList) return;
-        let cloud = null;
-        try { cloud = await window.SupaAuth.gmCampaignsList(); } catch (e) { return; }
-        if (cloud === null) return;                          // table injoignable (SQL pas lancé) → on reste en local, on réessaiera
-        const migrated = localStorage.getItem('dnd-gm-migrated') === '1';
-        if (!cloud.length && campaigns.length && !migrated) {
-            // Migration unique : pousse les campagnes locales + leur état vers le cloud.
-            let allOk = true;
-            for (const c of campaigns) {
-                let st = {};
-                try { st = JSON.parse(localStorage.getItem('dnd-gm-state-' + c.id)) || {}; } catch (e) {}
-                const res = await window.SupaAuth.gmCampaignUpsert({ id: c.id, name: c.name, archived: !!c.archived, state: exportState(st) });
-                if (!res) allOk = false;
-            }
-            if (allOk) localStorage.setItem('dnd-gm-migrated', '1'); // on ne marque migré que si tout est bien remonté
-            renderCampaigns();
-            return;
-        }
-        localStorage.setItem('dnd-gm-migrated', '1');
-        // Cloud = source de vérité : on remplace la liste locale par celle du cloud.
-        campaigns = cloud.map(c => ({ id: c.id, name: c.name, archived: !!c.archived, created: c.created_at ? Date.parse(c.created_at) : Date.now() }));
-        try { localStorage.setItem(CAMP_KEY, JSON.stringify(campaigns)); } catch (e) {}
-        renderCampaigns();
-    }
-
     // ---------- Campagnes (accueil MJ) ----------
     function createCampaign(name) { const c = { id: uid(), name: name.trim(), archived: false, created: Date.now() }; campaigns.push(c); saveCampaigns(); renderCampaigns(); return c; }
     function renderCampaigns() {
@@ -1624,7 +1464,7 @@
             actions.appendChild(mk('▶', 'Ouvrir', () => open(c.id)));
             actions.appendChild(mk('✏️', 'Renommer', () => { const n = prompt('Nouveau nom :', c.name); if (n && n.trim()) { c.name = n.trim(); saveCampaigns(); renderCampaigns(); } }));
             actions.appendChild(mk(c.archived ? '📂' : '🗄️', c.archived ? 'Désarchiver' : 'Archiver', () => { c.archived = !c.archived; saveCampaigns(); renderCampaigns(); }));
-            actions.appendChild(mk('✖', 'Supprimer', () => { if (confirm('Supprimer définitivement « ' + c.name + ' » et toutes ses données ?')) { try { localStorage.removeItem('dnd-gm-state-' + c.id); } catch (e) {} if (window.SupaAuth && window.SupaAuth.gmCampaignDelete) window.SupaAuth.gmCampaignDelete(c.id); campaigns = campaigns.filter(x => x.id !== c.id); saveCampaigns(); renderCampaigns(); } }));
+            actions.appendChild(mk('✖', 'Supprimer', () => { if (confirm('Supprimer définitivement « ' + c.name + ' » et toutes ses données ?')) { try { localStorage.removeItem('dnd-gm-state-' + c.id); } catch (e) {} campaigns = campaigns.filter(x => x.id !== c.id); saveCampaigns(); renderCampaigns(); } }));
             card.appendChild(info); card.appendChild(actions); list.appendChild(card);
         });
     }
@@ -1641,12 +1481,11 @@
         const ni = document.getElementById('new-campaign-name'); if (ni) ni.addEventListener('keydown', e => { if (e.key === 'Enter' && cc) { e.preventDefault(); cc.click(); } });
         const sa = document.getElementById('gm-show-archived'); if (sa) sa.addEventListener('change', renderCampaigns);
         renderCampaigns();
-        waitForUserGM(gmCloudInit);          // charge / migre les campagnes depuis le cloud une fois connecté
     }
 
     // ---------- Ouverture / fermeture ----------
     function open(campaignId) {
-        if (campaignId && campaignId !== activeCampaignId) { GmCloud.flushNow(); stopNetwork(); } // change de campagne → pousse l'état en attente, coupe l'ancien flux
+        if (campaignId && campaignId !== activeCampaignId) stopNetwork(); // on change de campagne → coupe l'ancien flux
         if (campaignId) { activeCampaignId = campaignId; state = load(); }
         else if (!activeCampaignId) { const c = createCampaign('Partie rapide'); activeCampaignId = c.id; state = load(); }
         const ov = document.getElementById('gm-screen'); if (!ov) return;
@@ -1659,7 +1498,6 @@
         try { if (location.hash !== '#gm/' + activeCampaignId) location.hash = '#gm/' + activeCampaignId; } catch (e) {}
         renderAll();
         loadTree();
-        loadStateFromCloud(activeCampaignId);                 // rafraîchit depuis le cloud (multi-appareils)
         if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte
     }
     function close() {
@@ -1695,7 +1533,6 @@
         setTimeout(() => {
             wire(); wireHome();
             window.addEventListener('hashchange', onHashChange);
-            window.addEventListener('beforeunload', () => GmCloud.flushNow()); // sauvegarde cloud des dernières modifs MJ
             // Restauration au chargement : #gm/<id> rouvre la campagne une fois connecté
             if (gmRouteId()) waitForUserGM(onHashChange);
         }, 60);
