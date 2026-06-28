@@ -197,7 +197,15 @@
         </div>
 
         <div class="gm-workspace">
-            <!-- ===== ZONE CENTRALE MODULABLE ===== -->
+            <!-- ===== BARRE D'OUTILS VERTICALE (type Roll20) ===== -->
+            <div class="gm-leftbar">
+                <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
+                <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
+                <button class="gm-tool" data-tool="grid" title="Afficher / masquer la grille">▦</button>
+                <button class="gm-tool" data-tool="lock" title="Verrouiller / libérer les jetons">🔒</button>
+                <button class="gm-tool" data-tool="clear" title="Vider les jetons">🗑️</button>
+            </div>
+            <!-- ===== ZONE CENTRALE : grande carte (stage) ===== -->
             <div class="gm-main">
 
                 <div class="gm-card gm-card-live gm-span-2">
@@ -325,7 +333,7 @@
                     </div>
                 </div>
 
-                <div class="gm-card gm-span-2">
+                <div id="gm-map-card" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🗺️</span> Carte tactique
                         <span class="gm-spacer"></span>
                         <button id="gm-map-sync" class="gm-btn" title="Placer les combattants (joueurs + monstres) sur la carte">⟳ Jetons combat</button>
@@ -382,14 +390,18 @@
             <!-- ===== SIDEBAR DROITE RÉTRACTABLE ===== -->
             <aside class="gm-sidebar">
                 <div class="gm-side-tabs">
-                    <button class="gm-side-tab active" data-side="chat">🎲 Dés</button>
+                    <button class="gm-side-tab active" data-side="table">📋 Table</button>
+                    <button class="gm-side-tab" data-side="chat">🎲 Dés</button>
                     <button class="gm-side-tab" data-side="prep">📁 Prépa</button>
                     <button class="gm-side-tab" data-side="journal">📖 Journal</button>
                     <button class="gm-side-tab" data-side="compendium">🔎 Compendium</button>
                 </div>
 
+                <!-- Panneau Table : tableau de bord MJ (joueurs, combat, monstres, scènes…) -->
+                <div class="gm-side-panel gm-side-table gm-side-show"></div>
+
                 <!-- Panneau Chat / Dés -->
-                <div class="gm-side-panel gm-side-chat gm-side-show">
+                <div class="gm-side-panel gm-side-chat">
                     <div class="gm-side-card">
                         <div class="gm-side-card-head">🎲 Lanceur de dés</div>
                         <div class="gm-dice-quick">${DICE.map(d => `<button class="gm-die" data-die="${d}">d${d}</button>`).join('')}</div>
@@ -472,6 +484,29 @@
         </div>
         </div>`;
         document.body.appendChild(ov);
+
+        // ----- Disposition Roll20 : carte au centre, modules de gestion dans l'onglet « Table » -----
+        try {
+            const main = ov.querySelector('.gm-main');
+            const tablePanel = ov.querySelector('.gm-side-table');
+            if (main && tablePanel) {
+                // Tout part dans la sidebar SAUF la carte qui reste la grande zone centrale.
+                Array.from(main.children).forEach(card => {
+                    if (card.id !== 'gm-map-card') tablePanel.appendChild(card);
+                });
+            }
+            // Barre d'outils gauche → proxys vers les contrôles carte existants.
+            ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
+                if (btn.dataset.tool === 'grid') {
+                    const cb = ov.querySelector('#gm-map-showgrid');
+                    if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+                    return;
+                }
+                const ids = { addtoken: 'gm-map-addtoken', sync: 'gm-map-sync', lock: 'gm-map-lock', clear: 'gm-map-clear' };
+                const el = ids[btn.dataset.tool] && ov.querySelector('#' + ids[btn.dataset.tool]);
+                if (el) el.click();
+            }));
+        } catch (e) { console.warn('gm layout Roll20:', e); }
     }
 
     // ---------- Rendus ----------
@@ -1325,7 +1360,7 @@
         document.querySelectorAll('.gm-side-tab').forEach(tab => tab.addEventListener('click', () => {
             document.querySelectorAll('.gm-side-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            const map = { chat: '.gm-side-chat', prep: '.gm-side-prep', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
+            const map = { table: '.gm-side-table', chat: '.gm-side-chat', prep: '.gm-side-prep', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
             document.querySelectorAll('.gm-side-panel').forEach(p => p.classList.remove('gm-side-show'));
             const target = document.querySelector(map[tab.dataset.side]); if (target) target.classList.add('gm-side-show');
             // Si on n'a pas la sidebar ouverte, l'ouvrir
