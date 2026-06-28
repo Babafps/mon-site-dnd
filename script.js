@@ -399,10 +399,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if(toggleFloatingDice && btnToggleDice && diceDrawer) {
             let showFloatingDice = DB.get('dnd-show-floating-dice'); if(showFloatingDice === null) showFloatingDice = 'true'; toggleFloatingDice.checked = showFloatingDice === 'true'; btnToggleDice.classList.toggle('hidden', !toggleFloatingDice.checked);
             toggleFloatingDice.addEventListener('change', (e) => { DB.set('dnd-show-floating-dice', e.target.checked); btnToggleDice.classList.toggle('hidden', !e.target.checked); if(!e.target.checked && diceDrawer.classList.contains('open')) diceDrawer.classList.remove('open'); });
+            // Glisser-déposer du bouton : pointer events → fonctionne à la souris ET au tactile (mobile/tablette).
             let isDraggingDiceBtn = false; let startY = 0, startX = 0, clickStartX = 0, clickStartY = 0; let startTop = 0, startLeft = 0;
-            btnToggleDice.addEventListener('mousedown', (e) => { isDraggingDiceBtn = true; startX = e.clientX; startY = e.clientY; clickStartX = e.clientX; clickStartY = e.clientY; let rect = btnToggleDice.getBoundingClientRect(); startLeft = rect.left; startTop = rect.top; btnToggleDice.style.transition = 'none'; btnToggleDice.style.cursor = 'grabbing'; });
-            window.addEventListener('mousemove', (e) => { if(!isDraggingDiceBtn) return; let newLeft = startLeft + (e.clientX - startX); let newTop = startTop + (e.clientY - startY); newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - btnToggleDice.offsetWidth)); newTop = Math.max(0, Math.min(newTop, window.innerHeight - btnToggleDice.offsetHeight)); btnToggleDice.style.left = newLeft + 'px'; btnToggleDice.style.top = newTop + 'px'; btnToggleDice.style.right = 'auto'; });
-            window.addEventListener('mouseup', (e) => { if(isDraggingDiceBtn) { isDraggingDiceBtn = false; btnToggleDice.style.transition = 'top 0.3s, left 0.3s, background 0.2s'; btnToggleDice.style.cursor = 'grab'; if(Math.abs(e.clientX - clickStartX) < 5 && Math.abs(e.clientY - clickStartY) < 5) { diceDrawer.classList.toggle('open'); } else { let rect = btnToggleDice.getBoundingClientRect(); let isLeft = (rect.left + rect.width/2) < window.innerWidth / 2; if(isLeft) { btnToggleDice.style.left = '0px'; diceDrawer.classList.add('drawer-left'); diceDrawer.style.top = Math.max(0, rect.top - 20) + 'px'; } else { btnToggleDice.style.left = (window.innerWidth - btnToggleDice.offsetWidth) + 'px'; diceDrawer.classList.remove('drawer-left'); diceDrawer.style.top = Math.max(0, rect.top - 20) + 'px'; } setTimeout(() => { DB.set('dnd-dice-btn-y', btnToggleDice.style.top); DB.set('dnd-dice-btn-side', isLeft ? 'left' : 'right'); }, 350); } } });
+            btnToggleDice.style.touchAction = 'none';
+            btnToggleDice.addEventListener('pointerdown', (e) => { if(e.button != null && e.button !== 0) return; isDraggingDiceBtn = true; startX = e.clientX; startY = e.clientY; clickStartX = e.clientX; clickStartY = e.clientY; const rect = btnToggleDice.getBoundingClientRect(); startLeft = rect.left; startTop = rect.top; btnToggleDice.style.transition = 'none'; btnToggleDice.style.cursor = 'grabbing'; try { btnToggleDice.setPointerCapture(e.pointerId); } catch(_) {} });
+            btnToggleDice.addEventListener('pointermove', (e) => { if(!isDraggingDiceBtn) return; let newLeft = startLeft + (e.clientX - startX); let newTop = startTop + (e.clientY - startY); newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - btnToggleDice.offsetWidth)); newTop = Math.max(0, Math.min(newTop, window.innerHeight - btnToggleDice.offsetHeight)); btnToggleDice.style.left = newLeft + 'px'; btnToggleDice.style.top = newTop + 'px'; btnToggleDice.style.right = 'auto'; });
+            const endDiceBtnDrag = (e) => { if(!isDraggingDiceBtn) return; isDraggingDiceBtn = false; btnToggleDice.style.transition = 'top 0.3s, left 0.3s, background 0.2s'; btnToggleDice.style.cursor = 'grab'; try { btnToggleDice.releasePointerCapture(e.pointerId); } catch(_) {} if(Math.abs(e.clientX - clickStartX) < 6 && Math.abs(e.clientY - clickStartY) < 6) { diceDrawer.classList.toggle('open'); } else { const rect = btnToggleDice.getBoundingClientRect(); const isLeft = (rect.left + rect.width/2) < window.innerWidth / 2; if(isLeft) { btnToggleDice.style.left = '0px'; diceDrawer.classList.add('drawer-left'); diceDrawer.style.top = Math.max(0, rect.top - 20) + 'px'; } else { btnToggleDice.style.left = (window.innerWidth - btnToggleDice.offsetWidth) + 'px'; diceDrawer.classList.remove('drawer-left'); diceDrawer.style.top = Math.max(0, rect.top - 20) + 'px'; } setTimeout(() => { DB.set('dnd-dice-btn-y', btnToggleDice.style.top); DB.set('dnd-dice-btn-side', isLeft ? 'left' : 'right'); }, 350); } };
+            btnToggleDice.addEventListener('pointerup', endDiceBtnDrag);
+            btnToggleDice.addEventListener('pointercancel', endDiceBtnDrag);
             let savedDiceY = DB.get('dnd-dice-btn-y'); let savedDiceSide = DB.get('dnd-dice-btn-side');
             if(savedDiceY) { btnToggleDice.style.top = savedDiceY; btnToggleDice.style.right = 'auto'; if(savedDiceSide === 'left') { btnToggleDice.style.left = '0px'; diceDrawer.classList.add('drawer-left'); } else { btnToggleDice.style.left = (window.innerWidth - btnToggleDice.offsetWidth) + 'px'; diceDrawer.classList.remove('drawer-left'); } diceDrawer.style.top = (parseInt(savedDiceY) - 20) + 'px'; }
             window.addEventListener('resize', () => { if(diceDrawer.classList.contains('drawer-left')) return; btnToggleDice.style.left = (window.innerWidth - btnToggleDice.offsetWidth) + 'px'; });
@@ -1205,7 +1209,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-close-rest')) document.getElementById('btn-close-rest').addEventListener('click', () => { restModal.classList.add('hidden'); });
         function getConstitutionModifierForRest() { return Math.floor(((parseInt(document.getElementById('stat-con').value) || 10) - 10) / 2); }
         function updateShortRestPanel() { if(!restHdAvailable) return; const hdMax = parseInt(document.getElementById('hd-max').value) || 0; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; restHdAvailable.textContent = available; restHdMaxDisplay.textContent = hdMax; restHdSizeDisplay.textContent = `d${hdSize}`; restConModDisplay.textContent = conMod >= 0 ? `+${conMod}` : `${conMod}`; restHpStatus.textContent = `${currentHp} / ${maxHp}`; btnRollHitDie.disabled = available <= 0; document.getElementById('rest-hd-to-roll').max = available; }
-        function recoverAbilitiesByRest(restType) { let recovered = 0; abilities.forEach(ab => { if(restType === 'short' && ab.regenMode !== 'short_long') return; const recoverType = restType === 'short' ? ab.shortType : ab.longType; const recoverAmount = recoverType === 'all' ? ab.max : (restType === 'short' ? (ab.shortAmount || 1) : (ab.longAmount || 1)); let count = 0; for(let i = ab.max - 1; i >= 0 && count < recoverAmount; i--) { if(ab.used[i]) { ab.used[i] = false; count++; recovered++; } } }); setStore('dnd-abilities', abilities); renderAbilities(); return recovered; }
+        function recoverAbilitiesByRest(restType) {
+            let recovered = 0;
+            abilities.forEach(ab => {
+                const mode = ab.regenMode || 'long';
+                if(mode === 'none') return;                              // aucune récupération
+                let recoverType, recoverAmount;
+                if(restType === 'short') {
+                    if(mode !== 'short' && mode !== 'short_long') return; // un repos court ne récupère que les capacités à repos court
+                    recoverType = ab.shortType || 'all';
+                    recoverAmount = recoverType === 'all' ? ab.max : (ab.shortAmount || 1);
+                } else {
+                    // Repos long : restaure long / court+long ; et aussi les capacités « repos court » (règle 5e).
+                    if(mode === 'long' || mode === 'short_long') { recoverType = ab.longType || 'all'; recoverAmount = recoverType === 'all' ? ab.max : (ab.longAmount || 1); }
+                    else { recoverType = ab.shortType || 'all'; recoverAmount = recoverType === 'all' ? ab.max : (ab.shortAmount || 1); }
+                }
+                let count = 0;
+                for(let i = ab.max - 1; i >= 0 && count < recoverAmount; i--) { if(ab.used[i]) { ab.used[i] = false; count++; recovered++; } }
+            });
+            setStore('dnd-abilities', abilities); renderAbilities(); return recovered;
+        }
         
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-short-rest') { document.getElementById('rest-modal-title').innerText = "Repos Court"; restLongContent.classList.add('hidden'); restShortContent.classList.remove('hidden'); shortRestRollLog = []; restRollResult.innerHTML = ``; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); restModal.classList.remove('hidden'); } if(e.target.id === 'btn-long-rest') { document.getElementById('rest-modal-title').innerText = "Repos Long"; restShortContent.classList.add('hidden'); restLongContent.classList.remove('hidden'); restModal.classList.remove('hidden'); } });
         if(btnRollHitDie) { btnRollHitDie.addEventListener('click', () => { const hdMax = parseInt(document.getElementById('hd-max').value) || 0; let hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); if(available <= 0) return; let amountToRoll = parseInt(document.getElementById('rest-hd-to-roll').value) || 1; if(amountToRoll > available) amountToRoll = available; if(amountToRoll <= 0) return; const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const conText = conMod >= 0 ? `+${conMod}` : `${conMod}`; let totalHealed = 0; let rollDetails = []; for(let i=0; i < amountToRoll; i++) { const roll = Math.floor(Math.random() * hdSize) + 1; const healed = Math.max(0, roll + conMod); totalHealed += healed; rollDetails.push(`[${roll}${conText}=${healed}]`); } const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; const newHp = Math.min(maxHp, currentHp + totalHealed); hdSpent += amountToRoll; document.getElementById('hd-spent').value = hdSpent; setStore('dnd-sheet-hd-spent', hdSpent, false); document.getElementById('hp-current').value = newHp; setStore('dnd-sheet-hp-current', newHp, false); shortRestRollLog.push(`<strong>${amountToRoll}d${hdSize}</strong> : ${rollDetails.join(' + ')} ➔ <span style="color:#2ecc71;">+${totalHealed} PV</span>`); restRollResult.innerHTML = `<p class="rest-log-line" style="font-size:1.2rem;"><strong>Lancé (${amountToRoll} dés) :</strong> ➔ <strong>+${totalHealed} PV</strong></p><p class="rest-log-line">PV : ${currentHp} → ${newHp}</p><div class="rest-roll-history" style="margin-top:10px; border-top:1px dashed var(--primary-color); padding-top:10px;"><strong>Historique :</strong><br>${shortRestRollLog.join('<br>')}</div>`; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); updateHpVisuals(); }); }
@@ -1614,48 +1637,116 @@ document.addEventListener('DOMContentLoaded', () => {
         const crudIgnoredPrefixes = ['new-', 'edit-', 'qa-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll', 'hp-quick'];
 
         let traits = getStore('dnd-traits') || []; const traitModal = document.getElementById('trait-form-modal');
-        let abilities = getStore('dnd-abilities') || []; const abilityModal = document.getElementById('ability-form-modal');
-
+        let abilities = getStore('dnd-abilities') || [];
+        function escAb(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        // Texte de récupération — identique à celui des emplacements de sorts.
+        function getAbilityRegenText(ab) {
+            const fmt = (t, a) => t === 'all' ? 'Tout' : `+${a}`;
+            const m = ab.regenMode || 'long';
+            if(m === 'none') return 'Aucune régénération';
+            if(m === 'short') return `Court: ${fmt(ab.shortType, ab.shortAmount)}`;
+            if(m === 'short_long') return `Court: ${fmt(ab.shortType, ab.shortAmount)} | Long: ${fmt(ab.longType, ab.longAmount)}`;
+            return `Long: ${fmt(ab.longType, ab.longAmount)}`;
+        }
+        // Affichage calqué sur la grille des emplacements de sorts (cases à cocher + info dispo).
         function renderAbilities() {
-            const list = document.getElementById('abilities-list'); if(!list) return; list.innerHTML = '';
-            if(abilities.length === 0) { list.innerHTML = `<div class="compact-empty">Aucune capacité limitée — ajoute-en une ci-dessus.</div>`; return; }
-            abilities.forEach((ab, index) => {
-                const usedCount = ab.used ? ab.used.filter(Boolean).length : 0; const available = ab.max - usedCount; let chargesHtml = '';
-                for(let i = 0; i < ab.max; i++) { const isUsed = ab.used && ab.used[i]; chargesHtml += `<button class="ability-charge-btn ${isUsed ? 'used' : ''}" data-idx="${index}" data-i="${i}" title="${isUsed ? '↩ Récupérer' : '▶ Dépenser'}"></button>`; }
-                const regenIcon = ab.regenMode === 'short_long' ? '⏳' : '🌙'; const regenTitle = ab.regenMode === 'short_long' ? 'Récupère au repos court ET long' : 'Récupère au repos long';
-                list.innerHTML += `<div class="ca-row" data-i="${index}"><div class="ca-head"><span class="ca-name">${ab.name}</span><span class="ability-counter">${available}<span style="opacity:0.55; font-size:0.8em;">/${ab.max}</span></span><span class="ca-regen" title="${regenTitle}">${regenIcon}</span><div class="ca-actions"><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div><div class="ca-pips ability-charges">${chargesHtml}</div></div>`;
+            const list = document.getElementById('abilities-list'); if(!list) return;
+            if(abilities.length === 0) { list.innerHTML = `<div class="spell-slot-empty">Aucune capacité configurée. Clique sur ⚙️ Gérer pour en ajouter.</div>`; return; }
+            list.innerHTML = abilities.map((ab, index) => {
+                const usedCount = ab.used ? ab.used.filter(Boolean).length : 0;
+                const available = Math.max(0, ab.max - usedCount);
+                let cbHtml = '';
+                for(let i = 0; i < ab.max; i++) cbHtml += `<input type="checkbox" class="slot-check ability-charge-check" data-idx="${index}" data-index="${i}" ${ab.used && ab.used[i] ? 'checked' : ''} title="Dépensé">`;
+                return `<div class="spell-slot-row"><div class="slot-lvl-label">${escAb(ab.name)}</div><div class="slot-main-content"><div class="slot-checkboxes">${cbHtml}</div><div class="slot-info">${available}/${ab.max} dispos • ${getAbilityRegenText(ab)}</div></div></div>`;
+            }).join('');
+            document.querySelectorAll('.ability-charge-check').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.idx), i = parseInt(e.target.dataset.index);
+                    if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false);
+                    abilities[idx].used[i] = e.target.checked;
+                    setStore('dnd-abilities', abilities); renderAbilities();
+                });
             });
         }
-        const abListContainer = document.getElementById('abilities-list');
-        if(abListContainer) abListContainer.addEventListener('click', (e) => {
-            const charge = e.target.closest('.ability-charge-btn');
-            if(charge) { const idx = parseInt(charge.dataset.idx); const i = parseInt(charge.dataset.i); if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false); abilities[idx].used[i] = !abilities[idx].used[i]; setStore('dnd-abilities', abilities); renderAbilities(); return; }
-            const row = e.target.closest('.ca-row'); if(!row) return; const index = parseInt(row.dataset.i);
-            if(e.target.closest('.ci-edit')) { if(window.editAbility) window.editAbility(index); return; }
-            if(e.target.closest('.ci-del')) { if(window.deleteAbility) window.deleteAbility(index); return; }
-        });
-        function abilityQuickAdd() {
-            const nameEl = document.getElementById('qa-ab-name'); const name = (nameEl.value || '').trim(); if(!name) { nameEl.focus(); return; }
-            const max = Math.max(1, parseInt(document.getElementById('qa-ab-max').value) || 1);
-            const regenMode = document.getElementById('qa-ab-regen').value || 'long';
-            abilities.push({ name, max, used: Array(max).fill(false), regenMode, shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1 });
-            setStore('dnd-abilities', abilities);
-            nameEl.value = ''; document.getElementById('qa-ab-max').value = '';
-            renderAbilities(); nameEl.focus();
+        // ---- Modale de configuration (calquée sur la modale des Emplacements de Sorts) ----
+        let abilityConfigDraft = [];
+        const abilityConfigModal = document.getElementById('ability-config-modal');
+        function abilityConfigRowHtml(ab, idx) {
+            return `<div class="spell-slot-config-row ability-config-row" data-idx="${idx}">
+                <div class="spell-slot-config-head">
+                    <input class="ab-cfg-name spell-config-name" placeholder="Nom de la capacité" value="${escAb(ab.name)}">
+                    <label class="spell-slot-mini-field">Charges<input type="number" class="ab-cfg-max" min="1" max="20" value="${ab.max || 1}"></label>
+                    <label class="spell-slot-mini-field spell-slot-regen-field">Récupération<select class="ab-cfg-regen-mode">
+                        <option value="none"${ab.regenMode === 'none' ? ' selected' : ''}>Aucune</option>
+                        <option value="short"${ab.regenMode === 'short' ? ' selected' : ''}>Repos court</option>
+                        <option value="long"${(ab.regenMode || 'long') === 'long' ? ' selected' : ''}>Repos long</option>
+                        <option value="short_long"${ab.regenMode === 'short_long' ? ' selected' : ''}>Repos court + long</option>
+                    </select></label>
+                    <button class="ab-cfg-del btn-del" title="Supprimer cette capacité">🗑</button>
+                </div>
+                <div class="spell-slot-config-details">
+                    <div class="spell-recovery-pill ab-cfg-short-block"><span>Court</span><select class="ab-cfg-short-type"><option value="all"${(ab.shortType || 'all') === 'all' ? ' selected' : ''}>Tout</option><option value="fixed"${ab.shortType === 'fixed' ? ' selected' : ''}>Partiel</option></select><input type="number" class="ab-cfg-short-amount" min="1" value="${ab.shortAmount || 1}" placeholder="Nb"></div>
+                    <div class="spell-recovery-pill ab-cfg-long-block"><span>Long</span><select class="ab-cfg-long-type"><option value="all"${(ab.longType || 'all') === 'all' ? ' selected' : ''}>Tout</option><option value="fixed"${ab.longType === 'fixed' ? ' selected' : ''}>Partiel</option></select><input type="number" class="ab-cfg-long-amount" min="1" value="${ab.longAmount || 1}" placeholder="Nb"></div>
+                </div>
+            </div>`;
         }
-        if(document.getElementById('btn-ab-quick-add')) document.getElementById('btn-ab-quick-add').addEventListener('click', abilityQuickAdd);
-        ['qa-ab-name', 'qa-ab-max'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); abilityQuickAdd(); } }); });
-
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-ability-modal') { editingAbilityIndex = -1; document.getElementById('new-ability-name').value = ''; document.getElementById('new-ability-max').value = ''; document.getElementById('ab-regen-mode').value = 'long'; document.getElementById('ab-short-rest-block').classList.add('hidden'); if(abilityModal) abilityModal.classList.remove('hidden'); } });
-        const abRegenMode = document.getElementById('ab-regen-mode'); if(abRegenMode) { abRegenMode.addEventListener('change', () => { const shortBlock = document.getElementById('ab-short-rest-block'); if(shortBlock) shortBlock.classList.toggle('hidden', abRegenMode.value !== 'short_long'); }); }
-        const abShortType = document.getElementById('ab-short-type'); if(abShortType) abShortType.addEventListener('change', () => { const el = document.getElementById('ab-short-amount'); if(el) el.classList.toggle('hidden', abShortType.value === 'all'); });
-        const abLongType = document.getElementById('ab-long-type'); if(abLongType) abLongType.addEventListener('change', () => { const el = document.getElementById('ab-long-amount'); if(el) el.classList.toggle('hidden', abLongType.value === 'all'); });
-
-        if(document.getElementById('btn-save-ability')) { document.getElementById('btn-save-ability').addEventListener('click', () => { const name = document.getElementById('new-ability-name').value.trim(); const max = parseInt(document.getElementById('new-ability-max').value) || 1; const regenMode = document.getElementById('ab-regen-mode').value; const shortType = document.getElementById('ab-short-type').value; const shortAmount = parseInt(document.getElementById('ab-short-amount').value) || 1; const longType = document.getElementById('ab-long-type').value; const longAmount = parseInt(document.getElementById('ab-long-amount').value) || 1; if(name && max > 0) { const ab = { name, max, used: Array(max).fill(false), regenMode, shortType, shortAmount, longType, longAmount }; if(editingAbilityIndex >= 0) { ab.used = (abilities[editingAbilityIndex].used || []).slice(0, max); while(ab.used.length < max) ab.used.push(false); abilities[editingAbilityIndex] = ab; } else { abilities.push(ab); } setStore('dnd-abilities', abilities); renderAbilities(); if(abilityModal) abilityModal.classList.add('hidden'); } }); }
+        function renderAbilityConfig() {
+            const list = document.getElementById('ability-config-list'); if(!list) return;
+            if(!abilityConfigDraft.length) { list.innerHTML = `<div class="spell-slot-empty" style="padding:16px;">Aucune capacité. Clique « ➕ Ajouter une capacité » ci-dessous.</div>`; return; }
+            list.innerHTML = abilityConfigDraft.map((ab, i) => abilityConfigRowHtml(ab, i)).join('');
+            list.querySelectorAll('.ability-config-row').forEach(row => {
+                const updateVisibility = () => {
+                    const mode = row.querySelector('.ab-cfg-regen-mode').value;
+                    row.querySelector('.spell-slot-config-details').classList.toggle('hidden', mode === 'none');
+                    row.querySelector('.ab-cfg-short-block').classList.toggle('hidden', !(mode === 'short' || mode === 'short_long'));
+                    row.querySelector('.ab-cfg-long-block').classList.toggle('hidden', !(mode === 'long' || mode === 'short_long'));
+                    row.querySelector('.ab-cfg-short-amount').classList.toggle('hidden', row.querySelector('.ab-cfg-short-type').value === 'all');
+                    row.querySelector('.ab-cfg-long-amount').classList.toggle('hidden', row.querySelector('.ab-cfg-long-type').value === 'all');
+                };
+                updateVisibility();
+                row.querySelectorAll('select, input').forEach(el => el.addEventListener('input', updateVisibility));
+                row.querySelector('.ab-cfg-del').addEventListener('click', () => { abilityConfigDraft = readAbilityConfigDraft(); abilityConfigDraft.splice(parseInt(row.dataset.idx), 1); renderAbilityConfig(); });
+            });
+        }
+        function readAbilityConfigDraft() {
+            const out = [];
+            document.querySelectorAll('#ability-config-list .ability-config-row').forEach(row => {
+                out.push({
+                    name: row.querySelector('.ab-cfg-name').value.trim(),
+                    max: Math.max(1, Math.min(20, parseInt(row.querySelector('.ab-cfg-max').value) || 1)),
+                    regenMode: row.querySelector('.ab-cfg-regen-mode').value,
+                    shortType: row.querySelector('.ab-cfg-short-type').value,
+                    shortAmount: Math.max(1, parseInt(row.querySelector('.ab-cfg-short-amount').value) || 1),
+                    longType: row.querySelector('.ab-cfg-long-type').value,
+                    longAmount: Math.max(1, parseInt(row.querySelector('.ab-cfg-long-amount').value) || 1)
+                });
+            });
+            return out;
+        }
+        function openAbilityConfig() {
+            abilityConfigDraft = abilities.map(ab => ({ name: ab.name, max: ab.max, regenMode: ab.regenMode || 'long', shortType: ab.shortType || 'all', shortAmount: ab.shortAmount || 1, longType: ab.longType || 'all', longAmount: ab.longAmount || 1 }));
+            renderAbilityConfig();
+            if(abilityConfigModal) abilityConfigModal.classList.remove('hidden');
+        }
+        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-ability-config') openAbilityConfig(); });
+        const btnAbCfgAdd = document.getElementById('btn-ability-config-add');
+        if(btnAbCfgAdd) btnAbCfgAdd.addEventListener('click', () => { abilityConfigDraft = readAbilityConfigDraft(); abilityConfigDraft.push({ name: '', max: 1, regenMode: 'long', shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1 }); renderAbilityConfig(); const last = document.querySelector('#ability-config-list .ability-config-row:last-child .ab-cfg-name'); if(last) last.focus(); });
+        const btnSaveAbCfg = document.getElementById('btn-save-ability-config');
+        if(btnSaveAbCfg) btnSaveAbCfg.addEventListener('click', () => {
+            const next = readAbilityConfigDraft().filter(ab => ab.name);
+            // On préserve les charges déjà dépensées (matching par nom).
+            next.forEach(ab => {
+                const prev = abilities.find(a => a.name === ab.name);
+                let used = prev && Array.isArray(prev.used) ? prev.used.slice(0, ab.max) : [];
+                while(used.length < ab.max) used.push(false);
+                ab.used = used;
+            });
+            abilities = next;
+            setStore('dnd-abilities', abilities);
+            renderAbilities();
+            if(abilityConfigModal) abilityConfigModal.classList.add('hidden');
+        });
         window.deleteAbility = (index) => { if(confirm("Supprimer cette capacité ?")) { abilities.splice(index, 1); setStore('dnd-abilities', abilities); renderAbilities(); } };
-        window.moveAbilityUp = (index) => { if(index > 0) { [abilities[index-1], abilities[index]] = [abilities[index], abilities[index-1]]; setStore('dnd-abilities', abilities); renderAbilities(); } };
-        window.moveAbilityDown = (index) => { if(index < abilities.length-1) { [abilities[index], abilities[index+1]] = [abilities[index+1], abilities[index]]; setStore('dnd-abilities', abilities); renderAbilities(); } };
-        window.editAbility = (index) => { const ab = abilities[index]; document.getElementById('new-ability-name').value = ab.name; document.getElementById('new-ability-max').value = ab.max; document.getElementById('ab-regen-mode').value = ab.regenMode || 'long'; const shortBlock = document.getElementById('ab-short-rest-block'); if(shortBlock) shortBlock.classList.toggle('hidden', ab.regenMode !== 'short_long'); const abShortEl = document.getElementById('ab-short-type'); if(abShortEl) abShortEl.value = ab.shortType || 'all'; const abShortAmtEl = document.getElementById('ab-short-amount'); if(abShortAmtEl) { abShortAmtEl.value = ab.shortAmount || 1; abShortAmtEl.classList.toggle('hidden', (ab.shortType || 'all') === 'all'); } const abLongEl = document.getElementById('ab-long-type'); if(abLongEl) abLongEl.value = ab.longType || 'all'; const abLongAmtEl = document.getElementById('ab-long-amount'); if(abLongAmtEl) { abLongAmtEl.value = ab.longAmount || 1; abLongAmtEl.classList.toggle('hidden', (ab.longType || 'all') === 'all'); } editingAbilityIndex = index; if(abilityModal) abilityModal.classList.remove('hidden'); };
 
         let macros = getStore('dnd-macros') || [];
         function renderMacros() { const list = document.getElementById('macro-list'); if(!list) return; list.innerHTML = ''; macros.forEach((m, i) => { list.innerHTML += `<div class="macro-pill"><button class="macro-btn rollable" data-formula="${m.formula}" data-name="${m.name}">${m.name}</button><span class="macro-del" onclick="deleteMacro(${i})">✖</span></div>`; }); }
@@ -1703,6 +1794,102 @@ document.addEventListener('DOMContentLoaded', () => {
         // ==========================================
         // MODULE DE RECHERCHE GLOBALE
         // ==========================================
+        // ==========================================
+        // BASE DE RÈGLES D&D 5e (en français) — recherche + fiche détaillée
+        // ==========================================
+        const DND_RULES = [
+            // --- Actions en combat ---
+            { name: 'Action : Attaquer', cat: 'Actions', text: "Effectue une attaque au corps à corps ou à distance contre une cible. Certaines capacités (Attaque supplémentaire) permettent plusieurs attaques avec la même action. Jet d'attaque : 1d20 + mod. de caractéristique + bonus de maîtrise (si l'arme est maîtrisée)." },
+            { name: 'Action : Lancer un sort', cat: 'Actions', text: "Lance un sort dont le temps d'incantation est de 1 action. Certains sorts utilisent une action bonus ou une réaction. On ne peut lancer qu'un seul sort nécessitant une action bonus par tour, et dans ce cas l'action ne peut servir qu'à un tour de magie." },
+            { name: 'Action : Foncer (Dash)', cat: 'Actions', text: "Gagne un déplacement supplémentaire égal à ta vitesse pour ce tour (après application des modificateurs de vitesse)." },
+            { name: 'Action : Se désengager', cat: 'Actions', text: "Ton déplacement ne provoque pas d'attaques d'opportunité pour le reste du tour." },
+            { name: 'Action : Esquiver', cat: 'Actions', text: "Jusqu'à ton prochain tour : les attaques contre toi ont le désavantage (si tu vois l'attaquant) et tu fais tes jets de sauvegarde de Dextérité avec l'avantage. Annulé si ta vitesse tombe à 0 ou si tu es neutralisé." },
+            { name: 'Action : Se cacher', cat: 'Actions', text: "Fais un test de Dextérité (Discrétion) opposé à la Perception passive (ou active) des créatures. En cas de succès, tu es caché : tu bénéficies de l'avantage à ta prochaine attaque et les créatures t'attaquent avec désavantage." },
+            { name: 'Action : Préparer', cat: 'Actions', text: "Choisis un déclencheur perceptible et une action (ou un déplacement) à exécuter en réaction quand il survient. Préparer un sort coûte un emplacement à l'avance et exige de maintenir la concentration jusqu'au déclenchement." },
+            { name: 'Action : Aider', cat: 'Actions', text: "Donne l'avantage au prochain test de caractéristique d'un allié sur une tâche pour laquelle tu l'assistes, OU à sa prochaine attaque contre une créature située à 1,50 m de toi (avant ton prochain tour)." },
+            { name: 'Action : Chercher', cat: 'Actions', text: "Consacre ton attention à trouver quelque chose : test de Sagesse (Perception) ou d'Intelligence (Investigation) selon la situation." },
+            { name: 'Action : Utiliser un objet', cat: 'Actions', text: "Interagir avec un second objet (le premier est gratuit via ton déplacement) ou utiliser un objet qui requiert une action. Ex. : boire une potion, activer un objet magique." },
+            { name: 'Action bonus', cat: 'Actions', text: "Action supplémentaire accordée par une capacité, un sort ou une règle spécifique. Tu ne peux en faire qu'UNE par tour, à ton tour uniquement." },
+            { name: 'Réaction', cat: 'Actions', text: "Action instantanée en réponse à un déclencheur, même hors de ton tour. Une seule réaction par round ; elle se récupère au début de ton tour. Ex. : attaque d'opportunité, certains sorts." },
+            { name: "Attaque d'opportunité", cat: 'Combat', text: "Réaction déclenchée quand une créature hostile que tu vois quitte ton allonge en se déplaçant : une attaque de mêlée contre elle. On l'évite avec l'action Se désengager ou en se téléportant." },
+            { name: 'Interaction avec un objet', cat: 'Combat', text: "Tu peux interagir gratuitement avec un objet une fois par tour pendant ton déplacement ou ton action (dégainer une arme, ouvrir une porte). Une seconde interaction nécessite l'action Utiliser un objet." },
+
+            // --- Mécaniques de combat ---
+            { name: 'Avantage / Désavantage', cat: 'Combat', text: "Avantage : lance 2d20 et garde le meilleur. Désavantage : lance 2d20 et garde le pire. Ils ne se cumulent pas : si tu as au moins une source de chaque, ils s'annulent et tu lances un seul d20." },
+            { name: 'Coup critique', cat: 'Combat', text: "Un 20 naturel sur un jet d'attaque touche automatiquement et constitue un coup critique : tu lances deux fois les dés de dégâts (pas les bonus fixes). Un 1 naturel rate automatiquement." },
+            { name: 'Initiative', cat: 'Combat', text: "Au début d'un combat, chaque participant lance 1d20 + mod. de Dextérité. On agit dans l'ordre décroissant. En cas d'égalité, le MJ tranche (ou DEX la plus haute)." },
+            { name: 'Surprise', cat: 'Combat', text: "Le MJ compare la Discrétion des assaillants à la Perception passive des autres. Une créature surprise ne peut ni agir ni réagir lors de son premier tour de combat." },
+            { name: 'Couverture', cat: 'Combat', text: "À demi-couvert : +2 à la CA et aux jets de sauvegarde de DEX. Aux trois quarts : +5. Couverture totale : la cible ne peut pas être visée directement." },
+            { name: 'Attaque à distance au contact', cat: 'Combat', text: "Effectuer une attaque à distance alors qu'une créature hostile se trouve à 1,50 m de toi impose le désavantage à ce jet d'attaque." },
+            { name: 'Combat à deux armes', cat: 'Combat', text: "Quand tu attaques avec une arme de mêlée légère à une main, tu peux, en action bonus, attaquer avec une seconde arme légère tenue dans l'autre main. Tu n'ajoutes pas ton mod. de caractéristique aux dégâts de cette seconde attaque (sauf s'il est négatif)." },
+            { name: 'Empoigner (grappling)', cat: 'Combat', text: "À la place d'une attaque, test de Force (Athlétisme) opposé à l'Athlétisme (Force) ou l'Acrobaties (DEX) de la cible (taille max : G+1). Réussite : la cible est Empoignée (vitesse 0)." },
+            { name: 'Bousculer', cat: 'Combat', text: "À la place d'une attaque : Force (Athlétisme) opposé à l'Athlétisme ou l'Acrobaties de la cible. Réussite : tu la mets à terre OU tu la repousses de 1,50 m." },
+            { name: 'Saut', cat: 'Déplacement', text: "Saut en longueur : distance en mètres ≈ valeur de Force (avec élan d'au moins 3 m), divisée par deux sans élan. Saut en hauteur : 90 cm + mod. de Force (avec élan). Le saut consomme du déplacement." },
+            { name: 'Dégâts massifs (mort subite)', cat: 'Combat', text: "Si des dégâts réduisent un personnage à 0 PV et que l'excédent est ≥ à son maximum de PV, il meurt sur le coup." },
+
+            // --- Concentration & magie ---
+            { name: 'Concentration', cat: 'Magie', text: "Certains sorts exigent de se concentrer pour durer. Tu perds la concentration si : tu lances un autre sort de concentration, tu es neutralisé/tué, ou tu subis des dégâts (jet de sauvegarde de Constitution, DD = 10 ou la moitié des dégâts subis, le plus élevé)." },
+            { name: 'Emplacements de sorts', cat: 'Magie', text: "Lancer un sort de niveau 1 ou plus dépense un emplacement de niveau égal ou supérieur. Les tours de magie (niveau 0) ne coûtent pas d'emplacement. Les emplacements se récupèrent au repos long (ou court pour certaines classes)." },
+            { name: 'Lancer à un niveau supérieur', cat: 'Magie', text: "Dépenser un emplacement de niveau plus élevé que celui du sort amplifie souvent son effet (« Aux niveaux supérieurs »). Le sort est considéré comme lancé au niveau de l'emplacement utilisé." },
+            { name: 'Composantes (V, S, M)', cat: 'Magie', text: "Verbale (incanter à voix haute), Somatique (geste d'une main libre), Matérielle (un composant ; un focaliseur ou une bourse à composants remplace ceux sans coût). Sans la composante requise, le sort ne peut être lancé." },
+            { name: 'Rituel', cat: 'Magie', text: "Un sort possédant la balise rituel peut être lancé sans dépenser d'emplacement si on y consacre 10 minutes de plus, à condition que la classe/capacité autorise l'incantation rituelle." },
+            { name: 'DD de sauvegarde des sorts', cat: 'Magie', text: "DD de sauvegarde = 8 + bonus de maîtrise + mod. de la caractéristique d'incantation. Bonus d'attaque de sort = bonus de maîtrise + mod. d'incantation." },
+            { name: 'Sorts de zone et couverture', cat: 'Magie', text: "Une créature bénéficiant d'une couverture totale par rapport au point d'origine d'un effet de zone n'est pas affectée. La zone part du point d'origine choisi par le lanceur." },
+
+            // --- Tests, compétences, sauvegardes ---
+            { name: 'Test de caractéristique', cat: 'Tests', text: "1d20 + mod. de caractéristique, comparé à un Degré de Difficulté (DD). On ajoute le bonus de maîtrise si une compétence pertinente est maîtrisée." },
+            { name: 'Degrés de Difficulté (DD)', cat: 'Tests', text: "Très facile 5 · Facile 10 · Moyen 15 · Difficile 20 · Très difficile 25 · Presque impossible 30." },
+            { name: 'Jet de sauvegarde', cat: 'Tests', text: "1d20 + mod. de caractéristique (+ maîtrise si tu maîtrises cette sauvegarde) pour résister à un effet (sort, poison, souffle…). Comparé au DD de l'effet." },
+            { name: 'Maîtrise et expertise', cat: 'Tests', text: "Le bonus de maîtrise (+2 au niveau 1, jusqu'à +6 au niveau 17) s'ajoute aux jets pour lesquels tu es maîtrisé. L'expertise double ce bonus pour la compétence concernée." },
+            { name: 'Test en groupe', cat: 'Tests', text: "Tout le monde lance le même test ; si la moitié au moins réussit, le groupe réussit. Utile pour la discrétion ou la traque collective." },
+            { name: 'Perception passive', cat: 'Tests', text: "Score passif = 10 + mod. de Sagesse (Perception) + maîtrise éventuelle. Utilisé pour repérer sans lancer de dé (ex. créatures cachées, pièges)." },
+            { name: 'Les 6 caractéristiques', cat: 'Tests', text: "Force (FOR), Dextérité (DEX), Constitution (CON), Intelligence (INT), Sagesse (SAG), Charisme (CHA). Modificateur = (score − 10) arrondi à l'inférieur, divisé par 2." },
+
+            // --- Repos & récupération ---
+            { name: 'Repos court', cat: 'Repos', text: "Au moins 1 heure d'activité légère. Tu peux dépenser des dés de vie (1 dé + mod. de CON chacun) pour récupérer des PV. Certaines capacités/emplacements se rechargent au repos court." },
+            { name: 'Repos long', cat: 'Repos', text: "Au moins 8 heures (dont 6 de sommeil). Récupère tous les PV, la moitié de tes dés de vie totaux (minimum 1) et la plupart des ressources. Un seul repos long bénéfique par 24 heures." },
+            { name: 'Dés de vie', cat: 'Repos', text: "Tu en possèdes autant que ton niveau, du type lié à ta classe (d6 à d12). Dépensés au repos court pour soigner, ils se récupèrent en partie au repos long." },
+
+            // --- Mort & soins ---
+            { name: 'Jets de sauvegarde contre la mort', cat: 'Mort & soins', text: "À 0 PV, au début de ton tour : 1d20. 10+ = succès, moins de 10 = échec. 3 succès → tu es stabilisé ; 3 échecs → tu meurs. Un 1 naturel compte double échec, un 20 naturel te rend 1 PV. Subir des dégâts à 0 PV = 1 échec (2 si critique au contact)." },
+            { name: 'Stabiliser une créature', cat: 'Mort & soins', text: "Action + test de Sagesse (Médecine) DD 10 sur une créature à 0 PV : elle devient stable (plus de jets contre la mort), reste inconsciente et regagne 1 PV après 1d4 heures." },
+            { name: 'Points de vie temporaires', cat: 'Mort & soins', text: "Ils forment un « tampon » absorbé en premier par les dégâts. Ils ne se cumulent pas (on garde le plus élevé), ne se soignent pas et disparaissent au repos long." },
+            { name: 'Résistance, vulnérabilité, immunité', cat: 'Mort & soins', text: "Résistance : dégâts du type concerné divisés par deux. Vulnérabilité : dégâts doublés. Immunité : aucun dégât de ce type. On applique d'abord les autres modificateurs, puis la résistance/vulnérabilité." },
+            { name: 'Types de dégâts', cat: 'Mort & soins', text: "Contondant, perforant, tranchant, feu, froid, foudre, acide, poison, nécrotique, radiant, psychique, tonnerre, force. Ils déterminent résistances et vulnérabilités." },
+
+            // --- Déplacement, environnement, vision ---
+            { name: 'Déplacement et vitesse', cat: 'Déplacement', text: "Tu peux répartir ton déplacement avant/après/entre tes attaques. Te relever (de À terre) coûte la moitié de ta vitesse. Tu peux te déplacer à travers l'espace d'un allié (pas d'un ennemi sans Acrobaties/Athlétisme)." },
+            { name: 'Terrain difficile', cat: 'Déplacement', text: "Chaque 1,50 m parcouru en terrain difficile (décombres, eau, broussailles, neige…) coûte 3 m de déplacement : ta distance utile est divisée par deux." },
+            { name: 'Capacité de charge', cat: 'Déplacement', text: "Charge maximale = score de Force × 7,5 kg. Au-delà de Force × 5 kg, tu es encombré (variante) : vitesse réduite et désavantages possibles." },
+            { name: 'Vision dans le noir', cat: 'Vision', text: "Dans le noir, tu vois en lumière faible comme en lumière vive, et dans l'obscurité comme en lumière faible (en nuances de gris), jusqu'à la distance indiquée." },
+            { name: 'Lumière (vive, faible, obscurité)', cat: 'Vision', text: "Lumière vive : vision normale. Lumière faible : zone de pénombre, perception visuelle avec désavantage. Obscurité : zone d'aveuglement (Aveuglé sans vision spéciale)." },
+            { name: 'Créature cachée / invisible', cat: 'Vision', text: "Attaquer une cible que tu ne vois pas : désavantage. Être attaqué sans être vu : l'attaquant a l'avantage. Une attaque révèle ta position si tu étais caché." },
+            { name: 'Chute', cat: 'Environnement', text: "1d6 dégâts contondants par tranche de 3 m de chute, jusqu'à 20d6 (60 m). La créature atterrit À terre, sauf si elle évite les dégâts." },
+            { name: 'Suffocation', cat: 'Environnement', text: "Tu peux retenir ta respiration 1 + mod. de CON minutes (min. 30 s). Ensuite, tu survis un nombre de rounds égal à ton mod. de CON (min. 1), puis tu tombes à 0 PV et tu te stabilises pas." },
+
+            // --- Conditions / états ---
+            { name: 'État : Aveuglé', cat: 'États', text: "Ne voit plus, rate automatiquement les tests liés à la vue. Ses attaques ont le désavantage ; les attaques contre lui ont l'avantage." },
+            { name: 'État : Charmé', cat: 'États', text: "Ne peut pas attaquer le charmeur ni le cibler par une capacité/un effet néfaste. Le charmeur a l'avantage aux tests d'interaction sociale avec lui." },
+            { name: 'État : Assourdi', cat: 'États', text: "N'entend plus et rate automatiquement les tests de caractéristique nécessitant l'ouïe." },
+            { name: 'État : Effrayé', cat: 'États', text: "Désavantage aux tests et aux attaques tant que la source de la peur est dans son champ de vision. Ne peut pas s'en rapprocher volontairement." },
+            { name: 'État : Empoigné', cat: 'États', text: "Sa vitesse tombe à 0 (pas de bonus de vitesse). Prend fin si l'empoigneur est neutralisé ou si la créature est sortie de portée par un effet." },
+            { name: 'État : Neutralisé', cat: 'États', text: "Ne peut effectuer aucune action ni réaction." },
+            { name: 'État : Invisible', cat: 'États', text: "Impossible à voir sans aide spéciale ; considéré comme fortement obscurci. Avantage à ses attaques ; les attaques contre lui ont le désavantage." },
+            { name: 'État : Paralysé', cat: 'États', text: "Neutralisé, ne peut ni bouger ni parler. Rate les sauvegardes de Force et de Dextérité. Les attaques contre lui ont l'avantage et tout coup porté à 1,50 m est un critique." },
+            { name: 'État : Pétrifié', cat: 'États', text: "Transformé en matière solide, neutralisé, ne perçoit plus, résistance à tous les dégâts, immunité au poison et aux maladies. Attaques contre lui avec avantage." },
+            { name: 'État : Empoisonné', cat: 'États', text: "Désavantage aux jets d'attaque et aux tests de caractéristique." },
+            { name: 'État : À terre', cat: 'États', text: "Ne peut que ramper (ou se relever en dépensant la moitié de sa vitesse). Désavantage à ses attaques. Attaques contre lui : avantage au contact, désavantage à distance." },
+            { name: 'État : Entravé', cat: 'États', text: "Vitesse à 0. Ses attaques ont le désavantage et les attaques contre lui l'avantage. Désavantage aux sauvegardes de Dextérité." },
+            { name: 'État : Étourdi', cat: 'États', text: "Neutralisé, ne peut bouger, parle avec peine. Rate les sauvegardes de Force et de Dextérité. Les attaques contre lui ont l'avantage." },
+            { name: 'État : Inconscient', cat: 'États', text: "Neutralisé, ne perçoit plus, lâche ce qu'il tient et tombe À terre. Rate FOR/DEX. Attaques contre lui avec avantage ; tout coup au contact à 1,50 m est un critique." },
+            { name: 'Épuisement', cat: 'États', text: "6 niveaux cumulatifs : 1) désavantage aux tests · 2) vitesse divisée par deux · 3) désavantage aux attaques et sauvegardes · 4) PV maximum divisés par deux · 5) vitesse à 0 · 6) mort. Un repos long retire 1 niveau (avec nourriture/boisson)." },
+
+            // --- Divers ---
+            { name: 'Inspiration', cat: 'Divers', text: "Récompense du MJ (souvent pour le roleplay). Tu peux la dépenser pour obtenir l'avantage sur un jet d'attaque, un test de caractéristique ou une sauvegarde. On n'en possède qu'une à la fois." },
+            { name: 'Monnaie et conversion', cat: 'Divers', text: "1 po = 10 pa = 100 pc ; 1 po = 2 pe ; 1 pp = 10 po. (po : or, pa : argent, pe : électrum, pc : cuivre, pp : platine)." },
+            { name: 'Liaison à un objet magique', cat: 'Divers', text: "Certains objets requièrent une liaison (attunement) : un repos court concentré sur l'objet. Un personnage ne peut être lié qu'à 3 objets magiques à la fois." }
+        ];
+
         const searchModal = document.getElementById('global-search-modal');
         const searchInput = document.getElementById('global-search-input');
         const searchResults = document.getElementById('global-search-results');
@@ -1718,57 +1905,130 @@ document.addEventListener('DOMContentLoaded', () => {
 
             searchModal.addEventListener('click', (e) => { if (e.target === searchModal) closeSearch(); });
 
-            searchInput.addEventListener('input', () => {
-                const query = searchInput.value.toLowerCase().trim();
-                if (!query) { searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>'; return; }
-                const itemsFound = [];
-                const targets = document.querySelectorAll('h1, h2, h3, h4, label, th, .widget-title, .spell-name, [placeholder]');
-                
+            // --- Widget de règle (fiche détaillée, fermable) ---
+            function openRuleWidget(rule) {
+                const titleEl = document.getElementById('rule-widget-title');
+                const catEl = document.getElementById('rule-widget-cat');
+                const bodyEl = document.getElementById('rule-widget-body');
+                const modal = document.getElementById('rule-widget-modal');
+                if (!titleEl || !modal) return;
+                titleEl.textContent = rule.name;
+                if (catEl) catEl.textContent = rule.cat || '';
+                if (bodyEl) bodyEl.textContent = rule.text;
+                modal.classList.remove('hidden');
+            }
+
+            // --- Recherche dans les données saisies de la fiche ---
+            function searchSheetData(q) {
+                const out = [];
+                const add = (arr, icon, subtitle, widgetId) => { (arr || []).forEach(it => { const nm = String((it && (it.name || it.title)) || '').trim(); if (nm && nm.toLowerCase().includes(q)) out.push({ icon, title: nm, subtitle, widgetId }); }); };
+                add(getStore('dnd-abilities'), '🔋', 'Capacité limitée', 'widget-abilities');
+                add(getStore('dnd-spells'),    '✨', 'Sort',             'widget-spells');
+                add(getStore('dnd-attacks'),   '⚔️', 'Attaque / arme',   'widget-attacks');
+                add(getStore('dnd-inventory'), '🎒', 'Objet (sac à dos)','widget-inventory');
+                add(getStore('dnd-traits'),    '📜', 'Capacité / don',   'widget-traits');
+                add(getStore('dnd-macros'),    '🎲', 'Macro',            'widget-macros');
+                // Raccourcis vers les modules (ex. « bourse »)
+                const modules = [
+                    { kw: ['bourse', 'argent', 'piece', 'pièce', 'or', 'monnaie', 'po'], title: 'Bourse', widgetId: 'widget-currency', icon: '💰' },
+                    { kw: ['inventaire', 'sac', 'poids', 'objet'], title: 'Sac à dos', widgetId: 'widget-inventory', icon: '🎒' },
+                    { kw: ['magie', 'emplacement', 'incantation', 'dd'], title: 'Caractéristiques magiques', widgetId: 'widget-magic-stats', icon: '✨' },
+                    { kw: ['initiative', 'tracker'], title: "Tracker d'initiative", widgetId: 'widget-initiative', icon: '⚔️' },
+                    { kw: ['note', 'journal'], title: 'Notes & Journal', widgetId: 'widget-notes', icon: '📝' },
+                    { kw: ['pv', 'vie', 'sante', 'santé', 'soin', 'mort'], title: 'Points de vie', widgetId: 'widget-hp', icon: '❤️' },
+                    { kw: ['competence', 'compétence', 'sauvegarde', 'caracteristique', 'caractéristique', 'stat', 'force', 'dexterite', 'dextérité'], title: 'Caractéristiques & compétences', widgetId: 'widget-stats', icon: '🎯' },
+                    { kw: ['repos'], title: 'Repos', widgetId: 'widget-rests', icon: '⛺' },
+                    { kw: ['compagnon', 'familier'], title: 'Compagnon / Familier', widgetId: 'widget-companion', icon: '🐾' },
+                    { kw: ['quete', 'quête', 'pnj'], title: 'Quêtes & PNJ', widgetId: 'widget-quests', icon: '🗺️' }
+                ];
+                modules.forEach(m => { if (m.kw.some(k => k.includes(q) || q.includes(k))) out.push({ icon: m.icon, title: m.title, subtitle: 'Module de la fiche', widgetId: m.widgetId }); });
+                // Dédoublonnage par titre + module
+                const seen = new Set();
+                return out.filter(o => { const key = o.title + '|' + o.widgetId; if (seen.has(key)) return false; seen.add(key); return true; });
+            }
+
+            // --- Recherche des libellés/champs affichés sur la fiche ---
+            function searchPageElements(query) {
+                const found = [];
+                const targets = document.querySelectorAll('#app-screen h1, #app-screen h2, #app-screen h3, #app-screen h4, #app-screen label, #app-screen th, #app-screen [placeholder]');
                 targets.forEach(el => {
-                    if (el.closest('#global-search-modal') || el.closest('#login-screen') || el.closest('#loading-screen')) return;
+                    if (el.closest('#global-search-modal') || el.closest('#rule-widget-modal')) return;
                     let text = el.hasAttribute('placeholder') && el.getAttribute('placeholder') ? el.getAttribute('placeholder') : (el.textContent || el.innerText);
                     text = text.replace(/[\n\r]+|[\s]{2,}/g, ' ').trim();
                     if (!text || text.length < 2) return;
-
                     if (text.toLowerCase().includes(query)) {
-                        let contextName = 'Fiche de personnage';
-                        let widget = el.closest('.draggable-widget, .modal-box, .scroll-paper, .auth-card');
-                        if (widget) {
-                            let titleEl = widget.querySelector('.section-title, h2, .grimoire-title');
-                            if (titleEl) contextName = "Dossier : " + titleEl.textContent.trim().replace(/[▶▼]/g, '');
-                        }
-
+                        let contextName = 'Fiche';
+                        const widget = el.closest('.draggable-widget, .modal-box, .scroll-paper');
+                        if (widget) { const titleEl = widget.querySelector('.section-title, h2, .grimoire-title'); if (titleEl) contextName = titleEl.textContent.trim().replace(/[▶▼]/g, ''); }
                         const clickTarget = el.hasAttribute('placeholder') ? el : (el.closest('div, li, tr, label') || el);
-                        if (!itemsFound.some(item => item.element === clickTarget)) { itemsFound.push({ title: text, context: contextName, element: clickTarget }); }
+                        if (!found.some(item => item.element === clickTarget)) found.push({ title: text, context: contextName, element: clickTarget });
                     }
                 });
+                return found;
+            }
 
-                if (itemsFound.length === 0) {
-                    searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Aucun élément correspondant trouvé.</div>';
-                } else {
-                    searchResults.innerHTML = '';
-                    itemsFound.slice(0, 15).forEach(item => {
-                        const row = document.createElement('div');
-                        row.className = 'search-result-item';
-                        row.innerHTML = `<div class="result-title">${item.title}</div><div class="result-path">${item.context}</div>`;
-                        row.addEventListener('click', () => {
-                            closeSearch();
-                            let hiddenParent = item.element.closest('.hidden, [style*="display: none"]');
-                            if (hiddenParent) {
-                                const tabId = item.element.closest('[id]')?.id;
-                                if (tabId) {
-                                    const tabBtn = document.querySelector(`[data-tab="${tabId}"], [href="#${tabId}"], #btn-tab-${tabId}`);
-                                    if (tabBtn) tabBtn.click();
-                                }
-                            }
-                            item.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            if (item.element.tagName === 'INPUT' || item.element.tagName === 'TEXTAREA') setTimeout(() => item.element.focus(), 300);
-                            item.element.classList.add('search-highlight-active');
-                            setTimeout(() => item.element.classList.remove('search-highlight-active'), 2400);
-                        });
-                        searchResults.appendChild(row);
-                    });
+            // Révèle un élément (onglet masqué) puis le met en évidence.
+            function revealAndScroll(el) {
+                if (!el) return;
+                const tabContent = el.closest('.tab-content');
+                if (tabContent && tabContent.classList.contains('hidden')) {
+                    const tabBtn = document.querySelector(`[data-tab="${tabContent.id}"]`);
+                    if (tabBtn) tabBtn.click();
                 }
+                setTimeout(() => {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('search-highlight-active');
+                    setTimeout(() => el.classList.remove('search-highlight-active'), 2400);
+                }, 120);
+            }
+
+            function escSearch(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+            function makeResultRow(icon, title, subtitle, onClick) {
+                const row = document.createElement('div');
+                row.className = 'search-result-item';
+                row.innerHTML = `<div class="result-title">${icon} ${escSearch(title)}</div><div class="result-path">${escSearch(subtitle)}</div>`;
+                row.addEventListener('click', onClick);
+                return row;
+            }
+            function groupHeader(label) { const h = document.createElement('div'); h.className = 'search-group-head'; h.textContent = label; return h; }
+
+            // Fermeture du widget de règle (✕ et clic sur le fond)
+            const ruleWidgetModal = document.getElementById('rule-widget-modal');
+            const btnCloseRule = document.getElementById('btn-close-rule-widget');
+            if (btnCloseRule && ruleWidgetModal) btnCloseRule.addEventListener('click', () => ruleWidgetModal.classList.add('hidden'));
+            if (ruleWidgetModal) ruleWidgetModal.addEventListener('click', (e) => { if (e.target === ruleWidgetModal) ruleWidgetModal.classList.add('hidden'); });
+
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase().trim();
+                searchResults.innerHTML = '';
+                if (!query) { searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>'; return; }
+                let any = false;
+
+                // 1) Données de ta fiche
+                const data = searchSheetData(query);
+                if (data.length) {
+                    any = true;
+                    searchResults.appendChild(groupHeader('📋 Ta fiche'));
+                    data.slice(0, 12).forEach(d => searchResults.appendChild(makeResultRow(d.icon || '•', d.title, d.subtitle, () => { closeSearch(); revealAndScroll(document.getElementById(d.widgetId)); })));
+                }
+
+                // 2) Règles D&D (clic → fiche détaillée dans un widget)
+                const rules = DND_RULES.filter(r => r.name.toLowerCase().includes(query) || r.text.toLowerCase().includes(query));
+                if (rules.length) {
+                    any = true;
+                    searchResults.appendChild(groupHeader('📖 Règles D&D'));
+                    rules.slice(0, 14).forEach(r => searchResults.appendChild(makeResultRow('📖', r.name, r.cat, () => { closeSearch(); openRuleWidget(r); })));
+                }
+
+                // 3) Autres libellés présents sur la fiche
+                const page = searchPageElements(query);
+                if (page.length) {
+                    any = true;
+                    searchResults.appendChild(groupHeader('🧭 Sur la page'));
+                    page.slice(0, 8).forEach(p => searchResults.appendChild(makeResultRow('🧭', p.title, p.context, () => { closeSearch(); revealAndScroll(p.element); if (p.element.tagName === 'INPUT' || p.element.tagName === 'TEXTAREA') setTimeout(() => p.element.focus(), 320); })));
+                }
+
+                if (!any) searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Aucun résultat. Essaie un autre mot-clé (règle, capacité, sort, objet…).</div>';
             });
 
             window.openGlobalSearch = openSearch;
