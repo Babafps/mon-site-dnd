@@ -242,6 +242,11 @@ body.gm-active #session-combat-badge { display: none !important; }
 .gm-side-card-head { font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.9rem; color: var(--primary-color, #7A2828); border-bottom: 1px solid rgba(196,155,53,0.4); padding-bottom: 6px; }
 .gm-side-grow { flex: 1; min-height: 0; }
 .gm-side-grow .gm-textarea { flex: 1; }
+/* Les modules gardent leur hauteur naturelle : c'est le PANNEAU qui défile (scroll interne),
+   et non chaque carte qui se comprime (ce qui coupait/chevauchait leur contenu).
+   La page, elle, ne défile pas (#gm-screen est fixe). */
+.gm-side-panel > .gm-card,
+.gm-side-panel > .gm-side-card:not(.gm-side-grow) { flex: 0 0 auto; }
 
 /* ---- Lanceur de dés ---- */
 .gm-dice-quick { display: flex; gap: 5px; flex-wrap: wrap; }
