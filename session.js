@@ -452,11 +452,32 @@
         view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         view.classList.toggle('show-grid', m.showGrid !== false);
         view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
-        view.innerHTML = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
+        const tokensHtml = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
             const mine = !locked && t.owner && t.owner === uid;
             const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
             return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
         }).join('');
+        view.innerHTML = tokensHtml + '<canvas class="smap-fog"></canvas>';
+        renderPlayerFog();
+    }
+    // Brouillard côté joueur : OPAQUE (le joueur ne voit que les zones révélées par le MJ).
+    function renderPlayerFog() {
+        const view = document.getElementById('smap-view'); if (!view) return;
+        const canvas = view.querySelector('.smap-fog'); if (!canvas) return;
+        const fog = (mapState.map && mapState.map.fog) || null;
+        if (!fog || !fog.on) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+        const w = Math.max(1, view.clientWidth), h = Math.max(1, view.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(6,5,4,0.985)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = '#000';                // alpha plein → zones révélées totalement claires
+        (fog.reveals || []).forEach(r => { ctx.beginPath(); ctx.arc(r.x * w, r.y * h, (r.r || 0.06) * w, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalCompositeOperation = 'source-over';
     }
 
     // Déplacement par le joueur de SON jeton (envoyé au MJ qui fait autorité)
@@ -581,6 +602,8 @@
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; }
         .smap-token-mine { cursor:grab; box-shadow:0 0 0 2px #fff, 0 0 10px var(--accent-color,#C49B35); }
         .smap-token-mine:active { cursor:grabbing; }
+        .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }
+        .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-head-btns { display:flex; gap:4px; }
         #session-map.smap-fullscreen { right:0; bottom:0; top:0; left:0; width:100vw; height:100vh; border-radius:0; z-index:9995; display:flex; flex-direction:column; }
         #session-map.smap-fullscreen .smap-view { flex:1; aspect-ratio:auto; height:auto; }

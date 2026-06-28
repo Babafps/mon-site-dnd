@@ -220,11 +220,18 @@
         <div class="gm-workspace">
             <!-- ===== BARRE D'OUTILS VERTICALE (type Roll20) ===== -->
             <div class="gm-leftbar">
+                <button class="gm-tool is-active" data-tool="select" title="Sélection / déplacement (souris)">🖱️</button>
                 <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
                 <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
                 <button class="gm-tool" data-tool="grid" title="Afficher / masquer la grille">▦</button>
                 <button class="gm-tool" data-tool="lock" title="Verrouiller / libérer les jetons">🔒</button>
                 <button class="gm-tool" data-tool="clear" title="Vider les jetons">🗑️</button>
+                <div class="gm-tool-sep"></div>
+                <button class="gm-tool" data-tool="fog" title="Brouillard de guerre : activer / retirer">🌫️</button>
+                <button class="gm-tool" data-tool="reveal" title="Pinceau : révéler une zone aux joueurs">🔦</button>
+                <button class="gm-tool" data-tool="cover" title="Pinceau : re-cacher une zone">⬛</button>
+                <button class="gm-tool" data-tool="revealall" title="Tout révéler">👁️</button>
+                <button class="gm-tool" data-tool="coverall" title="Tout recouvrir de brouillard">🌑</button>
             </div>
             <!-- ===== ZONE CENTRALE : grande carte (stage) ===== -->
             <div class="gm-main">
@@ -315,6 +322,14 @@
                     </div>
                 </div>
 
+                <div class="gm-card">
+                    <div class="gm-card-head"><span class="gm-card-icon">🔊</span> Soundboard</div>
+                    <div class="gm-card-body">
+                        <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer mes sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
+                        <div id="gm-soundboard-pads" class="gm-soundboard-pads"></div>
+                        <div class="gm-readonly-note">ⓘ Importe tes propres effets. Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
+                    </div>
+                </div>
 
                 <div class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
@@ -504,13 +519,14 @@
             }
             // Barre d'outils gauche → proxys vers les contrôles carte existants.
             ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
-                if (btn.dataset.tool === 'grid') {
-                    const cb = ov.querySelector('#gm-map-showgrid');
-                    if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); }
-                    return;
-                }
+                const tool = btn.dataset.tool;
+                if (tool === 'grid') { const cb = ov.querySelector('#gm-map-showgrid'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
+                if (tool === 'select' || tool === 'reveal' || tool === 'cover') { setMapTool(tool); return; }
+                if (tool === 'fog') { toggleFog(); return; }
+                if (tool === 'revealall') { fogRevealAll(); return; }
+                if (tool === 'coverall') { fogCoverAll(); return; }
                 const ids = { addtoken: 'gm-map-addtoken', sync: 'gm-map-sync', lock: 'gm-map-lock', clear: 'gm-map-clear' };
-                const el = ids[btn.dataset.tool] && ov.querySelector('#' + ids[btn.dataset.tool]);
+                const el = ids[tool] && ov.querySelector('#' + ids[tool]);
                 if (el) el.click();
             }));
         } catch (e) { console.warn('gm layout Roll20:', e); }
@@ -1154,6 +1170,8 @@
 
     // Vue locale de la carte (zoom / déplacement) — non synchronisée, propre au MJ.
     let mapView = { zoom: 1, panX: 0, panY: 0 };
+    let mapTool = 'select';      // 'select' | 'reveal' | 'cover'
+    let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
     function tokenHtml(t) {
         const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
@@ -1170,16 +1188,59 @@
         const content = view.querySelector('.gm-map-content'); if (!content) return;
         content.style.transform = `translate(${mapView.panX}px, ${mapView.panY}px) scale(${mapView.zoom})`;
     }
+    // ----- Brouillard de guerre (fog of war) -----
+    function fogState() { const m = state.map || {}; if (!m.fog) m.fog = { on: false, reveals: [] }; if (!Array.isArray(m.fog.reveals)) m.fog.reveals = []; return m.fog; }
+    function renderFog() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('.gm-layer-fog'); if (!canvas) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const fog = (state.map && state.map.fog) || { on: false, reveals: [] };
+        if (!fog.on) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(10,8,6,0.62)';   // MJ : semi-opaque (voit à travers) ; joueur = opaque
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = '#000';                // alpha plein → efface TOTALEMENT les zones révélées
+        (fog.reveals || []).forEach(r => { ctx.beginPath(); ctx.arc(r.x * w, r.y * h, (r.r || fogBrush) * w, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalCompositeOperation = 'source-over';
+    }
+    function paintFogAt(e) {
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
+        const r = content.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+        const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+        const fog = fogState();
+        if (mapTool === 'reveal') fog.reveals.push({ x, y, r: fogBrush });
+        else if (mapTool === 'cover') fog.reveals = fog.reveals.filter(rv => Math.hypot(rv.x - x, rv.y - y) > fogBrush);
+        renderFog();
+    }
+    function setMapTool(tool) {
+        mapTool = (mapTool === tool && tool !== 'select') ? 'select' : tool;
+        if (mapTool === 'reveal' || mapTool === 'cover') fogState().on = true;
+        document.querySelectorAll('.gm-leftbar .gm-tool[data-tool]').forEach(b => b.classList.toggle('is-active', b.dataset.tool === mapTool));
+        save(); renderMap(); broadcastMap(true);
+    }
+    function toggleFog() { const fog = fogState(); fog.on = !fog.on; if (!fog.on) setMapTool('select'); else { save(); renderMap(); broadcastMap(true); } if (window.showAppToast) window.showAppToast(fog.on ? '🌫️ Brouillard activé — 🔦 révèle, ⬛ recache' : '☀️ Brouillard retiré', '#2c3e50'); }
+    function fogRevealAll() { const fog = fogState(); fog.on = true; fog.reveals = [{ x: 0.5, y: 0.5, r: 3 }]; save(); renderMap(); broadcastMap(true); }
+    function fogCoverAll() { const fog = fogState(); fog.on = true; fog.reveals = []; save(); renderMap(); broadcastMap(true); }
+
     function renderMap() {
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens">${tokens}</div></div>`;
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens">${tokens}</div><canvas class="gm-layer gm-layer-fog"></canvas></div>`;
         const content = view.querySelector('.gm-map-content');
         content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         content.classList.toggle('show-grid', m.showGrid !== false);
         content.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
         applyMapTransform();
+        renderFog();
+        view.classList.toggle('gm-tool-paint', mapTool !== 'select');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
@@ -1276,10 +1337,14 @@
     }
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
-        let cur = null, tokenEl = null, panning = false, startX = 0, startY = 0, moved = false, startPan = null;
+        let cur = null, tokenEl = null, panning = false, painting = false, startX = 0, startY = 0, moved = false, startPan = null;
         const contentRect = () => { const c = view.querySelector('.gm-map-content'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
             startX = e.clientX; startY = e.clientY; moved = false;
+            if (mapTool === 'reveal' || mapTool === 'cover') {   // mode brouillard : on peint
+                painting = true; try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                paintFogAt(e); e.preventDefault(); return;
+            }
             const el = e.target.closest('.gm-token');
             if (el) {
                 cur = find(state.tokens, el.dataset.token); tokenEl = el; if (!cur) return;
@@ -1293,6 +1358,7 @@
         });
         view.addEventListener('pointermove', (e) => {
             if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
+            if (painting) { paintFogAt(e); return; }
             if (cur && tokenEl) {
                 const r = contentRect();
                 const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
@@ -1307,6 +1373,7 @@
             }
         });
         const up = (e) => {
+            if (painting) { painting = false; save(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
                 else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; }
