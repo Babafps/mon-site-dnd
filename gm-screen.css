@@ -6,9 +6,12 @@
 /* L'écran MJ est désormais une vraie page (.screen-view), plus une superposition.
    La visibilité est gérée par .hidden (comme les autres écrans). */
 #gm-screen { font-family: 'Lora', serif; color: var(--text-color); }
+/* Écran MJ = application plein écran FIXE : aucun scroll de page, chaque panneau
+   scrolle en interne. On réserve 66px en bas pour la barre du lecteur de musique. */
+#gm-screen:not(.hidden) { position: fixed; inset: 0 0 66px 0; z-index: 1200; overflow: hidden; padding: 10px; }
 .gm-shell {
     max-width: 1500px; margin: 0 auto;
-    min-height: calc(100vh - 40px);
+    height: 100%; min-height: 0;
     display: flex; flex-direction: column;
     background:
         radial-gradient(circle at 50% -10%, rgba(196,155,53,0.10), transparent 60%),
@@ -72,7 +75,7 @@
 .gm-close:hover { background: rgba(231,76,60,0.14); border-color: #c0392b; color: #c0392b; }
 
 /* ---- Espace de travail : zone centrale + sidebar (flux normal, anti-chevauchement) ---- */
-.gm-workspace { flex: 1; display: flex; gap: 12px; align-items: stretch; padding: 12px; min-height: 0; }
+.gm-workspace { flex: 1; display: flex; gap: 12px; align-items: stretch; padding: 12px; min-height: 0; overflow: hidden; }
 
 /* Barre d'outils verticale (type Roll20) */
 .gm-leftbar { flex: 0 0 52px; display: flex; flex-direction: column; gap: 8px; padding: 8px 6px; align-self: flex-start;
@@ -84,11 +87,11 @@
 .gm-tool:active { transform: scale(0.94); }
 
 /* Zone centrale = la carte tactique en grand (la "stage") */
-.gm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .gm-span-2 { grid-column: auto; }
-#gm-map-card { flex: 1; display: flex; flex-direction: column; align-self: stretch; }
-#gm-map-card .gm-card-body { flex: 1; min-height: 0; }
-#gm-map-card .gm-map-view { flex: 1; aspect-ratio: auto; height: auto; min-height: 480px; }
+#gm-map-card { flex: 1; min-height: 0; display: flex; flex-direction: column; align-self: stretch; }
+#gm-map-card .gm-card-body { flex: 1; min-height: 0; overflow: auto; }
+#gm-map-card .gm-map-view { flex: 1; aspect-ratio: auto; height: auto; min-height: 260px; }
 
 /* ---- Cartouche générique ---- */
 .gm-card {
@@ -210,8 +213,8 @@
 /* ---- SIDEBAR DROITE ---- */
 .gm-sidebar {
     flex: 0 0 400px; max-width: 400px;
-    position: sticky; top: 16px; align-self: flex-start;
-    max-height: calc(100vh - 32px);
+    position: static; align-self: stretch;
+    height: 100%; max-height: 100%;
     display: flex; flex-direction: column;
     background: linear-gradient(180deg, var(--widget-bg, #fbf4e2), #f3e8cf);
     border: 1px solid var(--soft-border, rgba(122,40,40,0.25));

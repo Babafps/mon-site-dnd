@@ -203,17 +203,12 @@
     // COMBAT (joueur) : bouton flottant (FAB) + initiative
     // =====================================================
     let combatState = { active: false, round: 1, turnIndex: 0, order: [] };
-    let fabEl = null, fabPanel = null, fabBadge = null;
+    let fabEl = null, fabPanel = null;
 
     function clampN(v, a, b) { return Math.max(a, Math.min(v, b)); }
 
     function ensureFab() {
         if (fabEl) return;
-        fabBadge = document.createElement('div');
-        fabBadge.id = 'session-combat-badge'; fabBadge.className = 'no-print';
-        fabBadge.textContent = '⚔️ Pas de combat pour le moment';
-        document.body.appendChild(fabBadge);
-
         fabEl = document.createElement('button');
         fabEl.id = 'session-fab'; fabEl.className = 'no-print'; fabEl.type = 'button';
         fabEl.innerHTML = '<span class="session-fab-ic">⚔️</span>';
@@ -247,6 +242,11 @@
 
     function renderFabPanel() {
         if (!fabPanel) return;
+        // Hors combat : on n'affiche le message QUE dans le panneau ouvert (plus de badge flottant).
+        if (!combatState.active) {
+            fabPanel.innerHTML = `<div class="sfp-head">⚔️ Combat</div><div class="sfp-empty">Pas de combat pour le moment.</div>`;
+            return;
+        }
         const order = combatState.order || [];
         const rows = order.map((c, i) => `<div class="sfp-row${i === combatState.turnIndex ? ' is-turn' : ''}">
             <span class="sfp-init">${c.init == null ? '—' : c.init}</span>
@@ -323,15 +323,17 @@
     function updateFabVisibility() {
         if (!fabEl) return;
         const connected = !!state.sessionId;
-        fabEl.style.display = (connected && combatState.active) ? 'flex' : 'none';
-        if (fabBadge) fabBadge.style.display = (connected && !combatState.active) ? 'block' : 'none';
-        if (!combatState.active && fabPanel) fabPanel.classList.add('hidden');
+        // Le bouton de combat n'apparaît QUE sur l'écran joueur (jamais MJ / accueil / login).
+        const app = document.getElementById('app-screen');
+        const onPlayerScreen = !!(app && !app.classList.contains('hidden'));
+        const show = connected && onPlayerScreen;
+        fabEl.style.display = show ? 'flex' : 'none';
+        if (!show && fabPanel) fabPanel.classList.add('hidden');
     }
 
     function teardownCombatUI() {
         combatState = { active: false, round: 1, turnIndex: 0, order: [] };
         if (fabEl) fabEl.style.display = 'none';
-        if (fabBadge) fabBadge.style.display = 'none';
         if (fabPanel) fabPanel.classList.add('hidden');
         document.body.classList.remove('session-combat-active');
     }
@@ -667,6 +669,8 @@
         app.addEventListener('click', (e) => {
             if (e.target.closest('#btn-hp-damage, #btn-hp-heal, #btn-short-rest, #btn-long-rest')) setTimeout(() => pushSnapshot(false), 50);
         }, true);
+        // Le bouton de combat suit l'écran actif (visible seulement sur la fiche joueur)
+        document.addEventListener('screen:change', updateFabVisibility);
         restore();
     }
 

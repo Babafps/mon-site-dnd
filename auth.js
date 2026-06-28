@@ -25,6 +25,7 @@ window.navTo = function (id) {
         if (el) el.classList.toggle('hidden', s !== id);
     });
     document.body.classList.toggle('gm-active', id === 'gm-screen');
+    try { document.dispatchEvent(new CustomEvent('screen:change', { detail: { id } })); } catch (e) {}
 };
 
 window.SupaAuth = {

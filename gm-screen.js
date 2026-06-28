@@ -110,6 +110,7 @@
             party: [], initiative: [], round: 1, turnIndex: 0, combatActive: false,
             monsters: [], npcs: [], quests: [], notes: '', scenes: [], soundboard: [],
             map: { bg: null, gridSize: 48, showGrid: true }, tokens: [],
+            maps: [], activeMapId: null,
             env: { time: '', weather: '☀️ Dégagé' }, diceLog: [], offlineSheets: []
         };
     }
@@ -146,7 +147,7 @@
     let pendingTreeUpload = null;
     let treeTextTimer = null;
     function load() { if (!activeCampaignId) return defaultState(); try { const s = JSON.parse(localStorage.getItem(stateKey())); return Object.assign(defaultState(), s || {}); } catch (e) { return defaultState(); } }
-    function save() { if (!activeCampaignId) return; try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} GmCloud.queueState(activeCampaignId); }
+    function save() { if (!activeCampaignId) return; syncActivePage(); try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} GmCloud.queueState(activeCampaignId); }
 
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -294,30 +295,6 @@
                     </div>
                 </div>
 
-                <div class="gm-card">
-                    <div class="gm-card-head"><span class="gm-card-icon">🔊</span> Soundboard</div>
-                    <div class="gm-card-body">
-                        <div class="gm-side-card-head" style="font-size:0.82rem; border:none; padding:0; margin-bottom:2px;">🎚️ Sons natifs</div>
-                        <div class="gm-soundboard-pads">
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="sword">⚔️ Épées</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="arrow">🏹 Flèche</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="magic">✨ Magie</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="fire">🔥 Feu</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="thunder">⚡ Tonnerre</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="heal">💚 Soin</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="bell">🔔 Cloche</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="horn">📯 Cor</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="coins">🪙 Pièces</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="dice">🎲 Dés</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="door">🚪 Porte</button>
-                            <button class="gm-pad gm-pad-native" data-act="sfx-native" data-sfx="tavern">🍺 Taverne</button>
-                        </div>
-                        <div class="gm-side-card-head" style="font-size:0.82rem; border:none; padding:0; margin:6px 0 2px;">📂 Mes sons importés</div>
-                        <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer des sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
-                        <div id="gm-soundboard-pads" class="gm-soundboard-pads"></div>
-                        <div class="gm-readonly-note">ⓘ Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
-                    </div>
-                </div>
 
                 <div class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
@@ -339,6 +316,13 @@
                         <button id="gm-map-sync" class="gm-btn" title="Placer les combattants (joueurs + monstres) sur la carte">⟳ Jetons combat</button>
                     </div>
                     <div class="gm-card-body">
+                        <div class="gm-row gm-map-pages-row" style="align-items:center;">
+                            <label class="gm-map-ctl">🗺️ Page</label>
+                            <select id="gm-map-pages" class="gm-select" style="flex:1;" title="Carte affichée"></select>
+                            <button id="gm-map-page-add" class="gm-btn" title="Nouvelle carte">➕</button>
+                            <button id="gm-map-page-rename" class="gm-btn" title="Renommer la carte">✏️</button>
+                            <button id="gm-map-page-del" class="gm-btn gm-btn-danger" title="Supprimer la carte">🗑️</button>
+                        </div>
                         <div class="gm-row">
                             <input id="gm-map-url" class="gm-input" placeholder="URL d'une image de fond / map…">
                             <label class="gm-btn" title="Importer une image de carte">🖼️<input type="file" id="gm-map-file" accept="image/*" style="display:none;"></label>
@@ -1080,6 +1064,68 @@
     // ---------- Carte tactique ----------
     let mapThrottle = 0;
     function tokenColor(t) { return t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9'); }
+    // ===== Cartes multiples (pages type Roll20) =====
+    // state.maps = [{ id, name, map:{bg,gridSize,showGrid,tokensLocked}, tokens:[] }]
+    // state.map / state.tokens = miroir de la page active (compat avec tout le code existant).
+    const cloneMap = (m) => Object.assign({ bg: null, gridSize: 48, showGrid: true }, m || {});
+    const cloneTokens = (t) => (t || []).map(x => Object.assign({}, x));
+
+    function ensureMaps() {
+        if (!Array.isArray(state.maps)) state.maps = [];
+        if (!state.maps.length) {
+            const p = { id: uid(), name: 'Carte 1', map: cloneMap(state.map), tokens: cloneTokens(state.tokens) };
+            state.maps.push(p);
+            state.activeMapId = p.id;
+        }
+        if (!state.activeMapId || !state.maps.find(p => p.id === state.activeMapId)) {
+            state.activeMapId = state.maps[0].id;
+            const p0 = state.maps[0];
+            state.map = cloneMap(p0.map); state.tokens = cloneTokens(p0.tokens);
+        }
+    }
+    function syncActivePage() {
+        if (!state.activeMapId || !Array.isArray(state.maps)) return;
+        const p = state.maps.find(x => x.id === state.activeMapId);
+        if (p) { p.map = cloneMap(state.map); p.tokens = cloneTokens(state.tokens); }
+    }
+    function switchMap(id) {
+        if (!id || id === state.activeMapId) return;
+        const p = (state.maps || []).find(x => x.id === id); if (!p) return;
+        syncActivePage();                                   // mémorise la carte courante
+        state.activeMapId = id;
+        state.map = cloneMap(p.map); state.tokens = cloneTokens(p.tokens);
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + (p.name || '?') + ' » affichée', '#2c3e50');
+    }
+    function addMap(name) {
+        ensureMaps(); syncActivePage();
+        const p = { id: uid(), name: name || ('Carte ' + (state.maps.length + 1)), map: cloneMap({ gridSize: (state.map && state.map.gridSize) || 48 }), tokens: [] };
+        state.maps.push(p);
+        state.activeMapId = p.id;
+        state.map = cloneMap(p.map); state.tokens = [];
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast('➕ « ' + p.name +' » créée', '#2c3e50');
+    }
+    function renameMap(id, name) {
+        const p = (state.maps || []).find(x => x.id === id); if (!p || !name) return;
+        p.name = name; save(); renderMapPages();
+    }
+    function deleteMap(id) {
+        if (!Array.isArray(state.maps) || state.maps.length <= 1) { if (window.showAppToast) window.showAppToast('Impossible : il faut au moins une carte.', '#c0392b'); return; }
+        const i = state.maps.findIndex(x => x.id === id); if (i < 0) return;
+        state.maps.splice(i, 1);
+        if (state.activeMapId === id) {
+            const p0 = state.maps[0];
+            state.activeMapId = p0.id; state.map = cloneMap(p0.map); state.tokens = cloneTokens(p0.tokens);
+        }
+        save(); renderMap(); broadcastMap(true);
+    }
+    function renderMapPages() {
+        const sel = byId('gm-map-pages'); if (!sel) return;
+        ensureMaps();
+        sel.innerHTML = (state.maps || []).map(p => `<option value="${p.id}"${p.id === state.activeMapId ? ' selected' : ''}>🗺️ ${esc(p.name)}</option>`).join('');
+    }
+
     function renderMap() {
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
@@ -1091,6 +1137,7 @@
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
         renderMapBank();
+        renderMapPages();
     }
     function renderMapBank() {
         const sel = byId('gm-map-bank'); if (!sel) return;
@@ -1497,6 +1544,12 @@
         byId('gm-map-lock').addEventListener('click', () => { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); });
         byId('gm-map-bank').addEventListener('change', (e) => { const n = treeNode(e.target.value); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); } });
 
+        // Pages de carte (multi-cartes type Roll20)
+        byId('gm-map-pages').addEventListener('change', (e) => switchMap(e.target.value));
+        byId('gm-map-page-add').addEventListener('click', () => { const n = prompt('Nom de la nouvelle carte :', 'Carte ' + ((state.maps ? state.maps.length : 0) + 1)); if (n && n.trim()) addMap(n.trim()); });
+        byId('gm-map-page-rename').addEventListener('click', () => { const p = (state.maps || []).find(x => x.id === state.activeMapId); if (!p) return; const n = prompt('Renommer la carte :', p.name); if (n && n.trim()) renameMap(p.id, n.trim()); });
+        byId('gm-map-page-del').addEventListener('click', () => { const p = (state.maps || []).find(x => x.id === state.activeMapId); if (!p) return; if (confirm('Supprimer la carte « ' + p.name + ' » et ses jetons ?')) deleteMap(p.id); });
+
         // --- Préparation (arbre) ---
         setupTreeDnD();
         byId('gm-tree-add').addEventListener('click', treeAdd);
@@ -1719,13 +1772,21 @@
         if (window.innerWidth <= 1100) ov.classList.add('gm-sidebar-collapsed');
         else ov.classList.remove('gm-sidebar-collapsed');
         if (window.navTo) window.navTo('gm-screen'); else ov.classList.remove('hidden');
+        // Le MJ contrôle TOUJOURS la musique sur son écran (jamais le mode « contrôlé par le MJ »)
+        if (window.MusicPlayer && window.MusicPlayer.setRole) window.MusicPlayer.setRole('free');
         try { if (location.hash !== '#gm/' + activeCampaignId) location.hash = '#gm/' + activeCampaignId; } catch (e) {}
+        ensureMaps();
         renderAll();
         loadTree();
         loadStateFromCloud(activeCampaignId);                 // rafraîchit depuis le cloud (multi-appareils)
         if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte
     }
     function close() {
+        // Restaure le rôle musique : « joueur » seulement si une session joueur est active, sinon « libre »
+        if (window.MusicPlayer && window.MusicPlayer.setRole) {
+            const asPlayer = !!(window.PlayerSession && window.PlayerSession.isConnected && window.PlayerSession.isConnected());
+            window.MusicPlayer.setRole(asPlayer ? 'player' : 'free');
+        }
         // Retour à l'accueil (onglet MJ), sans toucher à la fiche éventuellement active
         try { if ((location.hash || '').indexOf('#gm/') === 0) location.hash = '#home'; } catch (e) {}
         if (window.navTo) window.navTo('home-screen');
