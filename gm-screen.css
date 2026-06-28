@@ -296,22 +296,52 @@
 /* ---- Carte tactique ---- */
 .gm-map-ctl { font-size: 0.8rem; color: #6a5a3e; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .gm-map-view {
-    position: relative; width: 100%; aspect-ratio: 16 / 9;
-    background-color: #11100e; background-size: contain; background-position: center; background-repeat: no-repeat;
+    position: relative; width: 100%;
+    background-color: #11100e;
     border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); border-radius: 10px; overflow: hidden; touch-action: none;
+    cursor: grab;
 }
-.gm-map-view.show-grid::after {
+.gm-map-view.panning { cursor: grabbing; }
+/* Couche transformable (zoom + déplacement) qui porte fond + grille + jetons */
+.gm-map-content {
+    position: absolute; inset: 0; transform-origin: 0 0;
+    background-color: #11100e; background-size: contain; background-position: center; background-repeat: no-repeat;
+}
+.gm-map-content.show-grid::after {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background-image: linear-gradient(rgba(255,255,255,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.13) 1px, transparent 1px);
     background-size: var(--gm-grid, 48px) var(--gm-grid, 48px);
 }
+.gm-layer-tokens { position: absolute; inset: 0; }
 .gm-token {
     position: absolute; width: 34px; height: 34px; transform: translate(-50%, -50%);
     border-radius: 50%; background: var(--tok, #2980b9); border: 2px solid #fff;
     box-shadow: 0 2px 6px rgba(0,0,0,0.55); cursor: grab; display: flex; align-items: center; justify-content: center;
     color: #fff; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.72rem; user-select: none;
+    background-size: cover; background-position: center;
 }
+.gm-token.has-img { border-color: #f3e8cf; }
 .gm-token.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); }
+.gm-token-label { pointer-events: none; }
+.gm-token-ac { position: absolute; top: -6px; right: -6px; background: #2a1c0a; color: #f3e8cf; font-size: 0.58rem; line-height: 1; padding: 2px 4px; border-radius: 8px; border: 1px solid var(--accent-color, #C49B35); }
+.gm-token-hp { position: absolute; left: 2px; right: 2px; bottom: -7px; height: 4px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; }
+.gm-token-hp-fill { height: 100%; background: #27ae60; }
+.gm-token-hp-fill.is-low { background: #c0392b; }
+
+/* Bulle contextuelle d'édition d'un jeton (PV / CA / nom / image / couleur) */
+.gm-token-popover {
+    position: fixed; z-index: 7500; width: 260px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
+    background: var(--widget-bg, #fffdf7); border: 1px solid var(--accent-color, #C49B35); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4); font-family: 'Lora', serif;
+}
+.gm-token-popover.hidden { display: none; }
+.gm-tp-row { display: flex; align-items: center; gap: 6px; }
+.gm-tp-row label { font-size: 0.82rem; color: #6a5a3e; }
+.gm-tp-sep { color: #8a7a5e; }
+.gm-tp-color { width: 34px; height: 30px; padding: 0; border: 1px solid rgba(122,40,40,0.3); border-radius: 6px; background: none; cursor: pointer; }
+.gm-tp-upload { flex: 0 0 auto; }
+.gm-tp-actions { justify-content: space-between; }
+body.theme-dark .gm-token-popover { background: linear-gradient(172deg, #241c16, #2c231b); }
 
 /* ---- Préparation (arbre) ---- */
 .gm-tree-toolbar .gm-input { flex: 1; }

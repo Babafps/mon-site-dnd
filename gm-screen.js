@@ -85,7 +85,27 @@
         { name: 'Terrain difficile', text: 'Chaque 1,50 m coûte 3 m de déplacement (déplacement divisé par deux dans la zone).' },
         { name: 'Attaque à distance au contact', text: 'Tirer sur une cible à 1,50 m d\'un ennemi hostile valide donne le désavantage à l\'attaque.' },
         { name: 'Lumière & vision', text: 'Vision dans le noir : voit dans le noir comme une faible luminosité (zone éclairée faiblement = test de perception avec désavantage). Obscurité = zone d\'aveuglement.' },
-        { name: 'Inspiration', text: 'Ressource accordée par le MJ : à dépenser pour obtenir l\'avantage sur un jet de ton choix.' }
+        { name: 'Inspiration', text: 'Ressource accordée par le MJ : à dépenser pour obtenir l\'avantage sur un jet de ton choix.' },
+        { name: 'Action : Lancer un sort', text: 'Temps d\'incantation variable (action, action bonus, réaction, minutes). Un seul sort par tour utilisant un emplacement, sauf tour de magie en action + sort en action bonus.' },
+        { name: 'Attaque à deux armes', text: 'Avec deux armes légères : attaque avec la 2ᵉ en action bonus. On n\'ajoute pas le mod. de carac aux dégâts de la 2ᵉ (sauf négatif).' },
+        { name: 'Combat monté', text: 'Monter/descendre coûte la moitié du déplacement. La monture suit ton initiative. Tu peux la faire agir indépendamment ou la contrôler (3 actions : Foncer, Se désengager, Esquiver).' },
+        { name: 'Saut en longueur', text: 'Avec élan (3 m) : saute un nombre de mètres égal à ta valeur de FOR (en pieds = FOR). Sans élan : moitié.' },
+        { name: 'Saut en hauteur', text: 'Avec élan : 0,90 m + (mod. FOR × 0,30 m). Sans élan : moitié.' },
+        { name: 'Nager / Escalader', text: 'Sauf vitesse spéciale, chaque 1,50 m coûte 1,50 m supplémentaire (terrain difficile). Le MJ peut exiger un test d\'Athlétisme si conditions difficiles.' },
+        { name: 'Portée des armes', text: 'À distance : portée normale / longue. Au-delà de la normale et jusqu\'à la longue = désavantage. Au-delà de la longue = impossible.' },
+        { name: 'Boire / administrer une potion', text: 'Boire une potion = une action. La donner à une créature à terre/inconsciente = une action.' },
+        { name: 'Composantes de sort (V, S, M)', text: 'Verbale (parler), Somatique (main libre), Matérielle (composant ou focaliseur). Une main libre suffit pour S et M sans coût en or.' },
+        { name: 'Rituel', text: 'Un sort avec la mention « rituel » peut être lancé en +10 min sans dépenser d\'emplacement, si la classe le permet.' },
+        { name: 'Cumul d\'effets', text: 'Deux sources du même effet ne se cumulent pas : on garde le plus puissant. Des effets différents se cumulent.' },
+        { name: 'Zones d\'effet', text: 'Cône, cube, cylindre, ligne, sphère : l\'origine est un point que tu choisis. Une créature dans la zone est affectée si une ligne d\'effet l\'atteint.' },
+        { name: 'Dissipation de la magie', text: 'Dissipe un sort de niveau ≤ celui de l\'emplacement utilisé ; sinon test d\'incantation DD 10 + niveau du sort ciblé.' },
+        { name: 'Objets : encombrement', text: 'Capacité de port = FOR × 7,5 kg. Au-delà (jusqu\'à FOR × 15) : vitesse réduite à 1,50 m (règle optionnelle).' },
+        { name: 'Asphyxie', text: 'Retient son souffle 1 + mod. CON minutes (min 30 s). Ensuite survit un nombre de tours égal au mod. CON (min 1), puis tombe à 0 PV.' },
+        { name: 'Soins & PV temporaires', text: 'Les PV temporaires ne se cumulent pas (on garde le plus grand) et ne sont pas restaurés par les soins ; ils encaissent les dégâts en premier.' },
+        { name: 'Résistance / Vulnérabilité', text: 'Résistance = dégâts du type divisés par deux (après autres modificateurs). Vulnérabilité = dégâts doublés. Ne se cumulent pas.' },
+        { name: 'Identifier un objet magique', text: 'Repos court en contact + concentration, ou sort Identification. Sinon, l\'usage révèle progressivement les propriétés.' },
+        { name: 'Interaction sociale', text: 'Attitude de départ (hostile / indifférent / amical) modifie le DD. Persuasion (sincère), Tromperie (mensonge), Intimidation (menace).' },
+        { name: 'Vision dans le noir', text: 'À 18 m, la pénombre est traitée comme lumière vive et l\'obscurité comme pénombre (en nuances de gris). Ne perce pas l\'obscurité magique.' }
     ];
 
     // ---------- État (multi-campagnes) ----------
@@ -336,9 +356,12 @@
                             <label class="gm-map-ctl">Grille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
                             <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
                             <button id="gm-map-lock" class="gm-btn" title="Verrouiller / déverrouiller le déplacement des jetons par les joueurs">🔓 Jetons libres</button>
+                            <button id="gm-map-snap" class="gm-btn" title="Aimanter les jetons sur la grille (snap)">🧲 Aimant</button>
                             <button id="gm-map-addtoken" class="gm-btn">➕ Jeton</button>
+                            <button id="gm-map-resetview" class="gm-btn" title="Recentrer / réinitialiser le zoom">🎯 Recentrer</button>
                             <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
                         </div>
+                        <div class="gm-readonly-note" style="margin-top:-2px;">ⓘ Molette = zoom · glisser le fond = déplacer · clic sur un jeton = éditer PV/CA/image.</div>
                         <div id="gm-map-view" class="gm-map-view show-grid"></div>
                         <div class="gm-readonly-note">ⓘ Glisse les jetons : positions et fond sont synchronisés en direct avec les joueurs.</div>
                     </div>
@@ -877,8 +900,11 @@
                 <button class="gm-btn gm-btn-danger" data-act="offline-remove" data-uid="${esc(opts.offlineUid)}">🗑️ Retirer cette fiche</button>
             </div>`;
         }
+        // IMPORTANT : créer la modale AVANT d'écrire dans son corps (sinon #gm-player-modal-body
+        // n'existe pas encore → null.innerHTML → le clic « ne fait rien »).
+        const modal = ensurePlayerModal();
         byId('gm-player-modal-body').innerHTML = sheetBodyHtml(s, fallbackName) + footer;
-        ensurePlayerModal().classList.remove('hidden');
+        modal.classList.remove('hidden');
     }
     function openPlayerModal(uid) {
         const p = findLivePlayer(uid);
@@ -1126,18 +1152,91 @@
         sel.innerHTML = (state.maps || []).map(p => `<option value="${p.id}"${p.id === state.activeMapId ? ' selected' : ''}>🗺️ ${esc(p.name)}</option>`).join('');
     }
 
+    // Vue locale de la carte (zoom / déplacement) — non synchronisée, propre au MJ.
+    let mapView = { zoom: 1, panX: 0, panY: 0 };
+    function tokenHtml(t) {
+        const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
+        const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
+        const low = hpMax > 0 && ratio <= 0.33;
+        const imgStyle = t.img ? `background-image:url(${t.img});` : '';
+        const hpBar = hpMax > 0 ? `<div class="gm-token-hp"><div class="gm-token-hp-fill${low ? ' is-low' : ''}" style="width:${ratio * 100}%"></div></div>` : '';
+        const acBadge = (t.ac != null && t.ac !== '') ? `<span class="gm-token-ac" title="Classe d'armure">${esc(t.ac)}</span>` : '';
+        return `<div class="gm-token${t.hidden ? ' is-mj-hidden' : ''}${t.img ? ' has-img' : ''}" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}">`
+            + (t.img ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
+            + acBadge + hpBar + `</div>`;
+    }
+    function applyMapTransform() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        content.style.transform = `translate(${mapView.panX}px, ${mapView.panY}px) scale(${mapView.zoom})`;
+    }
     function renderMap() {
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
-        view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
-        view.classList.toggle('show-grid', m.showGrid !== false);
-        view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
-        view.innerHTML = (state.tokens || []).map(t => `<div class="gm-token" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${tokenColor(t)};" title="${esc(t.name)}"><span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span></div>`).join('');
+        const tokens = (state.tokens || []).map(tokenHtml).join('');
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens">${tokens}</div></div>`;
+        const content = view.querySelector('.gm-map-content');
+        content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        content.classList.toggle('show-grid', m.showGrid !== false);
+        content.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
+        applyMapTransform();
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
+        const sn = byId('gm-map-snap'); if (sn) { const on = !!m.snap; sn.classList.toggle('gm-btn-primary', on); sn.textContent = on ? '🧲 Aimant ON' : '🧲 Aimant'; }
         renderMapBank();
         renderMapPages();
+    }
+    // Aimante une position (fraction 0..1) au centre de la case de grille la plus proche.
+    function snapFraction(x, y) {
+        const m = state.map || {}; if (!m.snap) return { x, y };
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content');
+        if (!content) return { x, y };
+        const rect = content.getBoundingClientRect();
+        const uw = rect.width / (mapView.zoom || 1), uh = rect.height / (mapView.zoom || 1);
+        const g = m.gridSize || 48;
+        const cw = g / uw, ch = g / uh;
+        const sx = (Math.floor(x / cw) + 0.5) * cw, sy = (Math.floor(y / ch) + 0.5) * ch;
+        return { x: Math.max(0, Math.min(1, sx)), y: Math.max(0, Math.min(1, sy)) };
+    }
+    // ----- Bulle contextuelle d'un jeton (PV / CA / nom / image / couleur / caché) -----
+    function setTokenField(id, field, value) {
+        const t = find(state.tokens, id); if (!t) return;
+        if (field === 'hp' || field === 'hpMax' || field === 'ac') t[field] = (value === '' ? null : (parseInt(value, 10) || 0));
+        else t[field] = value;
+        save(); renderMap(); broadcastMap(true);
+    }
+    function ensureTokenPopover() {
+        let p = byId('gm-token-popover'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-token-popover'; p.className = 'gm-token-popover hidden no-print';
+        document.body.appendChild(p);
+        document.addEventListener('pointerdown', (e) => { if (!p.classList.contains('hidden') && !e.target.closest('#gm-token-popover') && !e.target.closest('.gm-token')) p.classList.add('hidden'); });
+        return p;
+    }
+    function openTokenPopover(tok, e) {
+        const p = ensureTokenPopover();
+        const color = tok.color || (tok.type === 'monster' ? '#7A2828' : '#2980b9');
+        p.innerHTML = `
+            <div class="gm-tp-row"><input class="gm-input" data-tp="name" value="${esc(tok.name || '')}" placeholder="Nom du jeton"></div>
+            <div class="gm-tp-row"><label>❤️</label><input class="gm-input gm-num" type="number" data-tp="hp" value="${tok.hp != null ? tok.hp : ''}" placeholder="PV"><span class="gm-tp-sep">/</span><input class="gm-input gm-num" type="number" data-tp="hpMax" value="${tok.hpMax != null ? tok.hpMax : ''}" placeholder="max"><label>🛡️</label><input class="gm-input gm-num" type="number" data-tp="ac" value="${tok.ac != null ? tok.ac : ''}" placeholder="CA"></div>
+            <div class="gm-tp-row"><input class="gm-input" data-tp="img" value="${esc(tok.img || '')}" placeholder="URL image…"><label class="gm-btn gm-tp-upload" title="Importer une image">🖼️<input type="file" accept="image/*" data-tp="imgfile" style="display:none;"></label><input class="gm-tp-color" type="color" data-tp="color" value="${color}" title="Couleur"></div>
+            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-tp-act="hide">${tok.hidden ? '👁️ Montrer' : '🙈 Cacher aux joueurs'}</button><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️</button></div>`;
+        p.classList.remove('hidden');
+        const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
+        p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
+        p.style.top = Math.max(8, Math.min(oy + 10, window.innerHeight - p.offsetHeight - 8)) + 'px';
+        p.querySelectorAll('[data-tp]').forEach(inp => {
+            const f = inp.dataset.tp;
+            if (f === 'imgfile') { inp.addEventListener('change', (ev) => { const file = ev.target.files[0]; if (file) fileToDataURL(file, (data) => { setTokenField(tok.id, 'img', data); const u = p.querySelector('[data-tp="img"]'); if (u) u.value = data; }); }); return; }
+            const evt = (inp.type === 'color') ? 'change' : 'input';
+            inp.addEventListener(evt, () => setTokenField(tok.id, f, inp.value));
+        });
+        p.querySelectorAll('[data-tp-act]').forEach(b => b.addEventListener('click', () => {
+            const t = find(state.tokens, tok.id); if (!t) return;
+            if (b.dataset.tpAct === 'hide') t.hidden = !t.hidden;
+            else if (b.dataset.tpAct === 'del') { state.tokens = state.tokens.filter(x => x.id !== tok.id); p.classList.add('hidden'); }
+            save(); renderMap(); broadcastMap(true);
+        }));
     }
     function renderMapBank() {
         const sel = byId('gm-map-bank'); if (!sel) return;
@@ -1177,26 +1276,54 @@
     }
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
-        let cur = null, tokenEl = null;
+        let cur = null, tokenEl = null, panning = false, startX = 0, startY = 0, moved = false, startPan = null;
+        const contentRect = () => { const c = view.querySelector('.gm-map-content'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
-            const el = e.target.closest('.gm-token'); if (!el) return;
-            cur = find(state.tokens, el.dataset.token); tokenEl = el; if (!cur) return;
-            try { el.setPointerCapture(e.pointerId); } catch (_) {}
-            el.classList.add('dragging'); e.preventDefault();
+            startX = e.clientX; startY = e.clientY; moved = false;
+            const el = e.target.closest('.gm-token');
+            if (el) {
+                cur = find(state.tokens, el.dataset.token); tokenEl = el; if (!cur) return;
+                try { el.setPointerCapture(e.pointerId); } catch (_) {}
+                el.classList.add('dragging'); e.preventDefault();
+            } else {
+                panning = true; startPan = { x: mapView.panX, y: mapView.panY };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                view.classList.add('panning');
+            }
         });
         view.addEventListener('pointermove', (e) => {
-            if (!cur || !tokenEl) return;
-            const r = view.getBoundingClientRect();
-            const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-            const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-            cur.x = x; cur.y = y;
-            tokenEl.style.left = (x * 100) + '%'; tokenEl.style.top = (y * 100) + '%';
-            throttleBroadcastMap();
+            if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
+            if (cur && tokenEl) {
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+                const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                cur.x = x; cur.y = y;
+                tokenEl.style.left = (x * 100) + '%'; tokenEl.style.top = (y * 100) + '%';
+                throttleBroadcastMap();
+            } else if (panning) {
+                mapView.panX = startPan.x + (e.clientX - startX);
+                mapView.panY = startPan.y + (e.clientY - startY);
+                applyMapTransform();
+            }
         });
-        const up = () => { if (!cur) return; if (tokenEl) tokenEl.classList.remove('dragging'); cur = null; tokenEl = null; save(); broadcastMap(true); };
+        const up = (e) => {
+            if (cur) {
+                if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
+                else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; }
+                if (tokenEl) tokenEl.classList.remove('dragging');
+                cur = null; tokenEl = null; save(); renderMap(); broadcastMap(true);
+            }
+            if (panning) { panning = false; view.classList.remove('panning'); }
+        };
         view.addEventListener('pointerup', up);
         view.addEventListener('pointercancel', up);
+        view.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            mapView.zoom = Math.max(0.4, Math.min(4, mapView.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+            applyMapTransform();
+        }, { passive: false });
     }
+    function resetMapView() { mapView = { zoom: 1, panX: 0, panY: 0 }; applyMapTransform(); }
 
     // ---------- Préparation (arbre cloud gm_tree) ----------
     function treeKindIcon(k) { return ({ folder: '📁', text: '📝', link: '🔗', image: '🖼️', map: '🗺️', monster: '👹' })[k] || '📄'; }
@@ -1542,6 +1669,8 @@
         byId('gm-map-clear').addEventListener('click', () => { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); });
         byId('gm-map-sync').addEventListener('click', addTokensFromCombat);
         byId('gm-map-lock').addEventListener('click', () => { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); });
+        byId('gm-map-snap').addEventListener('click', () => { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); });
+        byId('gm-map-resetview').addEventListener('click', resetMapView);
         byId('gm-map-bank').addEventListener('change', (e) => { const n = treeNode(e.target.value); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); } });
 
         // Pages de carte (multi-cartes type Roll20)

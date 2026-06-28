@@ -452,9 +452,10 @@
         view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         view.classList.toggle('show-grid', m.showGrid !== false);
         view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
-        view.innerHTML = (mapState.tokens || []).map(t => {
+        view.innerHTML = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
             const mine = !locked && t.owner && t.owner === uid;
-            return `<div class="smap-token${mine ? ' smap-token-mine' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')};" title="${escHtml(t.name)}"><span>${escHtml((t.name || '?').slice(0, 2))}</span></div>`;
+            const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
+            return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
         }).join('');
     }
 
