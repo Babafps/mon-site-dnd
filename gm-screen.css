@@ -337,6 +337,8 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
 .gm-layer-tokens { position: absolute; inset: 0; }
 .gm-layer-fog { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gm-layer-draw { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gm-map-ping { position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; border: 3px solid #C49B35; box-shadow: 0 0 18px #C49B35; pointer-events: none; z-index: 6; animation: gm-map-ping-anim 1s ease-out 2; }
+@keyframes gm-map-ping-anim { 0% { transform: translate(-50%,-50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; } }
 .gm-map-controls { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
 #gm-map-card.gm-map-collapsed .gm-map-controls { display: none; }
 .gm-map-preview { width: 100%; max-height: 150px; object-fit: contain; border-radius: 8px; border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); background: #11100e; }

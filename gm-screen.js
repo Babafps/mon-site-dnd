@@ -253,6 +253,7 @@
                 <button class="gm-tool is-active" data-tool="select" title="Sélection / déplacement (souris)">🖱️</button>
                 <button class="gm-tool" data-tool="bg" title="Caler le fond : glisser = déplacer la carte, molette = redimensionner (pour aligner sur la grille)">🗺️</button>
                 <button class="gm-tool" data-tool="draw" title="Dessin libre sur la carte (glisser pour tracer)">✏️</button>
+                <button class="gm-tool" data-tool="ping" title="Signal : clique un point → un repère lumineux apparaît chez les joueurs (attire leur attention)">📍</button>
                 <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
                 <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
                 <button class="gm-tool" data-tool="grid" title="Afficher / masquer la grille">▦</button>
@@ -587,7 +588,7 @@
             ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
                 const tool = btn.dataset.tool;
                 if (tool === 'grid') { const cb = ov.querySelector('#gm-map-showgrid'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
-                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg' || tool === 'draw') { setMapTool(tool); return; }
+                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg' || tool === 'draw' || tool === 'ping') { setMapTool(tool); return; }
                 if (tool === 'fog') { toggleFog(); return; }
                 if (tool === 'revealall') { fogRevealAll(); return; }
                 if (tool === 'coverall') { fogCoverAll(); return; }
@@ -1338,6 +1339,12 @@
         });
     }
     function clearDrawings() { if (state.map) state.map.drawings = []; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🧽 Dessins effacés', '#2c3e50'); }
+    function showGmMapPing(x, y) {
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
+        const p = document.createElement('div'); p.className = 'gm-map-ping';
+        p.style.left = (x * 100) + '%'; p.style.top = (y * 100) + '%';
+        content.appendChild(p); setTimeout(() => p.remove(), 2200);
+    }
 
     function renderMap() {
         const view = byId('gm-map-view'); if (!view) return;
@@ -1482,6 +1489,14 @@
                 drawData().push(drawStroke);
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 renderDraw(); e.preventDefault(); return;
+            }
+            if (mapTool === 'ping') {   // signal : repère lumineux chez les joueurs (au même endroit sur la carte)
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                gmBroadcast('map-ping', { x: x, y: y });
+                showGmMapPing(x, y);
+                if (window.showAppToast) window.showAppToast('📍 Signal envoyé aux joueurs', '#2c3e50');
+                e.preventDefault(); return;
             }
             const el = e.target.closest('.gm-token');
             if (el) {

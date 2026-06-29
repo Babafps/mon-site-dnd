@@ -204,6 +204,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Partage d'UNE fiche (la fiche active) → fichier .json importable
+    const btnExportChar = document.getElementById('btn-export-char');
+    if (btnExportChar) {
+        btnExportChar.addEventListener('click', async () => {
+            if (!ACTIVE_CHAR_ID) { alert("Ouvre d'abord une fiche de personnage."); return; }
+            btnExportChar.disabled = true; const old = btnExportChar.textContent; btnExportChar.textContent = '⏳ Export…';
+            try {
+                let data = {}, meta = null;
+                if (window.SupaAuth?.currentUser) {
+                    data = await window.SupaAuth.loadCharacterData(ACTIVE_CHAR_ID);
+                    const chars = await window.SupaAuth.loadCharacters(); meta = chars.find(c => c.id === ACTIVE_CHAR_ID) || null;
+                } else {
+                    const prefix = ACTIVE_CHAR_ID + '_';
+                    DB.keys().forEach(k => { if (k.startsWith(prefix)) data[k.slice(prefix.length)] = DB.get(k); });
+                    meta = charactersList.find(c => c.id === ACTIVE_CHAR_ID) || null;
+                }
+                const rawName = (data['dnd-sheet-char-name'] || (meta && meta.name) || 'fiche').toString();
+                const safe = rawName.replace(/[^\w\-]+/g, '_');
+                const exportData = { version: "char-1.0", meta: meta, data: data };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+                const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "fiche_" + safe + ".json"); document.body.appendChild(a); a.click(); a.remove();
+            } catch (err) { alert("Erreur lors de l'export : " + err.message); }
+            finally { btnExportChar.disabled = false; btnExportChar.textContent = old; }
+        });
+    }
+
     const btnImportJson = document.getElementById('btn-import-json');
     if (btnImportJson) {
         btnImportJson.addEventListener('change', (e) => {
@@ -212,7 +238,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const parsed = JSON.parse(event.target.result);
                     if (window.SupaAuth?.currentUser) {
-                        if (parsed.version === "4.0" && Array.isArray(parsed.characters)) {
+                        if (parsed.version === "char-1.0" && parsed.data) {
+                            const charName = parsed.data['dnd-sheet-char-name'] || parsed.meta?.name || 'Fiche importée';
+                            if (!confirm(`Importer la fiche « ${charName} » comme nouveau personnage ?`)) { btnImportJson.value = ''; return; }
+                            const newChar = await window.SupaAuth.createCharacter(charName); if (!newChar) { alert("Erreur lors de la création."); btnImportJson.value = ''; return; }
+                            const entries = Object.entries(parsed.data).filter(([, v]) => v !== null && v !== undefined).map(([key, value]) => ({ key, value: String(value) }));
+                            if (entries.length > 0) await window.SupaAuth.saveKeys(newChar.id, entries);
+                            alert(`✅ Fiche « ${charName} » importée !`); location.reload();
+                        } else if (parsed.version === "4.0" && Array.isArray(parsed.characters)) {
                             if (!confirm(`Importer ${parsed.characters.length} personnage(s) ? Ils seront ajoutés à vos personnages existants.`)) { btnImportJson.value = ''; return; }
                             let ok = 0;
                             for (const charExport of parsed.characters) {
@@ -234,7 +267,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             alert(`✅ ${ok} personnage(s) importé(s) !`); location.reload();
                         } else { alert("Format de fichier non reconnu."); }
                     } else {
-                        if (parsed.allData) { Object.keys(parsed.allData).forEach(k => { DB.set(k, parsed.allData[k]); }); if (parsed.charactersList) DB.set('dnd-character-list', JSON.stringify(parsed.charactersList)); if (parsed.activeCharId) DB.set('dnd-active-char', parsed.activeCharId); alert("Sauvegarde importée !"); location.reload(); } else { alert("Format de fichier invalide."); }
+                        if (parsed.version === "char-1.0" && parsed.data) {
+                            const newId = 'char_' + Date.now();
+                            const charName = parsed.data['dnd-sheet-char-name'] || parsed.meta?.name || 'Fiche importée';
+                            Object.entries(parsed.data).forEach(([k, v]) => DB.set(newId + '_' + k, v));
+                            let list = []; try { list = JSON.parse(DB.get('dnd-character-list') || '[]'); } catch (e) {}
+                            list.push({ id: newId, name: charName, level: (parsed.meta && parsed.meta.level) || 1, class: (parsed.meta && parsed.meta.class) || '' });
+                            DB.set('dnd-character-list', JSON.stringify(list));
+                            alert(`✅ Fiche « ${charName} » importée !`); location.reload();
+                        } else if (parsed.allData) { Object.keys(parsed.allData).forEach(k => { DB.set(k, parsed.allData[k]); }); if (parsed.charactersList) DB.set('dnd-character-list', JSON.stringify(parsed.charactersList)); if (parsed.activeCharId) DB.set('dnd-active-char', parsed.activeCharId); alert("Sauvegarde importée !"); location.reload(); } else { alert("Format de fichier invalide."); }
                     }
                 } catch (err) { alert("Erreur lors de la lecture du fichier : " + err.message); } btnImportJson.value = '';
             }; reader.readAsText(file);

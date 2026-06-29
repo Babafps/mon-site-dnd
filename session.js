@@ -141,6 +141,7 @@
               .on('broadcast', { event: 'kick' }, ({ payload }) => onKicked(payload))
               .on('broadcast', { event: 'show-image' }, ({ payload }) => receiveSharedImage(payload))
               .on('broadcast', { event: 'dice' }, ({ payload }) => receiveDiceRoll(payload))
+              .on('broadcast', { event: 'map-ping' }, ({ payload }) => showMapPing(payload))
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
                       try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
@@ -518,6 +519,17 @@
             ctx.stroke();
         });
     }
+    // Signal/ping du MJ : ouvre la carte + repère lumineux animé au point indiqué.
+    function showMapPing(p) {
+        if (!p) return;
+        ensureMapUI();
+        if (mapToggle) mapToggle.style.display = 'flex';
+        if (mapPanel) mapPanel.classList.remove('hidden');
+        const view = document.getElementById('smap-view'); if (!view) return;
+        const ping = document.createElement('div'); ping.className = 'smap-ping';
+        ping.style.left = ((p.x || 0.5) * 100) + '%'; ping.style.top = ((p.y || 0.5) * 100) + '%';
+        view.appendChild(ping); setTimeout(() => ping.remove(), 2600);
+    }
     // Brouillard côté joueur : OPAQUE (le joueur ne voit que les zones révélées par le MJ).
     function renderPlayerFog() {
         const view = document.getElementById('smap-view'); if (!view) return;
@@ -663,6 +675,8 @@
         .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-draw { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        .smap-ping { position:absolute; width:40px; height:40px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #C49B35; box-shadow:0 0 16px #C49B35; pointer-events:none; z-index:6; animation:smap-ping-anim 1s ease-out 2; }
+        @keyframes smap-ping-anim { 0%{ transform:translate(-50%,-50%) scale(0.3); opacity:0.95; } 100%{ transform:translate(-50%,-50%) scale(1.9); opacity:0; } }
         #session-image-viewer { position:fixed; inset:0; z-index:10000; background:rgba(8,6,4,0.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
         #session-image-viewer.hidden { display:none; }
         #session-image-viewer img { max-width:94vw; max-height:90vh; border-radius:10px; border:2px solid var(--accent-color,#C49B35); box-shadow:0 16px 60px rgba(0,0,0,0.7); }
