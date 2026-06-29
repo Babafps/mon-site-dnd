@@ -354,7 +354,7 @@
                     </div>
                 </div>
 
-                <div class="gm-card">
+                <div id="gm-card-soundboard" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🔊</span> Soundboard</div>
                     <div class="gm-card-body">
                         <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer mes sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
@@ -380,7 +380,7 @@
                     </div>
                 </div>
 
-                <div class="gm-card">
+                <div id="gm-card-scenes" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -574,10 +574,13 @@
         try {
             const main = ov.querySelector('.gm-main');
             const tablePanel = ov.querySelector('.gm-side-table');
+            const prepPanel = ov.querySelector('.gm-side-prep');
             if (main && tablePanel) {
-                // Tout part dans la sidebar SAUF la carte qui reste la grande zone centrale.
+                // La carte reste au centre ; l'audio (Soundboard + Scènes) va dans l'onglet Prépa ; le reste dans Table.
                 Array.from(main.children).forEach(card => {
-                    if (card.id !== 'gm-map-card') tablePanel.appendChild(card);
+                    if (card.id === 'gm-map-card') return;
+                    if (prepPanel && (card.id === 'gm-card-soundboard' || card.id === 'gm-card-scenes')) prepPanel.appendChild(card);
+                    else tablePanel.appendChild(card);
                 });
             }
             // Barre d'outils gauche → proxys vers les contrôles carte existants.
@@ -1949,7 +1952,11 @@
             const f = e.target.files && e.target.files[0]; e.target.value = ''; const id = pendingTreeUpload; pendingTreeUpload = null;
             if (!f || !id) return;
             try { const res = await window.SupaAuth.uploadAsset(f, 'images'); const n = treeNode(id); treePersist(id, { data: Object.assign({}, n ? n.data : {}, { url: res.url, path: res.path }) }); renderTree(); }
-            catch (err) { console.warn(err); if (window.showAppToast) window.showAppToast('⚠️ Upload échoué — Storage absent ? Lance le SQL Phase 0.', '#c0392b'); }
+            catch (err) {
+                // Repli : Storage indisponible → on enregistre l'image directement dans le nœud (data URL).
+                console.warn('upload tree image, repli data URL:', err);
+                fileToDataURL(f, (data) => { const n = treeNode(id); treePersist(id, { data: Object.assign({}, n ? n.data : {}, { url: data, path: null }) }); renderTree(); if (window.showAppToast) window.showAppToast('🖼️ Image enregistrée (stockage local).', '#2c3e50'); });
+            }
         });
 
         // --- Scènes : création (image + musique) ---
@@ -2165,6 +2172,12 @@
         if (window.navTo) window.navTo('gm-screen'); else ov.classList.remove('hidden');
         // Le MJ contrôle TOUJOURS la musique sur son écran (jamais le mode « contrôlé par le MJ »)
         if (window.MusicPlayer && window.MusicPlayer.setRole) window.MusicPlayer.setRole('free');
+        // Ancre le lecteur de musique DANS le panneau Prépa (au lieu de flotter) tant qu'on est sur l'écran MJ.
+        try {
+            const mp = document.getElementById('music-player-container');
+            const prep = ov.querySelector('.gm-side-prep');
+            if (mp && prep && mp.parentElement !== prep) { mp.classList.add('music-docked'); prep.appendChild(mp); }
+        } catch (e) {}
         try { if (location.hash !== '#gm/' + activeCampaignId) location.hash = '#gm/' + activeCampaignId; } catch (e) {}
         ensureMaps();
         renderAll();
@@ -2178,6 +2191,8 @@
             const asPlayer = !!(window.PlayerSession && window.PlayerSession.isConnected && window.PlayerSession.isConnected());
             window.MusicPlayer.setRole(asPlayer ? 'player' : 'free');
         }
+        // Restaure le lecteur de musique en mode flottant (il était ancré dans le panneau Prépa).
+        try { const mp = document.getElementById('music-player-container'); if (mp && mp.classList.contains('music-docked')) { mp.classList.remove('music-docked'); document.body.appendChild(mp); } } catch (e) {}
         // Retour à l'accueil (onglet MJ), sans toucher à la fiche éventuellement active
         try { if ((location.hash || '').indexOf('#gm/') === 0) location.hash = '#home'; } catch (e) {}
         if (window.navTo) window.navTo('home-screen');
