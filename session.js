@@ -139,6 +139,7 @@
               .on('broadcast', { event: 'map' }, ({ payload }) => { if (payload) applyMap(payload.map, payload.tokens); })
               .on('broadcast', { event: 'session-closed' }, () => onSessionClosed())
               .on('broadcast', { event: 'kick' }, ({ payload }) => onKicked(payload))
+              .on('broadcast', { event: 'show-image' }, ({ payload }) => receiveSharedImage(payload))
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
                       try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
@@ -197,6 +198,29 @@
             }));
         }
         wrap.appendChild(card);
+    }
+
+    // --- Image partagée par le MJ : notification « Ouvrir » → visionneuse plein écran ---
+    function receiveSharedImage(p) {
+        if (!p || !p.url) return;
+        let wrap = document.getElementById('session-notifs');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'session-notif';
+        card.innerHTML = `<div class="session-notif-head">🖼️ Le MJ partage une image</div><div class="session-notif-actions"></div>`;
+        const actions = card.querySelector('.session-notif-actions');
+        actions.appendChild(mkBtn('🔍 Ouvrir', 'accept', () => { openSharedImage(p.url); card.remove(); }));
+        actions.appendChild(mkBtn('Ignorer', 'refuse', () => card.remove()));
+        wrap.appendChild(card);
+    }
+    function openSharedImage(url) {
+        let ov = document.getElementById('session-image-viewer');
+        if (!ov) {
+            ov = document.createElement('div'); ov.id = 'session-image-viewer'; ov.className = 'no-print hidden';
+            ov.addEventListener('click', () => ov.classList.add('hidden'));
+            document.body.appendChild(ov);
+        }
+        ov.innerHTML = `<img src="${url}" alt="Image du MJ"><button class="siv-close" title="Fermer">✕</button>`;
+        ov.classList.remove('hidden');
     }
 
     // =====================================================
@@ -450,12 +474,16 @@
         const m = mapState.map || {};
         const uid = myUid(), locked = !!m.tokensLocked;
         view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
+        view.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
+        view.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
         view.classList.toggle('show-grid', m.showGrid !== false);
         view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
         const tokensHtml = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
             const mine = !locked && t.owner && t.owner === uid;
             const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
-            return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
+            const sz = Math.round(30 * (Number(t.size) || 1));
+            return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
         }).join('');
         view.innerHTML = tokensHtml + '<canvas class="smap-fog"></canvas>';
         renderPlayerFog();
@@ -604,6 +632,10 @@
         .smap-token-mine:active { cursor:grabbing; }
         .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        #session-image-viewer { position:fixed; inset:0; z-index:10000; background:rgba(8,6,4,0.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
+        #session-image-viewer.hidden { display:none; }
+        #session-image-viewer img { max-width:94vw; max-height:90vh; border-radius:10px; border:2px solid var(--accent-color,#C49B35); box-shadow:0 16px 60px rgba(0,0,0,0.7); }
+        #session-image-viewer .siv-close { position:fixed; top:18px; right:22px; width:42px; height:42px; border-radius:50%; border:none; background:#fffdf7; color:var(--primary-color,#7A2828); font-size:1.2rem; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.4); }
         .smap-head-btns { display:flex; gap:4px; }
         #session-map.smap-fullscreen { right:0; bottom:0; top:0; left:0; width:100vw; height:100vh; border-radius:0; z-index:9995; display:flex; flex-direction:column; }
         #session-map.smap-fullscreen .smap-view { flex:1; aspect-ratio:auto; height:auto; }

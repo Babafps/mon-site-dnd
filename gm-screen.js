@@ -221,6 +221,7 @@
             <!-- ===== BARRE D'OUTILS VERTICALE (type Roll20) ===== -->
             <div class="gm-leftbar">
                 <button class="gm-tool is-active" data-tool="select" title="Sélection / déplacement (souris)">🖱️</button>
+                <button class="gm-tool" data-tool="bg" title="Caler le fond : glisser = déplacer la carte, molette = redimensionner (pour aligner sur la grille)">🗺️</button>
                 <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
                 <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
                 <button class="gm-tool" data-tool="grid" title="Afficher / masquer la grille">▦</button>
@@ -328,6 +329,18 @@
                         <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer mes sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
                         <div id="gm-soundboard-pads" class="gm-soundboard-pads"></div>
                         <div class="gm-readonly-note">ⓘ Importe tes propres effets. Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
+                    </div>
+                </div>
+
+                <div class="gm-card">
+                    <div class="gm-card-head"><span class="gm-card-icon">🖼️</span> Montrer une image aux joueurs</div>
+                    <div class="gm-card-body">
+                        <div class="gm-row">
+                            <input id="gm-showimg-url" class="gm-input" placeholder="URL d'une image…">
+                            <label class="gm-btn" title="Importer une image">📁<input type="file" id="gm-showimg-file" accept="image/*" style="display:none;"></label>
+                            <button id="gm-showimg-send" class="gm-add" title="Envoyer aux joueurs">📤</button>
+                        </div>
+                        <div class="gm-readonly-note">ⓘ Les joueurs reçoivent une notification « Ouvrir » pour voir l'image en grand.</div>
                     </div>
                 </div>
 
@@ -521,7 +534,7 @@
             ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
                 const tool = btn.dataset.tool;
                 if (tool === 'grid') { const cb = ov.querySelector('#gm-map-showgrid'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
-                if (tool === 'select' || tool === 'reveal' || tool === 'cover') { setMapTool(tool); return; }
+                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg') { setMapTool(tool); return; }
                 if (tool === 'fog') { toggleFog(); return; }
                 if (tool === 'revealall') { fogRevealAll(); return; }
                 if (tool === 'coverall') { fogCoverAll(); return; }
@@ -576,9 +589,10 @@
                 <div class="gm-monster-top">
                     <span class="gm-monster-name">${esc(m.name)}${m.ac ? ` <span class="gm-party-sub">CA ${m.ac}</span>` : ''}</span>
                     <div class="gm-hp-ctrl">
-                        <button class="gm-hp-btn" data-act="mon-hp" data-id="${m.id}" data-delta="-1">−</button>
+                        <input class="gm-input gm-num gm-mon-hp-amt" type="number" min="1" placeholder="#" data-mon-hp-amount="${m.id}" title="Montant de PV à retirer / ajouter">
+                        <button class="gm-hp-btn" data-act="mon-hp" data-id="${m.id}" data-delta="-1" title="Retirer ces PV (dégâts)">−</button>
                         <span class="gm-hp-val ${dead ? 'is-dead' : ''}">${m.hpCur}/${m.hpMax}</span>
-                        <button class="gm-hp-btn" data-act="mon-hp" data-id="${m.id}" data-delta="1">＋</button>
+                        <button class="gm-hp-btn" data-act="mon-hp" data-id="${m.id}" data-delta="1" title="Ajouter ces PV (soin)">＋</button>
                     </div>
                     <button class="gm-eye${m.hidden ? ' is-hidden' : ''}" data-act="mon-eye" data-id="${m.id}" title="${m.hidden ? 'Caché des joueurs (clic = montrer)' : 'Visible (clic = masquer aux joueurs)'}">${m.hidden ? '🙈' : '👁️'}</button>
                     <button class="gm-del-x" data-act="mon-del" data-id="${m.id}">✕</button>
@@ -966,6 +980,13 @@
         if (!live.presChannel) { if (window.showAppToast) window.showAppToast('Ouvre une session pour diffuser aux joueurs.', '#c0392b'); return false; }
         try { live.presChannel.send({ type: 'broadcast', event, payload }); return true; } catch (e) { console.warn('broadcast:', e); return false; }
     }
+    // Diffuse une image aux joueurs (ils reçoivent une notification « Ouvrir »).
+    function sendSharedImage(url) {
+        if (!url) return;
+        const ok = gmBroadcast('show-image', { url: url });
+        if (ok && window.showAppToast) window.showAppToast('🖼️ Image envoyée aux joueurs', '#2c3e50');
+        const inp = byId('gm-showimg-url'); if (inp) inp.value = '';
+    }
     function onGiftResponse(p) {
         if (!p) return;
         const who = p.by || 'Un joueur';
@@ -1177,9 +1198,10 @@
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
         const low = hpMax > 0 && ratio <= 0.33;
         const imgStyle = t.img ? `background-image:url(${t.img});` : '';
+        const sz = Math.round(34 * (t.size || 1));
         const hpBar = hpMax > 0 ? `<div class="gm-token-hp"><div class="gm-token-hp-fill${low ? ' is-low' : ''}" style="width:${ratio * 100}%"></div></div>` : '';
         const acBadge = (t.ac != null && t.ac !== '') ? `<span class="gm-token-ac" title="Classe d'armure">${esc(t.ac)}</span>` : '';
-        return `<div class="gm-token${t.hidden ? ' is-mj-hidden' : ''}${t.img ? ' has-img' : ''}" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}">`
+        return `<div class="gm-token${t.hidden ? ' is-mj-hidden' : ''}${t.img ? ' has-img' : ''}" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}">`
             + (t.img ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
             + acBadge + hpBar + `</div>`;
     }
@@ -1236,6 +1258,9 @@
         view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens">${tokens}</div><canvas class="gm-layer gm-layer-fog"></canvas></div>`;
         const content = view.querySelector('.gm-map-content');
         content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
+        content.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
+        content.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
         content.classList.toggle('show-grid', m.showGrid !== false);
         content.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
         applyMapTransform();
@@ -1264,6 +1289,7 @@
     function setTokenField(id, field, value) {
         const t = find(state.tokens, id); if (!t) return;
         if (field === 'hp' || field === 'hpMax' || field === 'ac') t[field] = (value === '' ? null : (parseInt(value, 10) || 0));
+        else if (field === 'size') t.size = parseFloat(value) || 1;
         else t[field] = value;
         save(); renderMap(); broadcastMap(true);
     }
@@ -1277,9 +1303,12 @@
     function openTokenPopover(tok, e) {
         const p = ensureTokenPopover();
         const color = tok.color || (tok.type === 'monster' ? '#7A2828' : '#2980b9');
+        const sizes = [['0.75', 'Petit'], ['1', 'Normal'], ['1.5', 'Grand'], ['2', 'Très grand'], ['3', 'Gigantesque']];
+        const sizeOpts = sizes.map(s => `<option value="${s[0]}"${(Number(tok.size) || 1) === parseFloat(s[0]) ? ' selected' : ''}>${s[1]}</option>`).join('');
         p.innerHTML = `
             <div class="gm-tp-row"><input class="gm-input" data-tp="name" value="${esc(tok.name || '')}" placeholder="Nom du jeton"></div>
             <div class="gm-tp-row"><label>❤️</label><input class="gm-input gm-num" type="number" data-tp="hp" value="${tok.hp != null ? tok.hp : ''}" placeholder="PV"><span class="gm-tp-sep">/</span><input class="gm-input gm-num" type="number" data-tp="hpMax" value="${tok.hpMax != null ? tok.hpMax : ''}" placeholder="max"><label>🛡️</label><input class="gm-input gm-num" type="number" data-tp="ac" value="${tok.ac != null ? tok.ac : ''}" placeholder="CA"></div>
+            <div class="gm-tp-row"><label>📏</label><select class="gm-input" data-tp="size">${sizeOpts}</select></div>
             <div class="gm-tp-row"><input class="gm-input" data-tp="img" value="${esc(tok.img || '')}" placeholder="URL image…"><label class="gm-btn gm-tp-upload" title="Importer une image">🖼️<input type="file" accept="image/*" data-tp="imgfile" style="display:none;"></label><input class="gm-tp-color" type="color" data-tp="color" value="${color}" title="Couleur"></div>
             <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-tp-act="hide">${tok.hidden ? '👁️ Montrer' : '🙈 Cacher aux joueurs'}</button><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️</button></div>`;
         p.classList.remove('hidden');
@@ -1289,7 +1318,7 @@
         p.querySelectorAll('[data-tp]').forEach(inp => {
             const f = inp.dataset.tp;
             if (f === 'imgfile') { inp.addEventListener('change', (ev) => { const file = ev.target.files[0]; if (file) fileToDataURL(file, (data) => { setTokenField(tok.id, 'img', data); const u = p.querySelector('[data-tp="img"]'); if (u) u.value = data; }); }); return; }
-            const evt = (inp.type === 'color') ? 'change' : 'input';
+            const evt = (inp.type === 'color' || inp.tagName === 'SELECT') ? 'change' : 'input';
             inp.addEventListener(evt, () => setTokenField(tok.id, f, inp.value));
         });
         p.querySelectorAll('[data-tp-act]').forEach(b => b.addEventListener('click', () => {
@@ -1337,13 +1366,18 @@
     }
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
-        let cur = null, tokenEl = null, panning = false, painting = false, startX = 0, startY = 0, moved = false, startPan = null;
+        let cur = null, tokenEl = null, panning = false, painting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null;
         const contentRect = () => { const c = view.querySelector('.gm-map-content'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
             startX = e.clientX; startY = e.clientY; moved = false;
             if (mapTool === 'reveal' || mapTool === 'cover') {   // mode brouillard : on peint
                 painting = true; try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 paintFogAt(e); e.preventDefault(); return;
+            }
+            if (mapTool === 'bg') {   // calage du fond : on déplace l'image (pas la grille)
+                bgDrag = true; bgStart = { x: state.map.bgX || 0, y: state.map.bgY || 0 };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                e.preventDefault(); return;
             }
             const el = e.target.closest('.gm-token');
             if (el) {
@@ -1359,6 +1393,11 @@
         view.addEventListener('pointermove', (e) => {
             if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
             if (painting) { paintFogAt(e); return; }
+            if (bgDrag) {
+                state.map.bgX = bgStart.x + (e.clientX - startX); state.map.bgY = bgStart.y + (e.clientY - startY);
+                const c = view.querySelector('.gm-map-content'); if (c) c.style.backgroundPosition = `calc(50% + ${state.map.bgX}px) calc(50% + ${state.map.bgY}px)`;
+                return;
+            }
             if (cur && tokenEl) {
                 const r = contentRect();
                 const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
@@ -1373,6 +1412,7 @@
             }
         });
         const up = (e) => {
+            if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
             if (painting) { painting = false; save(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
@@ -1386,6 +1426,12 @@
         view.addEventListener('pointercancel', up);
         view.addEventListener('wheel', (e) => {
             e.preventDefault();
+            if (mapTool === 'bg') {   // molette = redimensionner le fond (calage grille)
+                state.map.bgScale = Math.max(0.2, Math.min(5, (Number(state.map.bgScale) || 1) * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
+                const c = view.querySelector('.gm-map-content'); if (c) c.style.backgroundSize = (state.map.bgScale * 100) + '%';
+                clearTimeout(bgWheelTimer); bgWheelTimer = setTimeout(() => { save(); broadcastMap(true); }, 250);
+                return;
+            }
             mapView.zoom = Math.max(0.4, Math.min(4, mapView.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
             applyMapTransform();
         }, { passive: false });
@@ -1738,6 +1784,21 @@
         byId('gm-map-lock').addEventListener('click', () => { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); });
         byId('gm-map-snap').addEventListener('click', () => { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); });
         byId('gm-map-resetview').addEventListener('click', resetMapView);
+
+        // Montrer une image aux joueurs (URL ou import)
+        byId('gm-showimg-send').addEventListener('click', () => {
+            const u = byId('gm-showimg-url').value.trim();
+            if (!u) { if (window.showAppToast) window.showAppToast('Renseigne une URL ou importe une image.', '#c0392b'); return; }
+            sendSharedImage(u);
+        });
+        byId('gm-showimg-file').addEventListener('change', async (e) => {
+            const f = e.target.files[0]; if (!f) return;
+            try {
+                if (window.SupaAuth && window.SupaAuth.uploadAsset) { const res = await window.SupaAuth.uploadAsset(f, 'shared'); sendSharedImage(res.url); }
+                else fileToDataURL(f, sendSharedImage);
+            } catch (err) { console.warn('showimg upload:', err); if (window.showAppToast) window.showAppToast('Échec de l\'envoi de l\'image.', '#c0392b'); }
+            e.target.value = '';
+        });
         byId('gm-map-bank').addEventListener('change', (e) => { const n = treeNode(e.target.value); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); } });
 
         // Pages de carte (multi-cartes type Roll20)
@@ -1814,7 +1875,7 @@
                 case 'mon-del': state.monsters = state.monsters.filter(m => m.id !== id); save(); renderMonsters(); break;
                 case 'mon-eye': { const m = find(state.monsters, id); if (m) { m.hidden = !m.hidden; save(); renderMonsters(); } break; }
                 case 'init-eye': { const c = find(state.initiative, id); if (c) { c.hidden = !c.hidden; save(); renderInit(); } break; }
-                case 'mon-hp': { const m = find(state.monsters, id); if (m) { m.hpCur = Math.max(0, Math.min(m.hpMax, m.hpCur + parseInt(t.dataset.delta))); save(); renderMonsters(); } break; }
+                case 'mon-hp': { const m = find(state.monsters, id); if (m) { const amtEl = document.querySelector('[data-mon-hp-amount="' + id + '"]'); const amt = (amtEl && Math.abs(parseInt(amtEl.value, 10))) || 1; m.hpCur = Math.max(0, Math.min(m.hpMax, m.hpCur + parseInt(t.dataset.delta) * amt)); save(); renderMonsters(); } break; }
                 case 'mon-cond': { const m = find(state.monsters, id); if (m) { const c = t.dataset.cond; m.conditions = m.conditions.includes(c) ? m.conditions.filter(x => x !== c) : [...m.conditions, c]; save(); renderMonsters(); } break; }
                 case 'mon-atk': { const m = find(state.monsters, id); if (m) { const a = m.attacks[parseInt(t.dataset.ai)]; if (a) logDice(`${m.name} — ${a.name}`, rollFormula(a.formula)); } break; }
                 case 'mon-atk-add': {

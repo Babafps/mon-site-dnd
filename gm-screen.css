@@ -8,7 +8,7 @@
 #gm-screen { font-family: 'Lora', serif; color: var(--text-color); }
 /* Écran MJ = application plein écran FIXE : aucun scroll de page, chaque panneau
    scrolle en interne. On réserve 66px en bas pour la barre du lecteur de musique. */
-#gm-screen:not(.hidden) { position: fixed; inset: 0 0 66px 0; z-index: 1200; overflow: hidden; padding: 10px; }
+#gm-screen:not(.hidden) { position: fixed; inset: 0; z-index: 1200; overflow: hidden; padding: 10px; }
 /* Sur l'écran MJ, on masque TOUTE l'UI flottante de la session JOUEUR (FAB combat,
    bouton carte, notifications…) : sinon elle se superpose aux modules de droite. */
 body.gm-active #session-fab,
@@ -84,7 +84,7 @@ body.gm-active #session-combat-badge { display: none !important; }
 .gm-close:hover { background: rgba(231,76,60,0.14); border-color: #c0392b; color: #c0392b; }
 
 /* ---- Espace de travail : zone centrale + sidebar (flux normal, anti-chevauchement) ---- */
-.gm-workspace { flex: 1; display: flex; gap: 12px; align-items: stretch; padding: 12px; min-height: 0; overflow: hidden; }
+.gm-workspace { flex: 1; display: flex; gap: 12px; align-items: stretch; padding: 12px 12px 68px; min-height: 0; overflow: hidden; }
 
 /* Barre d'outils verticale (type Roll20) */
 .gm-leftbar { flex: 0 0 52px; display: flex; flex-direction: column; gap: 8px; padding: 8px 6px; align-self: flex-start;
