@@ -140,6 +140,7 @@
               .on('broadcast', { event: 'session-closed' }, () => onSessionClosed())
               .on('broadcast', { event: 'kick' }, ({ payload }) => onKicked(payload))
               .on('broadcast', { event: 'show-image' }, ({ payload }) => receiveSharedImage(payload))
+              .on('broadcast', { event: 'dice' }, ({ payload }) => receiveDiceRoll(payload))
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
                       try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
@@ -211,6 +212,16 @@
         actions.appendChild(mkBtn('🔍 Ouvrir', 'accept', () => { openSharedImage(p.url); card.remove(); }));
         actions.appendChild(mkBtn('Ignorer', 'refuse', () => card.remove()));
         wrap.appendChild(card);
+    }
+    // Jet de dés public diffusé par le MJ → notification éphémère côté joueur.
+    function receiveDiceRoll(p) {
+        if (!p) return;
+        let wrap = document.getElementById('session-notifs');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'session-notif';
+        card.innerHTML = `<div class="session-notif-head">🎲 ${escHtml(p.user || 'MJ')} lance ${escHtml(p.formula || '')}</div><div class="session-notif-body">Résultat : <b>${escHtml(String(p.total))}</b> <span style="opacity:.6;">(${escHtml(p.detail || '')})</span></div>`;
+        wrap.appendChild(card);
+        setTimeout(() => { card.style.transition = 'opacity .4s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 400); }, 6000);
     }
     function openSharedImage(url) {
         let ov = document.getElementById('session-image-viewer');
@@ -485,8 +496,27 @@
             const sz = Math.round(30 * (Number(t.size) || 1));
             return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
         }).join('');
-        view.innerHTML = tokensHtml + '<canvas class="smap-fog"></canvas>';
+        view.innerHTML = tokensHtml + '<canvas class="smap-draw"></canvas><canvas class="smap-fog"></canvas>';
+        renderPlayerDraw();
         renderPlayerFog();
+    }
+    // Dessin libre du MJ (synchronisé) côté joueur.
+    function renderPlayerDraw() {
+        const view = document.getElementById('smap-view'); if (!view) return;
+        const canvas = view.querySelector('.smap-draw'); if (!canvas) return;
+        const strokes = (mapState.map && mapState.map.drawings) || [];
+        const w = Math.max(1, view.clientWidth), h = Math.max(1, view.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        strokes.forEach(s => {
+            if (!s.pts || !s.pts.length) return;
+            ctx.strokeStyle = s.color || '#e23b3b'; ctx.lineWidth = s.width || 3;
+            ctx.beginPath();
+            s.pts.forEach((p, i) => { const px = p.x * w, py = p.y * h; i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+            if (s.pts.length === 1) ctx.lineTo(s.pts[0].x * w + 0.5, s.pts[0].y * h + 0.5);
+            ctx.stroke();
+        });
     }
     // Brouillard côté joueur : OPAQUE (le joueur ne voit que les zones révélées par le MJ).
     function renderPlayerFog() {
@@ -632,6 +662,7 @@
         .smap-token-mine:active { cursor:grabbing; }
         .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        .smap-draw { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         #session-image-viewer { position:fixed; inset:0; z-index:10000; background:rgba(8,6,4,0.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
         #session-image-viewer.hidden { display:none; }
         #session-image-viewer img { max-width:94vw; max-height:90vh; border-radius:10px; border:2px solid var(--accent-color,#C49B35); box-shadow:0 16px 60px rgba(0,0,0,0.7); }

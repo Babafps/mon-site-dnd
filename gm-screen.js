@@ -105,7 +105,25 @@
         { name: 'Résistance / Vulnérabilité', text: 'Résistance = dégâts du type divisés par deux (après autres modificateurs). Vulnérabilité = dégâts doublés. Ne se cumulent pas.' },
         { name: 'Identifier un objet magique', text: 'Repos court en contact + concentration, ou sort Identification. Sinon, l\'usage révèle progressivement les propriétés.' },
         { name: 'Interaction sociale', text: 'Attitude de départ (hostile / indifférent / amical) modifie le DD. Persuasion (sincère), Tromperie (mensonge), Intimidation (menace).' },
-        { name: 'Vision dans le noir', text: 'À 18 m, la pénombre est traitée comme lumière vive et l\'obscurité comme pénombre (en nuances de gris). Ne perce pas l\'obscurité magique.' }
+        { name: 'Vision dans le noir', text: 'À 18 m, la pénombre est traitée comme lumière vive et l\'obscurité comme pénombre (en nuances de gris). Ne perce pas l\'obscurité magique.' },
+        { name: 'Degrés de difficulté (DD)', text: 'Très facile 5 · Facile 10 · Moyen 15 · Difficile 20 · Très difficile 25 · Quasi impossible 30.' },
+        { name: 'Maîtrise par niveau', text: 'Niv 1-4 : +2 · 5-8 : +3 · 9-12 : +4 · 13-16 : +5 · 17-20 : +6.' },
+        { name: 'XP de rencontre (par PJ niv.)', text: 'Seuils approximatifs/PJ — Facile/Moyen/Difficile/Mortel. Niv 1 : 25/50/75/100. Niv 5 : 250/500/750/1100. Adapter selon le groupe.' },
+        { name: 'Transport & vitesse de voyage', text: 'Rythme lent 3 km/h (avantage Discrétion) · normal 4,5 km/h · rapide 6 km/h (−5 Perception passive). ≈ 24/36/48 km par jour.' },
+        { name: 'Nourriture & eau', text: 'Besoin/jour : ~0,5 kg de nourriture et ~4 L d\'eau (le double par forte chaleur). Privation → épuisement.' },
+        { name: 'Suffocation / noyade', text: 'Réserve d\'air = 1 + mod. CON minutes (min 30 s). Ensuite : 0 PV au bout de mod. CON rounds (min 1).' },
+        { name: 'Tomber inconscient (PV 0)', text: 'Tu tombes à terre, neutralisé, et fais des jets contre la mort à chaque tour. Tout soin > 0 te réveille.' },
+        { name: 'Demi-créatures / couvert', text: 'Tirer à travers un allié n\'impose rien, mais un mur/obstacle accorde un couvert (½, ¾, total) à la cible.' },
+        { name: 'Lancer deux sorts par tour', text: 'Interdit d\'utiliser deux emplacements le même tour. Exception : tour de magie (action) + sort en action bonus.' },
+        { name: 'Aire d\'effet & créatures', text: 'Sauf indication, on cible les créatures (pas le MJ/joueur seul) ; un allié dans la zone subit aussi l\'effet.' },
+        { name: 'Objets & solidité', text: 'CA d\'objet selon matériau (tissu 11 → adamantine 23). PV selon taille/fragilité. Immunité poison/psychique.' },
+        { name: 'Montures & vitesse', text: 'Une monture contrôlée n\'agit qu\'avec Foncer/Se désengager/Esquiver. Indépendante : agit librement à son initiative.' },
+        { name: 'Potion de soin', text: 'Légère 2d4+2 · Supérieure 4d4+4 · Suprême 8d4+8 · Souveraine 10d4+20. Boire = action ; administrer à autrui = action.' },
+        { name: 'Maladies & poisons', text: 'Souvent un jet de sauvegarde de CON. Effets typiques : dégâts récurrents, désavantage, réduction de PV max.' },
+        { name: 'Folie (optionnel)', text: 'Courte (1d10 min), longue (1d10×10 min) ou indéfinie. Provoquée par effets surnaturels ; soignée par repos/sorts.' },
+        { name: 'Récompenses & trésor', text: 'Trésor individuel (pièces) + objets (table par CR). Pense à varier : or, gemmes, objets d\'art, consommables, objets magiques.' },
+        { name: 'Lumière des sources', text: 'Torche : 6 m vive + 6 m pénombre, 1 h. Lanterne sourde : cône 18 m. Lumière (sort) : 6+6 m. Bougie : 1,5 m, 1 h.' },
+        { name: 'Surprise & embuscade', text: 'Compare Discrétion du groupe embusqué vs Perception passive des cibles. Les surpris ne font rien au 1er tour.' }
     ];
 
     // ---------- État (multi-campagnes) ----------
@@ -197,6 +215,18 @@
         if (out) { const crit = /d20/.test(res.formula) && res.detail.split(' ').length === 1; let cls = ''; if (crit && res.total >= 20) cls = 'gm-crit'; if (crit && res.detail === '1') cls = 'gm-fail'; out.innerHTML = `<span class="${cls}">${res.total}</span>`; }
     }
 
+    // Parser de chat de dés : « /r 1d20+5 » (public, diffusé aux joueurs) ; « /w gm 1d20 » (secret, MJ seul).
+    function handleDiceCommand(raw) {
+        raw = String(raw || '').trim(); if (!raw) return;
+        let secret = false, formula = raw;
+        const mw = raw.match(/^\/w\s+gm\s+(.+)$/i), mr = raw.match(/^\/r\s+(.+)$/i);
+        if (mw) { secret = true; formula = mw[1].trim(); }
+        else if (mr) { formula = mr[1].trim(); }
+        const res = rollFormula(formula);
+        logDice((secret ? '🤫 (secret) ' : '🎲 ') + formula, res);
+        if (!secret) gmBroadcast('dice', { user: 'MJ', formula: formula, total: res.total, detail: res.detail });
+    }
+
     // ---------- Injection HTML ----------
     function injectHTML() {
         const ov = document.createElement('div');
@@ -222,6 +252,7 @@
             <div class="gm-leftbar">
                 <button class="gm-tool is-active" data-tool="select" title="Sélection / déplacement (souris)">🖱️</button>
                 <button class="gm-tool" data-tool="bg" title="Caler le fond : glisser = déplacer la carte, molette = redimensionner (pour aligner sur la grille)">🗺️</button>
+                <button class="gm-tool" data-tool="draw" title="Dessin libre sur la carte (glisser pour tracer)">✏️</button>
                 <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
                 <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
                 <button class="gm-tool" data-tool="grid" title="Afficher / masquer la grille">▦</button>
@@ -340,6 +371,11 @@
                             <label class="gm-btn" title="Importer une image">📁<input type="file" id="gm-showimg-file" accept="image/*" style="display:none;"></label>
                             <button id="gm-showimg-send" class="gm-add" title="Envoyer aux joueurs">📤</button>
                         </div>
+                        <div class="gm-row" style="align-items:center;">
+                            <label class="gm-map-ctl">📁 Préparée</label>
+                            <select id="gm-showimg-prepared" class="gm-select" style="flex:1;"><option value="">— Image préparée —</option></select>
+                            <button id="gm-showimg-send-prep" class="gm-btn" title="Envoyer l'image préparée">📤</button>
+                        </div>
                         <div class="gm-readonly-note">ⓘ Les joueurs reçoivent une notification « Ouvrir » pour voir l'image en grand.</div>
                     </div>
                 </div>
@@ -358,40 +394,54 @@
                     </div>
                 </div>
 
-                <div id="gm-map-card" class="gm-card">
+                <div id="gm-map-card" class="gm-card gm-map-collapsed">
                     <div class="gm-card-head"><span class="gm-card-icon">🗺️</span> Carte tactique
                         <span class="gm-spacer"></span>
-                        <button id="gm-map-sync" class="gm-btn" title="Placer les combattants (joueurs + monstres) sur la carte">⟳ Jetons combat</button>
+                        <button id="gm-map-sync" class="gm-btn" title="Placer les combattants (joueurs + monstres) sur la carte">⟳ Jetons</button>
+                        <button id="gm-map-collapse" class="gm-btn" title="Afficher / masquer les réglages de la carte">⚙️ Réglages</button>
                     </div>
                     <div class="gm-card-body">
-                        <div class="gm-row gm-map-pages-row" style="align-items:center;">
-                            <label class="gm-map-ctl">🗺️ Page</label>
-                            <select id="gm-map-pages" class="gm-select" style="flex:1;" title="Carte affichée"></select>
-                            <button id="gm-map-page-add" class="gm-btn" title="Nouvelle carte">➕</button>
-                            <button id="gm-map-page-rename" class="gm-btn" title="Renommer la carte">✏️</button>
-                            <button id="gm-map-page-del" class="gm-btn gm-btn-danger" title="Supprimer la carte">🗑️</button>
+                        <div class="gm-map-controls">
+                            <div class="gm-row gm-map-pages-row" style="align-items:center;">
+                                <label class="gm-map-ctl">🗺️ Page</label>
+                                <select id="gm-map-pages" class="gm-select" style="flex:1;" title="Carte affichée"></select>
+                                <button id="gm-map-page-add" class="gm-btn" title="Nouvelle carte">➕</button>
+                                <button id="gm-map-page-rename" class="gm-btn" title="Renommer la carte">✏️</button>
+                                <button id="gm-map-page-del" class="gm-btn gm-btn-danger" title="Supprimer la carte">🗑️</button>
+                            </div>
+                            <div class="gm-row">
+                                <input id="gm-map-url" class="gm-input" placeholder="URL d'une image de fond / map…">
+                                <label class="gm-btn" title="Importer une image de carte">🖼️<input type="file" id="gm-map-file" accept="image/*" style="display:none;"></label>
+                                <button id="gm-map-seturl" class="gm-add" title="Appliquer le fond">＋</button>
+                            </div>
+                            <div class="gm-row" style="align-items:center;">
+                                <label class="gm-map-ctl">📚 Banque</label>
+                                <select id="gm-map-bank" class="gm-select" style="flex:1;"><option value="">— Choisir une carte préparée —</option></select>
+                                <button id="gm-map-bank-load" class="gm-btn" title="Charger la carte prévisualisée">Charger</button>
+                            </div>
+                            <img id="gm-map-bank-preview" class="gm-map-preview" alt="Aperçu" style="display:none;">
+                            <div class="gm-row" style="gap:14px; align-items:center;">
+                                <label class="gm-map-ctl">Grille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
+                                <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
+                                <button id="gm-map-lock" class="gm-btn" title="Verrouiller / déverrouiller le déplacement des jetons par les joueurs">🔓 Jetons libres</button>
+                                <button id="gm-map-snap" class="gm-btn" title="Aimanter les jetons sur la grille (snap)">🧲 Aimant</button>
+                                <button id="gm-map-addtoken" class="gm-btn">➕ Jeton</button>
+                                <button id="gm-map-resetview" class="gm-btn" title="Recentrer / réinitialiser le zoom">🎯 Recentrer</button>
+                                <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
+                            </div>
+                            <div class="gm-row gm-map-layers" style="gap:10px; align-items:center; flex-wrap:wrap;">
+                                <span class="gm-map-ctl">Calques :</span>
+                                <label class="gm-map-ctl"><input type="checkbox" data-layer="tokens" checked> 🧝 Jetons</label>
+                                <label class="gm-map-ctl"><input type="checkbox" data-layer="draw" checked> ✏️ Dessin</label>
+                                <label class="gm-map-ctl"><input type="checkbox" data-layer="fog" checked> 🌫️ Brouillard</label>
+                                <label class="gm-map-ctl"><input type="checkbox" data-layer="grid" checked> ▦ Grille</label>
+                                <span class="gm-spacer"></span>
+                                <label class="gm-map-ctl">✏️ <input type="color" id="gm-draw-color" value="#e23b3b" title="Couleur du dessin libre"></label>
+                                <button id="gm-draw-clear" class="gm-btn" title="Effacer tous les dessins">🧽 Dessins</button>
+                            </div>
+                            <div class="gm-readonly-note" style="margin-top:-2px;">ⓘ Molette = zoom (taille du pinceau en mode brouillard) · glisser le fond = déplacer · clic jeton = éditer.</div>
                         </div>
-                        <div class="gm-row">
-                            <input id="gm-map-url" class="gm-input" placeholder="URL d'une image de fond / map…">
-                            <label class="gm-btn" title="Importer une image de carte">🖼️<input type="file" id="gm-map-file" accept="image/*" style="display:none;"></label>
-                            <button id="gm-map-seturl" class="gm-add" title="Appliquer le fond">＋</button>
-                        </div>
-                        <div class="gm-row" style="align-items:center;">
-                            <label class="gm-map-ctl">📚 Banque</label>
-                            <select id="gm-map-bank" class="gm-select" style="flex:1;"><option value="">— Charger une carte préparée —</option></select>
-                        </div>
-                        <div class="gm-row" style="gap:14px; align-items:center;">
-                            <label class="gm-map-ctl">Grille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
-                            <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
-                            <button id="gm-map-lock" class="gm-btn" title="Verrouiller / déverrouiller le déplacement des jetons par les joueurs">🔓 Jetons libres</button>
-                            <button id="gm-map-snap" class="gm-btn" title="Aimanter les jetons sur la grille (snap)">🧲 Aimant</button>
-                            <button id="gm-map-addtoken" class="gm-btn">➕ Jeton</button>
-                            <button id="gm-map-resetview" class="gm-btn" title="Recentrer / réinitialiser le zoom">🎯 Recentrer</button>
-                            <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
-                        </div>
-                        <div class="gm-readonly-note" style="margin-top:-2px;">ⓘ Molette = zoom · glisser le fond = déplacer · clic sur un jeton = éditer PV/CA/image.</div>
                         <div id="gm-map-view" class="gm-map-view show-grid"></div>
-                        <div class="gm-readonly-note">ⓘ Glisse les jetons : positions et fond sont synchronisés en direct avec les joueurs.</div>
                     </div>
                 </div>
 
@@ -441,7 +491,7 @@
                         <div class="gm-side-card-head">🎲 Lanceur de dés</div>
                         <div class="gm-dice-quick">${DICE.map(d => `<button class="gm-die" data-die="${d}">d${d}</button>`).join('')}</div>
                         <div class="gm-row">
-                            <input id="gm-dice-formula" class="gm-input" placeholder="ex : 2d6+3, 1d20+5…">
+                            <input id="gm-dice-formula" class="gm-input" placeholder="2d6+3 · /r 1d20+5 · /w gm 1d20 (secret)">
                             <button id="gm-dice-roll" class="gm-add" title="Lancer">🎲</button>
                         </div>
                         <div id="gm-dice-result" class="gm-dice-result"></div>
@@ -534,7 +584,7 @@
             ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
                 const tool = btn.dataset.tool;
                 if (tool === 'grid') { const cb = ov.querySelector('#gm-map-showgrid'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
-                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg') { setMapTool(tool); return; }
+                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg' || tool === 'draw') { setMapTool(tool); return; }
                 if (tool === 'fog') { toggleFog(); return; }
                 if (tool === 'revealall') { fogRevealAll(); return; }
                 if (tool === 'coverall') { fogCoverAll(); return; }
@@ -1189,10 +1239,12 @@
         sel.innerHTML = (state.maps || []).map(p => `<option value="${p.id}"${p.id === state.activeMapId ? ' selected' : ''}>🗺️ ${esc(p.name)}</option>`).join('');
     }
 
-    // Vue locale de la carte (zoom / déplacement) — non synchronisée, propre au MJ.
-    let mapView = { zoom: 1, panX: 0, panY: 0 };
-    let mapTool = 'select';      // 'select' | 'reveal' | 'cover'
+    // Vue locale de la carte (zoom / déplacement / calques visibles) — non synchronisée, propre au MJ.
+    let mapView = { zoom: 1, panX: 0, panY: 0, layers: { tokens: true, draw: true, fog: true, grid: true } };
+    let mapTool = 'select';      // 'select' | 'bg' | 'reveal' | 'cover' | 'draw'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
+    let drawColor = '#e23b3b';   // couleur du dessin libre
+    let drawStroke = null;       // tracé en cours
     function tokenHtml(t) {
         const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
@@ -1231,14 +1283,24 @@
         (fog.reveals || []).forEach(r => { ctx.beginPath(); ctx.arc(r.x * w, r.y * h, (r.r || fogBrush) * w, 0, Math.PI * 2); ctx.fill(); });
         ctx.globalCompositeOperation = 'source-over';
     }
+    let _fogLast = null;
     function paintFogAt(e) {
         const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
         const r = content.getBoundingClientRect();
         const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
         const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
         const fog = fogState();
-        if (mapTool === 'reveal') fog.reveals.push({ x, y, r: fogBrush });
-        else if (mapTool === 'cover') fog.reveals = fog.reveals.filter(rv => Math.hypot(rv.x - x, rv.y - y) > fogBrush);
+        // Trait CONTINU : on interpole des points entre la dernière position et l'actuelle (vrai pinceau).
+        const pts = [];
+        if (_fogLast) {
+            const dx = x - _fogLast.x, dy = y - _fogLast.y, dist = Math.hypot(dx, dy);
+            const step = Math.max(fogBrush * 0.45, 0.008), n = Math.min(80, Math.ceil(dist / step));
+            for (let i = 1; i <= n; i++) pts.push({ x: _fogLast.x + dx * (i / n), y: _fogLast.y + dy * (i / n) });
+        }
+        if (!pts.length) pts.push({ x, y });
+        if (mapTool === 'reveal') pts.forEach(p => fog.reveals.push({ x: p.x, y: p.y, r: fogBrush }));
+        else if (mapTool === 'cover') pts.forEach(p => { fog.reveals = fog.reveals.filter(rv => Math.hypot(rv.x - p.x, rv.y - p.y) > fogBrush); });
+        _fogLast = { x, y };
         renderFog();
     }
     function setMapTool(tool) {
@@ -1251,21 +1313,46 @@
     function fogRevealAll() { const fog = fogState(); fog.on = true; fog.reveals = [{ x: 0.5, y: 0.5, r: 3 }]; save(); renderMap(); broadcastMap(true); }
     function fogCoverAll() { const fog = fogState(); fog.on = true; fog.reveals = []; save(); renderMap(); broadcastMap(true); }
 
+    // ----- Dessin libre (couche partagée avec les joueurs) -----
+    function drawData() { const m = state.map || {}; if (!Array.isArray(m.drawings)) m.drawings = []; return m.drawings; }
+    function renderDraw() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('.gm-layer-draw'); if (!canvas) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ((state.map && state.map.drawings) || []).forEach(s => {
+            if (!s.pts || !s.pts.length) return;
+            ctx.strokeStyle = s.color || '#e23b3b'; ctx.lineWidth = s.width || 3;
+            ctx.beginPath();
+            s.pts.forEach((p, i) => { const px = p.x * w, py = p.y * h; i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+            if (s.pts.length === 1) ctx.lineTo(s.pts[0].x * w + 0.5, s.pts[0].y * h + 0.5);
+            ctx.stroke();
+        });
+    }
+    function clearDrawings() { if (state.map) state.map.drawings = []; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🧽 Dessins effacés', '#2c3e50'); }
+
     function renderMap() {
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens">${tokens}</div><canvas class="gm-layer gm-layer-fog"></canvas></div>`;
+        const L = mapView.layers || {};
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens"${L.tokens === false ? ' style="display:none"' : ''}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${L.draw === false ? ' style="display:none"' : ''}></canvas><canvas class="gm-layer gm-layer-fog"${L.fog === false ? ' style="display:none"' : ''}></canvas></div>`;
         const content = view.querySelector('.gm-map-content');
         content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
         content.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
         content.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
-        content.classList.toggle('show-grid', m.showGrid !== false);
+        content.classList.toggle('show-grid', m.showGrid !== false && L.grid !== false);
         content.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
         applyMapTransform();
-        renderFog();
-        view.classList.toggle('gm-tool-paint', mapTool !== 'select');
+        renderDraw();
+        if (L.fog !== false) renderFog();
+        view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'bg');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
@@ -1332,7 +1419,14 @@
         const sel = byId('gm-map-bank'); if (!sel) return;
         const maps = (tree || []).filter(n => n.kind === 'map' && n.data && n.data.url);
         const prev = sel.value;
-        sel.innerHTML = '<option value="">— Charger une carte préparée —</option>' + maps.map(n => `<option value="${n.id}">🗺️ ${esc(n.name)}</option>`).join('');
+        sel.innerHTML = '<option value="">— Choisir une carte préparée —</option>' + maps.map(n => `<option value="${n.id}">🗺️ ${esc(n.name)}</option>`).join('');
+        if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+    }
+    function renderSharedImagePicker() {
+        const sel = byId('gm-showimg-prepared'); if (!sel) return;
+        const imgs = (tree || []).filter(n => n.kind === 'image' && n.data && n.data.url);
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— Image préparée —</option>' + imgs.map(n => `<option value="${n.id}">🖼️ ${esc(n.name)}</option>`).join('');
         if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
     }
     function broadcastMap(persist) {
@@ -1371,13 +1465,20 @@
         view.addEventListener('pointerdown', (e) => {
             startX = e.clientX; startY = e.clientY; moved = false;
             if (mapTool === 'reveal' || mapTool === 'cover') {   // mode brouillard : on peint
-                painting = true; try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                painting = true; _fogLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 paintFogAt(e); e.preventDefault(); return;
             }
             if (mapTool === 'bg') {   // calage du fond : on déplace l'image (pas la grille)
                 bgDrag = true; bgStart = { x: state.map.bgX || 0, y: state.map.bgY || 0 };
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 e.preventDefault(); return;
+            }
+            if (mapTool === 'draw') {   // dessin libre : nouveau tracé
+                const r = contentRect();
+                drawStroke = { color: drawColor, width: 3, pts: [{ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }] };
+                drawData().push(drawStroke);
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderDraw(); e.preventDefault(); return;
             }
             const el = e.target.closest('.gm-token');
             if (el) {
@@ -1393,6 +1494,11 @@
         view.addEventListener('pointermove', (e) => {
             if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
             if (painting) { paintFogAt(e); return; }
+            if (drawStroke) {
+                const r = contentRect();
+                drawStroke.pts.push({ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) });
+                renderDraw(); return;
+            }
             if (bgDrag) {
                 state.map.bgX = bgStart.x + (e.clientX - startX); state.map.bgY = bgStart.y + (e.clientY - startY);
                 const c = view.querySelector('.gm-map-content'); if (c) c.style.backgroundPosition = `calc(50% + ${state.map.bgX}px) calc(50% + ${state.map.bgY}px)`;
@@ -1412,8 +1518,9 @@
             }
         });
         const up = (e) => {
+            if (drawStroke) { drawStroke = null; save(); broadcastMap(true); return; }
             if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
-            if (painting) { painting = false; save(); broadcastMap(true); return; }
+            if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
                 else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; }
@@ -1430,6 +1537,11 @@
                 state.map.bgScale = Math.max(0.2, Math.min(5, (Number(state.map.bgScale) || 1) * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
                 const c = view.querySelector('.gm-map-content'); if (c) c.style.backgroundSize = (state.map.bgScale * 100) + '%';
                 clearTimeout(bgWheelTimer); bgWheelTimer = setTimeout(() => { save(); broadcastMap(true); }, 250);
+                return;
+            }
+            if (mapTool === 'reveal' || mapTool === 'cover') {   // molette = taille du pinceau de brouillard
+                fogBrush = Math.max(0.02, Math.min(0.25, fogBrush * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+                if (window.showAppToast) window.showAppToast('🖌️ Pinceau : ' + Math.round(fogBrush * 100) + '%', '#2c3e50');
                 return;
             }
             mapView.zoom = Math.max(0.4, Math.min(4, mapView.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
@@ -1453,6 +1565,7 @@
         const kids = treeChildren(null);
         root.innerHTML = kids.length ? kids.map(n => treeNodeHtml(n, 0)).join('') : `<div class="gm-empty">Crée des dossiers et fichiers (textes, liens, images, maps, monstres) pour préparer ta partie.</div>`;
         if (typeof renderMapBank === 'function') renderMapBank();
+        if (typeof renderSharedImagePicker === 'function') renderSharedImagePicker();
     }
     function treeNodeHtml(n, depth) {
         const isFolder = n.kind === 'folder';
@@ -1722,7 +1835,7 @@
         // Dés
         DICE.forEach(() => {});
         document.querySelectorAll('.gm-die').forEach(b => b.addEventListener('click', () => logDice('1d' + b.dataset.die, rollFormula('1d' + b.dataset.die))));
-        byId('gm-dice-roll').addEventListener('click', () => { const f = byId('gm-dice-formula').value.trim(); if (f) logDice(f, rollFormula(f)); });
+        byId('gm-dice-roll').addEventListener('click', () => { const f = byId('gm-dice-formula').value.trim(); if (f) { handleDiceCommand(f); byId('gm-dice-formula').value = ''; } });
         byId('gm-dice-formula').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-dice-roll').click(); } });
 
         // Générateurs
@@ -1791,6 +1904,11 @@
             if (!u) { if (window.showAppToast) window.showAppToast('Renseigne une URL ou importe une image.', '#c0392b'); return; }
             sendSharedImage(u);
         });
+        byId('gm-showimg-send-prep').addEventListener('click', () => {
+            const n = treeNode(byId('gm-showimg-prepared').value);
+            if (n && n.data && n.data.url) sendSharedImage(n.data.url);
+            else if (window.showAppToast) window.showAppToast('Choisis une image préparée dans la liste.', '#c0392b');
+        });
         byId('gm-showimg-file').addEventListener('change', async (e) => {
             const f = e.target.files[0]; if (!f) return;
             try {
@@ -1799,7 +1917,23 @@
             } catch (err) { console.warn('showimg upload:', err); if (window.showAppToast) window.showAppToast('Échec de l\'envoi de l\'image.', '#c0392b'); }
             e.target.value = '';
         });
-        byId('gm-map-bank').addEventListener('change', (e) => { const n = treeNode(e.target.value); if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); } });
+        // Banque : on PRÉVISUALISE d'abord (pas d'application au change), puis « Charger » applique.
+        byId('gm-map-bank').addEventListener('change', (e) => {
+            const n = treeNode(e.target.value); const prev = byId('gm-map-bank-preview');
+            if (n && n.data && n.data.url) { prev.src = n.data.url; prev.style.display = 'block'; }
+            else { prev.removeAttribute('src'); prev.style.display = 'none'; }
+        });
+        byId('gm-map-bank-load').addEventListener('click', () => {
+            const n = treeNode(byId('gm-map-bank').value);
+            if (n && n.data && n.data.url) { state.map.bg = n.data.url; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🗺️ Carte « ' + n.name + ' » chargée', '#2c3e50'); }
+            else if (window.showAppToast) window.showAppToast('Choisis d\'abord une carte dans la liste.', '#c0392b');
+        });
+        // Repli des réglages de la carte (carte plein cadre quand replié)
+        byId('gm-map-collapse').addEventListener('click', () => { byId('gm-map-card').classList.toggle('gm-map-collapsed'); renderMap(); });
+        // Calques (visibilité côté MJ) + dessin libre
+        document.querySelectorAll('[data-layer]').forEach(cb => cb.addEventListener('change', () => { mapView.layers[cb.dataset.layer] = cb.checked; renderMap(); }));
+        byId('gm-draw-color').addEventListener('input', (e) => { drawColor = e.target.value; });
+        byId('gm-draw-clear').addEventListener('click', () => { if (confirm('Effacer tous les dessins de cette carte ?')) clearDrawings(); });
 
         // Pages de carte (multi-cartes type Roll20)
         byId('gm-map-pages').addEventListener('change', (e) => switchMap(e.target.value));
