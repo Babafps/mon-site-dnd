@@ -333,10 +333,12 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background-image: linear-gradient(rgba(255,255,255,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.13) 1px, transparent 1px);
     background-size: var(--gm-grid, 48px) var(--gm-grid, 48px);
+    opacity: var(--gm-grid-op, 1);
 }
 .gm-layer-tokens { position: absolute; inset: 0; }
 .gm-layer-fog { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gm-layer-draw { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gm-layer-gmnotes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gm-map-ping { position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; border: 3px solid #C49B35; box-shadow: 0 0 18px #C49B35; pointer-events: none; z-index: 6; animation: gm-map-ping-anim 1s ease-out 2; }
 @keyframes gm-map-ping-anim { 0% { transform: translate(-50%,-50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; } }
 .gm-map-controls { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
@@ -345,6 +347,33 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
 .gm-map-view.gm-tool-paint { cursor: crosshair; }
 .gm-tool.is-active { background: rgba(196,155,53,0.34); border-color: var(--accent-color, #C49B35); box-shadow: inset 0 0 0 1px var(--accent-color, #C49B35); }
 .gm-tool-sep { height: 1px; flex: 0 0 auto; background: var(--soft-border, rgba(122,40,40,0.25)); margin: 3px 4px; }
+
+/* ---- Panneau des calques (flottant sur la carte) ---- */
+.gm-layers-panel {
+    position: absolute; top: 10px; right: 10px; z-index: 20;
+    width: 236px; background: rgba(248,244,233,0.97);
+    border: 1px solid var(--soft-border, rgba(122,40,40,0.35)); border-radius: 10px;
+    box-shadow: 0 8px 26px rgba(0,0,0,0.28); padding: 8px; font-size: 0.82rem;
+}
+.gm-layers-panel.hidden { display: none; }
+.gm-layers-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700; color: #6a4a2a; padding: 2px 4px 8px; }
+.gm-layers-close { background: none; border: none; cursor: pointer; font-size: 0.9rem; color: #8a5a3a; border-radius: 4px; padding: 2px 6px; }
+.gm-layers-close:hover { background: rgba(122,40,40,0.12); }
+.gm-layer-row { display: grid; grid-template-columns: 30px 1fr 86px; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 6px; }
+.gm-layer-row:hover { background: rgba(196,155,53,0.12); }
+.gm-layer-vis { background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 3px; border-radius: 6px; }
+.gm-layer-vis:hover { background: rgba(196,155,53,0.2); }
+.gm-layer-vis.is-off { filter: grayscale(1); opacity: 0.55; }
+.gm-layer-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #4a3a26; }
+.gm-layer-op { width: 86px; accent-color: var(--accent-color, #C49B35); cursor: pointer; }
+.gm-layers-foot { font-size: 0.72rem; color: #8a7a5a; font-style: italic; padding: 6px 4px 2px; border-top: 1px solid rgba(122,40,40,0.15); margin-top: 4px; }
+
+body.theme-dark .gm-layers-panel { background: rgba(36,28,22,0.97); border-color: rgba(196,155,53,0.28); }
+body.theme-dark .gm-layers-head { color: #e8d6b0; }
+body.theme-dark .gm-layer-name { color: #d8cbb2; }
+body.theme-dark .gm-layer-row:hover { background: rgba(196,155,53,0.16); }
+body.theme-dark .gm-layers-close { color: #e0b878; }
+body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155,53,0.18); }
 .gm-token {
     position: absolute; width: 34px; height: 34px; transform: translate(-50%, -50%);
     border-radius: 50%; background: var(--tok, #2980b9); border: 2px solid #fff;

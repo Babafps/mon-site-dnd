@@ -946,13 +946,15 @@
             item.innerHTML = `
                 <span class="music-drag-handle" title="Glisser pour réordonner" draggable="true">⠿</span>
                 <span class="music-queue-num">${playing ? '♪' : (i + 1)}</span>
-                <span class="music-queue-item-name" title="${esc(track.title)}">${esc(track.title)}</span>
+                <span class="music-queue-item-name" title="Double-clic pour renommer">${esc(track.title)}</span>
                 <span class="music-queue-item-badge">${esc(track.badge)}</span>
+                <button class="music-queue-rename" title="Renommer">✎</button>
                 <button class="music-queue-del" title="Supprimer">✕</button>
             `;
 
             item.addEventListener('click', e => {
                 if (e.target.classList.contains('music-queue-del')) return;
+                if (e.target.classList.contains('music-queue-rename')) return;
                 if (e.target.classList.contains('music-drag-handle')) return;
                 playAtIndex(i);
             });
@@ -960,6 +962,16 @@
             item.querySelector('.music-queue-del').addEventListener('click', e => {
                 e.stopPropagation();
                 removeTrack(parseInt(item.dataset.index));
+            });
+
+            const nameEl = item.querySelector('.music-queue-item-name');
+            item.querySelector('.music-queue-rename').addEventListener('click', e => {
+                e.stopPropagation();
+                beginTrackRename(nameEl, parseInt(item.dataset.index));
+            });
+            nameEl.addEventListener('dblclick', e => {
+                e.stopPropagation();
+                beginTrackRename(nameEl, parseInt(item.dataset.index));
             });
 
             // Drag & drop : déclenché uniquement par la poignée, mais c'est bien
@@ -977,6 +989,38 @@
         // Scroll vers la piste en cours
         const cur = queueList.querySelector('.is-playing');
         if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    // Édition inline du nom d'une piste (le MJ organise sa playlist comme il veut).
+    function beginTrackRename(nameEl, idx) {
+        if (!nameEl || isNaN(idx) || !queue[idx] || nameEl.querySelector('input')) return;
+        const original = queue[idx].title || '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'music-queue-rename-input';
+        input.value = original;
+        nameEl.textContent = '';
+        nameEl.appendChild(input);
+        input.focus(); input.select();
+        let done = false;
+        const finish = (commit) => {
+            if (done) return; done = true;
+            if (commit) {
+                const v = input.value.trim();
+                if (v && queue[idx]) {
+                    queue[idx].title = v;
+                    if (idx === currentIndex && trackTitle) trackTitle.textContent = v;
+                }
+            }
+            renderQueue();
+        };
+        input.addEventListener('keydown', e => {
+            e.stopPropagation();
+            if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        });
+        input.addEventListener('blur', () => finish(true));
+        input.addEventListener('click', e => e.stopPropagation());
     }
 
     function removeTrack(idx) {

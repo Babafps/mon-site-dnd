@@ -467,6 +467,34 @@
 .music-queue-item:hover .music-queue-del { opacity: 1; }
 .music-queue-del:hover { color: #e74c3c; background: rgba(231,76,60,0.1); }
 
+.music-queue-rename {
+    background: none;
+    border: none;
+    color: #7a6050;
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 3px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+.music-queue-item:hover .music-queue-rename { opacity: 1; }
+.music-queue-rename:hover { color: var(--accent-color, #C49B35); background: rgba(196,155,53,0.12); }
+
+.music-queue-rename-input {
+    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.84rem;
+    color: #f5e6c8;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--accent-color, #C49B35);
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+}
+
 /* ---- BOUTON AJOUT DANS HEADER ---- */
 .music-btn-add-track {
     background: rgba(122,40,40,0.7);

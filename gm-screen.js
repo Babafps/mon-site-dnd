@@ -253,6 +253,7 @@
                 <button class="gm-tool is-active" data-tool="select" title="Sélection / déplacement (souris)">🖱️</button>
                 <button class="gm-tool" data-tool="bg" title="Caler le fond : glisser = déplacer la carte, molette = redimensionner (pour aligner sur la grille)">🗺️</button>
                 <button class="gm-tool" data-tool="draw" title="Dessin libre sur la carte (glisser pour tracer)">✏️</button>
+                <button class="gm-tool" data-tool="gmnote" title="Notes du MJ : dessin PRIVÉ (invisible pour les joueurs)">📝</button>
                 <button class="gm-tool" data-tool="ping" title="Signal : clique un point → un repère lumineux apparaît chez les joueurs (attire leur attention)">📍</button>
                 <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
                 <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
@@ -265,6 +266,12 @@
                 <button class="gm-tool" data-tool="cover" title="Pinceau : re-cacher une zone">⬛</button>
                 <button class="gm-tool" data-tool="revealall" title="Tout révéler">👁️</button>
                 <button class="gm-tool" data-tool="coverall" title="Tout recouvrir de brouillard">🌑</button>
+                <div class="gm-tool-sep"></div>
+                <button class="gm-tool" data-tool="layers" title="Panneau des calques (visibilité + opacité)">🗂️</button>
+                <button class="gm-tool" data-tool="zoomin" title="Zoomer (molette sur la carte = zoom sous le curseur)">🔍➕</button>
+                <button class="gm-tool" data-tool="zoomout" title="Dézoomer">🔍➖</button>
+                <button class="gm-tool" data-tool="recenter" title="Recentrer / réinitialiser le zoom">🎯</button>
+                <button class="gm-tool" data-tool="undodraw" title="Annuler le dernier trait de dessin">↩️</button>
             </div>
             <!-- ===== ZONE CENTRALE : grande carte (stage) ===== -->
             <div class="gm-main">
@@ -431,13 +438,9 @@
                                 <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
                             </div>
                             <div class="gm-row gm-map-layers" style="gap:10px; align-items:center; flex-wrap:wrap;">
-                                <span class="gm-map-ctl">Calques :</span>
-                                <label class="gm-map-ctl"><input type="checkbox" data-layer="tokens" checked> 🧝 Jetons</label>
-                                <label class="gm-map-ctl"><input type="checkbox" data-layer="draw" checked> ✏️ Dessin</label>
-                                <label class="gm-map-ctl"><input type="checkbox" data-layer="fog" checked> 🌫️ Brouillard</label>
-                                <label class="gm-map-ctl"><input type="checkbox" data-layer="grid" checked> ▦ Grille</label>
+                                <span class="gm-map-ctl">Calques → bouton 🗂️ de la barre d'outils</span>
                                 <span class="gm-spacer"></span>
-                                <label class="gm-map-ctl">✏️ <input type="color" id="gm-draw-color" value="#e23b3b" title="Couleur du dessin libre"></label>
+                                <label class="gm-map-ctl">✏️ <input type="color" id="gm-draw-color" value="#e23b3b" title="Couleur du dessin libre / des notes MJ"></label>
                                 <button id="gm-draw-clear" class="gm-btn" title="Effacer tous les dessins">🧽 Dessins</button>
                             </div>
                             <div class="gm-readonly-note" style="margin-top:-2px;">ⓘ Molette = zoom (taille du pinceau en mode brouillard) · glisser le fond = déplacer · clic jeton = éditer.</div>
@@ -588,10 +591,15 @@
             ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
                 const tool = btn.dataset.tool;
                 if (tool === 'grid') { const cb = ov.querySelector('#gm-map-showgrid'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
-                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg' || tool === 'draw' || tool === 'ping') { setMapTool(tool); return; }
+                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg' || tool === 'draw' || tool === 'gmnote' || tool === 'ping') { setMapTool(tool); return; }
+                if (tool === 'layers') { toggleLayersPanel(); return; }
                 if (tool === 'fog') { toggleFog(); return; }
                 if (tool === 'revealall') { fogRevealAll(); return; }
                 if (tool === 'coverall') { fogCoverAll(); return; }
+                if (tool === 'zoomin') { zoomAtCenter(1.2); return; }
+                if (tool === 'zoomout') { zoomAtCenter(1 / 1.2); return; }
+                if (tool === 'recenter') { resetMapView(); return; }
+                if (tool === 'undodraw') { undoLastDrawing(); return; }
                 const ids = { addtoken: 'gm-map-addtoken', sync: 'gm-map-sync', lock: 'gm-map-lock', clear: 'gm-map-clear' };
                 const el = ids[tool] && ov.querySelector('#' + ids[tool]);
                 if (el) el.click();
@@ -1244,11 +1252,15 @@
     }
 
     // Vue locale de la carte (zoom / déplacement / calques visibles) — non synchronisée, propre au MJ.
-    let mapView = { zoom: 1, panX: 0, panY: 0, layers: { tokens: true, draw: true, fog: true, grid: true } };
+    let mapView = { zoom: 1, panX: 0, panY: 0,
+        layers: { tokens: true, draw: true, gmnotes: true, fog: true, grid: true },
+        layerOp: { tokens: 1, draw: 1, gmnotes: 1, fog: 1, grid: 1 } };
     let mapTool = 'select';      // 'select' | 'bg' | 'reveal' | 'cover' | 'draw'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
     let drawColor = '#e23b3b';   // couleur du dessin libre
+    let drawWidth = 3;           // épaisseur du dessin libre (molette en mode ✏️)
     let drawStroke = null;       // tracé en cours
+    let drawIsNote = false;      // le tracé en cours appartient au calque privé « Notes MJ »
     function tokenHtml(t) {
         const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
@@ -1317,19 +1329,12 @@
     function fogRevealAll() { const fog = fogState(); fog.on = true; fog.reveals = [{ x: 0.5, y: 0.5, r: 3 }]; save(); renderMap(); broadcastMap(true); }
     function fogCoverAll() { const fog = fogState(); fog.on = true; fog.reveals = []; save(); renderMap(); broadcastMap(true); }
 
-    // ----- Dessin libre (couche partagée avec les joueurs) -----
+    // ----- Dessin libre (couche partagée) + Notes MJ (couche privée) -----
     function drawData() { const m = state.map || {}; if (!Array.isArray(m.drawings)) m.drawings = []; return m.drawings; }
-    function renderDraw() {
-        const view = byId('gm-map-view'); if (!view) return;
-        const canvas = view.querySelector('.gm-layer-draw'); if (!canvas) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
-        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
-        if (canvas.width !== w) canvas.width = w;
-        if (canvas.height !== h) canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, w, h);
+    function gmNotesData() { const m = state.map || {}; if (!Array.isArray(m.gmNotes)) m.gmNotes = []; return m.gmNotes; }
+    function paintStrokes(ctx, w, h, strokes) {
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ((state.map && state.map.drawings) || []).forEach(s => {
+        (strokes || []).forEach(s => {
             if (!s.pts || !s.pts.length) return;
             ctx.strokeStyle = s.color || '#e23b3b'; ctx.lineWidth = s.width || 3;
             ctx.beginPath();
@@ -1338,6 +1343,19 @@
             ctx.stroke();
         });
     }
+    function renderStrokeLayer(cls, strokes) {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector(cls); if (!canvas) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        paintStrokes(ctx, w, h, strokes);
+    }
+    function renderDraw() { renderStrokeLayer('.gm-layer-draw', (state.map && state.map.drawings) || []); }
+    function renderGmNotes() { renderStrokeLayer('.gm-layer-gmnotes', (state.map && state.map.gmNotes) || []); }
     function clearDrawings() { if (state.map) state.map.drawings = []; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🧽 Dessins effacés', '#2c3e50'); }
     function showGmMapPing(x, y) {
         const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
@@ -1350,8 +1368,9 @@
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        const L = mapView.layers || {};
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens"${L.tokens === false ? ' style="display:none"' : ''}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${L.draw === false ? ' style="display:none"' : ''}></canvas><canvas class="gm-layer gm-layer-fog"${L.fog === false ? ' style="display:none"' : ''}></canvas></div>`;
+        const L = mapView.layers || {}, OP = mapView.layerOp || {};
+        const layStyle = (k) => { let s = ''; if (L[k] === false) s += 'display:none;'; const o = OP[k]; if (o != null && o !== 1) s += 'opacity:' + o + ';'; return s ? ` style="${s}"` : ''; };
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas></div>`;
         const content = view.querySelector('.gm-map-content');
         content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
@@ -1359,10 +1378,12 @@
         content.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
         content.classList.toggle('show-grid', m.showGrid !== false && L.grid !== false);
         content.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
+        content.style.setProperty('--gm-grid-op', OP.grid == null ? 1 : OP.grid);
         applyMapTransform();
         renderDraw();
+        renderGmNotes();
         if (L.fog !== false) renderFog();
-        view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'bg');
+        view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'gmnote' || mapTool === 'bg');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
@@ -1439,15 +1460,17 @@
         sel.innerHTML = '<option value="">— Image préparée —</option>' + imgs.map(n => `<option value="${n.id}">🖼️ ${esc(n.name)}</option>`).join('');
         if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
     }
+    // Copie de la carte à diffuser aux joueurs : on retire le calque privé « Notes MJ ».
+    function mapForShare() { const m = state.map || {}; const c = {}; for (const k in m) if (k !== 'gmNotes') c[k] = m[k]; return c; }
     function broadcastMap(persist) {
-        if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens });
-        if (persist && state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: state.map, tokens: state.tokens }); } catch (e) {} }
+        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens });
+        if (persist && state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: state.tokens }); } catch (e) {} }
     }
     function throttleBroadcastMap() {
         const now = Date.now();
         if (now - mapThrottle < 70) return;
         mapThrottle = now;
-        if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens });
+        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens });
     }
     function addTokensFromCombat() {
         const add = (name, type, ref, owner) => { if (!state.tokens.find(t => t.ref === ref)) state.tokens.push({ id: uid(), ref, name, type, owner: owner || null, x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8 }); };
@@ -1464,9 +1487,9 @@
         if (tok.owner && p.fromUid && tok.owner !== p.fromUid) return; // un joueur ne bouge que SON jeton
         tok.x = Math.max(0, Math.min(1, p.x)); tok.y = Math.max(0, Math.min(1, p.y));
         renderMap();
-        if (live.presChannel) gmBroadcast('map', { map: state.map, tokens: state.tokens }); // relaye aux autres
+        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens }); // relaye aux autres (sans les notes MJ)
         clearTimeout(tokenMovePersistTimer);
-        tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: state.map, tokens: state.tokens }); } catch (e) {} } }, 400);
+        tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: state.tokens }); } catch (e) {} } }, 400);
     }
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
@@ -1485,10 +1508,17 @@
             }
             if (mapTool === 'draw') {   // dessin libre : nouveau tracé
                 const r = contentRect();
-                drawStroke = { color: drawColor, width: 3, pts: [{ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }] };
+                drawStroke = { color: drawColor, width: drawWidth, pts: [{ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }] };
                 drawData().push(drawStroke);
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 renderDraw(); e.preventDefault(); return;
+            }
+            if (mapTool === 'gmnote') {   // notes MJ : tracé PRIVÉ (jamais diffusé aux joueurs)
+                const r = contentRect();
+                drawStroke = { color: drawColor, width: drawWidth, pts: [{ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }] };
+                drawIsNote = true; gmNotesData().push(drawStroke);
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderGmNotes(); e.preventDefault(); return;
             }
             if (mapTool === 'ping') {   // signal : repère lumineux chez les joueurs (au même endroit sur la carte)
                 const r = contentRect();
@@ -1515,7 +1545,7 @@
             if (drawStroke) {
                 const r = contentRect();
                 drawStroke.pts.push({ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) });
-                renderDraw(); return;
+                drawIsNote ? renderGmNotes() : renderDraw(); return;
             }
             if (bgDrag) {
                 state.map.bgX = bgStart.x + (e.clientX - startX); state.map.bgY = bgStart.y + (e.clientY - startY);
@@ -1536,7 +1566,7 @@
             }
         });
         const up = (e) => {
-            if (drawStroke) { drawStroke = null; save(); broadcastMap(true); return; }
+            if (drawStroke) { drawStroke = null; drawIsNote = false; save(); broadcastMap(true); return; }
             if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
             if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
             if (cur) {
@@ -1562,11 +1592,110 @@
                 if (window.showAppToast) window.showAppToast('🖌️ Pinceau : ' + Math.round(fogBrush * 100) + '%', '#2c3e50');
                 return;
             }
-            mapView.zoom = Math.max(0.4, Math.min(4, mapView.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+            if (mapTool === 'draw') {   // molette = épaisseur du trait
+                drawWidth = Math.max(1, Math.min(24, drawWidth + (e.deltaY < 0 ? 1 : -1)));
+                if (window.showAppToast) window.showAppToast('✏️ Épaisseur : ' + drawWidth + ' px', '#2c3e50');
+                return;
+            }
+            // Zoom molette centré SUR LE CURSEUR : le point de la carte sous la souris reste fixe.
+            const content = view.querySelector('.gm-map-content');
+            const crect = content && content.getBoundingClientRect();
+            const oldZoom = mapView.zoom;
+            const newZoom = Math.max(0.4, Math.min(4, oldZoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+            if (crect && crect.width && newZoom !== oldZoom) {
+                const k = newZoom / oldZoom;
+                mapView.panX += (e.clientX - crect.left) * (1 - k);
+                mapView.panY += (e.clientY - crect.top) * (1 - k);
+            }
+            mapView.zoom = newZoom;
             applyMapTransform();
         }, { passive: false });
     }
-    function resetMapView() { mapView = { zoom: 1, panX: 0, panY: 0 }; applyMapTransform(); }
+    function resetMapView() { mapView.zoom = 1; mapView.panX = 0; mapView.panY = 0; applyMapTransform(); }
+    // Zoom ± centré sur le milieu de la carte (boutons 🔍 de la barre d'outils).
+    function zoomAtCenter(factor) {
+        const view = byId('gm-map-view'); if (!view) return;
+        const content = view.querySelector('.gm-map-content');
+        const crect = content && content.getBoundingClientRect();
+        const oldZoom = mapView.zoom;
+        const newZoom = Math.max(0.4, Math.min(4, oldZoom * factor));
+        if (crect && crect.width && newZoom !== oldZoom) {
+            const k = newZoom / oldZoom;
+            mapView.panX += (crect.width / 2) * (1 - k);
+            mapView.panY += (crect.height / 2) * (1 - k);
+        }
+        mapView.zoom = newZoom;
+        applyMapTransform();
+    }
+    // Annule le dernier trait (Notes MJ si l'outil 📝 est actif, sinon Dessin libre).
+    function undoLastDrawing() {
+        const note = (mapTool === 'gmnote');
+        const d = note ? gmNotesData() : drawData();
+        if (!d.length) { if (window.showAppToast) window.showAppToast('Aucun trait à annuler', '#7a6050'); return; }
+        d.pop(); save(); note ? renderGmNotes() : renderDraw(); if (!note) broadcastMap(true);
+    }
+
+    // ---------- Panneau des calques (visibilité + opacité ; « Notes MJ » privé) ----------
+    const LAYER_DEFS = [
+        { key: 'tokens', label: '🧝 Jetons' },
+        { key: 'draw', label: '✏️ Dessin' },
+        { key: 'gmnotes', label: '📝 Notes MJ' },
+        { key: 'fog', label: '🌫️ Brouillard' },
+        { key: 'grid', label: '▦ Grille' },
+    ];
+    function layerIsVisible(k) { return mapView.layers[k] !== false; }
+    function applyLayerOpacity(k) {
+        const view = byId('gm-map-view'); if (!view) return;
+        const o = (mapView.layerOp && mapView.layerOp[k] != null) ? mapView.layerOp[k] : 1;
+        if (k === 'grid') { const c = view.querySelector('.gm-map-content'); if (c) c.style.setProperty('--gm-grid-op', o); return; }
+        const el = view.querySelector('.gm-layer-' + k); if (el) el.style.opacity = (o === 1 ? '' : o);
+    }
+    function ensureLayersPanel() {
+        let panel = byId('gm-layers-panel'); if (panel) return panel;
+        const host = byId('gm-map-card') || document.querySelector('.gm-main'); if (!host) return null;
+        if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+        panel = document.createElement('div');
+        panel.id = 'gm-layers-panel'; panel.className = 'gm-layers-panel hidden';
+        panel.innerHTML = `<div class="gm-layers-head"><span>🗂️ Calques</span><button class="gm-layers-close" title="Fermer">✕</button></div>`
+            + LAYER_DEFS.map(d => `<div class="gm-layer-row">
+                    <button class="gm-layer-vis" data-layer="${d.key}" title="Afficher / masquer">👁️</button>
+                    <span class="gm-layer-name">${d.label}</span>
+                    <input type="range" class="gm-layer-op" data-layer-op="${d.key}" min="0" max="100" step="5" value="100" title="Opacité">
+                </div>`).join('')
+            + `<div class="gm-layers-foot">Le calque « Notes MJ » n'est jamais montré aux joueurs.</div>`;
+        host.appendChild(panel);
+        panel.querySelector('.gm-layers-close').addEventListener('click', () => panel.classList.add('hidden'));
+        panel.querySelectorAll('.gm-layer-vis').forEach(btn => btn.addEventListener('click', () => {
+            const k = btn.dataset.layer;
+            mapView.layers[k] = (mapView.layers[k] === false);   // bascule visible / masqué
+            renderMap(); syncLayersPanel();
+        }));
+        panel.querySelectorAll('.gm-layer-op').forEach(sl => sl.addEventListener('input', () => {
+            const k = sl.dataset.layerOp;
+            if (!mapView.layerOp) mapView.layerOp = {};
+            mapView.layerOp[k] = Math.max(0, Math.min(1, (Number(sl.value) || 0) / 100));
+            applyLayerOpacity(k);
+        }));
+        return panel;
+    }
+    function syncLayersPanel() {
+        const panel = byId('gm-layers-panel'); if (!panel) return;
+        panel.querySelectorAll('.gm-layer-vis').forEach(btn => {
+            const on = layerIsVisible(btn.dataset.layer);
+            btn.textContent = on ? '👁️' : '🚫'; btn.classList.toggle('is-off', !on);
+        });
+        panel.querySelectorAll('.gm-layer-op').forEach(sl => {
+            const k = sl.dataset.layerOp;
+            const o = (mapView.layerOp && mapView.layerOp[k] != null) ? mapView.layerOp[k] : 1;
+            sl.value = Math.round(o * 100);
+        });
+    }
+    function toggleLayersPanel() {
+        const panel = ensureLayersPanel(); if (!panel) return;
+        const show = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden', !show);
+        if (show) syncLayersPanel();
+    }
 
     // ---------- Préparation (arbre cloud gm_tree) ----------
     function treeKindIcon(k) { return ({ folder: '📁', text: '📝', link: '🔗', image: '🖼️', map: '🗺️', monster: '👹' })[k] || '📄'; }
@@ -1949,7 +2078,6 @@
         // Repli des réglages de la carte (carte plein cadre quand replié)
         byId('gm-map-collapse').addEventListener('click', () => { byId('gm-map-card').classList.toggle('gm-map-collapsed'); renderMap(); });
         // Calques (visibilité côté MJ) + dessin libre
-        document.querySelectorAll('[data-layer]').forEach(cb => cb.addEventListener('change', () => { mapView.layers[cb.dataset.layer] = cb.checked; renderMap(); }));
         byId('gm-draw-color').addEventListener('input', (e) => { drawColor = e.target.value; });
         byId('gm-draw-clear').addEventListener('click', () => { if (confirm('Effacer tous les dessins de cette carte ?')) clearDrawings(); });
 
