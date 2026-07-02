@@ -248,30 +248,17 @@
         </div>
 
         <div class="gm-workspace">
-            <!-- ===== BARRE D'OUTILS VERTICALE (type Roll20) ===== -->
+            <!-- ===== BARRE D'OUTILS VERTICALE (groupes + sous-menus, type Roll20) ===== -->
             <div class="gm-leftbar">
-                <button class="gm-tool is-active" data-tool="select" title="Sélection / déplacement (souris)">🖱️</button>
-                <button class="gm-tool" data-tool="bg" title="Caler le fond : glisser = déplacer la carte, molette = redimensionner (pour aligner sur la grille)">🗺️</button>
-                <button class="gm-tool" data-tool="draw" title="Dessin libre sur la carte (glisser pour tracer)">✏️</button>
-                <button class="gm-tool" data-tool="gmnote" title="Notes du MJ : dessin PRIVÉ (invisible pour les joueurs)">📝</button>
-                <button class="gm-tool" data-tool="ping" title="Signal : clique un point → un repère lumineux apparaît chez les joueurs (attire leur attention)">📍</button>
-                <button class="gm-tool" data-tool="addtoken" title="Ajouter un jeton sur la carte">➕</button>
-                <button class="gm-tool" data-tool="sync" title="Placer les combattants (joueurs + monstres)">⟳</button>
-                <button class="gm-tool" data-tool="grid" title="Afficher / masquer la grille">▦</button>
-                <button class="gm-tool" data-tool="lock" title="Verrouiller / libérer les jetons">🔒</button>
-                <button class="gm-tool" data-tool="clear" title="Vider les jetons">🗑️</button>
+                <button class="gm-tool is-active" data-tgroup="select" title="Sélection : déplacer les jetons et la carte">🖱️</button>
+                <button class="gm-tool" data-tgroup="ping" title="Signal : clique la carte → repère lumineux chez les joueurs">📍</button>
                 <div class="gm-tool-sep"></div>
-                <button class="gm-tool" data-tool="fog" title="Brouillard de guerre : activer / retirer">🌫️</button>
-                <button class="gm-tool" data-tool="reveal" title="Pinceau : révéler une zone aux joueurs">🔦</button>
-                <button class="gm-tool" data-tool="cover" title="Pinceau : re-cacher une zone">⬛</button>
-                <button class="gm-tool" data-tool="revealall" title="Tout révéler">👁️</button>
-                <button class="gm-tool" data-tool="coverall" title="Tout recouvrir de brouillard">🌑</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="draw" title="Dessin &amp; notes MJ">✏️</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="fog" title="Brouillard de guerre">🌫️</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="tokens" title="Jetons">🧝</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="view" title="Carte &amp; zoom">🗺️</button>
                 <div class="gm-tool-sep"></div>
-                <button class="gm-tool" data-tool="layers" title="Panneau des calques (visibilité + opacité)">🗂️</button>
-                <button class="gm-tool" data-tool="zoomin" title="Zoomer (molette sur la carte = zoom sous le curseur)">🔍➕</button>
-                <button class="gm-tool" data-tool="zoomout" title="Dézoomer">🔍➖</button>
-                <button class="gm-tool" data-tool="recenter" title="Recentrer / réinitialiser le zoom">🎯</button>
-                <button class="gm-tool" data-tool="undodraw" title="Annuler le dernier trait de dessin">↩️</button>
+                <button class="gm-tool" data-tgroup="layers" title="Calques (visibilité &amp; opacité)">🗂️</button>
             </div>
             <!-- ===== ZONE CENTRALE : grande carte (stage) ===== -->
             <div class="gm-main">
@@ -404,19 +391,15 @@
 
                 <div id="gm-map-card" class="gm-card gm-map-collapsed">
                     <div class="gm-card-head"><span class="gm-card-icon">🗺️</span> Carte tactique
+                        <span id="gm-map-title" class="gm-map-title"></span>
                         <span class="gm-spacer"></span>
-                        <button id="gm-map-sync" class="gm-btn" title="Placer les combattants (joueurs + monstres) sur la carte">⟳ Jetons</button>
-                        <button id="gm-map-collapse" class="gm-btn" title="Afficher / masquer les réglages de la carte">⚙️ Réglages</button>
+                        <button id="gm-map-pages-toggle" class="gm-btn" title="Afficher / masquer la barre des cartes (pages type Roll20)">📑 Cartes</button>
+                        <button id="gm-map-collapse" class="gm-btn" title="Afficher / masquer les réglages du fond et de la grille">⚙️ Réglages</button>
                     </div>
                     <div class="gm-card-body">
+                        <div id="gm-map-pages-bar" class="gm-map-pages-bar"></div>
                         <div class="gm-map-controls">
-                            <div class="gm-row gm-map-pages-row" style="align-items:center;">
-                                <label class="gm-map-ctl">🗺️ Page</label>
-                                <select id="gm-map-pages" class="gm-select" style="flex:1;" title="Carte affichée"></select>
-                                <button id="gm-map-page-add" class="gm-btn" title="Nouvelle carte">➕</button>
-                                <button id="gm-map-page-rename" class="gm-btn" title="Renommer la carte">✏️</button>
-                                <button id="gm-map-page-del" class="gm-btn gm-btn-danger" title="Supprimer la carte">🗑️</button>
-                            </div>
+                            <div class="gm-set-h">🖼️ Fond de la carte</div>
                             <div class="gm-row">
                                 <input id="gm-map-url" class="gm-input" placeholder="URL d'une image de fond / map…">
                                 <label class="gm-btn" title="Importer une image de carte">🖼️<input type="file" id="gm-map-file" accept="image/*" style="display:none;"></label>
@@ -428,22 +411,12 @@
                                 <button id="gm-map-bank-load" class="gm-btn" title="Charger la carte prévisualisée">Charger</button>
                             </div>
                             <img id="gm-map-bank-preview" class="gm-map-preview" alt="Aperçu" style="display:none;">
+                            <div class="gm-set-h">▦ Grille</div>
                             <div class="gm-row" style="gap:14px; align-items:center;">
-                                <label class="gm-map-ctl">Grille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
+                                <label class="gm-map-ctl">Taille <input type="number" id="gm-map-grid" class="gm-input gm-num" value="48" min="10" style="width:64px;"></label>
                                 <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
-                                <button id="gm-map-lock" class="gm-btn" title="Verrouiller / déverrouiller le déplacement des jetons par les joueurs">🔓 Jetons libres</button>
-                                <button id="gm-map-snap" class="gm-btn" title="Aimanter les jetons sur la grille (snap)">🧲 Aimant</button>
-                                <button id="gm-map-addtoken" class="gm-btn">➕ Jeton</button>
-                                <button id="gm-map-resetview" class="gm-btn" title="Recentrer / réinitialiser le zoom">🎯 Recentrer</button>
-                                <button id="gm-map-clear" class="gm-btn gm-btn-danger">Vider jetons</button>
+                                <span class="gm-readonly-note" style="flex:1; text-align:right;">Jetons, dessin, brouillard, zoom : barre d'outils à gauche.</span>
                             </div>
-                            <div class="gm-row gm-map-layers" style="gap:10px; align-items:center; flex-wrap:wrap;">
-                                <span class="gm-map-ctl">Calques → bouton 🗂️ de la barre d'outils</span>
-                                <span class="gm-spacer"></span>
-                                <label class="gm-map-ctl">✏️ <input type="color" id="gm-draw-color" value="#e23b3b" title="Couleur du dessin libre / des notes MJ"></label>
-                                <button id="gm-draw-clear" class="gm-btn" title="Effacer tous les dessins">🧽 Dessins</button>
-                            </div>
-                            <div class="gm-readonly-note" style="margin-top:-2px;">ⓘ Molette = zoom (taille du pinceau en mode brouillard) · glisser le fond = déplacer · clic jeton = éditer.</div>
                         </div>
                         <div id="gm-map-view" class="gm-map-view show-grid"></div>
                     </div>
@@ -479,15 +452,19 @@
             <!-- ===== SIDEBAR DROITE RÉTRACTABLE ===== -->
             <aside class="gm-sidebar">
                 <div class="gm-side-tabs">
-                    <button class="gm-side-tab active" data-side="table">📋 Table</button>
-                    <button class="gm-side-tab" data-side="chat">🎲 Dés</button>
-                    <button class="gm-side-tab" data-side="prep">📁 Prépa</button>
-                    <button class="gm-side-tab" data-side="journal">📖 Journal</button>
-                    <button class="gm-side-tab" data-side="compendium">🔎 Compendium</button>
+                    <button class="gm-side-tab active" data-side="table"><span class="tb-ic">📋</span><span class="tb-lbl">Table</span></button>
+                    <button class="gm-side-tab" data-side="chat"><span class="tb-ic">🎲</span><span class="tb-lbl">Dés</span></button>
+                    <button class="gm-side-tab" data-side="audio"><span class="tb-ic">🎵</span><span class="tb-lbl">Audio</span></button>
+                    <button class="gm-side-tab" data-side="prep"><span class="tb-ic">📁</span><span class="tb-lbl">Prépa</span></button>
+                    <button class="gm-side-tab" data-side="journal"><span class="tb-ic">📖</span><span class="tb-lbl">Journal</span></button>
+                    <button class="gm-side-tab" data-side="compendium"><span class="tb-ic">🔎</span><span class="tb-lbl">Règles</span></button>
                 </div>
 
-                <!-- Panneau Table : tableau de bord MJ (joueurs, combat, monstres, scènes…) -->
+                <!-- Panneau Table : tableau de bord MJ (joueurs, combat, monstres…) -->
                 <div class="gm-side-panel gm-side-table gm-side-show"></div>
+
+                <!-- Panneau Audio : lecteur de musique (ancré ici sur l'écran MJ) + soundboard + scènes -->
+                <div class="gm-side-panel gm-side-audio"></div>
 
                 <!-- Panneau Chat / Dés -->
                 <div class="gm-side-panel gm-side-chat">
@@ -574,38 +551,141 @@
         </div>`;
         document.body.appendChild(ov);
 
-        // ----- Disposition Roll20 : carte au centre, modules de gestion dans l'onglet « Table » -----
+        // ----- Disposition Roll20 : carte au centre, gestion dans « Table », audio dans « Audio » -----
         try {
             const main = ov.querySelector('.gm-main');
             const tablePanel = ov.querySelector('.gm-side-table');
-            const prepPanel = ov.querySelector('.gm-side-prep');
+            const audioPanel = ov.querySelector('.gm-side-audio');
             if (main && tablePanel) {
-                // La carte reste au centre ; l'audio (Soundboard + Scènes) va dans l'onglet Prépa ; le reste dans Table.
                 Array.from(main.children).forEach(card => {
                     if (card.id === 'gm-map-card') return;
-                    if (prepPanel && (card.id === 'gm-card-soundboard' || card.id === 'gm-card-scenes')) prepPanel.appendChild(card);
+                    if (audioPanel && (card.id === 'gm-card-soundboard' || card.id === 'gm-card-scenes')) audioPanel.appendChild(card);
                     else tablePanel.appendChild(card);
                 });
             }
-            // Barre d'outils gauche → proxys vers les contrôles carte existants.
-            ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', () => {
-                const tool = btn.dataset.tool;
-                if (tool === 'grid') { const cb = ov.querySelector('#gm-map-showgrid'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
-                if (tool === 'select' || tool === 'reveal' || tool === 'cover' || tool === 'bg' || tool === 'draw' || tool === 'gmnote' || tool === 'ping') { setMapTool(tool); return; }
-                if (tool === 'layers') { toggleLayersPanel(); return; }
-                if (tool === 'fog') { toggleFog(); return; }
-                if (tool === 'revealall') { fogRevealAll(); return; }
-                if (tool === 'coverall') { fogCoverAll(); return; }
-                if (tool === 'zoomin') { zoomAtCenter(1.2); return; }
-                if (tool === 'zoomout') { zoomAtCenter(1 / 1.2); return; }
-                if (tool === 'recenter') { resetMapView(); return; }
-                if (tool === 'undodraw') { undoLastDrawing(); return; }
-                const ids = { addtoken: 'gm-map-addtoken', sync: 'gm-map-sync', lock: 'gm-map-lock', clear: 'gm-map-clear' };
-                const el = ids[tool] && ov.querySelector('#' + ids[tool]);
-                if (el) el.click();
+            // Barre d'outils gauche : outils directs ou sous-menu (flyout) du groupe.
+            ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.tgroup;
+                if (key === 'select' || key === 'ping') { closeToolFlyout(); setMapTool(key); return; }
+                if (key === 'layers') { closeToolFlyout(); toggleLayersPanel(); return; }
+                openToolFlyout(key, btn);
             }));
         } catch (e) { console.warn('gm layout Roll20:', e); }
     }
+
+    // ---------- Barre d'outils : groupes & sous-menus (flyouts) ----------
+    // Chaque groupe liste ses éléments à l'OUVERTURE (état à jour : verrous, brouillard…).
+    function toolGroupItems(key) {
+        const m = state.map || {};
+        const fogOn = !!(m.fog && m.fog.on);
+        if (key === 'draw') return {
+            title: '✏️ Dessin & notes',
+            hint: 'Astuce : molette sur la carte = épaisseur du trait',
+            items: [
+                { icon: '✏️', label: 'Dessiner (visible des joueurs)', type: 'tool', tool: 'draw' },
+                { icon: '📝', label: 'Notes MJ (privé, jamais diffusé)', type: 'tool', tool: 'gmnote' },
+                { type: 'color' },
+                { type: 'width' },
+                { icon: '↩️', label: 'Annuler le dernier trait', type: 'action', run: undoLastDrawing, keep: true },
+                { icon: '🧽', label: 'Effacer tous les dessins', type: 'action', danger: true, run: () => { if (confirm('Effacer tous les dessins de cette carte ?')) clearDrawings(); } }
+            ]
+        };
+        if (key === 'fog') return {
+            title: '🌫️ Brouillard de guerre',
+            hint: 'Molette sur la carte = taille du pinceau',
+            items: [
+                { icon: '🌫️', label: fogOn ? 'Brouillard actif — cliquer pour retirer' : 'Activer le brouillard', type: 'toggle', on: fogOn, run: toggleFog },
+                { icon: '🔦', label: 'Révéler une zone (pinceau)', type: 'tool', tool: 'reveal' },
+                { icon: '⬛', label: 'Recacher une zone (pinceau)', type: 'tool', tool: 'cover' },
+                { icon: '👁️', label: 'Tout révéler', type: 'action', run: fogRevealAll, keep: true },
+                { icon: '🌑', label: 'Tout recouvrir', type: 'action', run: fogCoverAll, keep: true }
+            ]
+        };
+        if (key === 'tokens') return {
+            title: '🧝 Jetons',
+            hint: 'Clic sur un jeton = fiche (PV, CA, image, taille…)',
+            items: [
+                { icon: '➕', label: 'Ajouter un jeton…', type: 'action', run: addTokenPrompt },
+                { icon: '⟳', label: 'Placer les combattants', type: 'action', run: addTokensFromCombat },
+                { icon: m.tokensLocked ? '🔒' : '🔓', label: m.tokensLocked ? 'Verrouillés (MJ seul) — libérer' : 'Libres (joueurs) — verrouiller', type: 'toggle', on: !!m.tokensLocked, run: toggleTokensLock },
+                { icon: '🧲', label: 'Aimanter à la grille', type: 'toggle', on: !!m.snap, run: toggleSnap },
+                { icon: '🗑️', label: 'Vider tous les jetons', type: 'action', danger: true, run: clearTokensConfirm }
+            ]
+        };
+        if (key === 'view') return {
+            title: '🗺️ Carte & zoom',
+            hint: 'Molette sur la carte = zoom sous le curseur · glisser = déplacer',
+            items: [
+                { icon: '🖼️', label: 'Caler le fond (glisser / molette)', type: 'tool', tool: 'bg' },
+                { icon: '▦', label: 'Afficher la grille', type: 'toggle', on: m.showGrid !== false, run: toggleGrid },
+                { icon: '🔍➕', label: 'Zoomer', type: 'action', run: () => zoomAtCenter(1.2), keep: true },
+                { icon: '🔍➖', label: 'Dézoomer', type: 'action', run: () => zoomAtCenter(1 / 1.2), keep: true },
+                { icon: '🎯', label: 'Recentrer la vue', type: 'action', run: resetMapView, keep: true }
+            ]
+        };
+        return null;
+    }
+    // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], view: ['bg'], tokens: [], layers: [] };
+    let flyoutKey = null;
+    function ensureToolFlyout() {
+        let p = byId('gm-tool-flyout'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-tool-flyout'; p.className = 'gm-tool-flyout hidden no-print';
+        document.body.appendChild(p);
+        document.addEventListener('pointerdown', (e) => {
+            if (!p.classList.contains('hidden') && !e.target.closest('#gm-tool-flyout') && !e.target.closest('.gm-leftbar')) closeToolFlyout();
+        });
+        return p;
+    }
+    function closeToolFlyout() {
+        const p = byId('gm-tool-flyout'); if (p) p.classList.add('hidden');
+        flyoutKey = null;
+    }
+    function openToolFlyout(key, btn) {
+        if (flyoutKey === key) { closeToolFlyout(); return; }   // re-clic = fermer
+        const grp = toolGroupItems(key); if (!grp) return;
+        const p = ensureToolFlyout();
+        flyoutKey = key;
+        p.innerHTML = `<div class="gm-fly-title">${grp.title}</div>` + grp.items.map((it, i) => {
+            if (it.type === 'color') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur du trait</span><input type="color" id="gm-draw-color" value="${drawColor}" title="Couleur du dessin / des notes MJ"></div>`;
+            if (it.type === 'width') return `<div class="gm-fly-row"><span class="gm-fly-ic">━</span><span class="gm-fly-lbl">Épaisseur</span><input type="range" id="gm-draw-width" min="1" max="24" step="1" value="${drawWidth}"><b class="gm-fly-wval">${drawWidth}</b></div>`;
+            const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
+            return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
+        }).join('') + (grp.hint ? `<div class="gm-fly-hint">${grp.hint}</div>` : '');
+        p.classList.remove('hidden');
+        // Position : à droite du bouton, sans déborder de l'écran
+        const r = btn.getBoundingClientRect();
+        p.style.left = Math.min(r.right + 10, window.innerWidth - p.offsetWidth - 8) + 'px';
+        p.style.top = Math.max(8, Math.min(r.top - 4, window.innerHeight - p.offsetHeight - 8)) + 'px';
+        // Câblage des éléments
+        p.querySelectorAll('[data-fi]').forEach(el => el.addEventListener('click', () => {
+            const it = grp.items[parseInt(el.dataset.fi, 10)]; if (!it) return;
+            if (it.type === 'tool') { setMapTool(it.tool); closeToolFlyout(); return; }
+            it.run();
+            if (it.type === 'toggle') { const k = flyoutKey; flyoutKey = null; openToolFlyout(k, btn); }  // rafraîchit l'état affiché
+            else if (!it.keep) closeToolFlyout();
+        }));
+        const col = p.querySelector('#gm-draw-color'); if (col) col.addEventListener('input', (e) => { drawColor = e.target.value; });
+        const wid = p.querySelector('#gm-draw-width'); if (wid) wid.addEventListener('input', (e) => { drawWidth = Math.max(1, Math.min(24, parseInt(e.target.value, 10) || 3)); const v = p.querySelector('.gm-fly-wval'); if (v) v.textContent = drawWidth; });
+        syncToolbar();
+    }
+    // Surligne le groupe dont un outil est actif (appelé par setMapTool)
+    function syncToolbar() {
+        document.querySelectorAll('.gm-leftbar .gm-tool').forEach(b => {
+            const tools = GROUP_TOOLS[b.dataset.tgroup] || [];
+            b.classList.toggle('is-active', tools.indexOf(mapTool) !== -1);
+        });
+    }
+    // ----- Actions extraites (partagées entre la barre d'outils et les réglages) -----
+    function addTokenPrompt() { const n = prompt('Nom du jeton :'); if (!n || !n.trim()) return; state.tokens.push({ id: uid(), name: n.trim(), type: 'npc', x: 0.5, y: 0.5 }); save(); renderMap(); broadcastMap(true); }
+    function clearTokensConfirm() { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); }
+    function toggleTokensLock() { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); }
+    function toggleSnap() { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); }
+    function toggleGrid() { state.map.showGrid = (state.map.showGrid === false); save(); renderMap(); broadcastMap(true); }
+    function promptAddMap() { const n = prompt('Nom de la nouvelle carte :', 'Carte ' + ((state.maps ? state.maps.length : 0) + 1)); if (n && n.trim()) addMap(n.trim()); }
+    function promptRenameMap(id) { const p = (state.maps || []).find(x => x.id === id); if (!p) return; const n = prompt('Renommer la carte :', p.name); if (n && n.trim()) renameMap(p.id, n.trim()); }
+    function confirmDeleteMap(id) { const p = (state.maps || []).find(x => x.id === id); if (!p) return; if (confirm('Supprimer la carte « ' + p.name + ' » et ses jetons ?')) deleteMap(p.id); }
 
     // ---------- Rendus ----------
     function renderParty() {
@@ -1245,10 +1325,21 @@
         }
         save(); renderMap(); broadcastMap(true);
     }
+    // Barre des cartes façon Roll20 : vignettes cliquables, carte active surlignée,
+    // renommer (✏️ ou double-clic), supprimer (🗑️), « ➕ Nouvelle » en fin de liste.
     function renderMapPages() {
-        const sel = byId('gm-map-pages'); if (!sel) return;
+        const bar = byId('gm-map-pages-bar'); if (!bar) return;
         ensureMaps();
-        sel.innerHTML = (state.maps || []).map(p => `<option value="${p.id}"${p.id === state.activeMapId ? ' selected' : ''}>🗺️ ${esc(p.name)}</option>`).join('');
+        const title = byId('gm-map-title');
+        if (title) { const act = (state.maps || []).find(x => x.id === state.activeMapId); title.textContent = act ? '— ' + act.name : ''; }
+        bar.innerHTML = (state.maps || []).map(p => {
+            const bg = p.map && p.map.bg;
+            return `<div class="gm-page-thumb${p.id === state.activeMapId ? ' is-active' : ''}" data-page="${p.id}" title="${esc(p.name)} — clic : afficher · double-clic : renommer">
+                <div class="gm-page-img"${bg ? ` style="background-image:url(${esc(bg)})"` : ''}>${bg ? '' : '▦'}</div>
+                <div class="gm-page-name">${esc(p.name)}</div>
+                <div class="gm-page-acts"><button data-pact="rename" data-page="${p.id}" title="Renommer">✏️</button><button data-pact="del" data-page="${p.id}" title="Supprimer">🗑️</button></div>
+            </div>`;
+        }).join('') + `<button id="gm-map-page-add" class="gm-page-add" title="Créer une nouvelle carte vierge"><span class="gm-page-add-ic">➕</span><span>Nouvelle</span></button>`;
     }
 
     // Vue locale de la carte (zoom / déplacement / calques visibles) — non synchronisée, propre au MJ.
@@ -1322,7 +1413,7 @@
     function setMapTool(tool) {
         mapTool = (mapTool === tool && tool !== 'select') ? 'select' : tool;
         if (mapTool === 'reveal' || mapTool === 'cover') fogState().on = true;
-        document.querySelectorAll('.gm-leftbar .gm-tool[data-tool]').forEach(b => b.classList.toggle('is-active', b.dataset.tool === mapTool));
+        syncToolbar();
         save(); renderMap(); broadcastMap(true);
     }
     function toggleFog() { const fog = fogState(); fog.on = !fog.on; if (!fog.on) setMapTool('select'); else { save(); renderMap(); broadcastMap(true); } if (window.showAppToast) window.showAppToast(fog.on ? '🌫️ Brouillard activé — 🔦 révèle, ⬛ recache' : '☀️ Brouillard retiré', '#2c3e50'); }
@@ -1386,8 +1477,6 @@
         view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'gmnote' || mapTool === 'bg');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
-        const lb = byId('gm-map-lock'); if (lb) { const locked = !!m.tokensLocked; lb.textContent = locked ? '🔒 Jetons verrouillés' : '🔓 Jetons libres'; lb.classList.toggle('gm-btn-danger', locked); }
-        const sn = byId('gm-map-snap'); if (sn) { const on = !!m.snap; sn.classList.toggle('gm-btn-primary', on); sn.textContent = on ? '🧲 Aimant ON' : '🧲 Aimant'; }
         renderMapBank();
         renderMapPages();
     }
@@ -1907,7 +1996,7 @@
         document.querySelectorAll('.gm-side-tab').forEach(tab => tab.addEventListener('click', () => {
             document.querySelectorAll('.gm-side-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            const map = { table: '.gm-side-table', chat: '.gm-side-chat', prep: '.gm-side-prep', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
+            const map = { table: '.gm-side-table', chat: '.gm-side-chat', audio: '.gm-side-audio', prep: '.gm-side-prep', journal: '.gm-side-journal', compendium: '.gm-side-compendium' };
             document.querySelectorAll('.gm-side-panel').forEach(p => p.classList.remove('gm-side-show'));
             const target = document.querySelector(map[tab.dataset.side]); if (target) target.classList.add('gm-side-show');
             // Si on n'a pas la sidebar ouverte, l'ouvrir
@@ -2038,12 +2127,6 @@
         });
         byId('gm-map-grid').addEventListener('input', e => { state.map.gridSize = parseInt(e.target.value) || 48; save(); renderMap(); broadcastMap(true); });
         byId('gm-map-showgrid').addEventListener('change', e => { state.map.showGrid = e.target.checked; save(); renderMap(); broadcastMap(true); });
-        byId('gm-map-addtoken').addEventListener('click', () => { const n = prompt('Nom du jeton :'); if (!n || !n.trim()) return; state.tokens.push({ id: uid(), name: n.trim(), type: 'npc', x: 0.5, y: 0.5 }); save(); renderMap(); broadcastMap(true); });
-        byId('gm-map-clear').addEventListener('click', () => { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); });
-        byId('gm-map-sync').addEventListener('click', addTokensFromCombat);
-        byId('gm-map-lock').addEventListener('click', () => { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); });
-        byId('gm-map-snap').addEventListener('click', () => { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); });
-        byId('gm-map-resetview').addEventListener('click', resetMapView);
 
         // Montrer une image aux joueurs (URL ou import)
         byId('gm-showimg-send').addEventListener('click', () => {
@@ -2077,15 +2160,21 @@
         });
         // Repli des réglages de la carte (carte plein cadre quand replié)
         byId('gm-map-collapse').addEventListener('click', () => { byId('gm-map-card').classList.toggle('gm-map-collapsed'); renderMap(); });
-        // Calques (visibilité côté MJ) + dessin libre
-        byId('gm-draw-color').addEventListener('input', (e) => { drawColor = e.target.value; });
-        byId('gm-draw-clear').addEventListener('click', () => { if (confirm('Effacer tous les dessins de cette carte ?')) clearDrawings(); });
 
-        // Pages de carte (multi-cartes type Roll20)
-        byId('gm-map-pages').addEventListener('change', (e) => switchMap(e.target.value));
-        byId('gm-map-page-add').addEventListener('click', () => { const n = prompt('Nom de la nouvelle carte :', 'Carte ' + ((state.maps ? state.maps.length : 0) + 1)); if (n && n.trim()) addMap(n.trim()); });
-        byId('gm-map-page-rename').addEventListener('click', () => { const p = (state.maps || []).find(x => x.id === state.activeMapId); if (!p) return; const n = prompt('Renommer la carte :', p.name); if (n && n.trim()) renameMap(p.id, n.trim()); });
-        byId('gm-map-page-del').addEventListener('click', () => { const p = (state.maps || []).find(x => x.id === state.activeMapId); if (!p) return; if (confirm('Supprimer la carte « ' + p.name + ' » et ses jetons ?')) deleteMap(p.id); });
+        // Barre des cartes (pages type Roll20) : délégation sur la barre (re-rendue à chaque renderMap)
+        byId('gm-map-pages-toggle').addEventListener('click', () => { byId('gm-map-card').classList.toggle('gm-pages-collapsed'); renderMap(); });
+        const pagesBar = byId('gm-map-pages-bar');
+        pagesBar.addEventListener('click', (e) => {
+            const act = e.target.closest('[data-pact]');
+            if (act) { e.stopPropagation(); if (act.dataset.pact === 'rename') promptRenameMap(act.dataset.page); else confirmDeleteMap(act.dataset.page); return; }
+            if (e.target.closest('#gm-map-page-add')) { promptAddMap(); return; }
+            const th = e.target.closest('.gm-page-thumb');
+            if (th) switchMap(th.dataset.page);
+        });
+        pagesBar.addEventListener('dblclick', (e) => {
+            const th = e.target.closest('.gm-page-thumb');
+            if (th) promptRenameMap(th.dataset.page);
+        });
 
         // --- Préparation (arbre) ---
         setupTreeDnD();
@@ -2315,11 +2404,12 @@
         if (window.navTo) window.navTo('gm-screen'); else ov.classList.remove('hidden');
         // Le MJ contrôle TOUJOURS la musique sur son écran (jamais le mode « contrôlé par le MJ »)
         if (window.MusicPlayer && window.MusicPlayer.setRole) window.MusicPlayer.setRole('free');
-        // Ancre le lecteur de musique DANS le panneau Prépa (au lieu de flotter) tant qu'on est sur l'écran MJ.
+        // Ancre le lecteur de musique DANS l'onglet Audio de la sidebar (vrai module intégré, plus de flottant).
         try {
             const mp = document.getElementById('music-player-container');
-            const prep = ov.querySelector('.gm-side-prep');
-            if (mp && prep && mp.parentElement !== prep) { mp.classList.add('music-docked'); prep.appendChild(mp); }
+            const audioPanel = ov.querySelector('.gm-side-audio');
+            if (mp && audioPanel && mp.parentElement !== audioPanel) { mp.classList.add('music-docked'); audioPanel.insertBefore(mp, audioPanel.firstChild); }
+            if (window.MusicPlayer && window.MusicPlayer.show) window.MusicPlayer.show();   // s'assure qu'il est visible une fois ancré
         } catch (e) {}
         try { if (location.hash !== '#gm/' + activeCampaignId) location.hash = '#gm/' + activeCampaignId; } catch (e) {}
         ensureMaps();

@@ -41,6 +41,17 @@
             return raw && raw !== 'undefined' ? JSON.parse(raw) : null;
         } catch (e) { return null; }
     }
+    // Valeur brute (non-JSON) du stockage du personnage actif (clés dnd-sheet-*)
+    function rawStore(key) {
+        try {
+            const cid = localStorage.getItem('dnd-active-char'); if (!cid) return null;
+            const v = localStorage.getItem(cid + '_' + key);
+            return (v == null || v === 'undefined') ? null : v;
+        } catch (e) { return null; }
+    }
+    // Lecture robuste : DOM d'abord, sinon repli sur le stockage local du personnage
+    const val2 = id => { const v = val(id); return v || (rawStore('dnd-sheet-' + id) || ''); };
+    const chk2 = id => { const el = $(id); return el ? !!el.checked : rawStore('dnd-sheet-' + id) === 'true'; };
 
     // Fiche 2024 : correspondance champ PDF → compétence de l'app
     const SKILLS = { skill1: 'athletics', skill2: 'acrobatics', skill3: 'stealth', skill4: 'sleight',
@@ -55,11 +66,11 @@
         const C = {};   // cases à cocher {nom: bool}
 
         // --- Identité (page 1) ---
-        F.charactername = val('char-name');
-        F.class = val('char-class'); F.subclass = val('char-subclass');
-        F.level = val('char-level'); F.xp = val('char-xp');
-        F.background = val('char-background'); F.species = val('char-race');
-        F.size = val('char-size'); F.alignment = val('char-alignment');
+        F.charactername = val2('char-name');
+        F.class = val2('char-class'); F.subclass = val2('char-subclass');
+        F.level = val2('char-level'); F.xp = val2('char-xp');
+        F.background = val2('char-background'); F.species = val2('char-race');
+        F.size = val2('char-size'); F.alignment = val2('char-alignment');
 
         // --- Caracs + mods ---
         ['str', 'dex', 'con', 'int', 'wis', 'cha'].forEach(a => { F[a] = val('stat-' + a); F['mod' + a] = txt('mod-' + a); });
@@ -84,6 +95,10 @@
             C['sk' + f.slice(5)] = (parseInt(val('prof-' + SKILLS[f]), 10) || 0) > 0;
         });
 
+        // --- Bouclier & inspiration héroïque ---
+        C.shield = chk2('has-shield');
+        C.inspiration = chk2('heroic-inspiration');
+
         // --- Armes & attaques (grille 6×4 + liaison d'objets magiques) ---
         const attacks = jstore('dnd-attacks') || [];
         attacks.slice(0, 6).forEach((a, i) => {
@@ -91,31 +106,55 @@
             F['weapons' + r + '1'] = a.name || ''; F['weapons' + r + '2'] = a.bonus || '';
             F['weapons' + r + '3'] = a.dmg || '';  F['weapons' + r + '4'] = a.notes || '';
         });
-        if (attacks.length > 6) F.weapons = attacks.slice(6).map(a => [a.name, a.bonus, a.dmg].filter(Boolean).join(' · ')).join('\n');
         attacks.filter(a => a.reqAttune).slice(0, 3).forEach((a, i) => {
             F['attun' + (i + 1)] = a.name || ''; C['attunChk' + (i + 1)] = !!a.isAttuned;
         });
 
+        // --- Entraînements & maîtrises (bloc bas-gauche de la page 1) ---
+        // ARMURES : 4 cases (Légères / Intermédiaires / Lourdes / Boucliers)
+        C.armor1 = chk2('prof-armor-light'); C.armor2 = chk2('prof-armor-med');
+        C.armor3 = chk2('prof-armor-heavy'); C.armor4 = chk2('prof-armor-shield');
+        // ARMES : zone texte (le champ PDF « weapons » = maîtrises d'armes, PAS les attaques)
+        const wp = [];
+        if (chk2('prof-weapon-simple')) wp.push('Armes courantes');
+        if (chk2('prof-weapon-martial')) wp.push('Armes de guerre');
+        if (chk2('prof-weapon-other')) wp.push('Autres armes');
+        F.weapons = wp.join(', ');
+        // OUTILS : zone texte libre
+        F.tools = val2('prof-tools');
+
         // --- Capacités de classe / traits d'espèce / dons (NOMS seulement) ---
         const traits = jstore('dnd-traits') || [];
         const limited = (jstore('dnd-abilities') || []).map(c => c.name).filter(Boolean);
-        const classFeats = traits.filter(t => t.type === 'class').map(t => t.name).concat(limited);
+        const seen = {};
+        const classFeats = traits.filter(t => t.type === 'class').map(t => t.name).concat(limited)
+            .filter(n => { const k = String(n || '').trim().toLowerCase(); if (!k || seen[k]) return false; seen[k] = 1; return true; });
         const half = Math.ceil(classFeats.length / 2);
         F.features1 = classFeats.slice(0, half).join('\n');
         F.features2 = classFeats.slice(half).join('\n');
         F.traits = traits.filter(t => t.type === 'race').map(t => t.name).join('\n');
         F.feats = traits.filter(t => t.type === 'feat').map(t => t.name).join('\n');
 
-        // --- Équipement, langues, apparence, monnaie (page 2) ---
-        F.equipment = (jstore('dnd-inventory') || []).map(it => it.name + (Number(it.qty) > 1 ? ' ×' + it.qty : '')).join('\n');
-        F.languages = val('char-languages');
-        F.appearance = val('char-appearance');
+        // --- Équipement, langues, apparence, histoire & personnalité, monnaie (page 2) ---
+        let equipment = (jstore('dnd-inventory') || []).map(it => it.name + (Number(it.qty) > 1 ? ' ×' + it.qty : '')).join('\n');
+        // Les attaques au-delà des 6 lignes de la grille rejoignent l'équipement (page 2)
+        if (attacks.length > 6) {
+            equipment += (equipment ? '\n' : '') + '— Attaques (suite) —\n'
+                + attacks.slice(6).map(a => [a.name, a.bonus, a.dmg].filter(Boolean).join(' · ')).join('\n');
+        }
+        F.equipment = equipment;
+        F.languages = val2('char-languages');
+        F.appearance = val2('char-appearance');
+        F.backstory = val2('char-backstory');
         F.cp = val('coin-pc'); F.sp = val('coin-pa'); F.ep = val('coin-pe'); F.gp = val('coin-po'); F.pp = val('coin-pp');
 
-        // --- Magie ---
-        F['spell-ability'] = ({ int: 'Intelligence', wis: 'Sagesse', cha: 'Charisme' })[val('spellcasting-ability')] || '';
-        F['spell-mod'] = signed(val('spell-modifier')); F['spell-dc'] = val('spell-save-dc');
-        F['spell-bonus'] = signed(val('spell-attack-bonus'));
+        // --- Magie --- (val2 : certains champs sont recalculés/vidés dans le DOM → repli stockage)
+        F['spell-ability'] = ({ int: 'Intelligence', wis: 'Sagesse', cha: 'Charisme' })[val2('spellcasting-ability')] || '';
+        const spellMod = val2('spell-modifier');
+        F['spell-mod'] = spellMod === '' ? '' : signed(spellMod);
+        F['spell-dc'] = val2('spell-save-dc');
+        const spellAtk = val2('spell-attack-bonus');
+        F['spell-bonus'] = spellAtk === '' ? '' : signed(spellAtk);
         const slots = jstore('dnd-spell-slots') || [];
         slots.forEach((s, lvl) => {
             if (!s || !(s.total > 0)) return;
@@ -133,14 +172,15 @@
             .slice(0, 30);
         rows.forEach((sp, i) => {
             const n = i + 1;
+            const comp = sp.comp || null;   // cases V/S/M structurées (sinon repli sur l'ancien texte libre)
             F['spell' + n + 'l'] = String(parseInt(sp.level, 10) || 0);
             F['spell' + n] = sp.name || '';
             F['spell' + n + 't'] = sp.time || '';
             F['spell' + n + 'r'] = sp.range || '';
-            F['spell' + n + 'c'] = [sp.duration, sp.notes].filter(Boolean).join(' · ');
+            F['spell' + n + 'c'] = [sp.duration, sp.notes, (comp && comp.m && comp.mat) ? ('M : ' + comp.mat) : null].filter(Boolean).join(' · ');
             C['c' + n] = /concentration/i.test(sp.duration || '');
             C['r' + n] = /rituel|ritual/i.test((sp.name || '') + ' ' + (sp.time || '') + ' ' + (sp.notes || ''));
-            C['m' + n] = /\bM\b/i.test(sp.res || '');
+            C['m' + n] = comp ? !!comp.m : /\bM\b/i.test(sp.res || '');
         });
 
         return { F, C };
@@ -155,8 +195,8 @@
         const pad = 3 * scale;
         let size = Math.min(r.h * 0.66, 15 * scale);
         ctx.save(); ctx.fillStyle = INK; ctx.textBaseline = 'middle';
-        // rétrécit la police jusqu'à tenir dans la case
-        for (; size > 5; size -= 0.5 * scale) {
+        // rétrécit la police jusqu'à tenir dans la case (plancher bas : tout doit rentrer)
+        for (; size > 3.6 * scale; size -= 0.4 * scale) {
             ctx.font = size + 'px ' + FONT;
             if (ctx.measureText(value).width <= r.w - pad * 2) break;
         }
@@ -168,11 +208,12 @@
     function drawMultiline(ctx, value, r, scale) {
         const pad = 4 * scale;
         const lines = String(value).split('\n');
+        const MIN = 4.2 * scale;           // plancher bas : on réduit l'écriture plutôt que de couper
         let size = 10 * scale, lineH;
         ctx.save(); ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        // essaie 10pt puis réduit si trop de lignes après césure
-        for (; size >= 6.5 * scale; size -= 1 * scale) {
-            ctx.font = size + 'px ' + FONT; lineH = size * 1.28;
+        // essaie 10pt puis réduit (police ET interligne) jusqu'à ce que TOUT tienne dans la case
+        for (; size >= MIN; size -= 0.6 * scale) {
+            ctx.font = size + 'px ' + FONT; lineH = size * (size <= 6.5 * scale ? 1.18 : 1.28);
             const wrapped = [];
             lines.forEach(line => {
                 let cur = '';
@@ -183,7 +224,7 @@
                 });
                 wrapped.push(cur);
             });
-            if (wrapped.length * lineH <= r.h - pad || size <= 6.5 * scale) {
+            if (wrapped.length * lineH <= r.h - pad || size <= MIN) {
                 const maxLines = Math.max(1, Math.floor((r.h - pad) / lineH));
                 wrapped.slice(0, maxLines).forEach((l, i) => {
                     const last = (i === maxLines - 1 && wrapped.length > maxLines);
@@ -259,7 +300,7 @@
 
     async function print() {
         if (!window.FICHE_LAYOUT) throw new Error('fiche-layout.js non chargé');
-        if (window.showAppToast) window.showAppToast('🖨️ Préparation de la fiche officielle…', '#2c3e50');
+        if (window.showAppToast) window.showAppToast('💾 Préparation de la fiche officielle… (choisis « Enregistrer en PDF » comme imprimante)', '#2c3e50');
         const imgs = await loadImages();               // mis en cache après le 1er appel
         const data = collect();
         const p1 = renderFilledPage(imgs[0], window.FICHE_LAYOUT.p1, data);

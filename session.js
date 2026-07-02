@@ -274,6 +274,8 @@
         left = clampN(left, m, window.innerWidth - pw - m);
         let top = clampN(r.top, m, window.innerHeight - ph - m);
         fabPanel.style.left = left + 'px'; fabPanel.style.top = top + 'px';
+        // Le panneau « pousse » depuis le côté du bouton (animation naturelle)
+        fabPanel.style.transformOrigin = (left > r.left ? 'left' : 'right') + ' 24px';
     }
 
     function renderFabPanel() {
@@ -330,6 +332,7 @@
         if (!p) return;
         combatState = { active: !!p.active, round: p.round || 1, turnIndex: p.turnIndex || 0, order: p.order || [] };
         ensureFab();
+        fabEl.classList.toggle('fab-combat', combatState.active);   // halo + pastille rouge en combat
         updateFabVisibility();
         if (fabPanel && !fabPanel.classList.contains('hidden')) { renderFabPanel(); placePanel(); }
         document.body.classList.toggle('session-combat-active', combatState.active);
@@ -369,7 +372,7 @@
 
     function teardownCombatUI() {
         combatState = { active: false, round: 1, turnIndex: 0, order: [] };
-        if (fabEl) fabEl.style.display = 'none';
+        if (fabEl) { fabEl.style.display = 'none'; fabEl.classList.remove('fab-combat'); }
         if (fabPanel) fabPanel.classList.add('hidden');
         document.body.classList.remove('session-combat-active');
     }
@@ -419,8 +422,28 @@
         else if (min === dr) { edge = 'right'; offset = clampN(r.top, margin, window.innerHeight - h - margin); }
         else if (min === dt) { edge = 'top'; offset = clampN(r.left, margin, window.innerWidth - w - margin); }
         else { edge = 'bottom'; offset = clampN(r.left, margin, window.innerWidth - w - margin); }
-        applyFabEdge(edge, offset);
+        animateFabTo(edge, offset);
         try { localStorage.setItem('dnd-fab-pos', JSON.stringify({ edge, offset })); } catch (e) {}
+    }
+
+    // Glisse en douceur jusqu'au bord (au lieu de s'y téléporter), puis ré-ancre.
+    function animateFabTo(edge, offset) {
+        const margin = 10, w = fabEl.offsetWidth || 58, h = fabEl.offsetHeight || 58;
+        let tx, ty;
+        if (edge === 'left') { tx = margin; ty = clampN(offset, margin, window.innerHeight - h - margin); }
+        else if (edge === 'right') { tx = window.innerWidth - w - margin; ty = clampN(offset, margin, window.innerHeight - h - margin); }
+        else if (edge === 'top') { ty = margin; tx = clampN(offset, margin, window.innerWidth - w - margin); }
+        else { ty = window.innerHeight - h - margin; tx = clampN(offset, margin, window.innerWidth - w - margin); }
+        // Le drag positionne déjà en left/top : on anime left/top, puis on ré-ancre proprement.
+        fabEl.style.transition = 'left 0.3s cubic-bezier(0.22,0.9,0.35,1.15), top 0.3s cubic-bezier(0.22,0.9,0.35,1.15)';
+        fabEl.style.left = tx + 'px'; fabEl.style.top = ty + 'px'; fabEl.style.right = 'auto'; fabEl.style.bottom = 'auto';
+        clearTimeout(fabEl._snapTimer);
+        fabEl._snapTimer = setTimeout(() => {
+            fabEl.style.transition = 'none';
+            applyFabEdge(edge, offset);
+            requestAnimationFrame(() => { fabEl.style.transition = ''; });
+            if (fabPanel && !fabPanel.classList.contains('hidden')) placePanel();
+        }, 320);
     }
 
     function applyFabEdge(edge, offset) {
@@ -629,13 +652,21 @@
         .session-notif-btn.accept:hover { filter:brightness(1.08); }
         .session-notif-btn.refuse { background:#f0e6d8; color:#c0392b; }
         .session-notif-btn.refuse:hover { background:#e7d8c4; }
-        /* --- FAB de combat (joueur) --- */
-        #session-fab { position:fixed; z-index:9990; width:58px; height:58px; border-radius:50%; border:none; cursor:grab; display:none; align-items:center; justify-content:center; font-size:1.6rem; color:#fff; background:linear-gradient(160deg, var(--primary-hover,#9c3333), var(--primary-color,#7A2828)); box-shadow:0 6px 20px rgba(0,0,0,0.4); touch-action:none; animation:session-fab-in 0.3s ease-out; }
-        #session-fab:active { cursor:grabbing; }
-        #session-fab:hover { filter:brightness(1.08); }
-        @keyframes session-fab-in { from{ transform:scale(0.4); opacity:0; } to{ transform:none; opacity:1; } }
-        #session-fab-panel { position:fixed; z-index:9991; width:250px; max-height:62vh; overflow-y:auto; background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:14px; box-shadow:0 10px 32px rgba(0,0,0,0.4); padding:12px; font-family:'Lora',serif; color:#3a2e1f; }
-        #session-fab-panel.hidden { display:none; }
+        /* --- FAB de combat (joueur) : apparition « ressort », survol doux, halo en combat --- */
+        #session-fab { position:fixed; z-index:9990; width:58px; height:58px; border-radius:50%; border:none; cursor:grab; display:none; align-items:center; justify-content:center; font-size:1.6rem; color:#fff; background:linear-gradient(160deg, var(--primary-hover,#9c3333), var(--primary-color,#7A2828)); box-shadow:0 6px 20px rgba(0,0,0,0.4); touch-action:none; animation:session-fab-in 0.45s cubic-bezier(0.34,1.56,0.64,1); transition:transform 0.22s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s ease, filter 0.18s ease; will-change:transform; }
+        #session-fab:active { cursor:grabbing; transform:scale(0.92); }
+        #session-fab:hover { filter:brightness(1.08); transform:scale(1.08); box-shadow:0 10px 26px rgba(0,0,0,0.45); }
+        @keyframes session-fab-in { 0%{ transform:scale(0.3); opacity:0; } 60%{ transform:scale(1.12); opacity:1; } 100%{ transform:none; opacity:1; } }
+        .session-fab-ic { transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        #session-fab:hover .session-fab-ic { transform:rotate(-12deg) scale(1.08); }
+        /* Halo pulsé + pastille quand un combat est en cours */
+        #session-fab.fab-combat::before { content:''; position:absolute; inset:-5px; border-radius:50%; border:2px solid var(--accent-color,#C49B35); animation:session-fab-pulse 1.7s ease-out infinite; pointer-events:none; }
+        #session-fab.fab-combat::after { content:''; position:absolute; top:2px; right:2px; width:13px; height:13px; border-radius:50%; background:#e74c3c; border:2px solid #fffdf7; box-shadow:0 0 6px rgba(231,76,60,0.9); }
+        @keyframes session-fab-pulse { 0%{ transform:scale(0.9); opacity:0.9; } 75%{ transform:scale(1.28); opacity:0; } 100%{ opacity:0; } }
+        /* Panneau : glisse + fondu depuis le bouton (au lieu d'apparaître sèchement) */
+        #session-fab-panel { position:fixed; z-index:9991; width:250px; max-height:62vh; overflow-y:auto; background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:14px; box-shadow:0 10px 32px rgba(0,0,0,0.4); padding:12px; font-family:'Lora',serif; color:#3a2e1f; opacity:1; transform:none; transition:opacity 0.22s ease, transform 0.26s cubic-bezier(0.34,1.4,0.64,1), visibility 0s; }
+        #session-fab-panel.hidden { display:block; visibility:hidden; opacity:0; transform:translateY(10px) scale(0.94); pointer-events:none; transition:opacity 0.16s ease, transform 0.16s ease, visibility 0s 0.16s; }
+        @media (prefers-reduced-motion: reduce) { #session-fab, #session-fab-panel, .session-fab-ic { animation:none !important; transition:none !important; } #session-fab.fab-combat::before { animation:none !important; } }
         .sfp-head { font-family:'Cinzel',serif; font-weight:bold; color:var(--primary-color,#7A2828); margin-bottom:8px; }
         .sfp-head b { font-size:1.1rem; }
         .sfp-btn { width:100%; border:none; border-radius:9px; padding:10px; font-family:'Cinzel',serif; font-weight:bold; cursor:pointer; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; margin-bottom:10px; }

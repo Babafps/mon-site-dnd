@@ -1485,10 +1485,58 @@ body.theme-dark .search-group-head { color: var(--accent-color); border-color: r
 .btn-pin { background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 4px 9px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: var(--transition-smooth); }
 .btn-pin.pinned { background: linear-gradient(135deg, var(--primary-hover), var(--primary-color)); color: var(--accent-color); }
 .btn-pin:hover { transform: scale(1.06); }
-.opening .scroll-paper { animation: unroll 0.8s cubic-bezier(0.2,0.8,0.2,1) forwards; }
-.closing .scroll-paper { animation: rollUp 0.6s cubic-bezier(0.5,0,0.8,0.2) forwards; }
-@keyframes unroll { 0% { transform: scaleY(0); padding-top: 0; padding-bottom: 0; max-height: 0; } 100% { transform: scaleY(1); max-height: 75vh; } }
-@keyframes rollUp { 0% { transform: scaleY(1); max-height: 75vh; } 100% { transform: scaleY(0); padding-top: 0; padding-bottom: 0; max-height: 0; opacity: 0; } }
+/* ---- Grimoire : ouverture réaliste en LIVRE 3D ----
+   Couverture de cuir qui pivote (charnière à gauche) et révèle son dos
+   parchemin, puis deux pages de garde qui tournent, puis le contenu. */
+.grimoire-book { position: relative; width: 96%; perspective: 1800px; }
+.grimoire-book .scroll-paper { width: 100%; }
+.grimoire-cover, .grimoire-flip {
+    position: absolute; inset: 0; transform-origin: left center;
+    border-radius: 4px 14px 14px 4px; pointer-events: none;
+}
+.grimoire-cover { z-index: 7; transform-style: preserve-3d; }
+.gc-front, .gc-back { position: absolute; inset: 0; backface-visibility: hidden; border-radius: inherit; }
+.gc-front {
+    background:
+        radial-gradient(circle at 30% 18%, rgba(255,255,255,0.07), transparent 55%),
+        radial-gradient(circle at 78% 88%, rgba(0,0,0,0.4), transparent 55%),
+        linear-gradient(135deg, #5e1c1c 0%, #491414 45%, #380d0d 100%);
+    border: 3px solid #2c0a0a;
+    box-shadow: inset 0 0 0 3px rgba(212,175,55,0.55), inset 0 0 60px rgba(0,0,0,0.55), 10px 12px 34px rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center;
+}
+.gc-border { border: 2px double rgba(212,175,55,0.75); border-radius: 8px; padding: 28px 24px; text-align: center; color: #d4af37; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 68%; max-width: 420px; }
+.gc-title { font-family: 'Cinzel', serif; font-size: 2.3rem; margin: 0; color: #e9c85a; text-shadow: 0 2px 8px rgba(0,0,0,0.8); letter-spacing: 0.08em; }
+.gc-sub { font-family: 'Cinzel', serif; font-style: italic; font-size: 1.05rem; color: #d4af37; }
+.gc-orn { letter-spacing: 0.45em; font-size: 0.78rem; opacity: 0.85; }
+.gc-clasp { width: 46px; height: 14px; border-radius: 7px; background: linear-gradient(180deg, #e9c85a, #a87e1c); box-shadow: 0 2px 5px rgba(0,0,0,0.6); margin-top: 4px; }
+.gc-back { transform: rotateY(180deg); background: linear-gradient(175deg, #f6ecd4, #e6d6b0); border: 1px solid #d4c496; box-shadow: inset 0 0 40px rgba(120,90,40,0.28); }
+.grimoire-flip { z-index: 6; background: linear-gradient(175deg, #fbf4e2 0%, #efe1bf 100%); border: 1px solid #dcc9a0; box-shadow: 3px 4px 16px rgba(0,0,0,0.25); }
+/* État au repos (sécurité hors animation) : livre déjà ouvert */
+#grimoire-modal .grimoire-cover { transform: rotateY(-178deg); }
+#grimoire-modal .grimoire-flip { transform: rotateY(-178deg); opacity: 0; }
+/* Ouverture : le livre se pose, la couverture s'ouvre, les pages tournent, le contenu apparaît */
+.opening .grimoire-book { animation: gbook-in 0.45s cubic-bezier(0.2,0.8,0.3,1.1) both; }
+.opening .grimoire-cover { animation: gcover-open 1.05s cubic-bezier(0.55,0.06,0.28,1) 0.18s both; }
+.opening .gf1 { animation: gpage-flip 0.72s cubic-bezier(0.5,0.05,0.3,1) 0.66s both; }
+.opening .gf2 { animation: gpage-flip 0.82s cubic-bezier(0.5,0.05,0.3,1) 0.92s both; }
+.opening .scroll-paper > * { animation: gcontent-in 0.5s ease-out 0.95s both; }
+/* Fermeture : les pages reviennent puis la couverture se referme */
+.closing .grimoire-cover { animation: gcover-close 0.55s cubic-bezier(0.6,0,0.4,1) 0.1s both; }
+.closing .gf1 { animation: gpage-unflip 0.38s ease-in both; }
+.closing .gf2 { animation: gpage-unflip 0.3s ease-in both; }
+.closing .scroll-paper > * { animation: gcontent-out 0.22s ease-in both; }
+@keyframes gbook-in { from { opacity: 0; transform: translateY(28px) scale(0.9) rotateX(16deg); } to { opacity: 1; transform: none; } }
+@keyframes gcover-open { 0% { transform: rotateY(0); } 100% { transform: rotateY(-178deg); } }
+@keyframes gcover-close { 0% { transform: rotateY(-178deg); } 100% { transform: rotateY(0); } }
+@keyframes gpage-flip { 0% { transform: rotateY(0); opacity: 1; } 92% { opacity: 1; } 100% { transform: rotateY(-178deg); opacity: 0; } }
+@keyframes gpage-unflip { 0% { transform: rotateY(-178deg); opacity: 0; } 8% { opacity: 1; } 100% { transform: rotateY(0); opacity: 1; } }
+@keyframes gcontent-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes gcontent-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .opening .grimoire-book, .opening .grimoire-cover, .opening .grimoire-flip, .opening .scroll-paper > *,
+    .closing .grimoire-cover, .closing .grimoire-flip, .closing .scroll-paper > * { animation: none !important; }
+}
 
 /* ============================================================
    JOURNAL (BOOK)
@@ -2610,3 +2658,15 @@ body.theme-dark #currency-inline-rules { background: rgba(255,255,255,0.05); bor
 /* Champs de paiement / divers translucides à fort alpha restants */
 body.theme-dark .currency-pay-form input,
 body.theme-dark .hp-quick-amount { background: rgba(255,255,255,0.06) !important; }
+/* ============================================================
+   COMPOSANTES DE SORT (V / S / M) — cases à cocher du formulaire
+   ============================================================ */
+.spell-comp-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 8px 0 4px; }
+.spell-comp-label { font-weight: bold; color: #555; font-size: 0.9rem; }
+.spell-comp-check { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-weight: bold; color: var(--primary-color); user-select: none; }
+.spell-comp-check small { font-weight: normal; color: #888; font-size: 0.72rem; }
+.spell-comp-check input { transform: scale(1.2); accent-color: var(--primary-color); cursor: pointer; }
+#new-spell-comp-mat { margin-top: 4px; }
+body.theme-dark .spell-comp-label { color: #b6a484; }
+body.theme-dark .spell-comp-check { color: var(--accent-color); }
+body.theme-dark .spell-comp-check small { color: #9a8a70; }

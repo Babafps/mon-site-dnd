@@ -100,8 +100,24 @@ body.theme-dark .gm-tool { background: #2a2118; color: #ece3d2; border-color: rg
 body.theme-dark .gm-tool:hover { background: rgba(196,155,53,0.22); border-color: var(--accent-color, #C49B35); }
 body.theme-dark .gm-tool.is-active { background: rgba(196,155,53,0.32); }
 body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
-/* Lecteur de musique ancré dans le panneau Prépa (au lieu de flotter) */
-#music-player-container.music-docked { position: static !important; inset: auto !important; left: auto !important; right: auto !important; bottom: auto !important; top: auto !important; width: 100% !important; max-width: 100% !important; transform: none !important; box-shadow: none !important; z-index: auto !important; margin: 0 !important; }
+/* ---- Lecteur de musique ANCRÉ dans l'onglet 🎵 Audio de la sidebar MJ ----
+   Le dock flottant devient un vrai module : carte à part entière, contrôles
+   sur 2 lignes (la sidebar fait ~400px), poignée/︾ inutiles masqués. */
+#music-player-container.music-docked { position: static !important; inset: auto !important; left: auto !important; right: auto !important; bottom: auto !important; top: auto !important; width: 100% !important; max-width: 100% !important; transform: none !important; box-shadow: none !important; z-index: auto !important; margin: 0 !important; flex-shrink: 0; }
+.music-docked .music-player-bar {
+    flex-wrap: wrap; height: auto; row-gap: 8px; padding: 12px;
+    border: 1px solid var(--accent-color, #C49B35); border-radius: 12px;
+    cursor: default; box-shadow: 0 3px 10px rgba(60,40,20,0.18);
+}
+.music-docked .music-drag-grip { display: none !important; }
+.music-docked #music-btn-hide { display: none !important; }
+.music-docked .music-show-tab, .music-docked #music-show-tab { display: none !important; }
+.music-docked .music-track-info { flex: 1 1 100%; order: 1; }
+.music-docked #music-track-title { max-width: none; }
+.music-docked .music-progress-area { flex: 1 1 100%; order: 2; }
+.music-docked .music-controls-center { order: 3; flex: 1; justify-content: flex-start; }
+.music-docked .music-controls-right { order: 4; }
+.music-docked .music-panel { margin: 0 0 8px; }
 
 /* Zone centrale = la carte tactique en grand (la "stage") */
 .gm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -240,8 +256,11 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
     overflow: hidden;
 }
 #gm-screen.gm-sidebar-collapsed .gm-sidebar { flex-basis: 0; max-width: 0; opacity: 0; border-width: 0; padding: 0; }
-.gm-side-tabs { display: flex; gap: 0; padding: 10px 10px 0; flex-shrink: 0; }
-.gm-side-tab { flex: 1; background: transparent; border: 1px solid transparent; border-bottom: 2px solid transparent; color: #8a7a5e; border-radius: 8px 8px 0 0; padding: 9px 6px; cursor: pointer; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem; white-space: nowrap; }
+.gm-side-tabs { display: flex; gap: 2px; padding: 10px 8px 0; flex-shrink: 0; }
+/* Onglets empilés (icône + libellé) : 6 onglets tiennent sans se chevaucher */
+.gm-side-tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; background: transparent; border: 1px solid transparent; border-bottom: 2px solid transparent; color: #8a7a5e; border-radius: 8px 8px 0 0; padding: 7px 2px 6px; cursor: pointer; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.66rem; white-space: nowrap; overflow: hidden; }
+.gm-side-tab .tb-ic { font-size: 1.05rem; line-height: 1; }
+.gm-side-tab .tb-lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .gm-side-tab:hover { color: var(--primary-color, #7A2828); }
 .gm-side-tab.active { color: var(--primary-color, #7A2828); background: var(--widget-bg, #fffdf7); border-color: rgba(196,155,53,0.4); border-bottom-color: var(--widget-bg, #fffdf7); }
 .gm-side-panel { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 12px; flex-direction: column; gap: 12px; scrollbar-width: thin; }
@@ -566,3 +585,99 @@ body.theme-dark .gm-combat-status.is-active { color: #2ecc71; background: rgba(3
 body.theme-dark .gm-map-ctl { color: #b6a484; }
 body.theme-dark .gm-tree-row:hover { background: rgba(196,155,53,0.1); }
 body.theme-dark .gm-tree-act, body.theme-dark .gm-tree-empty { color: #9a8a70; }
+
+/* =====================================================
+   LOT 18 — REFONTE UI MJ : outils groupés (flyouts),
+   barre des cartes type Roll20, anti-chevauchement.
+   ===================================================== */
+/* ---- Barre d'outils : indicateur de sous-menu ---- */
+.gm-tool { position: relative; }
+.gm-tool-flyable::after { content: '▸'; position: absolute; right: 2px; bottom: 1px; font-size: 0.55rem; color: #9a8a6e; }
+.gm-tool-flyable.is-active::after { color: var(--primary-color, #7A2828); }
+
+/* ---- Sous-menu (flyout) d'un groupe d'outils ---- */
+.gm-tool-flyout {
+    position: fixed; z-index: 7600; min-width: 248px; max-width: 300px;
+    background: var(--widget-bg, #fffdf7);
+    border: 1px solid var(--accent-color, #C49B35); border-radius: 12px;
+    box-shadow: 0 12px 34px rgba(0,0,0,0.35); padding: 7px;
+    display: flex; flex-direction: column; gap: 2px;
+    font-family: 'Lora', serif;
+    animation: gm-fly-in 0.14s ease-out;
+}
+@keyframes gm-fly-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.gm-tool-flyout.hidden { display: none; }
+.gm-fly-title { font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem; color: var(--primary-color, #7A2828); padding: 4px 8px 7px; border-bottom: 1px solid rgba(196,155,53,0.4); margin-bottom: 3px; }
+.gm-fly-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 8px; padding: 8px 9px; cursor: pointer; font-family: 'Lora', serif; font-size: 0.84rem; color: #3a2e1f; }
+.gm-fly-item:hover { background: rgba(196,155,53,0.16); border-color: rgba(196,155,53,0.45); }
+.gm-fly-item.is-on { background: rgba(196,155,53,0.24); border-color: var(--accent-color, #C49B35); }
+.gm-fly-item.is-danger { color: #a03024; }
+.gm-fly-item.is-danger:hover { background: rgba(231,76,60,0.12); border-color: rgba(192,57,43,0.45); }
+.gm-fly-ic { flex: 0 0 22px; text-align: center; font-size: 1rem; }
+.gm-fly-lbl { flex: 1; min-width: 0; }
+.gm-fly-state { flex: 0 0 auto; font-size: 0.7rem; color: var(--primary-color, #7A2828); }
+.gm-fly-row { display: flex; align-items: center; gap: 9px; padding: 6px 9px; font-size: 0.84rem; color: #3a2e1f; }
+.gm-fly-row input[type="color"] { width: 44px; height: 28px; padding: 0; border: 1px solid rgba(122,40,40,0.3); border-radius: 6px; background: none; cursor: pointer; }
+.gm-fly-row input[type="range"] { flex: 1; accent-color: var(--accent-color, #C49B35); cursor: pointer; min-width: 0; }
+.gm-fly-wval { flex: 0 0 22px; text-align: right; color: var(--primary-color, #7A2828); font-size: 0.8rem; }
+.gm-fly-hint { font-size: 0.7rem; font-style: italic; color: #9a8a6e; padding: 6px 8px 3px; border-top: 1px dashed rgba(122,40,40,0.18); margin-top: 3px; }
+
+/* ---- Barre des cartes (pages type Roll20) ---- */
+.gm-map-title { font-family: 'Cinzel', serif; font-style: italic; font-weight: normal; font-size: 0.82rem; color: #8a6320; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.gm-map-pages-bar {
+    display: flex; gap: 8px; align-items: stretch; flex-shrink: 0;
+    overflow-x: auto; overflow-y: hidden; padding: 4px 2px 6px;
+    scrollbar-width: thin;
+}
+#gm-map-card.gm-pages-collapsed .gm-map-pages-bar { display: none; }
+.gm-page-thumb {
+    position: relative; flex: 0 0 96px; width: 96px; cursor: pointer;
+    border: 2px solid rgba(122,40,40,0.25); border-radius: 9px; overflow: hidden;
+    background: var(--widget-bg, #fffdf7);
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.gm-page-thumb:hover { transform: translateY(-2px); border-color: var(--accent-color, #C49B35); box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
+.gm-page-thumb.is-active { border-color: var(--accent-color, #C49B35); box-shadow: 0 0 0 2px rgba(196,155,53,0.4), 0 4px 12px rgba(0,0,0,0.15); }
+.gm-page-img {
+    height: 54px; background: #11100e center/cover no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    color: #6a5a3e; font-size: 1.3rem;
+}
+.gm-page-name { font-size: 0.68rem; font-weight: bold; color: #4a3a26; padding: 3px 5px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(180deg, rgba(196,155,53,0.14), rgba(196,155,53,0.04)); }
+.gm-page-thumb.is-active .gm-page-name { color: var(--primary-color, #7A2828); }
+.gm-page-acts { position: absolute; top: 2px; right: 2px; display: none; gap: 2px; }
+.gm-page-thumb:hover .gm-page-acts { display: flex; }
+.gm-page-acts button { border: none; background: rgba(20,14,8,0.72); color: #f0e6d2; border-radius: 6px; padding: 2px 5px; font-size: 0.68rem; cursor: pointer; }
+.gm-page-acts button:hover { background: rgba(122,40,40,0.9); }
+.gm-page-add {
+    flex: 0 0 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    border: 2px dashed rgba(122,40,40,0.35); border-radius: 9px; background: none; cursor: pointer;
+    color: #8a7a5e; font-family: 'Cinzel', serif; font-size: 0.66rem; font-weight: bold;
+    transition: all 0.15s;
+}
+.gm-page-add:hover { border-color: var(--accent-color, #C49B35); color: var(--primary-color, #7A2828); background: rgba(196,155,53,0.1); }
+.gm-page-add-ic { font-size: 1.05rem; }
+
+/* ---- Réglages de la carte : sous-titres de sections ---- */
+.gm-set-h { font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.78rem; color: #8a6320; border-bottom: 1px dashed rgba(196,155,53,0.5); padding-bottom: 3px; margin-top: 2px; }
+
+/* ---- Durcissement anti-chevauchement (texte/formes) ---- */
+.gm-row > * { min-width: 0; }
+.gm-card-head { min-width: 0; }
+.gm-live-name, .gm-pad-name, .gm-scene-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-live-top .gm-party-sub { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-campaign-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.gm-header .gm-title { white-space: nowrap; flex-shrink: 0; }
+
+/* ---- Mode sombre des nouveaux composants ---- */
+body.theme-dark .gm-tool-flyout { background: linear-gradient(172deg, #241c16, #2c231b); border-color: rgba(196,155,53,0.4); }
+body.theme-dark .gm-fly-item, body.theme-dark .gm-fly-row { color: #d8cbb2; }
+body.theme-dark .gm-fly-item:hover { background: rgba(196,155,53,0.14); }
+body.theme-dark .gm-fly-item.is-on { background: rgba(196,155,53,0.22); }
+body.theme-dark .gm-fly-hint { color: #9a8a70; }
+body.theme-dark .gm-page-thumb { background: #241c16; border-color: rgba(196,155,53,0.25); }
+body.theme-dark .gm-page-name { color: #d8cbb2; background: linear-gradient(180deg, rgba(196,155,53,0.12), rgba(196,155,53,0.03)); }
+body.theme-dark .gm-page-thumb.is-active .gm-page-name { color: var(--accent-color, #C49B35); }
+body.theme-dark .gm-page-add { border-color: rgba(196,155,53,0.35); color: #b6a074; }
+body.theme-dark .gm-set-h { color: #cfa953; }
+body.theme-dark .music-docked .music-player-bar { border-color: rgba(196,155,53,0.45); }
