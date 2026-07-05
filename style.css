@@ -190,25 +190,28 @@ body.concentrating-mode #concentration-glow {
 }
 .btn-icon:active { transform: translateY(0); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
-/* Gros bouton central du widget Sorts : ouvre le grimoire */
+/* Bouton central du widget Sorts : ouvre le grimoire */
 .grimoire-cta {
     display: block;
     width: 100%;
-    padding: 22px 15px;
+    padding: 11px 15px;
+    margin-bottom: 12px;
     background: linear-gradient(160deg, var(--primary-hover), var(--primary-color));
     color: var(--accent-color);
     border: 1px solid rgba(196,155,53,0.35);
-    border-radius: 12px;
+    border-radius: 10px;
     font-family: 'Cinzel', serif;
     font-weight: bold;
-    font-size: 1.35rem;
-    letter-spacing: 0.04em;
+    font-size: 1.05rem;
+    letter-spacing: 0.03em;
     cursor: pointer;
     transition: var(--transition-smooth);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25), var(--inner-highlight);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.22), var(--inner-highlight);
 }
-.grimoire-cta:hover { filter: brightness(1.12); transform: translateY(-2px); box-shadow: 0 8px 22px rgba(122,40,40,0.4), var(--inner-highlight); }
-.grimoire-cta:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.grimoire-cta:hover { filter: brightness(1.12); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(122,40,40,0.38), var(--inner-highlight); }
+.grimoire-cta:active { transform: translateY(0); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+/* Quand aucun sort n'est épinglé, pas de marge fantôme sous le bouton */
+#spells-list:empty { display: none; }
 
 /* ============================================================
    HOME SCREEN
