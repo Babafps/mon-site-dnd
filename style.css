@@ -190,6 +190,26 @@ body.concentrating-mode #concentration-glow {
 }
 .btn-icon:active { transform: translateY(0); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
+/* Gros bouton central du widget Sorts : ouvre le grimoire */
+.grimoire-cta {
+    display: block;
+    width: 100%;
+    padding: 22px 15px;
+    background: linear-gradient(160deg, var(--primary-hover), var(--primary-color));
+    color: var(--accent-color);
+    border: 1px solid rgba(196,155,53,0.35);
+    border-radius: 12px;
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 1.35rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25), var(--inner-highlight);
+}
+.grimoire-cta:hover { filter: brightness(1.12); transform: translateY(-2px); box-shadow: 0 8px 22px rgba(122,40,40,0.4), var(--inner-highlight); }
+.grimoire-cta:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+
 /* ============================================================
    HOME SCREEN
    ============================================================ */
@@ -780,7 +800,9 @@ h1::before, h1::after {
 .skill-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
 .skill-row.saving-throw { font-weight: bold; border-bottom: 1px solid rgba(122,40,40,0.12); padding-bottom: 4px; margin-bottom: 2px; }
 .skill-row input[type="checkbox"] { cursor: pointer; transform: scale(1.1); accent-color: var(--primary-color); }
-.skill-mod { font-weight: bold; width: 25px; text-align: right; color: var(--primary-color); }
+.skill-mod { font-weight: bold; width: 25px; text-align: right; color: var(--primary-color); cursor: pointer; border-radius: 4px; }
+.skill-mod:hover { background: rgba(196,155,53,0.18); }
+.skill-mod.manual-bonus { color: var(--accent-color); }
 
 /* ============================================================
    TRAINING / COMBAT / HP
@@ -1678,6 +1700,12 @@ body.theme-dark .ability-config-row .ab-cfg-name { background: #2a2118; color: v
 .auth-message { border-radius: 9px; padding: 11px 15px; font-size: 0.875rem; margin-bottom: 14px; line-height: 1.45; }
 .auth-message--error { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
 .auth-message--success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+.auth-link { display: block; width: 100%; background: none; border: none; margin-top: 12px; padding: 4px; font-family: 'Lora', serif; font-size: 0.85rem; color: #7a6855; cursor: pointer; text-align: center; text-decoration: underline; text-underline-offset: 3px; }
+.auth-link:hover { color: var(--primary-color); }
+.auth-forgot-hint { font-size: 0.85rem; color: #7a6855; line-height: 1.45; margin: 0 0 14px; }
+body.theme-dark .auth-link { color: #b6a484; }
+body.theme-dark .auth-link:hover { color: var(--accent-color); }
+body.theme-dark .auth-forgot-hint { color: #c2b094; }
 .auth-spinner { width: 38px; height: 38px; border: 3px solid rgba(122,40,40,0.15); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.75s linear infinite; margin: 14px auto 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 #auth-user-display { font-size: 0.75rem; color: #999; text-align: center; padding: 2px 0 6px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

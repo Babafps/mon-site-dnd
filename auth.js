@@ -7,6 +7,10 @@ const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Lien « mot de passe oublié » : on lit le hash AVANT que supabase-js ne le consomme.
+const AUTH_RECOVERY   = location.hash.includes('type=recovery');
+const AUTH_LINK_ERROR = /error_code=otp_expired|error=access_denied/.test(location.hash);
+
 // Code de session lisible (sans caractères ambigus : pas de 0/O, 1/I/L)
 function genSessionCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -474,6 +478,9 @@ function translateAuthError(msg) {
     if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) return 'Email ou mot de passe incorrect.';
     if (msg.includes('already registered')) return 'Cet email est déjà utilisé.';
     if (msg.includes('Email not confirmed')) return 'Confirme ton email avant de te connecter.';
+    if (msg.includes('should be different')) return "Le nouveau mot de passe doit être différent de l'ancien.";
+    if (msg.includes('rate limit') || msg.includes('security purposes')) return 'Trop de demandes. Patiente une minute puis réessaie.';
+    if (msg.includes('session missing') || msg.includes('Auth session')) return 'Lien expiré. Redemande un lien de réinitialisation.';
     if (msg.includes('Password should') || msg.includes('password')) return 'Mot de passe trop court (6 caractères min).';
     if (msg.includes('Unable to validate')) return 'Session expirée, recharge la page.';
     return msg;
@@ -490,10 +497,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.navTo(id);
     }
 
+    // --- Flux « mot de passe oublié » ---
+    // Autonome (accès DOM directs) : appelé pendant le boot, avant l'initialisation
+    // des const du bas de ce callback (showMsg/msgEl seraient encore en TDZ).
+    function authBootMsg(text, type) {
+        const el = document.getElementById('auth-message');
+        if (el) { el.textContent = text; el.className = 'auth-message auth-message--' + type; el.classList.remove('hidden'); }
+    }
+    function showRecoveryUI() {
+        window.navTo('login-screen'); // direct : showScreen redirigerait vers la fiche si un perso est actif
+        const tabs = document.querySelector('.auth-tabs'); if (tabs) tabs.classList.add('hidden');
+        ['auth-form-login', 'auth-form-register', 'auth-form-forgot'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+        const fr = document.getElementById('auth-form-reset'); if (fr) fr.classList.remove('hidden');
+        const sub = document.querySelector('.auth-subtitle'); if (sub) sub.textContent = 'Choisis ton nouveau mot de passe';
+        authBootMsg('🔐 Lien vérifié — saisis ton nouveau mot de passe.', 'success');
+    }
+
     showScreen('loading-screen');
 
     const user = await SupaAuth.getUser();
-    if (user) {
+    if (AUTH_RECOVERY && user) {
+        // Le jeton du mail de réinitialisation vient de connecter l'utilisateur :
+        // on demande le nouveau mot de passe au lieu d'entrer dans l'app.
+        showRecoveryUI();
+    } else if (user) {
         const emailEl = document.getElementById('auth-user-display');
         if (emailEl) emailEl.textContent = user.email;
 
@@ -501,10 +528,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadUserDataIntoLocalStorage(user.id);
     } else {
         showScreen('login-screen');
+        if (AUTH_LINK_ERROR) authBootMsg('Lien invalide ou expiré. Clique sur « Mot de passe oublié ? » pour en recevoir un nouveau.', 'error');
+        else if (AUTH_RECOVERY) authBootMsg("Le lien n'a pas pu être vérifié. Redemande un lien via « Mot de passe oublié ? ».", 'error');
     }
 
     _supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') { showRecoveryUI(); return; }
         if (event === 'SIGNED_IN' && session?.user) {
+            if (AUTH_RECOVERY) return; // connexion issue du lien de récupération : on reste sur le formulaire de nouveau mot de passe
             SupaAuth.currentUser = session.user;
             const emailEl = document.getElementById('auth-user-display');
             if (emailEl) emailEl.textContent = session.user.email;
@@ -542,15 +573,79 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (msgEl) { msgEl.textContent = ''; msgEl.classList.add('hidden'); }
     }
 
+    const formForgot = document.getElementById('auth-form-forgot');
+
     if (tabLogin) tabLogin.addEventListener('click', () => {
         tabLogin.classList.add('active'); tabRegister.classList.remove('active');
         formLogin.classList.remove('hidden'); formRegister.classList.add('hidden');
+        if (formForgot) formForgot.classList.add('hidden');
         clearMsg();
     });
     if (tabRegister) tabRegister.addEventListener('click', () => {
         tabRegister.classList.add('active'); tabLogin.classList.remove('active');
         formRegister.classList.remove('hidden'); formLogin.classList.add('hidden');
+        if (formForgot) formForgot.classList.add('hidden');
         clearMsg();
+    });
+
+    // --- Mot de passe oublié : demande d'envoi du lien ---
+    const btnShowForgot = document.getElementById('btn-show-forgot');
+    if (btnShowForgot) btnShowForgot.addEventListener('click', () => {
+        formLogin.classList.add('hidden');
+        if (formForgot) formForgot.classList.remove('hidden');
+        const fe = document.getElementById('forgot-email');
+        const se = document.getElementById('signin-email');
+        if (fe && se && !fe.value) fe.value = se.value.trim();
+        clearMsg();
+        if (fe) fe.focus();
+    });
+    const btnBackLogin = document.getElementById('btn-back-login');
+    if (btnBackLogin) btnBackLogin.addEventListener('click', () => {
+        if (formForgot) formForgot.classList.add('hidden');
+        formLogin.classList.remove('hidden');
+        clearMsg();
+    });
+    const btnSendReset = document.getElementById('btn-send-reset');
+    if (btnSendReset) btnSendReset.addEventListener('click', async () => {
+        const email = (document.getElementById('forgot-email').value || '').trim();
+        if (!email) { showMsg('Indique ton adresse email.', 'error'); return; }
+        btnSendReset.disabled = true; btnSendReset.textContent = 'Envoi…';
+        try {
+            const { error } = await _supabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+            if (error) throw error;
+            showMsg('📩 Si un compte existe pour ' + email + ", un lien de réinitialisation vient d'être envoyé. Pense à vérifier les spams.", 'success');
+        } catch (e) {
+            showMsg(translateAuthError(e.message), 'error');
+        } finally {
+            btnSendReset.disabled = false; btnSendReset.textContent = 'Envoyer le lien';
+        }
+    });
+    const forgotEmailInput = document.getElementById('forgot-email');
+    if (forgotEmailInput) forgotEmailInput.addEventListener('keydown', e => { if (e.key === 'Enter') btnSendReset?.click(); });
+
+    // --- Nouveau mot de passe (arrivée par le lien du mail) ---
+    const btnDoReset = document.getElementById('btn-do-reset');
+    if (btnDoReset) btnDoReset.addEventListener('click', async () => {
+        const p1 = document.getElementById('reset-password').value;
+        const p2 = document.getElementById('reset-password2').value;
+        if (!p1) { showMsg('Choisis un nouveau mot de passe.', 'error'); return; }
+        if (p1.length < 6) { showMsg('Mot de passe trop court (6 caractères min).', 'error'); return; }
+        if (p1 !== p2) { showMsg('Les mots de passe ne correspondent pas.', 'error'); return; }
+        btnDoReset.disabled = true; btnDoReset.textContent = 'Enregistrement…';
+        try {
+            const { error } = await _supabase.auth.updateUser({ password: p1 });
+            if (error) throw error;
+            showMsg('✅ Mot de passe modifié ! Connexion en cours…', 'success');
+            history.replaceState(null, '', location.pathname + location.search); // purge le jeton du hash avant de recharger
+            setTimeout(() => location.reload(), 1200);
+        } catch (e) {
+            showMsg(translateAuthError(e.message), 'error');
+            btnDoReset.disabled = false; btnDoReset.textContent = 'Changer le mot de passe';
+        }
+    });
+    ['reset-password', 'reset-password2'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') btnDoReset?.click(); });
     });
 
     const btnSignIn = document.getElementById('btn-signin');

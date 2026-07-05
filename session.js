@@ -280,25 +280,29 @@
 
     function renderFabPanel() {
         if (!fabPanel) return;
+        const whisperBtn = `<button id="sfp-whisper-open" class="sfp-btn sfp-btn-whisper" type="button">🤫 Murmurer au MJ</button>`;
         // Hors combat : on n'affiche le message QUE dans le panneau ouvert (plus de badge flottant).
         if (!combatState.active) {
-            fabPanel.innerHTML = `<div class="sfp-head">⚔️ Combat</div><div class="sfp-empty">Pas de combat pour le moment.</div>`;
-            return;
+            fabPanel.innerHTML = `<div class="sfp-head">⚔️ Session</div>${whisperBtn}<div class="sfp-empty">Pas de combat pour le moment.</div>`;
+        } else {
+            const order = combatState.order || [];
+            const rows = order.map((c, i) => `<div class="sfp-row${i === combatState.turnIndex ? ' is-turn' : ''}">
+                <span class="sfp-init">${c.init == null ? '—' : c.init}</span>
+                <span class="sfp-type">${c.type === 'monster' ? '👹' : '🧝'}</span>
+                <span class="sfp-name">${escHtml(c.name)}</span>
+            </div>`).join('') || '<div class="sfp-empty">En attente de l\'ordre d\'initiative…</div>';
+            fabPanel.innerHTML = `
+                <div class="sfp-head">⚔️ Combat — Round <b>${combatState.round || 1}</b></div>
+                <button id="sfp-roll-init" class="sfp-btn">🎲 Lancer mon initiative</button>
+                <div class="sfp-manual">
+                    <input type="number" id="sfp-init-manual" class="sfp-manual-input" inputmode="numeric" placeholder="Score réel (dé IRL)">
+                    <button id="sfp-init-manual-btn" class="sfp-btn sfp-btn-alt" title="Saisir manuellement mon initiative">✍️</button>
+                </div>
+                <div class="sfp-order">${rows}</div>
+                ${whisperBtn}`;
         }
-        const order = combatState.order || [];
-        const rows = order.map((c, i) => `<div class="sfp-row${i === combatState.turnIndex ? ' is-turn' : ''}">
-            <span class="sfp-init">${c.init == null ? '—' : c.init}</span>
-            <span class="sfp-type">${c.type === 'monster' ? '👹' : '🧝'}</span>
-            <span class="sfp-name">${escHtml(c.name)}</span>
-        </div>`).join('') || '<div class="sfp-empty">En attente de l\'ordre d\'initiative…</div>';
-        fabPanel.innerHTML = `
-            <div class="sfp-head">⚔️ Combat — Round <b>${combatState.round || 1}</b></div>
-            <button id="sfp-roll-init" class="sfp-btn">🎲 Lancer mon initiative</button>
-            <div class="sfp-manual">
-                <input type="number" id="sfp-init-manual" class="sfp-manual-input" inputmode="numeric" placeholder="Score réel (dé IRL)">
-                <button id="sfp-init-manual-btn" class="sfp-btn sfp-btn-alt" title="Saisir manuellement mon initiative">✍️</button>
-            </div>
-            <div class="sfp-order">${rows}</div>`;
+        const wb = document.getElementById('sfp-whisper-open');
+        if (wb) wb.addEventListener('click', renderWhisperForm);
         const rb = document.getElementById('sfp-roll-init');
         if (rb) rb.addEventListener('click', rollInitiative);
         const mb = document.getElementById('sfp-init-manual-btn');
@@ -326,6 +330,33 @@
         if (window.showAppToast) window.showAppToast('✍️ Initiative envoyée : ' + total, '#2c3e50');
         inp.value = '';
         renderFabPanel(); placePanel();
+    }
+
+    // --- Murmure joueur → MJ : privé, seul l'écran MJ écoute l'événement 'whisper' ---
+    function renderWhisperForm() {
+        if (!fabPanel) return;
+        fabPanel.innerHTML = `
+            <div class="sfp-head">🤫 Murmure au MJ</div>
+            <textarea id="sfp-whisper-text" class="sfp-whisper-text" rows="3" maxlength="500" placeholder="Message privé — seul le MJ le verra…"></textarea>
+            <div class="sfp-whisper-actions">
+                <button id="sfp-whisper-cancel" class="sfp-btn sfp-btn-alt" type="button">Annuler</button>
+                <button id="sfp-whisper-send" class="sfp-btn" type="button">Envoyer</button>
+            </div>`;
+        placePanel();
+        const ta = document.getElementById('sfp-whisper-text');
+        document.getElementById('sfp-whisper-cancel').addEventListener('click', () => { renderFabPanel(); placePanel(); });
+        document.getElementById('sfp-whisper-send').addEventListener('click', sendWhisper);
+        if (ta) { ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendWhisper(); } }); ta.focus(); }
+    }
+    function sendWhisper() {
+        const ta = document.getElementById('sfp-whisper-text'); if (!ta) return;
+        const text = (ta.value || '').trim();
+        if (!text) { ta.focus(); return; }
+        if (!state.channel) { if (window.showAppToast) window.showAppToast('Pas de session active.', '#c0392b'); return; }
+        sendToGm('whisper', { name: snapName(), charId: state.charId, fromUid: myUid(), text: text.slice(0, 500), ts: Date.now() });
+        if (window.showAppToast) window.showAppToast('🤫 Murmure envoyé au MJ', '#8a6320');
+        fabPanel.classList.add('hidden');
+        renderFabPanel();
     }
 
     function applyCombat(p) {
@@ -475,7 +506,7 @@
     // CARTE TACTIQUE (joueur) : vue lecture seule synchronisée
     // =====================================================
     let mapState = { map: {}, tokens: [] };
-    let mapPanel = null, mapToggle = null;
+    let mapPanel = null, mapToggle = null, openMapPanel = null;
 
     function ensureMapUI() {
         if (mapToggle) return;
@@ -489,9 +520,14 @@
         mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
         document.body.appendChild(mapPanel);
 
-        mapToggle.addEventListener('click', () => { mapPanel.classList.toggle('hidden'); });
+        // La carte s'ouvre toujours directement en plein écran ; ⛶ permet de la réduire.
+        const fullBtn = mapPanel.querySelector('#smap-full');
+        const syncFullBtn = () => { fullBtn.title = mapPanel.classList.contains('smap-fullscreen') ? 'Réduire' : 'Plein écran'; };
+        const refreshMapCanvases = () => { requestAnimationFrame(() => { renderPlayerDraw(); renderPlayerFog(); }); };
+        openMapPanel = () => { mapPanel.classList.remove('hidden'); mapPanel.classList.add('smap-fullscreen'); syncFullBtn(); refreshMapCanvases(); };
+        mapToggle.addEventListener('click', () => { if (mapPanel.classList.contains('hidden')) openMapPanel(); else mapPanel.classList.add('hidden'); });
         mapPanel.querySelector('#smap-close').addEventListener('click', () => mapPanel.classList.add('hidden'));
-        mapPanel.querySelector('#smap-full').addEventListener('click', () => mapPanel.classList.toggle('smap-fullscreen'));
+        fullBtn.addEventListener('click', () => { mapPanel.classList.toggle('smap-fullscreen'); syncFullBtn(); refreshMapCanvases(); });
         setupPlayerTokenDrag(document.getElementById('smap-view'));
     }
 
@@ -547,7 +583,7 @@
         if (!p) return;
         ensureMapUI();
         if (mapToggle) mapToggle.style.display = 'flex';
-        if (mapPanel) mapPanel.classList.remove('hidden');
+        if (mapPanel && mapPanel.classList.contains('hidden') && openMapPanel) openMapPanel();
         const view = document.getElementById('smap-view'); if (!view) return;
         const ping = document.createElement('div'); ping.className = 'smap-ping';
         ping.style.left = ((p.x || 0.5) * 100) + '%'; ping.style.top = ((p.y || 0.5) * 100) + '%';
@@ -682,6 +718,15 @@
         .sfp-init { font-family:'Courier New',monospace; font-weight:bold; min-width:22px; text-align:center; color:var(--primary-color,#7A2828); }
         .sfp-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .sfp-empty { font-style:italic; color:#8a7a5e; font-size:0.82rem; text-align:center; padding:6px; }
+        /* --- Murmure au MJ --- */
+        .sfp-btn-whisper { background:linear-gradient(160deg,#6d5a8c,#53446b); color:#f0eaf8; margin-top:8px; margin-bottom:6px; }
+        .sfp-btn-whisper:hover { filter:brightness(1.1); }
+        .sfp-whisper-text { width:100%; box-sizing:border-box; resize:vertical; min-height:70px; border:1px solid var(--accent-color,#C49B35); border-radius:9px; padding:9px 10px; font-family:'Lora',serif; font-size:0.9rem; background:#fffdf7; color:#3a2e1f; margin-bottom:10px; }
+        .sfp-whisper-text:focus { outline:none; border-color:var(--primary-color,#7A2828); box-shadow:0 0 0 2px rgba(196,155,53,0.25); }
+        .sfp-whisper-actions { display:flex; gap:8px; }
+        .sfp-whisper-actions .sfp-btn { margin-bottom:0; }
+        .sfp-whisper-actions #sfp-whisper-send { flex:1; }
+        body.theme-dark .sfp-whisper-text { background:#2a221b; color:var(--text-color,#ece3d2); }
         #session-combat-badge { position:fixed; right:14px; bottom:150px; z-index:9980; display:none; background:rgba(40,30,20,0.82); color:#e8dcc2; font-family:'Lora',serif; font-size:0.74rem; padding:6px 12px; border-radius:20px; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:none; }
         body.session-combat-active #btn-init-next, body.session-combat-active #btn-init-clear { opacity:0.4 !important; pointer-events:none !important; }
         /* UI combat allégée côté joueur : on masque le tracker complet (le FAB suffit) */

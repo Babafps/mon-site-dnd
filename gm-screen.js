@@ -243,6 +243,7 @@
                 <span id="gm-presence-count" class="gm-presence-count" style="display:none;">👥 0</span>
                 <button id="gm-room-btn" class="gm-btn gm-btn-primary">➕ Créer une session</button>
             </div>
+            <button id="gm-hints-toggle" class="gm-btn gm-icon-btn" title="Masquer les aides ⓘ">💡</button>
             <button id="gm-sidebar-toggle" class="gm-btn gm-icon-btn" title="Afficher / masquer le panneau latéral">📜</button>
             <button id="gm-close" class="gm-btn gm-close" title="Fermer">✕</button>
         </div>
@@ -263,7 +264,7 @@
             <!-- ===== ZONE CENTRALE : grande carte (stage) ===== -->
             <div class="gm-main">
 
-                <div class="gm-card gm-card-live gm-span-2">
+                <div id="gm-card-live" class="gm-card gm-card-live gm-span-2">
                     <div class="gm-card-head"><span class="gm-card-icon">📡</span> Joueurs connectés
                         <span class="gm-spacer"></span>
                         <span id="gm-live-status" class="gm-readonly-note">Hors ligne</span>
@@ -271,15 +272,15 @@
                     <div class="gm-card-body"><div id="gm-live-list" class="gm-live-list"></div></div>
                 </div>
 
-                <div class="gm-card gm-span-2 gm-card-offline">
+                <div id="gm-card-offline" class="gm-card gm-span-2 gm-card-offline">
                     <div class="gm-card-head"><span class="gm-card-icon">💤</span> Fiches hors-ligne
                         <span class="gm-spacer"></span>
-                        <span class="gm-readonly-note">Dernière version vue — conservée même après déconnexion</span>
+                        <span class="gm-readonly-note gm-hint">Dernière version vue — conservée même après déconnexion</span>
                     </div>
                     <div class="gm-card-body"><div id="gm-offline-list" class="gm-live-list"></div></div>
                 </div>
 
-                <div class="gm-card">
+                <div id="gm-card-party" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">👥</span> Groupe (manuel)</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -288,11 +289,11 @@
                             <button id="gm-party-add" class="gm-add" title="Ajouter">＋</button>
                         </div>
                         <div id="gm-party-list"></div>
-                        <div class="gm-readonly-note">ⓘ Suivi manuel (PNJ alliés, joueurs hors-ligne…). Les joueurs reliés par le code apparaissent en haut, en direct.</div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Suivi manuel (PNJ alliés, joueurs hors-ligne…). Les joueurs reliés par le code apparaissent en haut, en direct.</div>
                     </div>
                 </div>
 
-                <div class="gm-card">
+                <div id="gm-card-combat" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">⚔️</span> Combat &amp; Initiative
                         <span class="gm-spacer"></span>
                         <span id="gm-combat-status" class="gm-combat-status">Hors combat</span>
@@ -315,11 +316,11 @@
                             <button id="gm-init-next" class="gm-btn gm-btn-primary">⏭ Tour suivant</button>
                             <button id="gm-init-reset" class="gm-btn gm-btn-danger">↺ Réinitialiser</button>
                         </div>
-                        <div class="gm-readonly-note">ⓘ Lance le combat : les joueurs connectés voient un bouton flottant pour lancer leur initiative, qui peuple et trie cet ordre automatiquement.</div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Lance le combat : les joueurs connectés voient un bouton flottant pour lancer leur initiative, qui peuple et trie cet ordre automatiquement.</div>
                     </div>
                 </div>
 
-                <div class="gm-card gm-span-2">
+                <div id="gm-card-monsters" class="gm-card gm-span-2">
                     <div class="gm-card-head"><span class="gm-card-icon">👹</span> Monstres</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -332,7 +333,7 @@
                     </div>
                 </div>
 
-                <div class="gm-card">
+                <div id="gm-card-env" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🌤️</span> Environnement</div>
                     <div class="gm-card-body">
                         <div class="gm-env-row"><label>🕑 Heure</label><input id="gm-env-time" class="gm-input" placeholder="ex : Crépuscule, 18h…"></div>
@@ -354,11 +355,11 @@
                     <div class="gm-card-body">
                         <label class="gm-btn gm-soundboard-import" title="Importer des effets sonores">➕ Importer mes sons<input type="file" id="gm-sfx-file" accept="audio/*" multiple style="display:none;"></label>
                         <div id="gm-soundboard-pads" class="gm-soundboard-pads"></div>
-                        <div class="gm-readonly-note">ⓘ Importe tes propres effets. Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Importe tes propres effets. Clique un pad : le son joue chez toi ET chez les joueurs connectés.</div>
                     </div>
                 </div>
 
-                <div class="gm-card">
+                <div id="gm-card-image" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🖼️</span> Montrer une image aux joueurs</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -371,7 +372,7 @@
                             <select id="gm-showimg-prepared" class="gm-select" style="flex:1;"><option value="">— Image préparée —</option></select>
                             <button id="gm-showimg-send-prep" class="gm-btn" title="Envoyer l'image préparée">📤</button>
                         </div>
-                        <div class="gm-readonly-note">ⓘ Les joueurs reçoivent une notification « Ouvrir » pour voir l'image en grand.</div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Les joueurs reçoivent une notification « Ouvrir » pour voir l'image en grand.</div>
                     </div>
                 </div>
 
@@ -385,7 +386,7 @@
                         </div>
                         <input id="gm-scene-music" class="gm-input" placeholder="🎵 Lien musique/ambiance (YouTube ou .mp3, optionnel)">
                         <div id="gm-scene-list" class="gm-scene-list"></div>
-                        <div class="gm-readonly-note">ⓘ « Appliquer » change le fond ET la musique de tous les joueurs connectés, en direct.</div>
+                        <div class="gm-readonly-note gm-hint">ⓘ « Appliquer » change le fond ET la musique de tous les joueurs connectés, en direct.</div>
                     </div>
                 </div>
 
@@ -422,7 +423,7 @@
                     </div>
                 </div>
 
-                <div class="gm-card gm-span-2">
+                <div id="gm-card-trade" class="gm-card gm-span-2">
                     <div class="gm-card-head"><span class="gm-card-icon">✉️</span> Murmure &amp; Troc</div>
                     <div class="gm-card-body">
                         <div class="gm-row">
@@ -1137,6 +1138,20 @@
         if (p.accepted) { if (window.showAppToast) window.showAppToast('✅ ' + who + ' a accepté' + what, '#27ae60'); }
         else { if (window.showAppToast) window.showAppToast('✖ ' + who + ' a refusé' + what, '#c0392b'); }
     }
+    // Murmure privé reçu d'un joueur : carte persistante (jusqu'au clic « Lu »),
+    // un simple toast serait trop volatil pour un message que le MJ ne doit pas rater.
+    function onPlayerWhisper(p) {
+        if (!p || !p.text) return;
+        const who = p.name || 'Un joueur';
+        let wrap = byId('gm-whispers');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gm-whispers'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'gm-whisper-card';
+        const time = new Date(p.ts || Date.now()).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        card.innerHTML = `<div class="gm-whisper-head"><span>🤫 ${esc(who)}</span><span class="gm-whisper-time">${time}</span></div><div class="gm-whisper-text">${esc(String(p.text).slice(0, 500))}</div><button class="gm-whisper-ack" type="button">✔ Lu</button>`;
+        card.querySelector('.gm-whisper-ack').addEventListener('click', () => card.remove());
+        wrap.appendChild(card);
+        if (window.showAppToast) window.showAppToast('🤫 Murmure de ' + who, '#53446b');
+    }
     function stopNetwork() {
         if (live.netChannel) { try { live.netChannel.unsubscribe(); } catch (e) {} live.netChannel = null; }
         if (live.presChannel) { try { live.presChannel.untrack(); } catch (e) {} try { live.presChannel.unsubscribe(); } catch (e) {} live.presChannel = null; }
@@ -1192,6 +1207,7 @@
                 .on('broadcast', { event: 'gift-response' }, ({ payload }) => onGiftResponse(payload))
                 .on('broadcast', { event: 'initiative-roll' }, ({ payload }) => onInitiativeRoll(payload))
                 .on('broadcast', { event: 'token-move' }, ({ payload }) => onTokenMove(payload))
+                .on('broadcast', { event: 'whisper' }, ({ payload }) => onPlayerWhisper(payload))
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
         } catch (e) { console.warn('presence GM:', e); }
     }
@@ -1991,6 +2007,22 @@
         byId('gm-sidebar-toggle').addEventListener('click', () => {
             const ov = byId('gm-screen'); if (ov) ov.classList.toggle('gm-sidebar-collapsed');
         });
+
+        // Bascule des aides ⓘ (préférence persistée) : épure l'écran une fois qu'on connaît l'outil
+        const hintsBtn = byId('gm-hints-toggle');
+        if (hintsBtn) {
+            const applyHints = (hidden) => {
+                const ov = byId('gm-screen'); if (ov) ov.classList.toggle('gm-hints-hidden', hidden);
+                hintsBtn.classList.toggle('is-off', hidden);
+                hintsBtn.title = hidden ? 'Afficher les aides ⓘ' : 'Masquer les aides ⓘ';
+            };
+            applyHints(localStorage.getItem('dnd-gm-hints-hidden') === '1');
+            hintsBtn.addEventListener('click', () => {
+                const hidden = !byId('gm-screen').classList.contains('gm-hints-hidden');
+                try { localStorage.setItem('dnd-gm-hints-hidden', hidden ? '1' : '0'); } catch (e) {}
+                applyHints(hidden);
+            });
+        }
 
         // Onglets de la sidebar (Dés / Journal / Compendium)
         document.querySelectorAll('.gm-side-tab').forEach(tab => tab.addEventListener('click', () => {

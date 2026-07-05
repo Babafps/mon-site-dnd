@@ -681,3 +681,62 @@ body.theme-dark .gm-page-thumb.is-active .gm-page-name { color: var(--accent-col
 body.theme-dark .gm-page-add { border-color: rgba(196,155,53,0.35); color: #b6a074; }
 body.theme-dark .gm-set-h { color: #cfa953; }
 body.theme-dark .music-docked .music-player-bar { border-color: rgba(196,155,53,0.45); }
+
+/* ============================================================
+   MURMURES DES JOUEURS (messages privés reçus en session)
+   ============================================================ */
+#gm-whispers { position: fixed; right: 18px; bottom: 18px; z-index: 9998; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
+@keyframes gm-whisper-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.gm-whisper-card { background: #fffdf7; border: 2px solid #6d5a8c; border-left-width: 6px; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.32); padding: 12px 14px; font-family: 'Lora', serif; color: #3a2e1f; animation: gm-whisper-in 0.25s ease-out; }
+.gm-whisper-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: 'Cinzel', serif; font-weight: bold; color: #53446b; margin-bottom: 6px; }
+.gm-whisper-time { font-family: 'Lora', serif; font-weight: normal; font-size: 0.75rem; color: #8a7a5e; }
+.gm-whisper-text { font-style: italic; font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+.gm-whisper-ack { margin-top: 10px; width: 100%; border: none; border-radius: 8px; padding: 8px; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; background: #6d5a8c; color: #f0eaf8; font-size: 0.85rem; }
+.gm-whisper-ack:hover { filter: brightness(1.1); }
+body.theme-dark .gm-whisper-card { background: #241c16; color: #ece3d2; }
+body.theme-dark .gm-whisper-head { color: #a894cc; }
+
+/* ============================================================
+   COUP DE PROPRE — écran MJ (tâche 7)
+   Objectifs : hiérarchie visuelle plus lisible, en-têtes qui
+   restent visibles au défilement, aides ⓘ masquables, et
+   micro-interactions cohérentes avec le reste du site.
+   ============================================================ */
+
+/* --- Aides ⓘ : présentées comme de vraies pastilles d'info (au lieu d'un
+       texte minuscule centré), et entièrement masquables via le bouton 💡. --- */
+.gm-readonly-note.gm-hint {
+    text-align: left;
+    font-style: normal;
+    background: rgba(196,155,53,0.10);
+    border: 1px solid rgba(196,155,53,0.28);
+    border-radius: 8px;
+    padding: 7px 10px;
+    line-height: 1.4;
+    color: #8a7550;
+}
+#gm-screen.gm-hints-hidden .gm-hint { display: none !important; }
+
+/* Bouton 💡 : état « aides masquées » (grisé/atténué) */
+#gm-hints-toggle.is-off { opacity: 0.5; filter: grayscale(0.6); }
+
+/* --- Micro-interaction : la carte survolée se soulève légèrement --- */
+.gm-card { transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease; }
+.gm-card:hover { box-shadow: 0 6px 18px rgba(60,40,20,0.14); border-color: rgba(196,155,53,0.5); }
+
+/* --- En-tête des cartes : accent latéral doré pour ancrer le regard --- */
+.gm-card-head { border-left: 3px solid transparent; }
+.gm-card:not(.gm-card-live) > .gm-card-head { border-left-color: rgba(196,155,53,0.55); }
+.gm-card-live > .gm-card-head { border-left: 3px solid rgba(39,174,96,0.6); }
+
+/* --- Onglets latéraux : cible tactile plus généreuse + libellé lisible --- */
+.gm-side-tab { padding: 8px 2px 7px; font-size: 0.7rem; gap: 3px; transition: background 0.15s ease, color 0.15s ease; }
+.gm-side-tab .tb-ic { font-size: 1.15rem; }
+.gm-side-tab:not(.active):hover { background: rgba(196,155,53,0.10); }
+
+/* --- Bandeau d'en-tête : légère profondeur sous le titre --- */
+.gm-header { position: relative; z-index: 5; }
+
+body.theme-dark .gm-readonly-note.gm-hint { background: rgba(196,155,53,0.08); border-color: rgba(196,155,53,0.22); color: #b6a480; }
+body.theme-dark .gm-card:hover { border-color: rgba(196,155,53,0.55); box-shadow: 0 6px 18px rgba(0,0,0,0.3); }
+body.theme-dark .gm-side-tab:not(.active):hover { background: rgba(196,155,53,0.12); }
