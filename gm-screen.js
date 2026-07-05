@@ -256,6 +256,7 @@
                 <div class="gm-tool-sep"></div>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="draw" title="Dessin &amp; notes MJ">✏️</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="fog" title="Brouillard de guerre">🌫️</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="walls" title="Murs, portes &amp; obscurité (vision des joueurs)">🧱</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="tokens" title="Jetons">🧝</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="view" title="Carte &amp; zoom">🗺️</button>
                 <div class="gm-tool-sep"></div>
@@ -603,6 +604,22 @@
                 { icon: '🌑', label: 'Tout recouvrir', type: 'action', run: fogCoverAll, keep: true }
             ]
         };
+        if (key === 'walls') {
+            const dark = m.dark || { on: false, range: 9 };
+            return {
+                title: '🧱 Murs, portes & obscurité',
+                hint: 'Les murs sont invisibles pour les joueurs : ils bloquent leurs jetons et leur vision dans le noir. Clic sur une pastille 🚪 = ouvrir / fermer la porte.',
+                items: [
+                    { icon: '🧱', label: 'Tracer un mur (glisser)', type: 'tool', tool: 'wall' },
+                    { icon: '🚪', label: 'Tracer une porte (glisser)', type: 'tool', tool: 'door' },
+                    { icon: '🧹', label: 'Effacer un mur (cliquer dessus)', type: 'tool', tool: 'wallerase' },
+                    { icon: '🌑', label: dark.on ? 'Obscurité active — cliquer pour rallumer' : 'Plonger la pièce dans le noir', type: 'toggle', on: !!dark.on, run: toggleDark },
+                    { type: 'vision' },
+                    { icon: '👀', label: 'Aperçu : voir comme les joueurs', type: 'toggle', on: !!mapView.visionPreview, run: toggleVisionPreview },
+                    { icon: '🗑️', label: 'Supprimer tous les murs', type: 'action', danger: true, run: clearWallsConfirm }
+                ]
+            };
+        }
         if (key === 'tokens') return {
             title: '🧝 Jetons',
             hint: 'Clic sur un jeton = fiche (PV, CA, image, taille…)',
@@ -619,6 +636,7 @@
             hint: 'Molette sur la carte = zoom sous le curseur · glisser = déplacer',
             items: [
                 { icon: '🖼️', label: 'Caler le fond (glisser / molette)', type: 'tool', tool: 'bg' },
+                { icon: '📏', label: 'Mesurer une distance (glisser)', type: 'tool', tool: 'ruler' },
                 { icon: '▦', label: 'Afficher la grille', type: 'toggle', on: m.showGrid !== false, run: toggleGrid },
                 { icon: '🔍➕', label: 'Zoomer', type: 'action', run: () => zoomAtCenter(1.2), keep: true },
                 { icon: '🔍➖', label: 'Dézoomer', type: 'action', run: () => zoomAtCenter(1 / 1.2), keep: true },
@@ -628,7 +646,7 @@
         return null;
     }
     // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
-    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], view: ['bg'], tokens: [], layers: [] };
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'wallerase'], view: ['bg', 'ruler'], tokens: [], layers: [] };
     let flyoutKey = null;
     function ensureToolFlyout() {
         let p = byId('gm-tool-flyout'); if (p) return p;
@@ -651,6 +669,7 @@
         p.innerHTML = `<div class="gm-fly-title">${grp.title}</div>` + grp.items.map((it, i) => {
             if (it.type === 'color') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur du trait</span><input type="color" id="gm-draw-color" value="${drawColor}" title="Couleur du dessin / des notes MJ"></div>`;
             if (it.type === 'width') return `<div class="gm-fly-row"><span class="gm-fly-ic">━</span><span class="gm-fly-lbl">Épaisseur</span><input type="range" id="gm-draw-width" min="1" max="24" step="1" value="${drawWidth}"><b class="gm-fly-wval">${drawWidth}</b></div>`;
+            if (it.type === 'vision') { const dr = (state.map && state.map.dark && Number(state.map.dark.range)) || 9; return `<div class="gm-fly-row" title="Distance de vision des joueurs dans le noir (1 case = 1,5 m)"><span class="gm-fly-ic">👁️</span><span class="gm-fly-lbl">Vision</span><input type="range" id="gm-dark-range" min="1.5" max="30" step="1.5" value="${dr}"><b class="gm-fly-wval gm-fly-wval-wide" id="gm-dark-range-val">${dr} m</b></div>`; }
             const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
             return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
         }).join('') + (grp.hint ? `<div class="gm-fly-hint">${grp.hint}</div>` : '');
@@ -669,6 +688,13 @@
         }));
         const col = p.querySelector('#gm-draw-color'); if (col) col.addEventListener('input', (e) => { drawColor = e.target.value; });
         const wid = p.querySelector('#gm-draw-width'); if (wid) wid.addEventListener('input', (e) => { drawWidth = Math.max(1, Math.min(24, parseInt(e.target.value, 10) || 3)); const v = p.querySelector('.gm-fly-wval'); if (v) v.textContent = drawWidth; });
+        // Curseur de vision (obscurité) : mise à jour en direct + diffusion débauncée aux joueurs
+        const dkr = p.querySelector('#gm-dark-range'); if (dkr) dkr.addEventListener('input', (e) => {
+            const v = Math.max(1.5, Math.min(30, parseFloat(e.target.value) || 9));
+            darkState().range = v;
+            const lb = p.querySelector('#gm-dark-range-val'); if (lb) lb.textContent = v + ' m';
+            clearTimeout(dkr._t); dkr._t = setTimeout(() => { save(); renderMap(); broadcastMap(true); }, 250);
+        });
         syncToolbar();
     }
     // Surligne le groupe dont un outil est actif (appelé par setMapTool)
@@ -1360,14 +1386,18 @@
 
     // Vue locale de la carte (zoom / déplacement / calques visibles) — non synchronisée, propre au MJ.
     let mapView = { zoom: 1, panX: 0, panY: 0,
-        layers: { tokens: true, draw: true, gmnotes: true, fog: true, grid: true },
-        layerOp: { tokens: 1, draw: 1, gmnotes: 1, fog: 1, grid: 1 } };
-    let mapTool = 'select';      // 'select' | 'bg' | 'reveal' | 'cover' | 'draw'
+        layers: { tokens: true, draw: true, gmnotes: true, fog: true, grid: true, walls: true },
+        layerOp: { tokens: 1, draw: 1, gmnotes: 1, fog: 1, grid: 1, walls: 1 },
+        visionPreview: false };  // aperçu MJ de ce que voient les joueurs dans le noir
+    let mapTool = 'select';      // 'select' | 'bg' | 'reveal' | 'cover' | 'draw' | 'wall' | 'door' | 'wallerase' | 'ruler'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
     let drawColor = '#e23b3b';   // couleur du dessin libre
     let drawWidth = 3;           // épaisseur du dessin libre (molette en mode ✏️)
     let drawStroke = null;       // tracé en cours
     let drawIsNote = false;      // le tracé en cours appartient au calque privé « Notes MJ »
+    let wallDraft = null;        // mur / porte en cours de tracé { x1,y1,x2,y2,door }
+    let rulerDraft = null;       // mesure en cours { x1,y1,x2,y2 }
+    let gmDragBusy = false;      // un drag de jeton MJ est en cours (évite un re-render qui casserait le pointer capture)
     function tokenHtml(t) {
         const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
@@ -1436,6 +1466,145 @@
     function fogRevealAll() { const fog = fogState(); fog.on = true; fog.reveals = [{ x: 0.5, y: 0.5, r: 3 }]; save(); renderMap(); broadcastMap(true); }
     function fogCoverAll() { const fog = fogState(); fog.on = true; fog.reveals = []; save(); renderMap(); broadcastMap(true); }
 
+    // ----- Murs & portes (invisibles pour les joueurs : bloquent jetons + ligne de vue) -----
+    function wallsData() { const m = state.map || {}; if (!Array.isArray(m.walls)) m.walls = []; return m.walls; }
+    function darkState() { const m = state.map || {}; if (!m.dark) m.dark = { on: false, range: 9 }; if (!Number(m.dark.range)) m.dark.range = 9; return m.dark; }
+    function toggleDark() {
+        const d = darkState(); d.on = !d.on;
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast(d.on ? '🌑 Obscurité : les joueurs ne voient qu\'à ' + d.range + ' m autour de leur jeton' : '🔆 Obscurité levée', '#2c3e50');
+    }
+    function toggleVisionPreview() { mapView.visionPreview = !mapView.visionPreview; renderMap(); }
+    function clearWallsConfirm() { if (!confirm('Supprimer tous les murs et portes de cette carte ?')) return; if (state.map) state.map.walls = []; save(); renderMap(); broadcastMap(true); }
+    function toggleDoor(id) {
+        const d = wallsData().find(w => w.id === id); if (!d) return;
+        d.open = !d.open;
+        save(); renderWalls(); renderVisionPreview(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast(d.open ? '🚪 Porte ouverte' : '🚪 Porte fermée', '#2c3e50');
+    }
+    // Aimante le point de tracé : d'abord une extrémité de mur proche (murs continus),
+    // sinon un coin de grille si l'aimant 🧲 est actif.
+    function wallSnapPoint(fx, fy, rect) {
+        fx = Math.max(0, Math.min(1, fx)); fy = Math.max(0, Math.min(1, fy));
+        const w = rect.width, h = rect.height;
+        let best = null, bd = 12;                                  // rayon d'accroche en px écran
+        (state.map && state.map.walls || []).forEach(s => {
+            [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => {
+                const d = Math.hypot((pt[0] - fx) * w, (pt[1] - fy) * h);
+                if (d < bd) { bd = d; best = { x: pt[0], y: pt[1] }; }
+            });
+        });
+        if (best) return best;
+        const m = state.map || {};
+        if (m.snap) {
+            const uw = w / (mapView.zoom || 1), uh = h / (mapView.zoom || 1);
+            const g = m.gridSize || 48;
+            const cw = g / uw, ch = g / uh;
+            return { x: Math.max(0, Math.min(1, Math.round(fx / cw) * cw)), y: Math.max(0, Math.min(1, Math.round(fy / ch) * ch)) };
+        }
+        return { x: fx, y: fy };
+    }
+    function eraseWallAt(e) {
+        if (!window.VTTGeo) return;
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
+        const r = content.getBoundingClientRect();
+        const px = e.clientX - r.left, py = e.clientY - r.top;
+        const walls = wallsData();
+        let bi = -1, bd = 11;                                      // tolérance de clic en px
+        walls.forEach((s, i) => {
+            const d = window.VTTGeo.distToSegment(px, py, s.x1 * r.width, s.y1 * r.height, s.x2 * r.width, s.y2 * r.height);
+            if (d < bd) { bd = d; bi = i; }
+        });
+        if (bi >= 0) { walls.splice(bi, 1); save(); renderMap(); broadcastMap(true); }
+    }
+    function renderWalls() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-walls'); if (!canvas) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.lineCap = 'round';
+        const paintSeg = (s, draft) => {
+            ctx.beginPath();
+            ctx.moveTo(s.x1 * w, s.y1 * h); ctx.lineTo(s.x2 * w, s.y2 * h);
+            if (s.door) { ctx.strokeStyle = s.open ? 'rgba(87,166,74,0.95)' : 'rgba(214,138,43,0.95)'; ctx.setLineDash(s.open ? [3, 8] : [9, 5]); }
+            else { ctx.strokeStyle = 'rgba(226,59,59,0.9)'; ctx.setLineDash([]); }
+            ctx.lineWidth = 4;
+            if (draft) ctx.globalAlpha = 0.55;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            // Petites poignées aux extrémités (repères d'accroche)
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0] * w, pt[1] * h, 3, 0, Math.PI * 2); ctx.fill(); });
+        };
+        ((state.map && state.map.walls) || []).forEach(s => paintSeg(s, false));
+        if (wallDraft) paintSeg(wallDraft, true);
+        // Pastilles de porte cliquables (au centre de chaque porte)
+        const doorsHost = view.querySelector('.gm-layer-doors');
+        if (doorsHost) {
+            doorsHost.innerHTML = ((state.map && state.map.walls) || []).filter(s => s.door).map(s => {
+                const mx = (s.x1 + s.x2) / 2 * 100, my = (s.y1 + s.y2) / 2 * 100;
+                return `<button class="gm-door-btn${s.open ? ' is-open' : ''}" data-door="${s.id}" style="left:${mx}%; top:${my}%;" title="${s.open ? 'Porte ouverte — clic : fermer' : 'Porte fermée — clic : ouvrir'}">🚪</button>`;
+            }).join('');
+        }
+    }
+    // Aperçu MJ de l'obscurité : voile semi-transparent percé de la vision des jetons joueurs.
+    function renderVisionPreview() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-vision'); if (!canvas) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const dark = (state.map && state.map.dark) || null;
+        if (!mapView.visionPreview || !dark || !dark.on || !window.VTTGeo) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(6,4,2,0.72)';                       // semi-opaque : le MJ garde ses repères
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'destination-out';
+        const segs = window.VTTGeo.wallsToPx((state.map && state.map.walls) || [], w, h);
+        const g = (state.map && state.map.gridSize) || 48;
+        (state.tokens || []).filter(t => !t.hidden && (t.type === 'pj' || t.owner)).forEach(t => {
+            window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dark, g));
+        });
+        ctx.globalCompositeOperation = 'source-over';
+    }
+    // Règle : trait + étiquette de distance (1 case = 1,5 m), locale au MJ.
+    function renderRuler() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-ruler'); if (!canvas) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        if (!rulerDraft) return;
+        const x1 = rulerDraft.x1 * w, y1 = rulerDraft.y1 * h, x2 = rulerDraft.x2 * w, y2 = rulerDraft.y2 * h;
+        ctx.strokeStyle = '#C49B35'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#C49B35';
+        [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
+        const g = (state.map && state.map.gridSize) || 48;
+        const cells = Math.hypot(x2 - x1, y2 - y1) / g;
+        const label = (Math.round(cells * 1.5 * 10) / 10).toLocaleString('fr-FR') + ' m (' + (Math.round(cells * 10) / 10).toLocaleString('fr-FR') + ' cases)';
+        ctx.font = 'bold 14px Lora, serif';
+        const tw = ctx.measureText(label).width;
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 16;
+        const bx = Math.max(4, Math.min(w - tw - 16, mx - tw / 2 - 6));
+        ctx.fillStyle = 'rgba(20,14,8,0.85)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, my - 15, tw + 12, 22, 6) : ctx.rect(bx, my - 15, tw + 12, 22); ctx.fill();
+        ctx.fillStyle = '#f3e3bb';
+        ctx.fillText(label, bx + 6, my + 1);
+    }
+
     // ----- Dessin libre (couche partagée) + Notes MJ (couche privée) -----
     function drawData() { const m = state.map || {}; if (!Array.isArray(m.drawings)) m.drawings = []; return m.drawings; }
     function gmNotesData() { const m = state.map || {}; if (!Array.isArray(m.gmNotes)) m.gmNotes = []; return m.gmNotes; }
@@ -1477,7 +1646,7 @@
         const tokens = (state.tokens || []).map(tokenHtml).join('');
         const L = mapView.layers || {}, OP = mapView.layerOp || {};
         const layStyle = (k) => { let s = ''; if (L[k] === false) s += 'display:none;'; const o = OP[k]; if (o != null && o !== 1) s += 'opacity:' + o + ';'; return s ? ` style="${s}"` : ''; };
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas></div>`;
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas></div>`;
         const content = view.querySelector('.gm-map-content');
         content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
@@ -1490,7 +1659,10 @@
         renderDraw();
         renderGmNotes();
         if (L.fog !== false) renderFog();
-        view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'gmnote' || mapTool === 'bg');
+        if (L.walls !== false) renderWalls();
+        renderVisionPreview();
+        renderRuler();
+        view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'gmnote' || mapTool === 'bg' || mapTool === 'wall' || mapTool === 'door' || mapTool === 'wallerase' || mapTool === 'ruler');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         renderMapBank();
@@ -1513,6 +1685,7 @@
         const t = find(state.tokens, id); if (!t) return;
         if (field === 'hp' || field === 'hpMax' || field === 'ac') t[field] = (value === '' ? null : (parseInt(value, 10) || 0));
         else if (field === 'size') t.size = parseFloat(value) || 1;
+        else if (field === 'vision') t.vision = (value === '' ? null : Math.max(0, parseFloat(value) || 0));   // portée de vision propre (m), vide = réglage global
         else t[field] = value;
         save(); renderMap(); broadcastMap(true);
     }
@@ -1532,6 +1705,7 @@
             <div class="gm-tp-row"><input class="gm-input" data-tp="name" value="${esc(tok.name || '')}" placeholder="Nom du jeton"></div>
             <div class="gm-tp-row"><label>❤️</label><input class="gm-input gm-num" type="number" data-tp="hp" value="${tok.hp != null ? tok.hp : ''}" placeholder="PV"><span class="gm-tp-sep">/</span><input class="gm-input gm-num" type="number" data-tp="hpMax" value="${tok.hpMax != null ? tok.hpMax : ''}" placeholder="max"><label>🛡️</label><input class="gm-input gm-num" type="number" data-tp="ac" value="${tok.ac != null ? tok.ac : ''}" placeholder="CA"></div>
             <div class="gm-tp-row"><label>📏</label><select class="gm-input" data-tp="size">${sizeOpts}</select></div>
+            <div class="gm-tp-row" title="Distance de vision de CE jeton dans le noir (torche, vision dans le noir…). Vide = réglage global de la carte."><label>🌑</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="vision" value="${tok.vision != null ? tok.vision : ''}" placeholder="Vision (m)"><span class="gm-tp-sep">m</span></div>
             <div class="gm-tp-row"><input class="gm-input" data-tp="img" value="${esc(tok.img || '')}" placeholder="URL image…"><label class="gm-btn gm-tp-upload" title="Importer une image">🖼️<input type="file" accept="image/*" data-tp="imgfile" style="display:none;"></label><input class="gm-tp-color" type="color" data-tp="color" value="${color}" title="Couleur"></div>
             <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-tp-act="hide">${tok.hidden ? '👁️ Montrer' : '🙈 Cacher aux joueurs'}</button><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️</button></div>`;
         p.classList.remove('hidden');
@@ -1590,8 +1764,16 @@
         if (state.map && state.map.tokensLocked) return;            // déplacements verrouillés par le MJ
         const tok = find(state.tokens, p.id); if (!tok) return;
         if (tok.owner && p.fromUid && tok.owner !== p.fromUid) return; // un joueur ne bouge que SON jeton
-        tok.x = Math.max(0, Math.min(1, p.x)); tok.y = Math.max(0, Math.min(1, p.y));
-        renderMap();
+        const nx = Math.max(0, Math.min(1, p.x)), ny = Math.max(0, Math.min(1, p.y));
+        // Autorité MJ : un JOUEUR ne traverse jamais un mur ni une porte fermée (le MJ, lui, est libre).
+        const blocked = window.VTTGeo && window.VTTGeo.moveBlocked((state.map && state.map.walls) || [], tok.x, tok.y, nx, ny);
+        if (!blocked) { tok.x = nx; tok.y = ny; }
+        // Pendant un drag MJ, un re-render complet détruirait le jeton en cours de déplacement
+        // (pointer capture perdu) : on ne met à jour que le jeton déplacé par le joueur.
+        if (gmDragBusy) {
+            const el = document.querySelector(`#gm-map-view .gm-token[data-token="${tok.id}"]`);
+            if (el) { el.style.left = (tok.x * 100) + '%'; el.style.top = (tok.y * 100) + '%'; }
+        } else renderMap();
         if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens }); // relaye aux autres (sans les notes MJ)
         clearTimeout(tokenMovePersistTimer);
         tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: state.tokens }); } catch (e) {} } }, 400);
@@ -1602,9 +1784,29 @@
         const contentRect = () => { const c = view.querySelector('.gm-map-content'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
             startX = e.clientX; startY = e.clientY; moved = false;
+            // Pastille de porte : clic = ouvrir/fermer, quel que soit l'outil actif
+            const doorBtn = e.target.closest('.gm-door-btn');
+            if (doorBtn) { toggleDoor(doorBtn.dataset.door); e.preventDefault(); return; }
             if (mapTool === 'reveal' || mapTool === 'cover') {   // mode brouillard : on peint
                 painting = true; _fogLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 paintFogAt(e); e.preventDefault(); return;
+            }
+            if (mapTool === 'wall' || mapTool === 'door') {      // tracé d'un mur / d'une porte
+                const r = contentRect();
+                const p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
+                wallDraft = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, door: mapTool === 'door' };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderWalls(); e.preventDefault(); return;
+            }
+            if (mapTool === 'wallerase') {                       // gomme : clic sur un mur = suppression
+                eraseWallAt(e); e.preventDefault(); return;
+            }
+            if (mapTool === 'ruler') {                           // règle : glisser = mesurer
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                rulerDraft = { x1: x, y1: y, x2: x, y2: y };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderRuler(); e.preventDefault(); return;
             }
             if (mapTool === 'bg') {   // calage du fond : on déplace l'image (pas la grille)
                 bgDrag = true; bgStart = { x: state.map.bgX || 0, y: state.map.bgY || 0 };
@@ -1636,6 +1838,7 @@
             const el = e.target.closest('.gm-token');
             if (el) {
                 cur = find(state.tokens, el.dataset.token); tokenEl = el; if (!cur) return;
+                gmDragBusy = true;
                 try { el.setPointerCapture(e.pointerId); } catch (_) {}
                 el.classList.add('dragging'); e.preventDefault();
             } else {
@@ -1647,6 +1850,18 @@
         view.addEventListener('pointermove', (e) => {
             if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
             if (painting) { paintFogAt(e); return; }
+            if (wallDraft) {
+                const r = contentRect();
+                const p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
+                wallDraft.x2 = p.x; wallDraft.y2 = p.y;
+                renderWalls(); return;
+            }
+            if (rulerDraft) {
+                const r = contentRect();
+                rulerDraft.x2 = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+                rulerDraft.y2 = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                renderRuler(); return;
+            }
             if (drawStroke) {
                 const r = contentRect();
                 drawStroke.pts.push({ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) });
@@ -1663,6 +1878,7 @@
                 const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
                 cur.x = x; cur.y = y;
                 tokenEl.style.left = (x * 100) + '%'; tokenEl.style.top = (y * 100) + '%';
+                if (mapView.visionPreview) renderVisionPreview();   // l'aperçu de vision suit le jeton
                 throttleBroadcastMap();
             } else if (panning) {
                 mapView.panX = startPan.x + (e.clientX - startX);
@@ -1672,13 +1888,21 @@
         });
         const up = (e) => {
             if (drawStroke) { drawStroke = null; drawIsNote = false; save(); broadcastMap(true); return; }
+            if (wallDraft) {
+                // On ne garde que les segments réels (pas les simples clics)
+                if (Math.hypot(wallDraft.x2 - wallDraft.x1, wallDraft.y2 - wallDraft.y1) > 0.004) {
+                    wallsData().push({ id: uid(), x1: wallDraft.x1, y1: wallDraft.y1, x2: wallDraft.x2, y2: wallDraft.y2, door: !!wallDraft.door, open: false });
+                }
+                wallDraft = null; save(); renderMap(); broadcastMap(true); return;
+            }
+            if (rulerDraft) { rulerDraft = null; renderRuler(); return; }
             if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
             if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
                 else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; }
                 if (tokenEl) tokenEl.classList.remove('dragging');
-                cur = null; tokenEl = null; save(); renderMap(); broadcastMap(true);
+                cur = null; tokenEl = null; gmDragBusy = false; save(); renderMap(); broadcastMap(true);
             }
             if (panning) { panning = false; view.classList.remove('panning'); }
         };
@@ -1746,6 +1970,7 @@
         { key: 'draw', label: '✏️ Dessin' },
         { key: 'gmnotes', label: '📝 Notes MJ' },
         { key: 'fog', label: '🌫️ Brouillard' },
+        { key: 'walls', label: '🧱 Murs & portes' },
         { key: 'grid', label: '▦ Grille' },
     ];
     function layerIsVisible(k) { return mapView.layers[k] !== false; }
@@ -1753,7 +1978,7 @@
         const view = byId('gm-map-view'); if (!view) return;
         const o = (mapView.layerOp && mapView.layerOp[k] != null) ? mapView.layerOp[k] : 1;
         if (k === 'grid') { const c = view.querySelector('.gm-map-content'); if (c) c.style.setProperty('--gm-grid-op', o); return; }
-        const el = view.querySelector('.gm-layer-' + k); if (el) el.style.opacity = (o === 1 ? '' : o);
+        view.querySelectorAll('.gm-layer-' + k).forEach(el => { el.style.opacity = (o === 1 ? '' : o); });
     }
     function ensureLayersPanel() {
         let panel = byId('gm-layers-panel'); if (panel) return panel;

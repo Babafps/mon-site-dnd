@@ -151,7 +151,8 @@
         } catch (e) { console.warn('presence:', e); }
     }
 
-    function myUid() { return (window.SupaAuth && window.SupaAuth.currentUser && window.SupaAuth.currentUser.id) || null; }
+    let debugUid = null;   // uid simulé pour les tests hors session (voir debugApplyMap)
+    function myUid() { return (window.SupaAuth && window.SupaAuth.currentUser && window.SupaAuth.currentUser.id) || debugUid; }
     function sendToGm(event, payload) { if (state.channel) { try { state.channel.send({ type: 'broadcast', event, payload }); } catch (e) {} } }
     function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -507,27 +508,148 @@
     // =====================================================
     let mapState = { map: {}, tokens: [] };
     let mapPanel = null, mapToggle = null, openMapPanel = null;
+    let playerDragBusy = false;      // je déplace MON jeton : ne pas reconstruire le DOM sous mon doigt
+    let pendingMapRender = false;    // un état carte est arrivé pendant le drag → re-rendu au lâcher
+
+    // --- Bouton/élément flottant générique : glisser librement, aimanté au bord le plus proche au lâcher ---
+    function makeEdgeDock(el, storeKey, defaults) {
+        const margin = 10;
+        const read = () => { try { return JSON.parse(localStorage.getItem(storeKey) || 'null'); } catch (e) { return null; } };
+        const applyEdge = (edge, offset) => {
+            const w = el.offsetWidth || 48, h = el.offsetHeight || 48;
+            el.style.left = el.style.right = el.style.top = el.style.bottom = 'auto';
+            if (edge === 'left') { el.style.left = margin + 'px'; el.style.top = clampN(offset, margin, window.innerHeight - h - margin) + 'px'; }
+            else if (edge === 'right') { el.style.right = margin + 'px'; el.style.top = clampN(offset, margin, window.innerHeight - h - margin) + 'px'; }
+            else if (edge === 'top') { el.style.top = margin + 'px'; el.style.left = clampN(offset, margin, window.innerWidth - w - margin) + 'px'; }
+            else { el.style.bottom = margin + 'px'; el.style.left = clampN(offset, margin, window.innerWidth - w - margin) + 'px'; }
+        };
+        const glideTo = (edge, offset) => {                          // glisse animée vers le bord, puis ré-ancrage
+            const w = el.offsetWidth || 48, h = el.offsetHeight || 48;
+            let tx, ty;
+            if (edge === 'left') { tx = margin; ty = clampN(offset, margin, window.innerHeight - h - margin); }
+            else if (edge === 'right') { tx = window.innerWidth - w - margin; ty = clampN(offset, margin, window.innerHeight - h - margin); }
+            else if (edge === 'top') { ty = margin; tx = clampN(offset, margin, window.innerWidth - w - margin); }
+            else { ty = window.innerHeight - h - margin; tx = clampN(offset, margin, window.innerWidth - w - margin); }
+            el.style.transition = 'left 0.3s cubic-bezier(0.22,0.9,0.35,1.15), top 0.3s cubic-bezier(0.22,0.9,0.35,1.15)';
+            el.style.left = tx + 'px'; el.style.top = ty + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto';
+            clearTimeout(el._dockTimer);
+            el._dockTimer = setTimeout(() => {
+                el.style.transition = 'none';
+                applyEdge(edge, offset);
+                requestAnimationFrame(() => { el.style.transition = ''; });
+            }, 320);
+        };
+        let dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+        el.style.touchAction = 'none';
+        el.addEventListener('pointerdown', (e) => {
+            if (e.button != null && e.button !== 0) return;
+            dragging = true; moved = false;
+            const r = el.getBoundingClientRect();
+            ox = e.clientX - r.left; oy = e.clientY - r.top; sx = e.clientX; sy = e.clientY;
+            el.style.transition = 'none';
+            try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        });
+        el.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            if (Math.abs(e.clientX - sx) > 4 || Math.abs(e.clientY - sy) > 4) moved = true;
+            const w = el.offsetWidth, h = el.offsetHeight;
+            el.style.left = clampN(e.clientX - ox, margin, window.innerWidth - w - margin) + 'px';
+            el.style.top = clampN(e.clientY - oy, margin, window.innerHeight - h - margin) + 'px';
+            el.style.right = 'auto'; el.style.bottom = 'auto';
+        });
+        const up = (e) => {
+            if (!dragging) return; dragging = false;
+            el.style.transition = '';
+            el.dataset.dragged = moved ? '1' : '0';
+            if (moved) {
+                const w = el.offsetWidth, h = el.offsetHeight;
+                const r = el.getBoundingClientRect();
+                const cx = r.left + w / 2, cy = r.top + h / 2;
+                const dl = cx, drr = window.innerWidth - cx, dt = cy, db = window.innerHeight - cy;
+                const min = Math.min(dl, drr, dt, db);
+                let edge, offset;
+                if (min === dl) { edge = 'left'; offset = r.top; }
+                else if (min === drr) { edge = 'right'; offset = r.top; }
+                else if (min === dt) { edge = 'top'; offset = r.left; }
+                else { edge = 'bottom'; offset = r.left; }
+                glideTo(edge, offset);
+                try { localStorage.setItem(storeKey, JSON.stringify({ edge, offset })); } catch (err) {}
+            }
+            try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+        };
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+        window.addEventListener('resize', () => { const p = read(); if (p && p.edge) applyEdge(p.edge, p.offset); });
+        const p = read();
+        if (p && p.edge) applyEdge(p.edge, p.offset || 60);
+        else applyEdge(defaults.edge, defaults.offset);
+    }
 
     function ensureMapUI() {
         if (mapToggle) return;
         mapToggle = document.createElement('button');
         mapToggle.id = 'session-map-toggle'; mapToggle.className = 'no-print'; mapToggle.type = 'button';
-        mapToggle.textContent = '🗺️'; mapToggle.title = 'Carte tactique';
+        mapToggle.textContent = '🗺️'; mapToggle.title = 'Carte tactique (glisse-moi le long des bords)';
         document.body.appendChild(mapToggle);
 
         mapPanel = document.createElement('div');
         mapPanel.id = 'session-map'; mapPanel.className = 'no-print hidden';
-        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
+        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-sheet" title="Ma fiche (petit widget déplaçable)">🪪</button><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
         document.body.appendChild(mapPanel);
 
-        // La carte s'ouvre toujours directement en plein écran ; ⛶ permet de la réduire.
         const fullBtn = mapPanel.querySelector('#smap-full');
-        const syncFullBtn = () => { fullBtn.title = mapPanel.classList.contains('smap-fullscreen') ? 'Réduire' : 'Plein écran'; };
-        const refreshMapCanvases = () => { requestAnimationFrame(() => { renderPlayerDraw(); renderPlayerFog(); }); };
-        openMapPanel = () => { mapPanel.classList.remove('hidden'); mapPanel.classList.add('smap-fullscreen'); syncFullBtn(); refreshMapCanvases(); };
-        mapToggle.addEventListener('click', () => { if (mapPanel.classList.contains('hidden')) openMapPanel(); else mapPanel.classList.add('hidden'); });
+        const syncFullBtn = () => { fullBtn.title = mapPanel.classList.contains('smap-fullscreen') ? 'Réduire' : 'Plein écran'; fullBtn.textContent = mapPanel.classList.contains('smap-fullscreen') ? '🗗' : '⛶'; };
+        // Rendu immédiat (lire clientWidth force la mise en page) + une passe rAF de sécurité.
+        // (rAF seul ne suffit pas : il ne tourne pas si l'onglet est en arrière-plan.)
+        const refreshMapCanvases = () => {
+            renderPlayerDraw(); renderPlayerFog(); renderPlayerDark();
+            requestAnimationFrame(() => { renderPlayerDraw(); renderPlayerFog(); renderPlayerDark(); });
+        };
+        // La carte s'ouvre en PETIT, avec une animation depuis le bouton ; ⛶ agrandit (animé).
+        openMapPanel = () => {
+            mapPanel.classList.remove('smap-fullscreen');
+            mapPanel.classList.remove('hidden');
+            syncFullBtn();
+            // Origine de l'animation = position du bouton carte (où qu'il soit ancré)
+            try {
+                const tr = mapToggle.getBoundingClientRect(), pr = mapPanel.getBoundingClientRect();
+                const ax = clampN(tr.left + tr.width / 2 - pr.left, 0, pr.width);
+                const ay = clampN(tr.top + tr.height / 2 - pr.top, 0, pr.height);
+                mapPanel.style.transformOrigin = ax + 'px ' + ay + 'px';
+            } catch (e) { mapPanel.style.transformOrigin = 'bottom right'; }
+            mapPanel.classList.remove('smap-anim-open');
+            void mapPanel.offsetWidth;                     // relance l'animation CSS
+            mapPanel.classList.add('smap-anim-open');
+            refreshMapCanvases();
+        };
+        // Petit ↔ plein écran : transition FLIP fluide (au lieu d'un saut sec)
+        const toggleFullscreen = () => {
+            const first = mapPanel.getBoundingClientRect();
+            mapPanel.classList.remove('smap-anim-open');
+            mapPanel.classList.toggle('smap-fullscreen');
+            syncFullBtn();
+            const last = mapPanel.getBoundingClientRect();
+            if (last.width && last.height) {
+                mapPanel.style.transformOrigin = '0 0';
+                mapPanel.style.transition = 'none';
+                mapPanel.style.transform = `translate(${first.left - last.left}px, ${first.top - last.top}px) scale(${first.width / last.width}, ${first.height / last.height})`;
+                requestAnimationFrame(() => {
+                    mapPanel.style.transition = 'transform 0.34s cubic-bezier(0.22,0.9,0.3,1)';
+                    mapPanel.style.transform = 'none';
+                    setTimeout(() => { mapPanel.style.transition = ''; }, 360);
+                });
+            }
+            refreshMapCanvases();
+        };
+        mapToggle.addEventListener('click', () => {
+            if (mapToggle.dataset.dragged === '1') { mapToggle.dataset.dragged = '0'; return; }   // fin de glisser ≠ clic
+            if (mapPanel.classList.contains('hidden')) openMapPanel(); else mapPanel.classList.add('hidden');
+        });
         mapPanel.querySelector('#smap-close').addEventListener('click', () => mapPanel.classList.add('hidden'));
-        fullBtn.addEventListener('click', () => { mapPanel.classList.toggle('smap-fullscreen'); syncFullBtn(); refreshMapCanvases(); });
+        mapPanel.querySelector('#smap-sheet').addEventListener('click', toggleSheetWidget);
+        fullBtn.addEventListener('click', toggleFullscreen);
+        // Le bouton carte se déplace et s'aimante aux bords (position mémorisée)
+        makeEdgeDock(mapToggle, 'dnd-maptoggle-pos', { edge: 'right', offset: Math.round(window.innerHeight * 0.3) });
         setupPlayerTokenDrag(document.getElementById('smap-view'));
     }
 
@@ -537,6 +659,9 @@
         const hasMap = !!(mapState.map && mapState.map.bg) || (mapState.tokens && mapState.tokens.length);
         mapToggle.style.display = (state.sessionId && hasMap) ? 'flex' : 'none';
         if (!(state.sessionId && hasMap)) mapPanel.classList.add('hidden');
+        // Pendant que je déplace mon jeton, reconstruire le DOM casserait le glisser en cours :
+        // on note qu'un re-rendu est dû et on l'applique au lâcher.
+        if (playerDragBusy) { pendingMapRender = true; return; }
         renderPlayerMap();
     }
 
@@ -556,9 +681,43 @@
             const sz = Math.round(30 * (Number(t.size) || 1));
             return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
         }).join('');
-        view.innerHTML = tokensHtml + '<canvas class="smap-draw"></canvas><canvas class="smap-fog"></canvas>';
+        view.innerHTML = tokensHtml + '<canvas class="smap-draw"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas>';
         renderPlayerDraw();
         renderPlayerFog();
+        renderPlayerDark();
+    }
+    // --- Obscurité (vision limitée) : NOIR TOTAL hors de portée de vision de MES jetons.
+    // Les murs invisibles posés par le MJ bloquent la ligne de vue (portes fermées incluses).
+    let darkRaf = false;
+    function scheduleDark() { if (darkRaf) return; darkRaf = true; requestAnimationFrame(() => { darkRaf = false; renderPlayerDark(); }); }
+    function renderPlayerDark() {
+        const view = document.getElementById('smap-view'); if (!view) return;
+        const canvas = view.querySelector('.smap-dark'); if (!canvas) return;
+        const m = mapState.map || {};
+        const dark = m.dark || null;
+        if (!dark || !dark.on || !window.VTTGeo) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+        const w = Math.max(1, view.clientWidth), h = Math.max(1, view.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgb(4,3,2)';                       // noir complet : on ne voit RIEN au-delà
+        ctx.fillRect(0, 0, w, h);
+        const uid = myUid();
+        const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
+        if (mine.length) {
+            ctx.globalCompositeOperation = 'destination-out';
+            const segs = window.VTTGeo.wallsToPx(m.walls || [], w, h);
+            const g = Number(m.gridSize) || 48;
+            mine.forEach(t => window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dark, g)));
+            ctx.globalCompositeOperation = 'source-over';
+        } else {
+            ctx.fillStyle = 'rgba(232,216,182,0.75)';
+            ctx.font = 'italic 13px Lora, serif'; ctx.textAlign = 'center';
+            ctx.fillText('🌑 Il fait noir… vous ne voyez rien.', w / 2, h / 2);
+            ctx.textAlign = 'start';
+        }
     }
     // Dessin libre du MJ (synchronisé) côté joueur.
     function renderPlayerDraw() {
@@ -625,25 +784,132 @@
             const t = (mapState.tokens || []).find(x => x.id === tEl.dataset.token); if (!t) return;
             if (mapState.map && mapState.map.tokensLocked) return;
             if (!t.owner || t.owner !== myUid()) return;   // un joueur ne bouge que son jeton
-            cur = t; el = tEl; try { tEl.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
+            cur = t; el = tEl; playerDragBusy = true;
+            try { tEl.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
         });
         view.addEventListener('pointermove', (e) => {
             if (!cur || !el) return;
             const r = view.getBoundingClientRect();
             const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
             const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+            // Les murs (et portes fermées) posés par le MJ sont infranchissables pour un joueur.
+            const walls = (mapState.map && mapState.map.walls) || [];
+            if (walls.length && window.VTTGeo && window.VTTGeo.moveBlocked(walls, cur.x, cur.y, x, y)) return;
             cur.x = x; cur.y = y; el.style.left = (x * 100) + '%'; el.style.top = (y * 100) + '%';
+            scheduleDark();                                // ma vision suit mon jeton en direct
             sendTokenMove(cur, false);
         });
-        const up = () => { if (!cur) return; sendTokenMove(cur, true); cur = null; el = null; };
+        const up = () => {
+            if (!cur) return;
+            sendTokenMove(cur, true); cur = null; el = null; playerDragBusy = false;
+            if (pendingMapRender) { pendingMapRender = false; renderPlayerMap(); }
+        };
         view.addEventListener('pointerup', up);
         view.addEventListener('pointercancel', up);
+    }
+
+    // =====================================================
+    // WIDGET FICHE (joueur) : mini-fiche déplaçable par-dessus la carte
+    // =====================================================
+    let sheetWidget = null, sswTimer = null;
+    function vId(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+    function toggleSheetWidget() {
+        ensureSheetWidget();
+        const hidden = sheetWidget.classList.toggle('hidden');
+        clearInterval(sswTimer);
+        if (!hidden) { refreshSheetWidget(); sswTimer = setInterval(refreshSheetWidget, 1500); }   // suit la fiche en direct
+    }
+    function ensureSheetWidget() {
+        if (sheetWidget) return;
+        sheetWidget = document.createElement('div');
+        sheetWidget.id = 'session-sheet-widget'; sheetWidget.className = 'no-print hidden';
+        sheetWidget.innerHTML = `
+            <div class="ssw-head"><span class="ssw-drag" title="Glisser pour déplacer">⠿</span><b class="ssw-name">Ma fiche</b><button class="ssw-close" title="Fermer">✕</button></div>
+            <div class="ssw-hp-row">
+                <button class="ssw-hp-btn" data-hp="-5">−5</button>
+                <button class="ssw-hp-btn" data-hp="-1">−1</button>
+                <div class="ssw-hp" id="ssw-hp"></div>
+                <button class="ssw-hp-btn ssw-hp-plus" data-hp="1">+1</button>
+                <button class="ssw-hp-btn ssw-hp-plus" data-hp="5">+5</button>
+            </div>
+            <div class="ssw-hpbar"><div class="ssw-hpbar-fill"></div></div>
+            <div class="ssw-pills" id="ssw-pills"></div>
+            <div class="ssw-abilities" id="ssw-abilities"></div>
+            <div class="ssw-conds" id="ssw-conds"></div>`;
+        document.body.appendChild(sheetWidget);
+        sheetWidget.querySelector('.ssw-close').addEventListener('click', () => { sheetWidget.classList.add('hidden'); clearInterval(sswTimer); });
+        sheetWidget.querySelectorAll('.ssw-hp-btn').forEach(b => b.addEventListener('click', () => bumpHp(parseInt(b.dataset.hp, 10) || 0)));
+        // Déplacement par l'en-tête (position mémorisée)
+        const head = sheetWidget.querySelector('.ssw-head');
+        let dragging = false, ox = 0, oy = 0;
+        head.style.touchAction = 'none';
+        head.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.ssw-close')) return;
+            dragging = true;
+            const r = sheetWidget.getBoundingClientRect();
+            ox = e.clientX - r.left; oy = e.clientY - r.top;
+            try { head.setPointerCapture(e.pointerId); } catch (_) {}
+            e.preventDefault();
+        });
+        head.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            const x = clampN(e.clientX - ox, 4, window.innerWidth - sheetWidget.offsetWidth - 4);
+            const y = clampN(e.clientY - oy, 4, window.innerHeight - sheetWidget.offsetHeight - 4);
+            sheetWidget.style.left = x + 'px'; sheetWidget.style.top = y + 'px'; sheetWidget.style.right = 'auto'; sheetWidget.style.bottom = 'auto';
+        });
+        const up = () => {
+            if (!dragging) return; dragging = false;
+            try { localStorage.setItem('dnd-ssw-pos', JSON.stringify({ x: parseInt(sheetWidget.style.left, 10) || 0, y: parseInt(sheetWidget.style.top, 10) || 0 })); } catch (e) {}
+        };
+        head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+        try {
+            const p = JSON.parse(localStorage.getItem('dnd-ssw-pos') || 'null');
+            if (p) { sheetWidget.style.left = clampN(p.x, 4, Math.max(4, window.innerWidth - 270)) + 'px'; sheetWidget.style.top = clampN(p.y, 4, Math.max(4, window.innerHeight - 220)) + 'px'; sheetWidget.style.right = 'auto'; sheetWidget.style.bottom = 'auto'; }
+        } catch (e) {}
+    }
+    // ± PV : modifie le VRAI champ de la fiche (les écouteurs de l'app + la synchro MJ suivent)
+    function bumpHp(delta) {
+        const inp = document.getElementById('hp-current'); if (!inp) return;
+        const max = parseInt((document.getElementById('hp-max') || {}).value, 10);
+        let v = (parseInt(inp.value, 10) || 0) + delta;
+        if (!isNaN(max)) v = Math.min(v, max);
+        inp.value = Math.max(0, v);
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+        refreshSheetWidget();
+    }
+    function refreshSheetWidget() {
+        if (!sheetWidget || sheetWidget.classList.contains('hidden')) return;
+        sheetWidget.querySelector('.ssw-name').textContent = vId('char-name') || 'Ma fiche';
+        const hp = parseInt(vId('hp-current'), 10), hpMax = parseInt(vId('hp-max'), 10), tmp = parseInt(vId('hp-temp'), 10);
+        sheetWidget.querySelector('#ssw-hp').innerHTML = `❤️ <b>${isNaN(hp) ? '—' : hp}</b>/${isNaN(hpMax) ? '—' : hpMax}${(!isNaN(tmp) && tmp > 0) ? ` <span class="ssw-tmp">+${tmp}</span>` : ''}`;
+        const ratio = (hpMax > 0 && !isNaN(hp)) ? Math.max(0, Math.min(1, hp / hpMax)) : 0;
+        const fill = sheetWidget.querySelector('.ssw-hpbar-fill');
+        fill.style.width = (ratio * 100) + '%';
+        fill.classList.toggle('is-low', ratio <= 0.33);
+        sheetWidget.querySelector('#ssw-pills').innerHTML =
+            `<span class="ssw-pill">🛡️ CA <b>${escHtml(vId('armor-class') || '—')}</b></span>` +
+            `<span class="ssw-pill">👟 <b>${escHtml(vId('speed') || '—')}</b></span>` +
+            `<span class="ssw-pill">⚡ Init <b>${escHtml(vId('initiative') || '—')}</b></span>` +
+            `<span class="ssw-pill">👁️ Perc. <b>${escHtml(vId('passive-perception') || '—')}</b></span>`;
+        const abbr = { str: 'FOR', dex: 'DEX', con: 'CON', int: 'INT', wis: 'SAG', cha: 'CHA' };
+        sheetWidget.querySelector('#ssw-abilities').innerHTML = Object.keys(abbr).map(a => {
+            const md = document.getElementById('mod-' + a);
+            return `<div class="ssw-ab"><span>${abbr[a]}</span><b>${md ? escHtml(md.textContent.trim()) : '—'}</b></div>`;
+        }).join('');
+        const conds = [];
+        document.querySelectorAll('#conditions-track-container input[type="checkbox"]:checked, #custom-conditions-container input[type="checkbox"]:checked').forEach(cb => {
+            const lbl = (cb.parentElement ? cb.parentElement.textContent : '').replace(/\s+/g, ' ').trim();
+            if (lbl) conds.push(lbl);
+        });
+        sheetWidget.querySelector('#ssw-conds').innerHTML = conds.map(c => `<span class="ssw-cond">${escHtml(c)}</span>`).join('');
     }
 
     function teardownMapUI() {
         mapState = { map: {}, tokens: [] };
         if (mapToggle) mapToggle.style.display = 'none';
         if (mapPanel) mapPanel.classList.add('hidden');
+        if (sheetWidget) { sheetWidget.classList.add('hidden'); clearInterval(sswTimer); }
     }
 
     // --- Exclusion ciblée d'un joueur (kick + ban temporaire) ---
@@ -737,8 +1003,9 @@
         body.theme-dark .sfp-row { background:rgba(196,155,53,0.1); }
         body.theme-dark .sfp-empty { color:#9a8a70; }
         /* --- Carte tactique (joueur, lecture seule) --- */
-        #session-map-toggle { position:fixed; right:14px; bottom:210px; z-index:9982; width:46px; height:46px; border-radius:50%; border:none; cursor:pointer; display:none; align-items:center; justify-content:center; font-size:1.3rem; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+        #session-map-toggle { position:fixed; right:14px; bottom:210px; z-index:9982; width:46px; height:46px; border-radius:50%; border:none; cursor:grab; touch-action:none; display:none; align-items:center; justify-content:center; font-size:1.3rem; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
         #session-map-toggle:hover { filter:brightness(1.07); }
+        #session-map-toggle:active { cursor:grabbing; }
         #session-map { position:fixed; z-index:9985; right:14px; bottom:14px; width:min(540px,92vw); background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,0.45); padding:10px; }
         #session-map.hidden { display:none; }
         .smap-head { display:flex; justify-content:space-between; align-items:center; font-family:'Cinzel',serif; font-weight:bold; color:var(--primary-color,#7A2828); margin-bottom:6px; }
@@ -751,6 +1018,11 @@
         .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-draw { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        .smap-dark { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        /* Ouverture de la carte : elle « jaillit » depuis le bouton flottant */
+        @keyframes smap-open-anim { 0%{ transform:scale(0.25); opacity:0; } 60%{ opacity:1; } 100%{ transform:none; opacity:1; } }
+        #session-map.smap-anim-open { animation:smap-open-anim 0.32s cubic-bezier(0.26,1.2,0.42,1); }
+        @media (prefers-reduced-motion: reduce) { #session-map { animation:none !important; transition:none !important; } }
         .smap-ping { position:absolute; width:40px; height:40px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #C49B35; box-shadow:0 0 16px #C49B35; pointer-events:none; z-index:6; animation:smap-ping-anim 1s ease-out 2; }
         @keyframes smap-ping-anim { 0%{ transform:translate(-50%,-50%) scale(0.3); opacity:0.95; } 100%{ transform:translate(-50%,-50%) scale(1.9); opacity:0; } }
         #session-image-viewer { position:fixed; inset:0; z-index:10000; background:rgba(8,6,4,0.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
@@ -760,7 +1032,38 @@
         .smap-head-btns { display:flex; gap:4px; }
         #session-map.smap-fullscreen { right:0; bottom:0; top:0; left:0; width:100vw; height:100vh; border-radius:0; z-index:9995; display:flex; flex-direction:column; }
         #session-map.smap-fullscreen .smap-view { flex:1; aspect-ratio:auto; height:auto; }
-        body.theme-dark #session-map { background:#241c16; }`;
+        body.theme-dark #session-map { background:#241c16; }
+        /* --- Widget « Ma fiche » : mini-fiche déplaçable par-dessus la carte --- */
+        #session-sheet-widget { position:fixed; left:auto; right:20px; top:90px; z-index:9996; width:248px; background:#fffdf7; border:2px solid var(--accent-color,#C49B35); border-radius:13px; box-shadow:0 12px 36px rgba(0,0,0,0.45); padding:0 10px 10px; font-family:'Lora',serif; color:#3a2e1f; animation:session-notif-in 0.22s ease-out; }
+        #session-sheet-widget.hidden { display:none; }
+        .ssw-head { display:flex; align-items:center; gap:7px; margin:0 -10px 8px; padding:8px 10px; background:linear-gradient(180deg,rgba(196,155,53,0.2),rgba(196,155,53,0.06)); border-radius:11px 11px 0 0; cursor:grab; user-select:none; }
+        .ssw-head:active { cursor:grabbing; }
+        .ssw-drag { color:#8a7a5e; font-size:0.9rem; }
+        .ssw-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:'Cinzel',serif; color:var(--primary-color,#7A2828); font-size:0.92rem; }
+        .ssw-close { background:none; border:none; cursor:pointer; color:var(--primary-color,#7A2828); font-size:0.95rem; padding:2px 4px; }
+        .ssw-hp-row { display:flex; align-items:center; gap:4px; }
+        .ssw-hp { flex:1; text-align:center; font-size:0.95rem; white-space:nowrap; }
+        .ssw-hp b { color:var(--primary-color,#7A2828); font-size:1.1rem; }
+        .ssw-tmp { color:#2471a3; font-weight:bold; font-size:0.8rem; }
+        .ssw-hp-btn { border:1px solid rgba(122,40,40,0.35); background:#fdf3df; color:#7A2828; border-radius:7px; padding:5px 0; width:34px; cursor:pointer; font-weight:bold; font-size:0.8rem; }
+        .ssw-hp-btn:hover { background:#f4e2bd; }
+        .ssw-hp-btn.ssw-hp-plus { color:#1e8449; }
+        .ssw-hpbar { height:7px; border-radius:4px; background:rgba(122,40,40,0.15); margin:7px 0 9px; overflow:hidden; }
+        .ssw-hpbar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#27ae60,#2ecc71); transition:width 0.25s ease; }
+        .ssw-hpbar-fill.is-low { background:linear-gradient(90deg,#c0392b,#e74c3c); }
+        .ssw-pills { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+        .ssw-pill { font-size:0.74rem; background:rgba(196,155,53,0.13); border:1px solid rgba(196,155,53,0.35); border-radius:12px; padding:3px 8px; white-space:nowrap; }
+        .ssw-pill b { color:var(--primary-color,#7A2828); }
+        .ssw-abilities { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-bottom:6px; }
+        .ssw-ab { display:flex; flex-direction:column; align-items:center; background:rgba(196,155,53,0.1); border-radius:7px; padding:4px 0; }
+        .ssw-ab span { font-size:0.6rem; color:#8a7a5e; font-family:'Cinzel',serif; }
+        .ssw-ab b { font-size:0.82rem; color:var(--primary-color,#7A2828); }
+        .ssw-conds { display:flex; flex-wrap:wrap; gap:4px; }
+        .ssw-cond { font-size:0.7rem; background:rgba(192,57,43,0.12); border:1px solid rgba(192,57,43,0.35); color:#96281b; border-radius:10px; padding:2px 7px; }
+        body.theme-dark #session-sheet-widget { background:#241c16; color:var(--text-color,#ece3d2); }
+        body.theme-dark .ssw-hp-btn { background:#2a221b; }
+        body.theme-dark .ssw-hp-btn:hover { background:#332a20; }
+        body.theme-dark .ssw-cond { color:#e89a8c; }`;
         document.head.appendChild(st);
     }
 
@@ -854,5 +1157,8 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore };
+    window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore,
+        // Crochet de TEST (preview sans Supabase) : simule une carte reçue du MJ.
+        // Aucun effet en usage normal ; permet de valider le rendu joueur sans session réelle.
+        debugApplyMap: function (map, tokens, uid) { if (uid) debugUid = uid; if (!state.sessionId) state.sessionId = 'debug'; applyMap(map, tokens); } };
 })();

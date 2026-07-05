@@ -7,8 +7,8 @@
    La visibilité est gérée par .hidden (comme les autres écrans). */
 #gm-screen { font-family: 'Lora', serif; color: var(--text-color); }
 /* Écran MJ = application plein écran FIXE : aucun scroll de page, chaque panneau
-   scrolle en interne. On réserve 66px en bas pour la barre du lecteur de musique. */
-#gm-screen:not(.hidden) { position: fixed; inset: 0; z-index: 1200; overflow: hidden; padding: 10px; }
+   scrolle en interne. L'interface occupe TOUTE la fenêtre (plus de cadre centré). */
+#gm-screen:not(.hidden) { position: fixed; inset: 0; z-index: 1200; overflow: hidden; padding: 4px; }
 /* Sur l'écran MJ, on masque TOUTE l'UI flottante de la session JOUEUR (FAB combat,
    bouton carte, notifications…) : sinon elle se superpose aux modules de droite. */
 body.gm-active #session-fab,
@@ -17,9 +17,10 @@ body.gm-active #session-map-toggle,
 body.gm-active #session-map,
 body.gm-active #session-notifs,
 body.gm-active #session-turn-notice,
+body.gm-active #session-sheet-widget,
 body.gm-active #session-combat-badge { display: none !important; }
 .gm-shell {
-    max-width: 1500px; margin: 0 auto;
+    max-width: none; margin: 0;
     height: 100%; min-height: 0;
     display: flex; flex-direction: column;
     background:
@@ -84,13 +85,14 @@ body.gm-active #session-combat-badge { display: none !important; }
 .gm-close:hover { background: rgba(231,76,60,0.14); border-color: #c0392b; color: #c0392b; }
 
 /* ---- Espace de travail : zone centrale + sidebar (flux normal, anti-chevauchement) ---- */
-.gm-workspace { flex: 1; display: flex; gap: 12px; align-items: stretch; padding: 12px 12px 68px; min-height: 0; overflow: hidden; }
+/* Le lecteur musique est ancré dans l'onglet Audio sur l'écran MJ : plus besoin de réserver 68px en bas */
+.gm-workspace { flex: 1; display: flex; gap: 10px; align-items: stretch; padding: 10px; min-height: 0; overflow: hidden; }
 
 /* Barre d'outils verticale (type Roll20) */
-.gm-leftbar { flex: 0 0 52px; display: flex; flex-direction: column; gap: 8px; padding: 8px 6px; align-self: flex-start;
+.gm-leftbar { flex: 0 0 58px; display: flex; flex-direction: column; gap: 8px; padding: 8px 6px; align-self: flex-start;
     background: linear-gradient(180deg, var(--widget-bg, #fbf4e2), #f3e8cf);
     border: 1px solid var(--soft-border, rgba(122,40,40,0.22)); border-radius: 12px; }
-.gm-tool { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+.gm-tool { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
     background: #fffdf7; border: 1px solid rgba(122,40,40,0.25); border-radius: 9px; cursor: pointer; transition: all 0.15s; }
 .gm-tool:hover { background: rgba(196,155,53,0.2); border-color: var(--accent-color, #C49B35); transform: translateY(-1px); }
 .gm-tool:active { transform: scale(0.94); }
@@ -358,6 +360,21 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
 .gm-layer-fog { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gm-layer-draw { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .gm-layer-gmnotes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* ---- Murs & portes (invisibles côté joueur), aperçu vision, règle ---- */
+canvas.gm-layer-walls, .gm-layer-vision, .gm-layer-ruler { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gm-layer-doors { position: absolute; inset: 0; pointer-events: none; }
+.gm-door-btn {
+    position: absolute; transform: translate(-50%, -50%); z-index: 7;
+    width: 26px; height: 26px; padding: 0; border-radius: 50%;
+    border: 2px solid #d68a2b; background: rgba(34,24,14,0.9);
+    font-size: 0.82rem; line-height: 1; cursor: pointer; pointer-events: auto;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    transition: transform 0.12s, box-shadow 0.12s;
+}
+.gm-door-btn:hover { transform: translate(-50%, -50%) scale(1.18); box-shadow: 0 0 12px rgba(214,138,43,0.85); }
+.gm-door-btn.is-open { border-color: #57a64a; opacity: 0.85; }
+.gm-fly-wval-wide { flex: 0 0 46px !important; }
 .gm-map-ping { position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; border: 3px solid #C49B35; box-shadow: 0 0 18px #C49B35; pointer-events: none; z-index: 6; animation: gm-map-ping-anim 1s ease-out 2; }
 @keyframes gm-map-ping-anim { 0% { transform: translate(-50%,-50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; } }
 .gm-map-controls { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
