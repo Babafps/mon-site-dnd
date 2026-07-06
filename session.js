@@ -803,7 +803,7 @@
             wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
             fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
             dark: !!(m.dark && m.dark.on), dR: (m.dark && m.dark.range) || 0, li: (m.lights || []).length,
-            tk: (ms.tokens || []).map(t => [t.id, t.owner || '', Number(t.size) || 1, t.img || '', t.name || '', !!t.hidden, (t.badges || ''), t.color || '']).sort()
+            tk: (ms.tokens || []).map(t => [t.id, t.owner || '', Number(t.size) || 1, t.img || '', t.name || '', !!t.hidden, (t.badges || ''), t.color || '', t.layer || '']).sort()
         });
     }
     let lastMapSig = null;
@@ -854,32 +854,34 @@
     // Le BOARD : plateau à ratio fixe (m.stageAR), identique à celui du MJ — les fractions
     // x/y y correspondent pile aux mêmes points de la carte (fix « voir à travers les murs »).
     function playerBoard() { const v = document.getElementById('smap-view'); return v ? (v.querySelector('.smap-board') || v) : null; }
+    // IDENTIQUE à gridPxFor(w) côté MJ → même taille de case et de jetons des deux côtés.
     function playerGridPx(bw) {
         const m = mapState.map || {};
-        return Number(m.stageAR) ? Math.max(4, (m.gridSize || 48) * bw / 1000) : (m.gridSize || 48);
+        return Math.max(4, (m.gridSize || 48) * bw / 1000);
     }
     function playerCellM() { return Number(mapState.map && mapState.map.cellM) || 1.5; }
     function renderPlayerMap() {
         const view = document.getElementById('smap-view'); if (!view) return;
         const m = mapState.map || {};
         const uid = myUid(), locked = !!m.tokensLocked;
-        // Géométrie du board : letterbox au ratio du MJ (repli : ancien modèle plein cadre)
+        // Géométrie du board : letterbox au MÊME ratio que le MJ (défaut 16/9 identique) → boards superposables.
         const vw = Math.max(1, view.clientWidth), vh = Math.max(1, view.clientHeight);
-        const AR = Number(m.stageAR) || 0;
-        let bw = vw, bh = vh, bl = 0, bt = 0;
-        if (AR > 0) { bw = Math.min(vw, vh * AR); bh = bw / AR; bl = (vw - bw) / 2; bt = (vh - bh) / 2; }
+        const AR = Number(m.stageAR) || (16 / 9);
+        let bw = Math.min(vw, vh * AR), bh = bw / AR, bl = (vw - bw) / 2, bt = (vh - bh) / 2;
         const gpx = playerGridPx(bw);
         const tokensHtml = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
             const mine = !locked && t.owner && t.owner === uid;
             const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
-            const sz = AR > 0 ? Math.max(12, Math.round(gpx * (Number(t.size) || 1) * 0.92)) : Math.round(30 * (Number(t.size) || 1));
+            // FORMULE IDENTIQUE au MJ (tokenHtml) → même taille apparente des jetons.
+            const sz = Math.max(12, Math.round(Math.max(6, gpx) * (Number(t.size) || 1) * 0.92));
+            const onMap = t.layer === 'map';
             let aura = '';
             if (t.aura && Number(t.aura.r) > 0) {
                 const apx = (Number(t.aura.r) / playerCellM()) * gpx;
                 aura = `<div class="smap-aura" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${apx * 2}px; height:${apx * 2}px; --aura:${t.aura.color || '#3498db'};"></div>`;
             }
             const badges = t.badges ? `<span class="smap-badges">${escHtml(t.badges)}</span>` : '';
-            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}</div>`;
+            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}${onMap ? ' smap-token-onmap' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}</div>`;
         }).join('');
         // Portes : jamais les secrètes, et seulement celles RÉELLEMENT en vue quand
         // l'obscurité ou le brouillard sont actifs (le joueur ne devine plus les portes cachées).
@@ -1354,6 +1356,7 @@
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }
         .smap-token-dragging { transition:none !important; z-index:9; }
+        .smap-token-onmap { z-index:1; opacity:0.94; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
         .smap-aoe-bar { position:absolute; top:8px; left:8px; z-index:12; display:flex; gap:4px; align-items:center; background:rgba(28,20,12,0.92); border:1px solid rgba(196,155,53,0.5); border-radius:10px; padding:4px 6px; box-shadow:0 3px 10px rgba(0,0,0,0.5); }
         .smap-aoe-bar.hidden { display:none; }
         .smap-aoe-bar button { width:30px; height:30px; border-radius:7px; border:1px solid rgba(196,155,53,0.35); background:#2a2118; color:#ece3d2; cursor:pointer; font-size:0.95rem; padding:0; }

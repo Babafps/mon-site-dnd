@@ -1391,22 +1391,41 @@
     function renderCompendium(query) {
         const el = byId('gm-comp-results'); if (!el) return;
         const q = (query || '').toLowerCase().trim();
-        if (!q) { el.innerHTML = `<div class="gm-readonly-note">Tape un mot-clé : règle 5e (action, avantage, couverture, repos, épuisement, chute, sauvegarde…), condition, ou un de tes monstres / PNJ / quêtes.</div>`; return; }
-        const blocks = [];
-        CONDITIONS_REF.filter(c => c.name.toLowerCase().includes(q) || c.text.toLowerCase().includes(q))
-            .forEach(c => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">⚠️ ${esc(c.name)}</div><div class="gm-comp-text">${esc(c.text)}</div></div>`));
-        RULES_REF.filter(r => r.name.toLowerCase().includes(q) || r.text.toLowerCase().includes(q))
-            .forEach(r => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">📖 ${esc(r.name)}</div><div class="gm-comp-text">${esc(r.text)}</div></div>`));
-        state.monsters.filter(m => m.name.toLowerCase().includes(q))
-            .forEach(m => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">👹 ${esc(m.name)}</div><div class="gm-comp-text">PV ${m.hpCur}/${m.hpMax}${m.ac ? ' · CA ' + m.ac : ''}${(m.attacks || []).length ? ' · ' + m.attacks.map(a => esc(a.name) + ' (' + esc(a.formula) + ')').join(', ') : ''}</div></div>`));
-        state.npcs.filter(n => n.name.toLowerCase().includes(q) || (n.secret || '').toLowerCase().includes(q))
-            .forEach(n => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">🎭 ${esc(n.name)}</div>${n.secret ? `<div class="gm-comp-text">${esc(n.secret)}</div>` : ''}</div>`));
-        state.quests.filter(t => t.text.toLowerCase().includes(q))
-            .forEach(t => blocks.push(`<div class="gm-comp-item"><div class="gm-comp-title">📜 ${t.done ? '✅ ' : ''}${esc(t.text)}</div></div>`));
-        el.innerHTML = blocks.length ? blocks.join('') : `<div class="gm-empty">Aucun résultat pour « ${esc(query)} ».</div>`;
+        const hit = (s) => !q || String(s || '').toLowerCase().includes(q);
+        // Section pliable avec en-tête (repliée par défaut pour les grosses listes quand pas de recherche).
+        const section = (id, icon, label, items, collapsedByDefault) => {
+            if (!items.length) return '';
+            const open = q || !collapsedByDefault;                // recherche → tout ouvert
+            return `<div class="gm-comp-sec"><div class="gm-comp-sec-head${open ? ' is-open' : ''}" data-comp-sec="${id}">${icon} ${label} <span class="gm-comp-count">${items.length}</span><span class="gm-comp-caret">${open ? '▾' : '▸'}</span></div><div class="gm-comp-sec-body"${open ? '' : ' style="display:none;"'}>${items.join('')}</div></div>`;
+        };
+        const conds = CONDITIONS_REF.filter(c => hit(c.name) || hit(c.text))
+            .map(c => `<div class="gm-comp-item"><div class="gm-comp-title">⚠️ ${esc(c.name)}</div><div class="gm-comp-text">${esc(c.text)}</div></div>`);
+        const rules = RULES_REF.filter(r => hit(r.name) || hit(r.text))
+            .map(r => `<div class="gm-comp-item"><div class="gm-comp-title">📖 ${esc(r.name)}</div><div class="gm-comp-text">${esc(r.text)}</div></div>`);
+        const mons = (state.monsters || []).filter(m => hit(m.name))
+            .map(m => `<div class="gm-comp-item"><div class="gm-comp-title">👹 ${esc(m.name)}</div><div class="gm-comp-text">PV ${m.hpCur}/${m.hpMax}${m.ac ? ' · CA ' + m.ac : ''}${(m.attacks || []).length ? ' · ' + m.attacks.map(a => esc(a.name) + ' (' + esc(a.formula) + ')').join(', ') : ''}</div></div>`);
+        const npcs = (state.npcs || []).filter(n => hit(n.name) || hit(n.secret))
+            .map(n => `<div class="gm-comp-item"><div class="gm-comp-title">🎭 ${esc(n.name)}</div>${n.secret ? `<div class="gm-comp-text">${esc(n.secret)}</div>` : ''}</div>`);
+        const quests = (state.quests || []).filter(t => hit(t.text))
+            .map(t => `<div class="gm-comp-item"><div class="gm-comp-title">📜 ${t.done ? '✅ ' : ''}${esc(t.text)}</div></div>`);
+        const html = section('mon', '👹', 'Mes monstres', mons, false)
+            + section('npc', '🎭', 'Mes PNJ', npcs, false)
+            + section('quest', '📜', 'Mes quêtes', quests, false)
+            + section('cond', '⚠️', 'Conditions (5e)', conds, true)
+            + section('rule', '📖', 'Règles (5e)', rules, true);
+        el.innerHTML = html || `<div class="gm-empty">Aucun résultat pour « ${esc(query)} ».</div>`;
+        // Repli / dépli des sections
+        el.querySelectorAll('[data-comp-sec]').forEach(h => h.addEventListener('click', () => {
+            const body = h.nextElementSibling; if (!body) return;
+            const open = body.style.display === 'none';
+            body.style.display = open ? '' : 'none';
+            h.classList.toggle('is-open', open);
+            const car = h.querySelector('.gm-comp-caret'); if (car) car.textContent = open ? '▾' : '▸';
+        }));
     }
 
     function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers(); renderCombatLog(); renderSnaps();
+        { const ci = byId('gm-comp-search'); renderCompendium(ci ? ci.value : ''); }
         const t = document.getElementById('gm-env-time'); if (t) t.value = state.env.time || '';
         const w = document.getElementById('gm-env-weather'); if (w) w.value = state.env.weather || '☀️ Dégagé';
         const n = document.getElementById('gm-notes'); if (n) n.value = state.notes || '';
@@ -1542,7 +1561,42 @@
     let mapView = { zoom: 1, panX: 0, panY: 0,
         layers: { tokens: true, draw: true, gmnotes: true, fog: true, grid: true, walls: true },
         layerOp: { tokens: 1, draw: 1, gmnotes: 1, fog: 1, grid: 1, walls: 1 },
-        visionPreview: false };  // aperçu MJ de ce que voient les joueurs dans le noir
+        visionPreview: false,    // aperçu MJ de ce que voient les joueurs dans le noir
+        activeLayer: 'pj' };     // calque d'objets actif type Roll20 : 'map' | 'gm' | 'pj'
+    // ----- Calques d'objets (jetons) façon Roll20 : Carte / MJ / PJ -----
+    const OBJ_LAYERS = [
+        { key: 'map', icon: '🗺️', label: 'Carte', tip: 'Décor posé sur la carte (visible des joueurs, sous les jetons)' },
+        { key: 'gm', icon: '🎬', label: 'MJ', tip: 'Calque MJ : jetons que SEUL le maître voit (préparation)' },
+        { key: 'pj', icon: '👥', label: 'PJ', tip: 'Calque joueurs : ce que les joueurs voient' }
+    ];
+    // Le calque d'un jeton (rétro-compat : ancien t.hidden ⇒ calque MJ).
+    function tokenLayerOf(t) { return t.layer || (t.hidden ? 'gm' : 'pj'); }
+    // Normalise tous les jetons (fige t.layer + resynchronise t.hidden = calque MJ).
+    function ensureTokenLayers() {
+        (state.tokens || []).forEach(t => { const l = tokenLayerOf(t); t.layer = l; t.hidden = (l === 'gm'); });
+    }
+    // Déplace un jeton vers un calque (= « transférer » MJ → PJ). Source de vérité : t.layer.
+    function setTokenLayer(id, layer) {
+        const t = find(state.tokens, id); if (!t) return;
+        t.layer = layer; t.hidden = (layer === 'gm');
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) { const d = OBJ_LAYERS.find(x => x.key === layer); window.showAppToast('Jeton → calque ' + (d ? d.label : layer), '#2c3e50'); }
+    }
+    function setActiveLayer(layer) {
+        mapView.activeLayer = layer;
+        renderMap();
+        const d = OBJ_LAYERS.find(x => x.key === layer);
+        if (window.showAppToast && d) window.showAppToast(d.icon + ' Calque actif : ' + d.label + ' — ' + d.tip, '#2c3e50');
+    }
+    // Révèle d'un coup tous les jetons du calque MJ (les passe au calque PJ).
+    function revealAllGmTokens() {
+        const gm = (state.tokens || []).filter(t => tokenLayerOf(t) === 'gm');
+        if (!gm.length) { if (window.showAppToast) window.showAppToast('Aucun jeton sur le calque MJ.', '#7a6050'); return; }
+        if (!confirm('Montrer aux joueurs les ' + gm.length + ' jeton(s) du calque MJ ?')) return;
+        gm.forEach(t => { t.layer = 'pj'; t.hidden = false; });
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast('👥 ' + gm.length + ' jeton(s) transféré(s) aux joueurs', '#2c3e50');
+    }
     let mapTool = 'select';      // 'select'|'pan'|'objmove'|'bg'|'reveal'|'cover'|'draw'|'wall'|'door'|'dooredit'|'wallerase'|'ruler'|'light'|'placetoken'|'placecombatant'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
     let drawColor = '#e23b3b';   // couleur du dessin libre
@@ -1576,9 +1630,11 @@
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
         const low = hpMax > 0 && ratio <= 0.33;
         const imgStyle = t.img ? `background-image:url(${t.img});` : '';
-        // Taille liée à la grille du board : un jeton « Normal » remplit sa case (cohérent MJ / joueurs)
-        const gpx = Math.max(10, gridPxFor(boardWpx));
-        const sz = Math.max(14, Math.round(gpx * (t.size || 1) * 0.92));
+        // Taille liée à la grille du board : un jeton « Normal » remplit sa case.
+        // FORMULE IDENTIQUE côté joueur (renderPlayerMap) → même taille apparente MJ / PJ.
+        const gpx = Math.max(6, gridPxFor(boardWpx));
+        const sz = Math.max(12, Math.round(gpx * (Number(t.size) || 1) * 0.92));
+        const layer = tokenLayerOf(t);
         const hpBar = hpMax > 0 ? `<div class="gm-token-hp"><div class="gm-token-hp-fill${low ? ' is-low' : ''}" style="width:${ratio * 100}%"></div></div>` : '';
         const acBadge = (t.ac != null && t.ac !== '') ? `<span class="gm-token-ac" title="Classe d'armure">${esc(t.ac)}</span>` : '';
         const badges = tokenBadges(t);
@@ -1589,7 +1645,9 @@
             const apx = (Number(t.aura.r) / cellMeters()) * gpx;
             auraHtml = `<div class="gm-token-aura" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${apx * 2}px; height:${apx * 2}px; --aura:${t.aura.color || '#3498db'};"></div>`;
         }
-        return auraHtml + `<div class="gm-token${t.hidden ? ' is-mj-hidden' : ''}${t.img ? ' has-img' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}">`
+        const layerCls = layer === 'gm' ? ' is-mj-hidden gm-layer-gm' : (layer === 'map' ? ' gm-token-onmap' : '');
+        const dim = (mapView.activeLayer && mapView.activeLayer !== layer) ? ' gm-token-dim' : '';
+        return auraHtml + `<div class="gm-token${layerCls}${dim}${t.img ? ' has-img' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" data-layer="${layer}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}${layer === 'gm' ? ' — calque MJ (invisible aux joueurs)' : (layer === 'map' ? ' — calque Carte' : '')}">`
             + (t.img ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
             + acBadge + badgeHtml + hpBar + `</div>`;
     }
@@ -1860,8 +1918,9 @@
         }
         return b;
     }
-    // Jetons envoyés aux joueurs : on y « cuit » les badges calculés côté MJ.
-    function tokensForShare() { return (state.tokens || []).map(t => Object.assign({}, t, { badges: tokenBadges(t) })); }
+    // Jetons envoyés aux joueurs : on EXCLUT le calque MJ (jamais transmis, même en données)
+    // et on « cuit » les badges calculés côté MJ.
+    function tokensForShare() { return (state.tokens || []).filter(t => tokenLayerOf(t) !== 'gm').map(t => Object.assign({}, t, { badges: tokenBadges(t) })); }
     // ----- Journal de combat -----
     function clog(text) {
         if (!Array.isArray(state.combatLog)) state.combatLog = [];
@@ -2115,6 +2174,7 @@
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
         migrateMapRef(m, view);                              // anciennes cartes → modèle « board »
+        ensureTokenLayers();                                 // fige t.layer (Carte/MJ/PJ) + resync t.hidden
         const L = mapView.layers || {}, OP = mapView.layerOp || {};
         const layStyle = (k) => { let s = ''; if (L[k] === false) s += 'display:none;'; const o = OP[k]; if (o != null && o !== 1) s += 'opacity:' + o + ';'; return s ? ` style="${s}"` : ''; };
         // ===== BOARD : plateau à ratio FIXE, letterboxé — même géométrie chez les joueurs =====
@@ -2157,6 +2217,19 @@
         renderMapBank();
         renderMapPages();
         if (placeQueue.length) renderPlaceBar();              // la barre « placer » survit aux re-rendus
+        renderLayerSwitch();                                  // sélecteur de calque (Carte/MJ/PJ) sur la carte
+    }
+    // Sélecteur de calque d'objets flottant (haut-gauche de la carte), façon Roll20.
+    function renderLayerSwitch() {
+        const host = byId('gm-map-view'); if (!host) return;
+        let bar = byId('gm-layer-switch');
+        if (!bar) { bar = document.createElement('div'); bar.id = 'gm-layer-switch'; bar.className = 'gm-layer-switch no-print'; host.appendChild(bar); }
+        const gmCount = (state.tokens || []).filter(t => tokenLayerOf(t) === 'gm').length;
+        bar.innerHTML = `<span class="gm-lsw-lbl">Calque</span>`
+            + OBJ_LAYERS.map(d => `<button class="gm-lsw-btn${mapView.activeLayer === d.key ? ' is-on' : ''}" data-layer="${d.key}" title="${d.tip}">${d.icon}<span>${d.label}</span>${d.key === 'gm' && gmCount ? `<b class="gm-lsw-badge">${gmCount}</b>` : ''}</button>`).join('')
+            + (gmCount ? `<button class="gm-lsw-reveal" data-reveal="1" title="Montrer aux joueurs tous les jetons du calque MJ">👁️ Tout révéler</button>` : '');
+        bar.querySelectorAll('[data-layer]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setActiveLayer(b.dataset.layer); }));
+        const rv = bar.querySelector('[data-reveal]'); if (rv) rv.addEventListener('click', (e) => { e.stopPropagation(); revealAllGmTokens(); });
     }
     // Aimante une position (fraction 0..1) au centre de la case de grille la plus proche.
     function snapFraction(x, y) {
@@ -2202,7 +2275,8 @@
             <div class="gm-tp-row" title="Badges d'état affichés sur le jeton (emojis) — les états de la fiche du joueur s'ajoutent automatiquement"><label>🏷️</label><input class="gm-input" data-tp="badges" value="${esc(tok.badges || '')}" placeholder="🤢💤… (états manuels)"></div>
             <div class="gm-tp-row" title="Dégâts / soins rapides"><label>⚔️</label><input class="gm-input gm-num" type="number" min="1" data-tp-amt placeholder="X"><button class="gm-btn gm-btn-danger" data-tp-act="dmg" title="Infliger X dégâts">💥</button><button class="gm-btn" data-tp-act="heal" title="Soigner X PV">💚</button></div>
             <div class="gm-tp-row"><input class="gm-input" data-tp="img" value="${esc(tok.img || '')}" placeholder="URL image…"><label class="gm-btn gm-tp-upload" title="Importer une image">🖼️<input type="file" accept="image/*" data-tp="imgfile" style="display:none;"></label><input class="gm-tp-color" type="color" data-tp="color" value="${color}" title="Couleur"></div>
-            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-tp-act="hide">${tok.hidden ? '👁️ Montrer' : '🙈 Cacher aux joueurs'}</button><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️</button></div>`;
+            <div class="gm-tp-row gm-tp-layer" title="Calque du jeton (façon Roll20). MJ = invisible aux joueurs ; PJ = visible. Transférer = déplacer d'un calque à l'autre."><label>🗂️</label>${OBJ_LAYERS.map(d => `<button class="gm-tp-lbtn${tokenLayerOf(tok) === d.key ? ' is-on' : ''}" data-tp-layer="${d.key}" title="${d.tip}">${d.icon} ${d.label}</button>`).join('')}</div>
+            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️ Supprimer</button></div>`;
         p.classList.remove('hidden');
         const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
         p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
@@ -2213,11 +2287,14 @@
             const evt = (inp.type === 'color' || inp.tagName === 'SELECT') ? 'change' : 'input';
             inp.addEventListener(evt, () => setTokenField(tok.id, f, inp.value));
         });
+        p.querySelectorAll('[data-tp-layer]').forEach(b => b.addEventListener('click', () => {
+            setTokenLayer(tok.id, b.dataset.tpLayer);
+            p.querySelectorAll('[data-tp-layer]').forEach(x => x.classList.toggle('is-on', x === b));
+        }));
         p.querySelectorAll('[data-tp-act]').forEach(b => b.addEventListener('click', () => {
             const t = find(state.tokens, tok.id); if (!t) return;
             const act = b.dataset.tpAct;
-            if (act === 'hide') t.hidden = !t.hidden;
-            else if (act === 'del') { state.tokens = state.tokens.filter(x => x.id !== tok.id); p.classList.add('hidden'); }
+            if (act === 'del') { state.tokens = state.tokens.filter(x => x.id !== tok.id); p.classList.add('hidden'); }
             else if (act === 'dmg' || act === 'heal') {
                 const amtEl = p.querySelector('[data-tp-amt]');
                 const amt = Math.abs(parseInt(amtEl && amtEl.value, 10)) || 1;
@@ -2396,6 +2473,9 @@
         // Rect du BOARD (l'espace de coordonnées partagé) — pas du conteneur transformé.
         const contentRect = () => { const c = view.querySelector('.gm-board'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
+            // Les UI flottantes posées SUR la carte (sélecteur de calque, barre « placer »)
+            // gèrent leurs propres clics : ne pas déclencher l'outil carte dessous.
+            if (e.target.closest('#gm-layer-switch') || e.target.closest('#gm-place-bar')) return;
             startX = e.clientX; startY = e.clientY; moved = false;
             // Clic molette (bouton du milieu) = se déplacer dans la carte, quel que soit l'outil,
             // SANS perdre l'outil en cours : on le retrouve tel quel au relâchement.
@@ -2467,7 +2547,8 @@
                 const sn = snapFraction(x, y); x = sn.x; y = sn.y;
                 const sp = spreadFreeSpot(x, y); x = sp.x; y = sp.y;
                 const names = { pj: 'PJ', npc: 'PNJ', monster: 'Monstre' };
-                const tok = { id: uid(), name: names[placeTokenType] || 'Jeton', type: placeTokenType, x, y };
+                const lyr = mapView.activeLayer || 'pj';
+                const tok = { id: uid(), name: names[placeTokenType] || 'Jeton', type: placeTokenType, x, y, layer: lyr, hidden: lyr === 'gm' };
                 if (placeTokenType === 'pj' && placeOwner) { tok.owner = placeOwner.uid; tok.name = placeOwner.name; tok.ref = 'pj:' + placeOwner.uid; }
                 state.tokens.push(tok);
                 save(); renderMap(); broadcastMap(true); e.preventDefault(); return;
@@ -2960,9 +3041,10 @@
             const ov = byId('gm-screen'); if (ov) ov.classList.remove('gm-sidebar-collapsed');
         }));
 
-        // Compendium : recherche
+        // Compendium : recherche (+ affichage complet par défaut, champ vide)
         const compInput = byId('gm-comp-search');
         if (compInput) compInput.addEventListener('input', (e) => renderCompendium(e.target.value));
+        renderCompendium('');
 
         // --- Ajouts ---
         byId('gm-party-add').addEventListener('click', () => {
