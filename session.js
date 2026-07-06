@@ -638,6 +638,7 @@
     let mapPanel = null, mapToggle = null, openMapPanel = null;
     let playerDragBusy = false;      // je déplace MON jeton : ne pas reconstruire le DOM sous mon doigt
     let pendingMapRender = false;    // un état carte est arrivé pendant le drag → re-rendu au lâcher
+    let playerAoe = { on: false, kind: 'circle', color: '#3498db', draft: null };  // outil gabarit de sort côté joueur
 
     // --- Bouton/élément flottant générique : glisser librement, aimanté au bord le plus proche au lâcher ---
     function makeEdgeDock(el, storeKey, defaults) {
@@ -722,7 +723,7 @@
 
         mapPanel = document.createElement('div');
         mapPanel.id = 'session-map'; mapPanel.className = 'no-print hidden';
-        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-sheet" title="Ma fiche (petit widget déplaçable)">🪪</button><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
+        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-aoe" title="Gabarit de sort / zone d\'effet">🎯</button><button id="smap-sheet" title="Ma fiche (petit widget déplaçable)">🪪</button><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
         document.body.appendChild(mapPanel);
 
         const fullBtn = mapPanel.querySelector('#smap-full');
@@ -782,12 +783,30 @@
         });
         mapPanel.querySelector('#smap-close').addEventListener('click', () => mapPanel.classList.add('hidden'));
         mapPanel.querySelector('#smap-sheet').addEventListener('click', toggleSheetWidget);
+        const aoeBtn = mapPanel.querySelector('#smap-aoe');
+        if (aoeBtn) aoeBtn.addEventListener('click', () => { playerAoe.on = !playerAoe.on; aoeBtn.classList.toggle('is-on', playerAoe.on); renderPlayerAoeBar(); });
         fullBtn.addEventListener('click', toggleFullscreen);
         // Le bouton carte se déplace et s'aimante aux bords (position mémorisée)
         makeEdgeDock(mapToggle, 'dnd-maptoggle-pos', { edge: 'right', offset: Math.round(window.innerHeight * 0.3) });
         setupPlayerTokenDrag(document.getElementById('smap-view'));
     }
 
+    // Signature « structurelle » de la carte : tout SAUF la position x/y des jetons.
+    // Si elle est inchangée d'une trame à l'autre, on se contente de déplacer les jetons
+    // existants (transition CSS fluide) au lieu de reconstruire tout le DOM.
+    function mapStructSig(ms) {
+        const m = ms.map || {}, walls = m.walls || [];
+        return JSON.stringify({
+            bg: m.bg || '', ar: m.stageAR || 0, grid: m.gridSize || 48, sg: m.showGrid !== false,
+            bx: m.bgX || 0, by: m.bgY || 0, bs: m.bgScale || 1, w: m.weather || '',
+            doors: walls.filter(w => w.door).map(w => [w.id, !!w.open, !!w.locked, !!w.secret]),
+            wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
+            fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
+            dark: !!(m.dark && m.dark.on), dR: (m.dark && m.dark.range) || 0, li: (m.lights || []).length,
+            tk: (ms.tokens || []).map(t => [t.id, t.owner || '', Number(t.size) || 1, t.img || '', t.name || '', !!t.hidden, (t.badges || ''), t.color || '']).sort()
+        });
+    }
+    let lastMapSig = null;
     function applyMap(map, tokens) {
         mapState = { map: map || {}, tokens: tokens || [] };
         ensureMapUI();
@@ -797,7 +816,39 @@
         // Pendant que je déplace mon jeton, reconstruire le DOM casserait le glisser en cours :
         // on note qu'un re-rendu est dû et on l'applique au lâcher.
         if (playerDragBusy) { pendingMapRender = true; return; }
-        renderPlayerMap();
+        const sig = mapStructSig(mapState);
+        const hasAura = (mapState.tokens || []).some(t => t.aura && Number(t.aura.r) > 0);
+        const board = playerBoard();
+        if (board && lastMapSig !== null && sig === lastMapSig && !hasAura) patchTokenPositions();
+        else renderPlayerMap();
+        lastMapSig = sig;
+    }
+    // Déplace seulement les jetons déjà présents (fluide), rafraîchit vision + portes visibles.
+    function patchTokenPositions() {
+        const board = playerBoard(); if (!board) { renderPlayerMap(); return; }
+        (mapState.tokens || []).filter(t => !t.hidden).forEach(t => {
+            const el = board.querySelector('.smap-token[data-token="' + t.id + '"]');
+            if (el) { el.style.left = (t.x * 100) + '%'; el.style.top = (t.y * 100) + '%'; }
+        });
+        renderPlayerDark();
+        const m = mapState.map || {};
+        if ((m.dark && m.dark.on) || (m.fog && m.fog.on)) refreshPlayerDoors();  // la visibilité des portes suit les jetons
+    }
+    // Recalcule quelles portes sont visibles (utilisé pendant un déplacement fluide).
+    function refreshPlayerDoors() {
+        const board = playerBoard(); if (!board) return;
+        const m = mapState.map || {};
+        const bw = Math.max(1, board.clientWidth), bh = Math.max(1, board.clientHeight);
+        const origins = playerVisionOrigins(bw, bh), segs = playerBlockingSegsPx(bw, bh);
+        board.querySelectorAll('.smap-door-btn').forEach(b => b.remove());
+        const html = (m.walls || []).filter(s => s.door && !s.secret && doorVisibleToPlayer(s, bw, bh, origins, segs)).map(doorButtonHtml).join('');
+        if (html) board.insertAdjacentHTML('beforeend', html);
+    }
+    function doorButtonHtml(s) {
+        const mx = (s.x1 + s.x2) / 2 * 100, my = (s.y1 + s.y2) / 2 * 100;
+        const cls = 'smap-door-btn' + (s.open ? ' is-open' : '') + (s.locked ? ' is-locked' : '');
+        const tip = s.locked ? 'Porte verrouillée' : (s.open ? 'Porte ouverte — clic : fermer' : 'Porte fermée — clic : ouvrir');
+        return `<button class="${cls}" data-door="${s.id}"${s.locked ? ' disabled' : ''} style="left:${mx}%; top:${my}%;" title="${tip}">${s.locked ? '🔒' : '🚪'}</button>`;
     }
 
     // Le BOARD : plateau à ratio fixe (m.stageAR), identique à celui du MJ — les fractions
@@ -830,13 +881,11 @@
             const badges = t.badges ? `<span class="smap-badges">${escHtml(t.badges)}</span>` : '';
             return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}</div>`;
         }).join('');
-        // Portes visibles par les joueurs (pas les portes secrètes). Verrouillées = 🔒 non cliquables.
-        const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret).map(s => {
-            const mx = (s.x1 + s.x2) / 2 * 100, my = (s.y1 + s.y2) / 2 * 100;
-            const cls = 'smap-door-btn' + (s.open ? ' is-open' : '') + (s.locked ? ' is-locked' : '');
-            const tip = s.locked ? 'Porte verrouillée' : (s.open ? 'Porte ouverte — clic : fermer' : 'Porte fermée — clic : ouvrir');
-            return `<button class="${cls}" data-door="${s.id}"${s.locked ? ' disabled' : ''} style="left:${mx}%; top:${my}%;" title="${tip}">${s.locked ? '🔒' : '🚪'}</button>`;
-        }).join('');
+        // Portes : jamais les secrètes, et seulement celles RÉELLEMENT en vue quand
+        // l'obscurité ou le brouillard sont actifs (le joueur ne devine plus les portes cachées).
+        const doorOrigins = playerVisionOrigins(bw, bh);
+        const doorSegs = playerBlockingSegsPx(bw, bh);
+        const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret && doorVisibleToPlayer(s, bw, bh, doorOrigins, doorSegs)).map(doorButtonHtml).join('');
         view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;">` + tokensHtml + doorsHtml
             + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas></div>';
         const board = view.querySelector('.smap-board');
@@ -853,6 +902,28 @@
         renderPlayerWeather();
         renderPlayerFog();
         renderPlayerDark();
+        renderPlayerAoeBar();
+    }
+    // Barre d'outils gabarit côté joueur (formes + couleur + effacer). Le MJ peut la désactiver.
+    function renderPlayerAoeBar() {
+        const view = document.getElementById('smap-view'); if (!view) return;
+        let bar = view.querySelector('#smap-aoe-bar');
+        const off = !!(mapState.map && mapState.map.playerAoeOff);
+        const aoeBtn = mapPanel && mapPanel.querySelector('#smap-aoe');
+        if (aoeBtn) aoeBtn.style.display = off ? 'none' : '';
+        if (off) playerAoe.on = false;
+        if (!playerAoe.on) { if (bar) bar.remove(); return; }
+        if (!bar) { bar = document.createElement('div'); bar.id = 'smap-aoe-bar'; bar.className = 'smap-aoe-bar'; view.appendChild(bar); }
+        const shapes = [['circle', '⭕'], ['cone', '🔺'], ['line', '➖'], ['cube', '⬛']];
+        bar.innerHTML = shapes.map(s => `<button data-aoe="${s[0]}" class="${playerAoe.kind === s[0] ? 'is-on' : ''}" title="Forme">${s[1]}</button>`).join('')
+            + `<input type="color" id="smap-aoe-color" value="${playerAoe.color}" title="Couleur">`
+            + `<button data-aoe="clear" title="Effacer mes gabarits">🧹</button>`;
+        bar.querySelectorAll('[data-aoe]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (b.dataset.aoe === 'clear') { sendToGm('template-clear', { fromUid: myUid() }); return; }
+            playerAoe.kind = b.dataset.aoe; renderPlayerAoeBar();
+        }));
+        const col = bar.querySelector('#smap-aoe-color'); if (col) col.addEventListener('input', (e) => { playerAoe.color = e.target.value; });
     }
     // Gabarits de sorts posés par le MJ (sphère / cône / ligne / cube)
     function renderPlayerTemplates() {
@@ -863,7 +934,7 @@
         if (canvas.height !== h) canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, w, h);
-        const ts = (mapState.map && mapState.map.templates) || [];
+        const ts = ((mapState.map && mapState.map.templates) || []).concat(playerAoe.draft ? [playerAoe.draft] : []);
         if (ts.length && window.VTTGeo && window.VTTGeo.drawTemplates) window.VTTGeo.drawTemplates(ctx, w, h, ts, playerGridPx(w), playerCellM());
     }
     // Météo d'ambiance décidée par le MJ (pluie, neige, brume, braises)
@@ -871,6 +942,40 @@
         const board = playerBoard(); if (!board) return;
         const canvas = board.querySelector('.smap-weather'); if (!canvas) return;
         if (window.VTTWeather) window.VTTWeather.apply(canvas, (mapState.map && mapState.map.weather) || '', Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
+    }
+    // Origines de vision du joueur (SES jetons + les lumières du MJ), en px du board donné.
+    function playerVisionOrigins(w, h) {
+        const m = mapState.map || {};
+        if (!window.VTTGeo) return [];
+        const uid = myUid();
+        const dk = Object.assign({}, m.dark || {}, { cellM: playerCellM() });
+        const g = playerGridPx(w);
+        const origins = [];
+        (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid)
+            .forEach(t => origins.push({ x: t.x * w, y: t.y * h, R: window.VTTGeo.visionRadiusPx(t, dk, g) }));
+        (m.lights || []).forEach(l => origins.push({ x: l.x * w, y: l.y * h, R: (Number(l.r) || 0.16) * w }));
+        return origins;
+    }
+    // Murs bloquants en px, id conservé (pour exclure une porte de son propre test de vue).
+    function playerBlockingSegsPx(w, h) {
+        const walls = (mapState.map && mapState.map.walls) || [];
+        if (!window.VTTGeo) return [];
+        return window.VTTGeo.blockingWalls(walls).map(s => ({ id: s.id, x1: s.x1 * w, y1: s.y1 * h, x2: s.x2 * w, y2: s.y2 * h }));
+    }
+    // Une porte est-elle réellement vue par le joueur ? (respecte obscurité + brouillard)
+    function doorVisibleToPlayer(s, w, h, origins, segsPx) {
+        const m = mapState.map || {};
+        if (m.fog && m.fog.on) {
+            const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
+            const revealed = (m.fog.reveals || []).some(r => Math.hypot(r.x - mx, r.y - my) <= (r.r || 0.06));
+            if (!revealed) return false;
+        }
+        if (m.dark && m.dark.on && window.VTTGeo && window.VTTGeo.pointVisible) {
+            const mx = (s.x1 + s.x2) / 2 * w, my = (s.y1 + s.y2) / 2 * h;
+            const segsNoSelf = segsPx.filter(g => g.id !== s.id);   // la porte ne se bloque pas elle-même
+            return window.VTTGeo.pointVisible(mx, my, origins, segsNoSelf);
+        }
+        return true;                                                // ni noir ni brouillard : tout est visible
     }
     // --- Obscurité (vision limitée) : NOIR TOTAL hors de portée de vision de MES jetons.
     // Les murs invisibles posés par le MJ bloquent la ligne de vue (portes fermées incluses).
@@ -977,16 +1082,30 @@
             sendToGm('door-toggle', { id: dEl.dataset.door, fromUid: myUid() });
             if (window.showAppToast) window.showAppToast('🚪 …', '#2c3e50');
         });
+        let aoeDrawing = false;
+        const boardFrac = (e) => { const b = playerBoard() || view; const r = b.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
         view.addEventListener('pointerdown', (e) => {
-            if (e.target.closest('.smap-door-btn')) return;   // la porte gère son propre clic
+            if (e.target.closest('.smap-door-btn') || e.target.closest('#smap-aoe-bar')) return;
+            // Outil gabarit actif : glisser sur la carte trace la zone d'effet (origine → taille).
+            if (playerAoe.on) {
+                const p = boardFrac(e);
+                playerAoe.draft = { kind: playerAoe.kind, x: p.x, y: p.y, x2: p.x, y2: p.y, color: playerAoe.color };
+                aoeDrawing = true;
+                try { view.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); return;
+            }
             const tEl = e.target.closest('.smap-token'); if (!tEl) return;
             const t = (mapState.tokens || []).find(x => x.id === tEl.dataset.token); if (!t) return;
             if (mapState.map && mapState.map.tokensLocked) return;
             if (!t.owner || t.owner !== myUid()) return;   // un joueur ne bouge que son jeton
             cur = t; el = tEl; playerDragBusy = true;
+            el.classList.add('smap-token-dragging');
             try { tEl.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
         });
         view.addEventListener('pointermove', (e) => {
+            if (aoeDrawing && playerAoe.draft) {
+                const p = boardFrac(e); playerAoe.draft.x2 = p.x; playerAoe.draft.y2 = p.y;
+                renderPlayerTemplates(); return;
+            }
             if (!cur || !el) return;
             const b = playerBoard() || view;
             const r = b.getBoundingClientRect();               // coordonnées relatives au BOARD (espace partagé)
@@ -1000,7 +1119,15 @@
             sendTokenMove(cur, false);
         });
         const up = () => {
+            if (aoeDrawing && playerAoe.draft) {
+                const d = playerAoe.draft; playerAoe.draft = null; aoeDrawing = false;
+                if (Math.hypot((d.x2 - d.x), (d.y2 - d.y)) > 0.01) {
+                    sendToGm('template-add', { kind: d.kind, x: d.x, y: d.y, x2: d.x2, y2: d.y2, color: d.color, by: 'player', byUid: myUid() });
+                }
+                renderPlayerTemplates(); return;
+            }
             if (!cur) return;
+            if (el) el.classList.remove('smap-token-dragging');
             sendTokenMove(cur, true); cur = null; el = null; playerDragBusy = false;
             if (pendingMapRender) { pendingMapRender = false; renderPlayerMap(); }
         };
@@ -1225,7 +1352,14 @@
         .smap-templates, .smap-weather { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
         .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
-        .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; }
+        .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }
+        .smap-token-dragging { transition:none !important; z-index:9; }
+        .smap-aoe-bar { position:absolute; top:8px; left:8px; z-index:12; display:flex; gap:4px; align-items:center; background:rgba(28,20,12,0.92); border:1px solid rgba(196,155,53,0.5); border-radius:10px; padding:4px 6px; box-shadow:0 3px 10px rgba(0,0,0,0.5); }
+        .smap-aoe-bar.hidden { display:none; }
+        .smap-aoe-bar button { width:30px; height:30px; border-radius:7px; border:1px solid rgba(196,155,53,0.35); background:#2a2118; color:#ece3d2; cursor:pointer; font-size:0.95rem; padding:0; }
+        .smap-aoe-bar button.is-on { background:rgba(196,155,53,0.4); border-color:#C49B35; }
+        .smap-aoe-bar input[type=color] { width:28px; height:28px; padding:0; border:1px solid rgba(196,155,53,0.35); border-radius:6px; background:none; cursor:pointer; }
+        #smap-aoe.is-on { background:rgba(196,155,53,0.4); }
         .smap-token-mine { cursor:grab; box-shadow:0 0 0 2px #fff, 0 0 10px var(--accent-color,#C49B35); }
         .smap-token-mine:active { cursor:grabbing; }
         .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }

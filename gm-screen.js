@@ -243,6 +243,7 @@
                 <span id="gm-presence-count" class="gm-presence-count" style="display:none;">👥 0</span>
                 <button id="gm-room-btn" class="gm-btn gm-btn-primary">➕ Créer une session</button>
             </div>
+            <button id="gm-shortcuts-btn" class="gm-btn gm-icon-btn" title="Raccourcis clavier (?)">⌨️</button>
             <button id="gm-hints-toggle" class="gm-btn gm-icon-btn" title="Masquer les aides ⓘ">💡</button>
             <button id="gm-sidebar-toggle" class="gm-btn gm-icon-btn" title="Afficher / masquer le panneau latéral">📜</button>
             <button id="gm-close" class="gm-btn gm-close" title="Fermer">✕</button>
@@ -263,6 +264,9 @@
                 <button class="gm-tool gm-tool-flyable" data-tgroup="view" title="Carte &amp; zoom">🗺️</button>
                 <div class="gm-tool-sep"></div>
                 <button class="gm-tool" data-tgroup="layers" title="Calques (visibilité &amp; opacité)">🗂️</button>
+                <div class="gm-tool-sep"></div>
+                <button class="gm-tool gm-tool-hist" id="gm-undo" title="Annuler (Ctrl+Z)" disabled>↶</button>
+                <button class="gm-tool gm-tool-hist" id="gm-redo" title="Rétablir (Ctrl+Y)" disabled>↷</button>
             </div>
             <!-- ===== ZONE CENTRALE : grande carte (stage) ===== -->
             <div class="gm-main">
@@ -590,10 +594,14 @@
             ov.querySelectorAll('.gm-leftbar .gm-tool').forEach(btn => btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const key = btn.dataset.tgroup;
+                if (!key) return;                                    // boutons historique (undo/redo) : gérés à part
                 if (key === 'select' || key === 'ping') { closeToolFlyout(); setMapTool(key); return; }
                 if (key === 'layers') { closeToolFlyout(); toggleLayersPanel(); return; }
                 openToolFlyout(key, btn);
             }));
+            const undoBtn = ov.querySelector('#gm-undo'); if (undoBtn) undoBtn.addEventListener('click', (e) => { e.stopPropagation(); undoMap(); });
+            const redoBtn = ov.querySelector('#gm-redo'); if (redoBtn) redoBtn.addEventListener('click', (e) => { e.stopPropagation(); redoMap(); });
+            const scBtn = ov.querySelector('#gm-shortcuts-btn'); if (scBtn) scBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleShortcutsHelp(); });
         } catch (e) { console.warn('gm layout Roll20:', e); }
     }
 
@@ -659,6 +667,7 @@
                 { type: 'aoekind' },
                 { type: 'aoecolor' },
                 { icon: '🧹', label: 'Effacer un gabarit (cliquer l\'origine)', type: 'tool', tool: 'aoeerase' },
+                { icon: (m.playerAoeOff ? '🚫' : '👥'), label: m.playerAoeOff ? 'Joueurs : gabarits interdits — autoriser' : 'Joueurs : gabarits autorisés — interdire', type: 'toggle', on: !m.playerAoeOff, run: togglePlayerAoe },
                 { icon: '🗑️', label: 'Retirer tous les gabarits', type: 'action', danger: true, run: clearTemplatesConfirm }
             ]
         };
@@ -668,8 +677,9 @@
             items: [
                 { icon: '📍', label: 'Poser des jetons (clic sur la carte)', type: 'tool', tool: 'placetoken' },
                 { type: 'placetype' },
-                { icon: '➕', label: 'Ajouter un jeton au centre…', type: 'action', run: addTokenPrompt },
-                { icon: '⟳', label: 'Placer les combattants', type: 'action', run: addTokensFromCombat },
+                { type: 'placeowner' },
+                { icon: '✥', label: 'Déplacer un élément posé (mur, lumière, gabarit)', type: 'tool', tool: 'objmove' },
+                { icon: '⟳', label: 'Placer les combattants (choisir qui & où)', type: 'action', run: startPlaceCombatants },
                 { icon: m.tokensLocked ? '🔒' : '🔓', label: m.tokensLocked ? 'Verrouillés (MJ seul) — libérer' : 'Libres (joueurs) — verrouiller', type: 'toggle', on: !!m.tokensLocked, run: toggleTokensLock },
                 { icon: '🧲', label: 'Aimanter à la grille', type: 'toggle', on: !!m.snap, run: toggleSnap },
                 { icon: '🗑️', label: 'Vider tous les jetons', type: 'action', danger: true, run: clearTokensConfirm }
@@ -677,9 +687,10 @@
         };
         if (key === 'view') return {
             title: '🗺️ Carte & zoom',
-            hint: 'Molette sur la carte = zoom sous le curseur · glisser = déplacer',
+            hint: 'Molette = zoom sous le curseur · ✋ ou clic-molette = déplacer la vue',
             items: [
-                { icon: '🖼️', label: 'Caler le fond (glisser / molette)', type: 'tool', tool: 'bg' },
+                { icon: '✋', label: 'Déplacer la vue (glisser)', type: 'tool', tool: 'pan' },
+                { icon: '🖼️', label: 'Caler l\'image de fond sous la grille', type: 'tool', tool: 'bg' },
                 { icon: '📏', label: 'Mesurer une distance (glisser)', type: 'tool', tool: 'ruler' },
                 { icon: '📐', label: 'Échelle : 1 case = ' + cellMeters() + ' m', type: 'action', run: promptCellM, keep: true },
                 { type: 'weather' },
@@ -692,7 +703,7 @@
         return null;
     }
     // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
-    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase'], light: ['light'], aoe: ['aoe', 'aoeerase'], view: ['bg', 'ruler'], tokens: ['placetoken'], layers: [] };
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase'], light: ['light'], aoe: ['aoe', 'aoeerase'], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant'], layers: [] };
     let flyoutKey = null;
     function ensureToolFlyout() {
         let p = byId('gm-tool-flyout'); if (p) return p;
@@ -718,6 +729,12 @@
             if (it.type === 'vision') { const dr = (state.map && state.map.dark && Number(state.map.dark.range)) || 9; return `<div class="gm-fly-row" title="Distance de vision des joueurs dans le noir (1 case = 1,5 m)"><span class="gm-fly-ic">👁️</span><span class="gm-fly-lbl">Vision</span><input type="range" id="gm-dark-range" min="1.5" max="30" step="1.5" value="${dr}"><b class="gm-fly-wval gm-fly-wval-wide" id="gm-dark-range-val">${dr} m</b></div>`; }
             if (it.type === 'lightcolor') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur de lumière</span><input type="color" id="gm-light-color" value="${lightColor}" title="Couleur de la prochaine lumière"></div>`;
             if (it.type === 'placetype') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎭</span><span class="gm-fly-lbl">Type posé</span><span class="gm-place-type" id="gm-place-type">${[['pj', '🧝 PJ'], ['npc', '🙂 PNJ'], ['monster', '👹 Monstre']].map(t => `<button data-ptype="${t[0]}" class="${placeTokenType === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
+            if (it.type === 'placeowner') {
+                const players = (live.players || []);
+                const opts = players.map(pl => { const s = pl.snapshot || {}; const nm = s.name || pl.character_name || 'Joueur'; return `<button data-powner="${pl.user_id}" data-pname="${esc(nm)}" class="${placeOwner && placeOwner.uid === pl.user_id ? 'is-on' : ''}">🧝 ${esc(nm)}</button>`; }).join('');
+                const none = `<button data-powner="" class="${!placeOwner ? 'is-on' : ''}">— libre —</button>`;
+                return `<div class="gm-fly-row" title="Assigne le prochain jeton PJ posé à un joueur connecté (pré-placement) : ce sera SON jeton quand il jouera."><span class="gm-fly-ic">🔗</span><span class="gm-fly-lbl">Joueur</span><span class="gm-place-type" id="gm-place-owner">${none}${opts || '<button disabled>aucun connecté</button>'}</span></div>`;
+            }
             if (it.type === 'aoekind') return `<div class="gm-fly-row"><span class="gm-fly-ic">🔷</span><span class="gm-fly-lbl">Forme</span><span class="gm-place-type" id="gm-aoe-kind">${[['circle', '⭕ Sphère'], ['cone', '🔺 Cône'], ['line', '➖ Ligne'], ['cube', '⬛ Cube']].map(t => `<button data-aoekind="${t[0]}" class="${aoeKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
             if (it.type === 'aoecolor') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur</span><input type="color" id="gm-aoe-color" value="${aoeColor}"></div>`;
             if (it.type === 'weather') { const cur = (state.map && state.map.weather) || ''; return `<div class="gm-fly-row"><span class="gm-fly-ic">🌦️</span><span class="gm-fly-lbl">Météo</span><span class="gm-place-type" id="gm-weather-pick">${[['', '☀️'], ['rain', '🌧️'], ['snow', '❄️'], ['fog', '🌫️'], ['embers', '🔥']].map(t => `<button data-weather="${t[0]}" class="${cur === t[0] ? 'is-on' : ''}" title="${{ '': 'Aucune', rain: 'Pluie', snow: 'Neige', fog: 'Brume', embers: 'Braises' }[t[0]]}">${t[1]}</button>`).join('')}</span></div>`; }
@@ -741,8 +758,19 @@
         const lcol = p.querySelector('#gm-light-color'); if (lcol) lcol.addEventListener('input', (e) => { lightColor = e.target.value; });
         const ptype = p.querySelector('#gm-place-type');
         if (ptype) ptype.querySelectorAll('[data-ptype]').forEach(b => b.addEventListener('click', (e) => {
-            e.stopPropagation(); placeTokenType = b.dataset.ptype; setMapTool('placetoken');
+            e.stopPropagation(); placeTokenType = b.dataset.ptype; if (b.dataset.ptype !== 'pj') placeOwner = null;
+            if (mapTool !== 'placetoken') setMapTool('placetoken');
             ptype.querySelectorAll('[data-ptype]').forEach(x => x.classList.toggle('is-on', x === b));
+            const own = p.querySelector('#gm-place-owner'); if (own) own.querySelectorAll('[data-powner]').forEach(x => x.classList.toggle('is-on', !x.dataset.powner && !placeOwner));
+        }));
+        const powner = p.querySelector('#gm-place-owner');
+        if (powner) powner.querySelectorAll('[data-powner]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            placeOwner = b.dataset.powner ? { uid: b.dataset.powner, name: b.dataset.pname } : null;
+            if (placeOwner) placeTokenType = 'pj';
+            if (mapTool !== 'placetoken') setMapTool('placetoken');
+            powner.querySelectorAll('[data-powner]').forEach(x => x.classList.toggle('is-on', x === b));
+            const pt = p.querySelector('#gm-place-type'); if (pt) pt.querySelectorAll('[data-ptype]').forEach(x => x.classList.toggle('is-on', x.dataset.ptype === placeTokenType));
         }));
         const akind = p.querySelector('#gm-aoe-kind');
         if (akind) akind.querySelectorAll('[data-aoekind]').forEach(b => b.addEventListener('click', (e) => {
@@ -1341,6 +1369,8 @@
                 .on('broadcast', { event: 'initiative-roll' }, ({ payload }) => onInitiativeRoll(payload))
                 .on('broadcast', { event: 'token-move' }, ({ payload }) => onTokenMove(payload))
                 .on('broadcast', { event: 'door-toggle' }, ({ payload }) => onPlayerDoorToggle(payload))
+                .on('broadcast', { event: 'template-add' }, ({ payload }) => onPlayerTemplate(payload))
+                .on('broadcast', { event: 'template-clear' }, ({ payload }) => onPlayerTemplateClear(payload))
                 .on('broadcast', { event: 'dice' }, ({ payload }) => {   // jet partagé d'un joueur
                     if (!payload) return;
                     if (window.showAppToast) window.showAppToast('🎲 ' + (payload.user || 'Joueur') + ' : ' + (payload.formula || '') + ' = ' + payload.total, '#2c3e50');
@@ -1513,7 +1543,7 @@
         layers: { tokens: true, draw: true, gmnotes: true, fog: true, grid: true, walls: true },
         layerOp: { tokens: 1, draw: 1, gmnotes: 1, fog: 1, grid: 1, walls: 1 },
         visionPreview: false };  // aperçu MJ de ce que voient les joueurs dans le noir
-    let mapTool = 'select';      // 'select'|'bg'|'reveal'|'cover'|'draw'|'wall'|'door'|'dooredit'|'wallerase'|'ruler'|'light'|'placetoken'
+    let mapTool = 'select';      // 'select'|'pan'|'objmove'|'bg'|'reveal'|'cover'|'draw'|'wall'|'door'|'dooredit'|'wallerase'|'ruler'|'light'|'placetoken'|'placecombatant'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
     let drawColor = '#e23b3b';   // couleur du dessin libre
     let drawWidth = 3;           // épaisseur du dessin libre (molette en mode ✏️)
@@ -1525,12 +1555,15 @@
     let lightColor = '#ffcf7a';  // couleur de la prochaine lumière posée
     let lightRadius = 0.16;      // rayon par défaut d'une lumière (fraction de largeur ; molette pour ajuster)
     let placeTokenType = 'npc';  // type de jeton posé au clic (palette PJ/PNJ/monstre)
+    let placeOwner = null;       // joueur assigné au prochain jeton PJ posé { uid, name } (poser à l'avance)
     let aoeKind = 'circle';      // forme du prochain gabarit de sort
     let aoeColor = '#e67e22';    // couleur du prochain gabarit
     let aoeDraft = null;         // gabarit en cours de placement
     let boardWpx = 500;          // largeur ACTUELLE du board MJ en px (mise à jour par renderMap)
-    let mapHist = [];            // historique {map,tokens} pour Ctrl+Z
-    let histLock = false;        // évite de ré-empiler pendant un undo
+    let mapHist = [];            // historique {map,tokens} pour Ctrl+Z (annuler)
+    let mapRedo = [];            // pile de rétablissement (Ctrl+Y / Ctrl+Maj+Z)
+    let histLock = false;        // évite de ré-empiler pendant un undo/redo
+    let placeQueue = [];         // combattants restant à poser sur la carte (outil « placer les combattants »)
     // Jeton dont c'est le tour en combat (surbrillance sur la carte) : match par monId ou par nom.
     function isTokenActiveTurn(t) {
         if (!state.combatActive || !state.initiative || !state.initiative.length) return false;
@@ -1607,8 +1640,10 @@
         renderFog();
     }
     function setMapTool(tool) {
+        const prev = mapTool;
         mapTool = (mapTool === tool && tool !== 'select') ? 'select' : tool;
         if (mapTool === 'reveal' || mapTool === 'cover') fogState().on = true;
+        if (prev === 'placecombatant' && mapTool !== 'placecombatant') removePlaceBar();
         syncToolbar();
         save(); renderMap(); broadcastMap(true);
     }
@@ -1780,6 +1815,7 @@
     }
     function templatesData() { const m = state.map || {}; if (!Array.isArray(m.templates)) m.templates = []; return m.templates; }
     function clearTemplatesConfirm() { if (!confirm('Retirer tous les gabarits de sorts ?')) return; if (state.map) state.map.templates = []; save(); renderMap(); broadcastMap(true); }
+    function togglePlayerAoe() { state.map.playerAoeOff = !state.map.playerAoeOff; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.playerAoeOff ? '🚫 Les joueurs ne peuvent plus poser de gabarits' : '👥 Les joueurs peuvent poser des gabarits', '#2c3e50'); }
     function renderTemplates() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('canvas.gm-layer-templates'); if (!canvas) return;
@@ -1844,20 +1880,82 @@
         if (histLock) return;
         try {
             const snap = JSON.stringify({ map: state.map, tokens: tokensForShare() });
-            if (mapHist[mapHist.length - 1] !== snap) { mapHist.push(snap); if (mapHist.length > 40) mapHist.shift(); }
+            if (mapHist[mapHist.length - 1] !== snap) {
+                mapHist.push(snap); if (mapHist.length > 60) mapHist.shift();
+                mapRedo.length = 0;                          // une nouvelle action invalide le « rétablir »
+                updateUndoRedoButtons();
+            }
         } catch (e) {}
     }
-    function undoMap() {
-        if (mapHist.length < 2) { if (window.showAppToast) window.showAppToast('Rien à annuler sur la carte.', '#7a6050'); return; }
-        mapHist.pop();
+    function applyHistSnap(snap) {
         try {
-            const prev = JSON.parse(mapHist[mapHist.length - 1]);
+            const prev = JSON.parse(snap);
             histLock = true;
             state.map = prev.map; state.tokens = prev.tokens;
             save(); renderMap(); broadcastMap(true);
             histLock = false;
-            if (window.showAppToast) window.showAppToast('↩️ Carte : annulé', '#2c3e50');
         } catch (e) { histLock = false; }
+    }
+    function undoMap() {
+        if (mapHist.length < 2) { if (window.showAppToast) window.showAppToast('Rien à annuler sur la carte.', '#7a6050'); return; }
+        mapRedo.push(mapHist.pop());                          // l'état courant part dans « rétablir »
+        applyHistSnap(mapHist[mapHist.length - 1]);
+        updateUndoRedoButtons();
+        if (window.showAppToast) window.showAppToast('↩️ Carte : annulé', '#2c3e50');
+    }
+    function redoMap() {
+        if (!mapRedo.length) { if (window.showAppToast) window.showAppToast('Rien à rétablir.', '#7a6050'); return; }
+        const snap = mapRedo.pop();
+        mapHist.push(snap);
+        applyHistSnap(snap);
+        updateUndoRedoButtons();
+        if (window.showAppToast) window.showAppToast('↪️ Carte : rétabli', '#2c3e50');
+    }
+    function updateUndoRedoButtons() {
+        const u = byId('gm-undo'), r = byId('gm-redo');
+        if (u) u.disabled = mapHist.length < 2;
+        if (r) r.disabled = !mapRedo.length;
+    }
+    // ----- Aide : liste des raccourcis clavier (bouton ⌨️ / touche ?) -----
+    function toggleShortcutsHelp() {
+        let ov = byId('gm-shortcuts-modal');
+        if (ov) { ov.remove(); return; }
+        ov = document.createElement('div'); ov.id = 'gm-shortcuts-modal'; ov.className = 'gm-modal no-print';
+        const rows = (window.__gmShortcuts || []).map(s => `<div class="gm-sc-row"><kbd>${esc(s[0])}</kbd><span>${esc(s[1])}</span></div>`).join('');
+        ov.innerHTML = `<div class="gm-modal-box gm-sc-box">
+            <div class="gm-modal-head">⌨️ Raccourcis clavier <button class="gm-modal-x" id="gm-sc-close" title="Fermer">✕</button></div>
+            <div class="gm-sc-grid">${rows}</div>
+            <div class="gm-readonly-note" style="margin-top:8px;">Les raccourcis d'outil ne fonctionnent pas quand tu écris dans un champ.</div>
+        </div>`;
+        document.body.appendChild(ov);
+        const close = () => ov.remove();
+        ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+        const x = byId('gm-sc-close'); if (x) x.addEventListener('click', close);
+    }
+    // ----- Coller une image (Ctrl+V) : fond de la carte si vide, sinon nouveau jeton -----
+    function setupMapPaste() {
+        document.addEventListener('paste', (e) => {
+            if (!document.body.classList.contains('gm-active')) return;
+            const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || (document.activeElement && document.activeElement.isContentEditable)) return;
+            const items = (e.clipboardData && e.clipboardData.items) || [];
+            let file = null;
+            for (const it of items) { if (it.type && it.type.indexOf('image') === 0) { file = it.getAsFile(); break; } }
+            if (!file) return;
+            e.preventDefault();
+            fileToDataURL(file, async (data) => {
+                let url = data;
+                try { const res = await window.SupaAuth.uploadAsset(file, 'maps'); if (res && res.url) url = res.url; } catch (_) {}
+                if (!state.map.bg) {                                 // carte vide → l'image devient le fond
+                    state.map.bg = url; save(); renderMap(); broadcastMap(true);
+                    if (window.showAppToast) window.showAppToast('🖼️ Image collée comme fond de carte', '#2c3e50');
+                } else {                                             // sinon → jeton image au centre de la vue
+                    state.tokens.push({ id: uid(), name: 'Image', type: 'npc', img: url, x: 0.5, y: 0.5 });
+                    save(); renderMap(); broadcastMap(true);
+                    if (window.showAppToast) window.showAppToast('🖼️ Image collée comme jeton', '#2c3e50');
+                }
+            });
+        });
     }
     // ----- Points de sauvegarde de la campagne -----
     function snapsKey() { return 'dnd-gm-snapshots-' + activeCampaignId; }
@@ -2050,12 +2148,15 @@
         if (L.walls !== false) renderWalls();
         renderVisionPreview();
         renderRuler();
-        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'aoe', 'aoeerase'];
+        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase'];
         view.classList.toggle('gm-tool-paint', paintTools.indexOf(mapTool) !== -1);
+        view.classList.toggle('gm-tool-grab', mapTool === 'pan');
+        view.classList.toggle('gm-tool-move', mapTool === 'objmove');
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         renderMapBank();
         renderMapPages();
+        if (placeQueue.length) renderPlaceBar();              // la barre « placer » survit aux re-rendus
     }
     // Aimante une position (fraction 0..1) au centre de la case de grille la plus proche.
     function snapFraction(x, y) {
@@ -2075,6 +2176,7 @@
         else if (field === 'auraR') { if (!t.aura) t.aura = {}; t.aura.r = Math.max(0, parseFloat(value) || 0); if (!t.aura.r) t.aura = null; }
         else if (field === 'auraColor') { if (!t.aura) t.aura = { r: 3 }; t.aura.color = value; }
         else if (field === 'badges') t.badges = String(value || '').slice(0, 12);
+        else if (field === 'owner') { t.owner = value || null; if (t.owner && !t.ref) t.ref = 'pj:' + t.owner; }
         else t[field] = value;
         save(); renderMap(); broadcastMap(true);
     }
@@ -2094,6 +2196,7 @@
             <div class="gm-tp-row"><input class="gm-input" data-tp="name" value="${esc(tok.name || '')}" placeholder="Nom du jeton"></div>
             <div class="gm-tp-row"><label>❤️</label><input class="gm-input gm-num" type="number" data-tp="hp" value="${tok.hp != null ? tok.hp : ''}" placeholder="PV"><span class="gm-tp-sep">/</span><input class="gm-input gm-num" type="number" data-tp="hpMax" value="${tok.hpMax != null ? tok.hpMax : ''}" placeholder="max"><label>🛡️</label><input class="gm-input gm-num" type="number" data-tp="ac" value="${tok.ac != null ? tok.ac : ''}" placeholder="CA"></div>
             <div class="gm-tp-row"><label>📏</label><select class="gm-input" data-tp="size">${sizeOpts}</select></div>
+            <div class="gm-tp-row" title="Assigner ce jeton à un joueur : il devient SON jeton (il peut le déplacer)."><label>🔗</label><select class="gm-input" data-tp="owner"><option value="">— libre / MJ —</option>${(live.players || []).map(pl => { const s = pl.snapshot || {}; const nm = s.name || pl.character_name || 'Joueur'; return `<option value="${pl.user_id}"${tok.owner === pl.user_id ? ' selected' : ''}>${esc(nm)}</option>`; }).join('')}</select></div>
             <div class="gm-tp-row" title="Distance de vision de CE jeton dans le noir (torche, vision dans le noir…). Vide = réglage global de la carte."><label>🌑</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="vision" value="${tok.vision != null ? tok.vision : ''}" placeholder="Vision (m)"><span class="gm-tp-sep">m</span></div>
             <div class="gm-tp-row" title="Aura autour du jeton (rayon en mètres) — visible par tous"><label>🌀</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="auraR" value="${tok.aura && tok.aura.r ? tok.aura.r : ''}" placeholder="Aura (m)"><span class="gm-tp-sep">m</span><input class="gm-tp-color" type="color" data-tp="auraColor" value="${(tok.aura && tok.aura.color) || '#3498db'}" title="Couleur de l'aura"></div>
             <div class="gm-tp-row" title="Badges d'état affichés sur le jeton (emojis) — les états de la fiche du joueur s'ajoutent automatiquement"><label>🏷️</label><input class="gm-input" data-tp="badges" value="${esc(tok.badges || '')}" placeholder="🤢💤… (états manuels)"></div>
@@ -2154,11 +2257,43 @@
         mapThrottle = now;
         if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: tokensForShare() });
     }
-    function addTokensFromCombat() {
-        const add = (name, type, ref, owner) => { if (!state.tokens.find(t => t.ref === ref)) state.tokens.push({ id: uid(), ref, name, type, owner: owner || null, x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8 }); };
-        (live.players || []).forEach(p => { const s = p.snapshot || {}; add(s.name || p.character_name || 'PJ', 'pj', 'pj:' + p.user_id, p.user_id); });
-        state.monsters.forEach(m => add(m.name, 'monster', 'mon:' + m.id, null));
+    // « Placer les combattants » : on choisit QUI (barre du bas) et OÙ (clic sur la carte).
+    let placeSelIdx = 0;
+    function startPlaceCombatants() {
+        const q = [];
+        (live.players || []).forEach(p => { const s = p.snapshot || {}; const ref = 'pj:' + p.user_id; if (!state.tokens.find(t => t.ref === ref)) q.push({ name: s.name || p.character_name || 'PJ', type: 'pj', ref, owner: p.user_id, img: (s && s.tokenImg) || null }); });
+        (state.monsters || []).forEach(m => { const ref = 'mon:' + m.id; if (!state.tokens.find(t => t.ref === ref)) q.push({ name: m.name, type: 'monster', ref, owner: null }); });
+        if (!q.length) { if (window.showAppToast) window.showAppToast('Tous les combattants sont déjà sur la carte.', '#7a6050'); return; }
+        placeQueue = q; placeSelIdx = 0;
+        setMapTool('placecombatant');
+        renderPlaceBar();
+        if (window.showAppToast) window.showAppToast('👆 Choisis qui (barre du bas) puis clique la carte pour le poser', '#2c3e50');
+    }
+    function placeNextCombatant(x, y) {
+        if (!placeQueue.length) return;
+        const idx = Math.min(placeSelIdx, placeQueue.length - 1);
+        const c = placeQueue[idx];
+        const spot = spreadFreeSpot(x, y);
+        state.tokens.push({ id: uid(), ref: c.ref, name: c.name, type: c.type, owner: c.owner || null, img: c.img || null, x: spot.x, y: spot.y });
+        placeQueue.splice(idx, 1);
+        if (placeSelIdx >= placeQueue.length) placeSelIdx = Math.max(0, placeQueue.length - 1);
         save(); renderMap(); broadcastMap(true);
+        if (!placeQueue.length) { removePlaceBar(); setMapTool('select'); if (window.showAppToast) window.showAppToast('✅ Tous les combattants sont placés', '#2c3e50'); }
+        else renderPlaceBar();
+    }
+    function removePlaceBar() { const b = byId('gm-place-bar'); if (b) b.remove(); placeQueue = []; }
+    function renderPlaceBar() {
+        let bar = byId('gm-place-bar');
+        if (!placeQueue.length) { if (bar) bar.remove(); return; }
+        const host = byId('gm-map-view'); if (!host) return;
+        if (!bar) { bar = document.createElement('div'); bar.id = 'gm-place-bar'; bar.className = 'gm-place-bar no-print'; host.appendChild(bar); }
+        bar.innerHTML = `<span class="gm-place-lbl">À placer — clique un nom puis la carte :</span>`
+            + placeQueue.map((c, i) => `<button class="gm-place-chip${i === placeSelIdx ? ' is-on' : ''}" data-pq="${i}">${c.type === 'monster' ? '👹' : '🧝'} ${esc(c.name)}</button>`).join('')
+            + `<button class="gm-place-chip gm-place-done" data-pq="done">✕ Terminer</button>`;
+        bar.querySelectorAll('[data-pq]').forEach(b => b.addEventListener('click', () => {
+            if (b.dataset.pq === 'done') { removePlaceBar(); setMapTool('select'); return; }
+            placeSelIdx = parseInt(b.dataset.pq, 10) || 0; renderPlaceBar();
+        }));
     }
     // Un joueur ouvre/ferme une porte (autorité MJ : refuse si verrouillée ou secrète).
     function onPlayerDoorToggle(p) {
@@ -2166,6 +2301,20 @@
         const d = (state.map && state.map.walls || []).find(w => w.id === p.id && w.door); if (!d) return;
         if (d.locked || d.secret) return;                          // porte verrouillée / secrète : joueur ignoré
         d.open = !d.open;
+        save(); renderMap(); broadcastMap(true);
+    }
+    // Un joueur pose un gabarit de sort (sphère/cône/ligne/cube). Le MJ fait autorité et rediffuse.
+    function onPlayerTemplate(p) {
+        if (!p || p.x == null || (state.map && state.map.playerAoeOff)) return;
+        const ts = templatesData();
+        ts.push({ id: uid(), kind: p.kind || 'circle', x: +p.x, y: +p.y, x2: (p.x2 != null ? +p.x2 : +p.x), y2: (p.y2 != null ? +p.y2 : +p.y), color: p.color || '#3498db', by: p.by || 'player', byUid: p.byUid || null });
+        if (ts.length > 60) ts.shift();
+        save(); renderMap(); broadcastMap(true);
+    }
+    // Un joueur efface les gabarits qu'il a lui-même posés.
+    function onPlayerTemplateClear(p) {
+        if (!p) return;
+        state.map.templates = templatesData().filter(t => !(t.by === 'player' && (!p.fromUid || t.byUid === p.fromUid)));
         save(); renderMap(); broadcastMap(true);
     }
     // Déplacement d'un jeton demandé par un joueur (broadcast 'token-move')
@@ -2189,20 +2338,85 @@
         clearTimeout(tokenMovePersistTimer);
         tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: tokensForShare() }); } catch (e) {} } }, 400);
     }
+    // ----- Déplacement des éléments déjà posés (outil ✥) : murs, lumières, gabarits -----
+    // Renvoie une « poignée » saisissable la plus proche du point (fx,fy) fraction 0..1.
+    function pickMovableAt(fx, fy, rect) {
+        const w = rect.width, h = rect.height, px = fx * w, py = fy * h;
+        let best = null, bd = 14;                                  // tolérance en px écran
+        // Extrémités de murs (déplace un seul bout) puis le mur entier
+        (wallsData()).forEach(s => {
+            [['1', s.x1, s.y1], ['2', s.x2, s.y2]].forEach(end => {
+                const d = Math.hypot(end[1] * w - px, end[2] * h - py);
+                if (d < bd) { bd = d; best = { kind: 'wallpt', ref: s, end: end[0] }; }
+            });
+        });
+        if (best) return best;
+        // Lumières
+        let ld = 16; let lbest = null;
+        (lightsData()).forEach(l => { const d = Math.hypot(l.x * w - px, l.y * h - py); if (d < ld) { ld = d; lbest = { kind: 'light', ref: l }; } });
+        if (lbest) return lbest;
+        // Gabarits (origine)
+        let td = 16; let tbest = null;
+        (templatesData()).forEach(t => { const d = Math.hypot(t.x * w - px, t.y * h - py); if (d < td) { td = d; tbest = { kind: 'template', ref: t }; } });
+        if (tbest) return tbest;
+        // Corps d'un mur (glisse le segment entier) — dernier recours
+        let sd = 12, sbest = null;
+        (wallsData()).forEach(s => {
+            const d = window.VTTGeo ? window.VTTGeo.distToSegment(px, py, s.x1 * w, s.y1 * h, s.x2 * w, s.y2 * h) : 99;
+            if (d < sd) { sd = d; sbest = { kind: 'wallseg', ref: s, grabX: fx, grabY: fy }; }
+        });
+        return sbest;
+    }
+    function moveMovable(md, x, y) {
+        if (md.kind === 'wallpt') { const s = md.ref; if (md.end === '1') { s.x1 = x; s.y1 = y; } else { s.x2 = x; s.y2 = y; } }
+        else if (md.kind === 'wallseg') { const s = md.ref, dx = x - md.grabX, dy = y - md.grabY; s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; md.grabX = x; md.grabY = y; }
+        else if (md.kind === 'light') { md.ref.x = x; md.ref.y = y; }
+        else if (md.kind === 'template') { const t = md.ref, dx = x - t.x, dy = y - t.y; t.x = x; t.y = y; if (t.x2 != null) { t.x2 += dx; t.y2 += dy; } }
+    }
+    // Décale légèrement une position si une case est déjà occupée (évite les jetons empilés).
+    function spreadFreeSpot(x, y) {
+        const cw = ((state.map && state.map.gridSize) || 48) / 1000;
+        const ch = cw * (Number(state.map && state.map.stageAR) || (16 / 9));
+        const taken = (nx, ny) => (state.tokens || []).some(t => Math.abs(t.x - nx) < cw * 0.5 && Math.abs(t.y - ny) < ch * 0.5);
+        if (!taken(x, y)) return { x, y };
+        // Spirale de cases voisines
+        for (let ring = 1; ring <= 6; ring++) {
+            for (let dx = -ring; dx <= ring; dx++) for (let dy = -ring; dy <= ring; dy++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+                const nx = Math.max(0, Math.min(1, x + dx * cw)), ny = Math.max(0, Math.min(1, y + dy * ch));
+                if (!taken(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+        return { x, y };
+    }
+
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
-        let cur = null, tokenEl = null, panning = false, painting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null;
+        let cur = null, tokenEl = null, panning = false, painting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null, objDrag = null;
         // Rect du BOARD (l'espace de coordonnées partagé) — pas du conteneur transformé.
         const contentRect = () => { const c = view.querySelector('.gm-board'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
             startX = e.clientX; startY = e.clientY; moved = false;
-            // Clic molette (bouton du milieu) = se déplacer dans la carte, quel que soit l'outil.
-            // On rebascule aussi sur l'outil « souris » (feedback), sans re-rendre la carte.
+            // Clic molette (bouton du milieu) = se déplacer dans la carte, quel que soit l'outil,
+            // SANS perdre l'outil en cours : on le retrouve tel quel au relâchement.
             if (e.button === 1) {
-                if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); closeToolFlyout(); view.classList.remove('gm-tool-paint'); }
                 panning = true; startPan = { x: mapView.panX, y: mapView.panY };
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 view.classList.add('panning'); e.preventDefault(); return;
+            }
+            // Outil ✋ Main : glisser n'importe où = déplacer la vue (pas l'image de fond).
+            if (mapTool === 'pan') {
+                panning = true; startPan = { x: mapView.panX, y: mapView.panY };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                view.classList.add('panning'); e.preventDefault(); return;
+            }
+            // Outil ✥ Déplacer un élément posé (mur, lumière, gabarit) : on saisit la poignée la plus proche.
+            if (mapTool === 'objmove') {
+                const r = contentRect();
+                const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+                objDrag = pickMovableAt(fx, fy, r);
+                if (objDrag) { try { view.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); }
+                return;
             }
             // Pastille de porte : outil « régler » → popover ; sinon clic = ouvrir/fermer.
             const doorBtn = e.target.closest('.gm-door-btn');
@@ -2251,9 +2465,20 @@
                 const r = contentRect();
                 let x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
                 const sn = snapFraction(x, y); x = sn.x; y = sn.y;
+                const sp = spreadFreeSpot(x, y); x = sp.x; y = sp.y;
                 const names = { pj: 'PJ', npc: 'PNJ', monster: 'Monstre' };
-                state.tokens.push({ id: uid(), name: names[placeTokenType] || 'Jeton', type: placeTokenType, x, y });
+                const tok = { id: uid(), name: names[placeTokenType] || 'Jeton', type: placeTokenType, x, y };
+                if (placeTokenType === 'pj' && placeOwner) { tok.owner = placeOwner.uid; tok.name = placeOwner.name; tok.ref = 'pj:' + placeOwner.uid; }
+                state.tokens.push(tok);
                 save(); renderMap(); broadcastMap(true); e.preventDefault(); return;
+            }
+            if (mapTool === 'placecombatant') {                  // pose le combattant sélectionné à l'endroit cliqué
+                if (!placeQueue.length) { setMapTool('select'); return; }
+                const r = contentRect();
+                let x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                const sn = snapFraction(x, y); x = sn.x; y = sn.y;
+                placeNextCombatant(x, y);
+                e.preventDefault(); return;
             }
             if (mapTool === 'bg') {   // calage du fond : on déplace l'image (pas la grille)
                 bgDrag = true; bgStart = { x: state.map.bgX || 0, y: state.map.bgY || 0 };
@@ -2296,6 +2521,12 @@
         });
         view.addEventListener('pointermove', (e) => {
             if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
+            if (objDrag) {
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                moveMovable(objDrag, x, y);
+                renderWalls(); renderLights(); renderTemplates(); renderVisionPreview(); return;   // redraw léger (pas de rebuild DOM)
+            }
             if (painting) { paintFogAt(e); return; }
             if (wallDraft) {
                 const r = contentRect();
@@ -2344,6 +2575,7 @@
             }
         });
         const up = (e) => {
+            if (objDrag) { objDrag = null; save(); renderMap(); broadcastMap(true); return; }
             if (drawStroke) { drawStroke = null; drawIsNote = false; save(); broadcastMap(true); return; }
             if (wallDraft) {
                 // On ne garde que les segments réels (pas les simples clics)
@@ -2824,15 +3056,27 @@
         byId('gm-snap-create').addEventListener('click', createSnap);
 
         // Raccourcis clavier des outils carte (hors saisie) + Ctrl+Z = annuler sur la carte
-        const TOOL_KEYS = { s: ['select', '🖱️ Souris'], m: ['wall', '🧱 Mur'], p: ['door', '🚪 Porte'], d: ['draw', '✏️ Dessin'], l: ['light', '💡 Lumière'], r: ['ruler', '📏 Règle'], f: ['reveal', '🔦 Révéler (brouillard)'], j: ['placetoken', '📍 Poser un jeton'], a: ['aoe', '🎯 Gabarit'] };
+        const TOOL_KEYS = { s: ['select', '🖱️ Souris'], h: ['pan', '✋ Déplacer la vue'], v: ['objmove', '✥ Déplacer un élément'], m: ['wall', '🧱 Mur'], p: ['door', '🚪 Porte'], d: ['draw', '✏️ Dessin'], l: ['light', '💡 Lumière'], r: ['ruler', '📏 Règle'], f: ['reveal', '🔦 Révéler (brouillard)'], j: ['placetoken', '📍 Poser un jeton'], a: ['aoe', '🎯 Gabarit'] };
+        // Table des raccourcis affichée dans l'aide (⌨️) — libellés lisibles.
+        window.__gmShortcuts = [
+            ['S', 'Souris / sélection'], ['H', 'Déplacer la vue (main)'], ['V', 'Déplacer un élément posé'],
+            ['M', 'Tracer un mur'], ['P', 'Tracer une porte'], ['D', 'Dessiner'], ['L', 'Poser une lumière'],
+            ['R', 'Mesurer (règle)'], ['F', 'Révéler le brouillard'], ['J', 'Poser un jeton'], ['A', 'Gabarit de sort'],
+            ['Échap', 'Revenir à la souris'], ['Ctrl + Z', 'Annuler'], ['Ctrl + Y', 'Rétablir'],
+            ['Molette', 'Zoom sous le curseur'], ['Clic molette', 'Déplacer la vue'], ['Ctrl + V', 'Coller une image sur la carte'], ['?', 'Afficher cette aide']
+        ];
         document.addEventListener('keydown', (e) => {
             if (!document.body.classList.contains('gm-active')) return;
             const tag = (e.target.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoMap(); return; }
+            const k = e.key.toLowerCase();
+            if ((e.ctrlKey || e.metaKey) && k === 'z' && e.shiftKey) { e.preventDefault(); redoMap(); return; }
+            if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); undoMap(); return; }
+            if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redoMap(); return; }
             if (e.ctrlKey || e.metaKey || e.altKey) return;
-            if (e.key === 'Escape') { if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); renderMap(); } closeToolFlyout(); return; }
-            const def = TOOL_KEYS[e.key.toLowerCase()];
+            if (e.key === 'Escape') { if (placeQueue.length) removePlaceBar(); if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); renderMap(); } closeToolFlyout(); return; }
+            if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); toggleShortcutsHelp(); return; }
+            const def = TOOL_KEYS[k];
             if (def) {
                 e.preventDefault();
                 if (mapTool !== def[0]) { mapTool = def[0]; if (def[0] === 'reveal') fogState().on = true; syncToolbar(); renderMap(); }
@@ -2873,6 +3117,7 @@
 
         // --- Carte tactique : fond, grille, jetons ---
         setupMapDrag();
+        setupMapPaste();
         // Le board (plateau à ratio fixe) se recalcule quand la zone carte change de taille
         try {
             let roT = null;

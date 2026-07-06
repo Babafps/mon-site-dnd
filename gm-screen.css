@@ -408,8 +408,34 @@ body.theme-dark .gm-dp-check { color: #d8cbb2; }
 #gm-map-card.gm-map-collapsed .gm-map-controls { display: none; }
 .gm-map-preview { width: 100%; max-height: 150px; object-fit: contain; border-radius: 8px; border: 1px solid var(--soft-border, rgba(122,40,40,0.3)); background: #11100e; }
 .gm-map-view.gm-tool-paint { cursor: crosshair; }
+.gm-map-view.panning { cursor: grabbing; }
+.gm-map-view.gm-tool-grab { cursor: grab; }
+.gm-map-view.gm-tool-grab.panning { cursor: grabbing; }
+.gm-map-view.gm-tool-move { cursor: move; }
 .gm-tool.is-active { background: rgba(196,155,53,0.34); border-color: var(--accent-color, #C49B35); box-shadow: inset 0 0 0 1px var(--accent-color, #C49B35); }
 .gm-tool-sep { height: 1px; flex: 0 0 auto; background: var(--soft-border, rgba(122,40,40,0.25)); margin: 3px 4px; }
+.gm-tool-hist { font-size: 1.35rem; line-height: 1; }
+.gm-tool-hist:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ---- Barre « placer les combattants » (choisir qui puis cliquer la carte) ---- */
+.gm-place-bar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 26; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 92%; padding: 7px 10px; background: rgba(28,20,12,0.94); border: 1px solid rgba(196,155,53,0.5); border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.55); }
+.gm-place-lbl { font-family: 'Lora', serif; font-size: 0.78rem; color: #e8d8b6; margin-right: 4px; }
+.gm-place-chip { font-family: 'Lora', serif; font-size: 0.82rem; padding: 5px 10px; border-radius: 8px; border: 1px solid rgba(196,155,53,0.4); background: #2a2118; color: #ece3d2; cursor: pointer; }
+.gm-place-chip:hover { background: rgba(196,155,53,0.22); }
+.gm-place-chip.is-on { background: rgba(196,155,53,0.42); border-color: #C49B35; box-shadow: inset 0 0 0 1px #C49B35; }
+.gm-place-done { color: #e2a99e; }
+
+/* ---- Fenêtre modale (raccourcis clavier) ---- */
+.gm-modal { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; background: rgba(8,6,4,0.55); backdrop-filter: blur(2px); }
+.gm-modal-box { background: linear-gradient(172deg, #fbf3e0, #f3e7cd); border: 1px solid var(--accent-color, #C49B35); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); padding: 16px 18px; max-width: 460px; width: 92%; max-height: 84vh; overflow: auto; }
+body.theme-dark .gm-modal-box { background: linear-gradient(172deg, #241c16, #2c231b); color: #ece3d2; }
+.gm-modal-head { display: flex; align-items: center; font-family: 'Cinzel', serif; font-weight: bold; color: var(--primary-color, #7A2828); font-size: 1.02rem; margin-bottom: 10px; }
+body.theme-dark .gm-modal-head { color: #e2c25a; }
+.gm-modal-x { margin-left: auto; border: none; background: none; font-size: 1.1rem; cursor: pointer; color: inherit; }
+.gm-sc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.gm-sc-row { display: flex; align-items: center; gap: 8px; font-family: 'Lora', serif; font-size: 0.86rem; }
+.gm-sc-row kbd { flex: 0 0 auto; min-width: 30px; text-align: center; font-family: 'Consolas', monospace; font-size: 0.76rem; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(122,40,40,0.35); background: rgba(196,155,53,0.16); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+@media (max-width: 520px) { .gm-sc-grid { grid-template-columns: 1fr; } }
 
 /* ---- Panneau des calques (flottant sur la carte) ---- */
 .gm-layers-panel {
@@ -442,10 +468,10 @@ body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155
     border-radius: 50%; background: var(--tok, #2980b9); border: 2px solid #fff;
     box-shadow: 0 2px 6px rgba(0,0,0,0.55); cursor: grab; display: flex; align-items: center; justify-content: center;
     color: #fff; font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.72rem; user-select: none;
-    background-size: cover; background-position: center;
+    background-size: cover; background-position: center; transition: left 0.09s linear, top 0.09s linear;
 }
 .gm-token.has-img { border-color: #f3e8cf; }
-.gm-token.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); }
+.gm-token.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); transition: none; }
 /* Jeton dont c'est le tour en combat : anneau doré pulsé */
 .gm-token.is-turn { z-index: 6; box-shadow: 0 0 0 3px #C49B35, 0 0 16px 4px rgba(196,155,53,0.85); animation: gm-token-turn 1.4s ease-in-out infinite; }
 @keyframes gm-token-turn { 0%,100% { box-shadow: 0 0 0 3px #C49B35, 0 0 12px 3px rgba(196,155,53,0.7); } 50% { box-shadow: 0 0 0 4px #e2c25a, 0 0 22px 7px rgba(196,155,53,0.95); } }

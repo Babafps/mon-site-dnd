@@ -73,16 +73,14 @@
     // Retourne une liste ordonnée de points {x,y} (à tracer puis remplir).
     function visionPolygon(cx, cy, segs, R) {
         const angles = [];
-        const N = 90;                                        // rayons uniformes (lisse le cercle)
+        const N = 128;                                       // rayons uniformes (lisse le cercle, moins d'accrocs)
         for (let i = 0; i < N; i++) angles.push((i / N) * Math.PI * 2);
-        const margin = R * 1.6;
+        // Rayons vers CHAQUE extrémité de mur (± epsilon pour « glisser » derrière les coins) :
+        // on ne cule plus par distance — un mur à peine plus loin que R laissait fuiter la lumière.
         (segs || []).forEach(s => {
-            // Rayons vers chaque extrémité (± epsilon pour « glisser » derrière les coins)
             [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => {
-                const dx = pt[0] - cx, dy = pt[1] - cy;
-                if (Math.abs(dx) > margin || Math.abs(dy) > margin) return; // trop loin pour compter
-                const a = Math.atan2(dy, dx);
-                angles.push(a - 0.0008, a, a + 0.0008);
+                const a = Math.atan2(pt[1] - cy, pt[0] - cx);
+                angles.push(a - 0.0006, a, a + 0.0006);
             });
         });
         angles.sort((a, b) => a - b);
@@ -90,7 +88,7 @@
         let lastA = null;
         for (let i = 0; i < angles.length; i++) {
             const a = angles[i];
-            if (lastA !== null && Math.abs(a - lastA) < 1e-5) continue;  // doublons
+            if (lastA !== null && Math.abs(a - lastA) < 1e-6) continue;  // doublons
             lastA = a;
             const dx = Math.cos(a), dy = Math.sin(a);
             let best = R;
@@ -110,9 +108,11 @@
     }
 
     // Dessine la « lumière » d'un jeton dans un ctx en mode effacement :
-    // clip sur le polygone de visibilité + dégradé radial (net au centre,
-    // fondu au bord de la portée). ctx doit être en 'destination-out'.
-    function eraseVision(ctx, cx, cy, segs, R) {
+    // clip sur le polygone de visibilité. ctx doit être en 'destination-out'.
+    //   hard = true  → bord NET (aucun fondu) : la zone vue est dévoilée d'un bloc,
+    //                  ce qui donne des lignes propres et un aperçu MJ = vue joueur.
+    //   hard = false → léger fondu radial en bord de portée (ancien rendu doux).
+    function eraseVision(ctx, cx, cy, segs, R, hard) {
         const poly = visionPolygon(cx, cy, segs, R);
         if (!poly.length) return;
         ctx.save();
@@ -120,14 +120,40 @@
         poly.forEach((p, i) => { i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
         ctx.closePath();
         ctx.clip();
-        const g = ctx.createRadialGradient(cx, cy, Math.max(1, R * 0.55), cx, cy, R);
-        g.addColorStop(0, 'rgba(0,0,0,1)');      // alpha 1 = zone totalement dévoilée
-        g.addColorStop(1, 'rgba(0,0,0,0)');      // fondu en bord de portée
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.fill();
+        if (hard !== false) {                    // NET par défaut (demande MJ : pas de fondu)
+            ctx.fillStyle = 'rgba(0,0,0,1)';
+            ctx.fillRect(cx - R - 2, cy - R - 2, R * 2 + 4, R * 2 + 4);
+        } else {
+            const g = ctx.createRadialGradient(cx, cy, Math.max(1, R * 0.78), cx, cy, R);
+            g.addColorStop(0, 'rgba(0,0,0,1)');  // alpha 1 = zone totalement dévoilée
+            g.addColorStop(1, 'rgba(0,0,0,0)');  // fondu en bord de portée
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(cx, cy, R, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.restore();
+    }
+
+    // Un point (fraction 0..1) est-il visible depuis un jeton porteur de vision ?
+    // Sert côté joueur à ne montrer une porte QUE si elle est réellement en vue.
+    // origins = [{x,y,R}] en px (jetons + lumières) ; segs = murs bloquants en px.
+    function pointVisible(px, py, origins, segs) {
+        for (let i = 0; i < origins.length; i++) {
+            const o = origins[i];
+            const d = Math.hypot(px - o.x, py - o.y);
+            if (d > o.R) continue;
+            if (!moveBlockedPx(o.x, o.y, px, py, segs)) return true;
+        }
+        return false;
+    }
+    // Version pixels de moveBlocked (segments déjà en px)
+    function moveBlockedPx(x1, y1, x2, y2, segs) {
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            if (segCross(x1, y1, x2, y2, s.x1, s.y1, s.x2, s.y2)) return true;
+        }
+        return false;
     }
 
     // Portée de vision d'un jeton en PIXELS : t.vision (m) sinon portée globale.
@@ -187,7 +213,7 @@
         });
     }
 
-    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, visionRadiusPx, blockingWalls, drawTemplates };
+    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, visionRadiusPx, blockingWalls, drawTemplates, pointVisible };
 })();
 
 // =====================================================
