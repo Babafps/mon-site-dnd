@@ -149,7 +149,7 @@
             monsters: [], npcs: [], quests: [], notes: '', scenes: [], soundboard: [],
             map: { bg: null, gridSize: 48, showGrid: true }, tokens: [],
             maps: [], activeMapId: null,
-            env: { time: '', weather: '☀️ Dégagé' }, diceLog: [], offlineSheets: []
+            env: { time: '', weather: '☀️ Dégagé' }, diceLog: [], offlineSheets: [], combatLog: []
         };
     }
     let state = defaultState();
@@ -185,7 +185,7 @@
     let pendingTreeUpload = null;
     let treeTextTimer = null;
     function load() { if (!activeCampaignId) return defaultState(); try { const s = JSON.parse(localStorage.getItem(stateKey())); return Object.assign(defaultState(), s || {}); } catch (e) { return defaultState(); } }
-    function save() { if (!activeCampaignId) return; syncActivePage(); try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} GmCloud.queueState(activeCampaignId); }
+    function save() { if (!activeCampaignId) return; syncActivePage(); try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch (e) {} GmCloud.queueState(activeCampaignId); if (typeof histPush === 'function') histPush(); }
 
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -257,6 +257,8 @@
                 <button class="gm-tool gm-tool-flyable" data-tgroup="draw" title="Dessin &amp; notes MJ">✏️</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="fog" title="Brouillard de guerre">🌫️</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="walls" title="Murs, portes &amp; obscurité (vision des joueurs)">🧱</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="light" title="Points de lumière (torches, lanternes…)">💡</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="aoe" title="Gabarits de sorts (sphère, cône, ligne, cube)">🎯</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="tokens" title="Jetons">🧝</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="view" title="Carte &amp; zoom">🗺️</button>
                 <div class="gm-tool-sep"></div>
@@ -334,9 +336,18 @@
                     </div>
                 </div>
 
+                <div class="gm-card gm-span-2">
+                    <div class="gm-card-head"><span class="gm-card-icon">📜</span> Journal de combat
+                        <span class="gm-spacer"></span>
+                        <button id="gm-combatlog-clear" class="gm-btn" title="Vider le journal">🧹</button>
+                    </div>
+                    <div class="gm-card-body"><div id="gm-combatlog" class="gm-dice-log"></div></div>
+                </div>
+
                 <div id="gm-card-env" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🌤️</span> Environnement</div>
                     <div class="gm-card-body">
+                        <div class="gm-env-row"><label>⏳ Minuteur</label><input id="gm-timer-min" class="gm-input gm-num" type="number" min="1" value="5" style="width:64px;" title="Minutes"><button id="gm-timer-start" class="gm-btn" title="Lancer le compte à rebours (visible par tous)">▶</button><button id="gm-timer-stop" class="gm-btn" title="Arrêter">⏹</button></div>
                         <div class="gm-env-row"><label>🕑 Heure</label><input id="gm-env-time" class="gm-input" placeholder="ex : Crépuscule, 18h…"></div>
                         <div class="gm-env-row"><label>🌦️ Météo</label>
                             <select id="gm-env-weather" class="gm-select">
@@ -363,10 +374,14 @@
                 <div id="gm-card-image" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🖼️</span> Montrer une image aux joueurs</div>
                     <div class="gm-card-body">
+                        <div class="gm-row" style="align-items:center;">
+                            <label class="gm-map-ctl">👤 Pour</label>
+                            <select id="gm-showimg-target" class="gm-select" style="flex:1;"><option value="all">📢 Tous les joueurs</option></select>
+                        </div>
                         <div class="gm-row">
                             <input id="gm-showimg-url" class="gm-input" placeholder="URL d'une image…">
                             <label class="gm-btn" title="Importer une image">📁<input type="file" id="gm-showimg-file" accept="image/*" style="display:none;"></label>
-                            <button id="gm-showimg-send" class="gm-add" title="Envoyer aux joueurs">📤</button>
+                            <button id="gm-showimg-send" class="gm-add" title="Envoyer">📤</button>
                         </div>
                         <div class="gm-row" style="align-items:center;">
                             <label class="gm-map-ctl">📁 Préparée</label>
@@ -505,6 +520,12 @@
                         <div id="gm-tree-root" class="gm-tree"></div>
                         <input type="file" id="gm-tree-file" accept="image/*" style="display:none;">
                     </div>
+                    <div class="gm-side-card">
+                        <div class="gm-side-card-head">💾 Points de sauvegarde</div>
+                        <button id="gm-snap-create" class="gm-btn" style="width:100%;">➕ Sauvegarder l'état de la campagne</button>
+                        <div id="gm-snap-list" class="gm-snap-list"></div>
+                        <div class="gm-readonly-note">ⓘ Reviens à un état précédent (cartes, jetons, combat, notes…) en un clic.</div>
+                    </div>
                 </div>
 
                 <!-- Panneau Journal -->
@@ -612,6 +633,7 @@
                 items: [
                     { icon: '🧱', label: 'Tracer un mur (glisser)', type: 'tool', tool: 'wall' },
                     { icon: '🚪', label: 'Tracer une porte (glisser)', type: 'tool', tool: 'door' },
+                    { icon: '⚙️', label: 'Régler une porte (verrou / secrète)', type: 'tool', tool: 'dooredit' },
                     { icon: '🧹', label: 'Effacer un mur (cliquer dessus)', type: 'tool', tool: 'wallerase' },
                     { icon: '🌑', label: dark.on ? 'Obscurité active — cliquer pour rallumer' : 'Plonger la pièce dans le noir', type: 'toggle', on: !!dark.on, run: toggleDark },
                     { type: 'vision' },
@@ -620,11 +642,33 @@
                 ]
             };
         }
+        if (key === 'light') return {
+            title: '💡 Points de lumière',
+            hint: 'Clic sur la carte = poser une lumière · clic sur une lumière = la régler · molette = rayon. Les lumières percent l\'obscurité pour les joueurs (arrêtées par les murs).',
+            items: [
+                { icon: '💡', label: 'Poser / régler une lumière', type: 'tool', tool: 'light' },
+                { type: 'lightcolor' },
+                { icon: '🗑️', label: 'Retirer toutes les lumières', type: 'action', danger: true, run: clearLightsConfirm }
+            ]
+        };
+        if (key === 'aoe') return {
+            title: '🎯 Gabarits de sorts',
+            hint: 'Glisse sur la carte : l\'origine est le point de départ, la taille suit ta souris (étiquette en mètres). Visible par les joueurs.',
+            items: [
+                { icon: '🎯', label: 'Placer un gabarit (glisser)', type: 'tool', tool: 'aoe' },
+                { type: 'aoekind' },
+                { type: 'aoecolor' },
+                { icon: '🧹', label: 'Effacer un gabarit (cliquer l\'origine)', type: 'tool', tool: 'aoeerase' },
+                { icon: '🗑️', label: 'Retirer tous les gabarits', type: 'action', danger: true, run: clearTemplatesConfirm }
+            ]
+        };
         if (key === 'tokens') return {
             title: '🧝 Jetons',
-            hint: 'Clic sur un jeton = fiche (PV, CA, image, taille…)',
+            hint: 'Outil « poser » : clique la carte pour déposer des jetons à l\'avance. Clic sur un jeton = fiche (PV, CA, image, taille…).',
             items: [
-                { icon: '➕', label: 'Ajouter un jeton…', type: 'action', run: addTokenPrompt },
+                { icon: '📍', label: 'Poser des jetons (clic sur la carte)', type: 'tool', tool: 'placetoken' },
+                { type: 'placetype' },
+                { icon: '➕', label: 'Ajouter un jeton au centre…', type: 'action', run: addTokenPrompt },
                 { icon: '⟳', label: 'Placer les combattants', type: 'action', run: addTokensFromCombat },
                 { icon: m.tokensLocked ? '🔒' : '🔓', label: m.tokensLocked ? 'Verrouillés (MJ seul) — libérer' : 'Libres (joueurs) — verrouiller', type: 'toggle', on: !!m.tokensLocked, run: toggleTokensLock },
                 { icon: '🧲', label: 'Aimanter à la grille', type: 'toggle', on: !!m.snap, run: toggleSnap },
@@ -637,6 +681,8 @@
             items: [
                 { icon: '🖼️', label: 'Caler le fond (glisser / molette)', type: 'tool', tool: 'bg' },
                 { icon: '📏', label: 'Mesurer une distance (glisser)', type: 'tool', tool: 'ruler' },
+                { icon: '📐', label: 'Échelle : 1 case = ' + cellMeters() + ' m', type: 'action', run: promptCellM, keep: true },
+                { type: 'weather' },
                 { icon: '▦', label: 'Afficher la grille', type: 'toggle', on: m.showGrid !== false, run: toggleGrid },
                 { icon: '🔍➕', label: 'Zoomer', type: 'action', run: () => zoomAtCenter(1.2), keep: true },
                 { icon: '🔍➖', label: 'Dézoomer', type: 'action', run: () => zoomAtCenter(1 / 1.2), keep: true },
@@ -646,7 +692,7 @@
         return null;
     }
     // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
-    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'wallerase'], view: ['bg', 'ruler'], tokens: [], layers: [] };
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase'], light: ['light'], aoe: ['aoe', 'aoeerase'], view: ['bg', 'ruler'], tokens: ['placetoken'], layers: [] };
     let flyoutKey = null;
     function ensureToolFlyout() {
         let p = byId('gm-tool-flyout'); if (p) return p;
@@ -670,6 +716,11 @@
             if (it.type === 'color') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur du trait</span><input type="color" id="gm-draw-color" value="${drawColor}" title="Couleur du dessin / des notes MJ"></div>`;
             if (it.type === 'width') return `<div class="gm-fly-row"><span class="gm-fly-ic">━</span><span class="gm-fly-lbl">Épaisseur</span><input type="range" id="gm-draw-width" min="1" max="24" step="1" value="${drawWidth}"><b class="gm-fly-wval">${drawWidth}</b></div>`;
             if (it.type === 'vision') { const dr = (state.map && state.map.dark && Number(state.map.dark.range)) || 9; return `<div class="gm-fly-row" title="Distance de vision des joueurs dans le noir (1 case = 1,5 m)"><span class="gm-fly-ic">👁️</span><span class="gm-fly-lbl">Vision</span><input type="range" id="gm-dark-range" min="1.5" max="30" step="1.5" value="${dr}"><b class="gm-fly-wval gm-fly-wval-wide" id="gm-dark-range-val">${dr} m</b></div>`; }
+            if (it.type === 'lightcolor') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur de lumière</span><input type="color" id="gm-light-color" value="${lightColor}" title="Couleur de la prochaine lumière"></div>`;
+            if (it.type === 'placetype') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎭</span><span class="gm-fly-lbl">Type posé</span><span class="gm-place-type" id="gm-place-type">${[['pj', '🧝 PJ'], ['npc', '🙂 PNJ'], ['monster', '👹 Monstre']].map(t => `<button data-ptype="${t[0]}" class="${placeTokenType === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
+            if (it.type === 'aoekind') return `<div class="gm-fly-row"><span class="gm-fly-ic">🔷</span><span class="gm-fly-lbl">Forme</span><span class="gm-place-type" id="gm-aoe-kind">${[['circle', '⭕ Sphère'], ['cone', '🔺 Cône'], ['line', '➖ Ligne'], ['cube', '⬛ Cube']].map(t => `<button data-aoekind="${t[0]}" class="${aoeKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
+            if (it.type === 'aoecolor') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur</span><input type="color" id="gm-aoe-color" value="${aoeColor}"></div>`;
+            if (it.type === 'weather') { const cur = (state.map && state.map.weather) || ''; return `<div class="gm-fly-row"><span class="gm-fly-ic">🌦️</span><span class="gm-fly-lbl">Météo</span><span class="gm-place-type" id="gm-weather-pick">${[['', '☀️'], ['rain', '🌧️'], ['snow', '❄️'], ['fog', '🌫️'], ['embers', '🔥']].map(t => `<button data-weather="${t[0]}" class="${cur === t[0] ? 'is-on' : ''}" title="${{ '': 'Aucune', rain: 'Pluie', snow: 'Neige', fog: 'Brume', embers: 'Braises' }[t[0]]}">${t[1]}</button>`).join('')}</span></div>`; }
             const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
             return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
         }).join('') + (grp.hint ? `<div class="gm-fly-hint">${grp.hint}</div>` : '');
@@ -687,6 +738,25 @@
             else if (!it.keep) closeToolFlyout();
         }));
         const col = p.querySelector('#gm-draw-color'); if (col) col.addEventListener('input', (e) => { drawColor = e.target.value; });
+        const lcol = p.querySelector('#gm-light-color'); if (lcol) lcol.addEventListener('input', (e) => { lightColor = e.target.value; });
+        const ptype = p.querySelector('#gm-place-type');
+        if (ptype) ptype.querySelectorAll('[data-ptype]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation(); placeTokenType = b.dataset.ptype; setMapTool('placetoken');
+            ptype.querySelectorAll('[data-ptype]').forEach(x => x.classList.toggle('is-on', x === b));
+        }));
+        const akind = p.querySelector('#gm-aoe-kind');
+        if (akind) akind.querySelectorAll('[data-aoekind]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation(); aoeKind = b.dataset.aoekind; if (mapTool !== 'aoe') setMapTool('aoe');
+            akind.querySelectorAll('[data-aoekind]').forEach(x => x.classList.toggle('is-on', x === b));
+        }));
+        const acol = p.querySelector('#gm-aoe-color'); if (acol) acol.addEventListener('input', (e) => { aoeColor = e.target.value; });
+        const wpick = p.querySelector('#gm-weather-pick');
+        if (wpick) wpick.querySelectorAll('[data-weather]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.map.weather = b.dataset.weather || '';
+            save(); renderMap(); broadcastMap(true);
+            wpick.querySelectorAll('[data-weather]').forEach(x => x.classList.toggle('is-on', x === b));
+        }));
         const wid = p.querySelector('#gm-draw-width'); if (wid) wid.addEventListener('input', (e) => { drawWidth = Math.max(1, Math.min(24, parseInt(e.target.value, 10) || 3)); const v = p.querySelector('.gm-fly-wval'); if (v) v.textContent = drawWidth; });
         // Curseur de vision (obscurité) : mise à jour en direct + diffusion débauncée aux joueurs
         const dkr = p.querySelector('#gm-dark-range'); if (dkr) dkr.addEventListener('input', (e) => {
@@ -783,6 +853,7 @@
             <div class="gm-npc-top">
                 <input type="checkbox" class="gm-check" data-act="npc-present" data-id="${n.id}" ${n.present ? 'checked' : ''} title="Présent dans la scène">
                 <span class="gm-npc-name">${esc(n.name)}</span>
+                <button class="gm-tree-act" data-act="npc-reveal" data-id="${n.id}" title="Révéler ce PNJ aux joueurs (carte illustrée)">🎴</button>
                 <button class="gm-del-x" data-act="npc-del" data-id="${n.id}">✕</button>
             </div>
             <textarea class="gm-textarea" style="min-height:48px;margin-top:6px;" placeholder="Secret / note du PNJ…" data-act="npc-secret" data-id="${n.id}">${esc(n.secret || '')}</textarea>
@@ -823,16 +894,19 @@
         if (window.showAppToast) window.showAppToast('🎬 Scène « ' + (s.name || '') + ' » appliquée', '#8a6320');
     }
     function renderTradeTargets() {
-        const sel = byId('gm-trade-target'); if (!sel) return;
-        const prev = sel.value;
         const opts = ['<option value="all">📢 Tous les joueurs</option>'].concat(live.players.map(p => {
             const s = p.snapshot || {};
             const nm = s.name || p.character_name || 'Aventurier';
             const dot = live.online.has(p.user_id) ? '🟢' : '⚪';
             return `<option value="${p.user_id}">${dot} ${esc(nm)}</option>`;
-        }));
-        sel.innerHTML = opts.join('');
-        if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+        })).join('');
+        // Même liste pour le troc/murmure ET pour « Montrer une image »
+        ['gm-trade-target', 'gm-showimg-target'].forEach(id => {
+            const sel = byId(id); if (!sel) return;
+            const prev = sel.value;
+            sel.innerHTML = opts;
+            if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+        });
     }
     function fileToDataURL(file, cb) {
         const reader = new FileReader();
@@ -897,6 +971,7 @@
                     ${s.concentrating ? '<span class="gm-live-conc" title="Concentration active">🌀</span>' : ''}
                     <span class="gm-spacer"></span>
                     <span class="gm-party-sub">${esc(sub || '—')}</span>
+                    <button class="gm-insp" data-act="player-inspire" data-uid="${esc(p.user_id)}" title="Accorder l'inspiration héroïque">✨</button>
                     <button class="gm-del-x" data-act="player-kick" data-uid="${esc(p.user_id)}" title="Modérer / exclure ce joueur">✕</button>
                 </div>
                 <div class="gm-live-stats">
@@ -1124,9 +1199,15 @@
         // Déconnexion immédiate (le ban serveur empêche tout retour, le broadcast coupe la session en cours).
         gmBroadcast('kick', { targetUserId: uid, until: until });
         const p = findLivePlayer(uid), nm = (p && (p.snapshot && p.snapshot.name || p.character_name)) || 'Joueur';
+        // Retrait OPTIMISTE : on ne dépend pas des events présence/DB (parfois lents ou manqués
+        // si le joueur recharge trop vite) → le joueur disparaît tout de suite de « connectés ».
+        if (p) stashOfflineSheet(p);                        // conserve sa dernière fiche (hors-ligne)
+        live.players = live.players.filter(x => x.user_id !== uid);
+        if (live.online && live.online.delete) live.online.delete(uid);
+        save();
         if (window.showAppToast) window.showAppToast('🚪 ' + nm + (until ? ' banni' : ' exclu'), '#7A2828');
         const m = byId('gm-player-modal'); if (m) m.classList.add('hidden');
-        renderLivePlayers();
+        renderLivePlayers(); updatePresenceCount();
     }
     function unbanPlayer(uid) {
         delete live.bans[uid];
@@ -1152,8 +1233,10 @@
     // Diffuse une image aux joueurs (ils reçoivent une notification « Ouvrir »).
     function sendSharedImage(url) {
         if (!url) return;
-        const ok = gmBroadcast('show-image', { url: url });
-        if (ok && window.showAppToast) window.showAppToast('🖼️ Image envoyée aux joueurs', '#2c3e50');
+        const tgt = byId('gm-showimg-target');
+        const target = (tgt && tgt.value) || 'all';
+        const ok = gmBroadcast('show-image', { url: url, targetUserId: target });
+        if (ok && window.showAppToast) window.showAppToast(target === 'all' ? '🖼️ Image envoyée aux joueurs' : '🖼️ Image envoyée en privé', '#2c3e50');
         const inp = byId('gm-showimg-url'); if (inp) inp.value = '';
     }
     function onGiftResponse(p) {
@@ -1212,8 +1295,27 @@
                 // on conserve la dernière fiche connue dans le module hors-ligne (déjà mémorisée)
             } else {
                 const i = live.players.findIndex(p => p.user_id === row.user_id);
+                const prevSnap = (i >= 0 && live.players[i] && live.players[i].snapshot) || null;
                 if (i >= 0) live.players[i] = row; else live.players.push(row);
                 stashOfflineSheet(row);
+                const s = row.snapshot || {};
+                // ⚠️ Concentration : un lanceur concentré qui PERD des PV doit faire un jet de CON
+                // (DD = max(10, dégâts/2)). On alerte le MJ et on notifie le joueur (jet en un clic).
+                if (prevSnap && s.concentrating) {
+                    const oldHp = Number(prevSnap.hpCur), newHp = Number(s.hpCur);
+                    if (isFinite(oldHp) && isFinite(newHp) && newHp < oldHp) {
+                        const dmg = oldHp - newHp, dc = Math.max(10, Math.floor(dmg / 2));
+                        const nm = s.name || row.character_name || 'Un joueur';
+                        if (window.showAppToast) window.showAppToast('🌀 ' + nm + ' (concentré) subit ' + dmg + ' dégâts → jet de CON DD ' + dc, '#8e44ad');
+                        clog('🌀 ' + nm + ' subit ' + dmg + ' dégâts en concentration (DD ' + dc + ')');
+                        gmBroadcast('concentration', { targetUserId: row.user_id, dc: dc, dmg: dmg });
+                    }
+                }
+                // Les états de la fiche (badges) ont pu changer → rafraîchit les jetons de ce joueur
+                if (prevSnap && JSON.stringify(prevSnap.conditions || []) !== JSON.stringify(s.conditions || [])) {
+                    if (!gmDragBusy) renderMap();
+                    throttleBroadcastMap();
+                }
             }
             save();
             renderLivePlayers(); updatePresenceCount();
@@ -1222,7 +1324,12 @@
             live.presChannel = window.SupaAuth.presenceChannel(code);
             live.presChannel
                 .on('presence', { event: 'sync' }, () => {
+                    const prevOnline = live.online || new Set();
                     live.online = new Set(Object.keys(live.presChannel.presenceState()));
+                    // Un joueur qui vient de passer hors-ligne : on fige sa dernière fiche connue
+                    // (garantit qu'elle apparaît dans « Fiches hors-ligne » même sans event DB).
+                    (live.players || []).forEach(p => { if (prevOnline.has(p.user_id) && !live.online.has(p.user_id)) stashOfflineSheet(p); });
+                    save();
                     enforceBans();
                     updatePresenceCount(); renderLivePlayers(); renderTradeTargets();
                     // Resynchronise les nouveaux arrivants (combat + carte + musique) sans réécrire la base
@@ -1233,6 +1340,18 @@
                 .on('broadcast', { event: 'gift-response' }, ({ payload }) => onGiftResponse(payload))
                 .on('broadcast', { event: 'initiative-roll' }, ({ payload }) => onInitiativeRoll(payload))
                 .on('broadcast', { event: 'token-move' }, ({ payload }) => onTokenMove(payload))
+                .on('broadcast', { event: 'door-toggle' }, ({ payload }) => onPlayerDoorToggle(payload))
+                .on('broadcast', { event: 'dice' }, ({ payload }) => {   // jet partagé d'un joueur
+                    if (!payload) return;
+                    if (window.showAppToast) window.showAppToast('🎲 ' + (payload.user || 'Joueur') + ' : ' + (payload.formula || '') + ' = ' + payload.total, '#2c3e50');
+                    clog('🎲 ' + (payload.user || 'Joueur') + ' lance ' + (payload.formula || '') + ' = ' + payload.total);
+                })
+                .on('broadcast', { event: 'rest' }, ({ payload }) => {   // un joueur prend un repos
+                    if (!payload) return;
+                    const lbl = payload.kind === 'long' ? 'repos long' : 'repos court';
+                    if (window.showAppToast) window.showAppToast('🛌 ' + (payload.name || 'Un joueur') + ' entame un ' + lbl, '#2c3e50');
+                    clog('🛌 ' + (payload.name || 'Un joueur') + ' — ' + lbl);
+                })
                 .on('broadcast', { event: 'whisper' }, ({ payload }) => onPlayerWhisper(payload))
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
         } catch (e) { console.warn('presence GM:', e); }
@@ -1257,7 +1376,7 @@
         el.innerHTML = blocks.length ? blocks.join('') : `<div class="gm-empty">Aucun résultat pour « ${esc(query)} ».</div>`;
     }
 
-    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers();
+    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers(); renderCombatLog(); renderSnaps();
         const t = document.getElementById('gm-env-time'); if (t) t.value = state.env.time || '';
         const w = document.getElementById('gm-env-weather'); if (w) w.value = state.env.weather || '☀️ Dégagé';
         const n = document.getElementById('gm-notes'); if (n) n.value = state.notes || '';
@@ -1278,6 +1397,8 @@
         const payload = combatPayload();
         if (live.presChannel) gmBroadcast('combat', payload);
         if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { combat: payload }); } catch (e) {} }
+        // Rafraîchit la surbrillance du jeton dont c'est le tour (sans casser un drag en cours).
+        if (!gmDragBusy) { const v = byId('gm-map-view'); if (v && v.querySelector('.gm-map-content')) renderMap(); }
     }
     function renderCombatStatus() {
         const el = byId('gm-combat-status'), btn = byId('gm-combat-toggle');
@@ -1305,6 +1426,7 @@
         if (entry) entry.init = p.total;
         else state.initiative.push({ id: uid(), name: p.name, init: p.total, type: 'pj', charId: p.charId || null });
         sortInit(); save(); renderInit(); broadcastCombat();
+        clog('🎲 ' + p.name + ' — initiative ' + p.total);
         if (window.showAppToast) window.showAppToast('🎲 ' + p.name + ' — initiative ' + p.total, '#2c3e50');
     }
 
@@ -1314,7 +1436,9 @@
     // ===== Cartes multiples (pages type Roll20) =====
     // state.maps = [{ id, name, map:{bg,gridSize,showGrid,tokensLocked}, tokens:[] }]
     // state.map / state.tokens = miroir de la page active (compat avec tout le code existant).
-    const cloneMap = (m) => Object.assign({ bg: null, gridSize: 48, showGrid: true }, m || {});
+    // stageAR = ratio FIXE de la scène (nouveau modèle « board » : les fractions sont
+    // relatives à un plateau letterboxé identique chez le MJ et les joueurs, réf. largeur 1000px).
+    const cloneMap = (m) => Object.assign({ bg: null, gridSize: 48, showGrid: true, stageAR: 16 / 9 }, m || {});
     const cloneTokens = (t) => (t || []).map(x => Object.assign({}, x));
 
     function ensureMaps() {
@@ -1376,7 +1500,7 @@
         if (title) { const act = (state.maps || []).find(x => x.id === state.activeMapId); title.textContent = act ? '— ' + act.name : ''; }
         bar.innerHTML = (state.maps || []).map(p => {
             const bg = p.map && p.map.bg;
-            return `<div class="gm-page-thumb${p.id === state.activeMapId ? ' is-active' : ''}" data-page="${p.id}" title="${esc(p.name)} — clic : afficher · double-clic : renommer">
+            return `<div class="gm-page-thumb${p.id === state.activeMapId ? ' is-active' : ''}" draggable="true" data-page="${p.id}" title="${esc(p.name)} — clic ou glisse sur la carte pour l'afficher · double-clic : renommer">
                 <div class="gm-page-img"${bg ? ` style="background-image:url(${esc(bg)})"` : ''}>${bg ? '' : '▦'}</div>
                 <div class="gm-page-name">${esc(p.name)}</div>
                 <div class="gm-page-acts"><button data-pact="rename" data-page="${p.id}" title="Renommer">✏️</button><button data-pact="del" data-page="${p.id}" title="Supprimer">🗑️</button></div>
@@ -1389,7 +1513,7 @@
         layers: { tokens: true, draw: true, gmnotes: true, fog: true, grid: true, walls: true },
         layerOp: { tokens: 1, draw: 1, gmnotes: 1, fog: 1, grid: 1, walls: 1 },
         visionPreview: false };  // aperçu MJ de ce que voient les joueurs dans le noir
-    let mapTool = 'select';      // 'select' | 'bg' | 'reveal' | 'cover' | 'draw' | 'wall' | 'door' | 'wallerase' | 'ruler'
+    let mapTool = 'select';      // 'select'|'bg'|'reveal'|'cover'|'draw'|'wall'|'door'|'dooredit'|'wallerase'|'ruler'|'light'|'placetoken'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
     let drawColor = '#e23b3b';   // couleur du dessin libre
     let drawWidth = 3;           // épaisseur du dessin libre (molette en mode ✏️)
@@ -1398,21 +1522,47 @@
     let wallDraft = null;        // mur / porte en cours de tracé { x1,y1,x2,y2,door }
     let rulerDraft = null;       // mesure en cours { x1,y1,x2,y2 }
     let gmDragBusy = false;      // un drag de jeton MJ est en cours (évite un re-render qui casserait le pointer capture)
+    let lightColor = '#ffcf7a';  // couleur de la prochaine lumière posée
+    let lightRadius = 0.16;      // rayon par défaut d'une lumière (fraction de largeur ; molette pour ajuster)
+    let placeTokenType = 'npc';  // type de jeton posé au clic (palette PJ/PNJ/monstre)
+    let aoeKind = 'circle';      // forme du prochain gabarit de sort
+    let aoeColor = '#e67e22';    // couleur du prochain gabarit
+    let aoeDraft = null;         // gabarit en cours de placement
+    let boardWpx = 500;          // largeur ACTUELLE du board MJ en px (mise à jour par renderMap)
+    let mapHist = [];            // historique {map,tokens} pour Ctrl+Z
+    let histLock = false;        // évite de ré-empiler pendant un undo
+    // Jeton dont c'est le tour en combat (surbrillance sur la carte) : match par monId ou par nom.
+    function isTokenActiveTurn(t) {
+        if (!state.combatActive || !state.initiative || !state.initiative.length) return false;
+        const c = state.initiative[state.turnIndex]; if (!c) return false;
+        if (c.monId && t.ref === 'mon:' + c.monId) return true;
+        return !!(c.name && t.name && c.name.toLowerCase() === t.name.toLowerCase());
+    }
     function tokenHtml(t) {
         const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
         const low = hpMax > 0 && ratio <= 0.33;
         const imgStyle = t.img ? `background-image:url(${t.img});` : '';
-        const sz = Math.round(34 * (t.size || 1));
+        // Taille liée à la grille du board : un jeton « Normal » remplit sa case (cohérent MJ / joueurs)
+        const gpx = Math.max(10, gridPxFor(boardWpx));
+        const sz = Math.max(14, Math.round(gpx * (t.size || 1) * 0.92));
         const hpBar = hpMax > 0 ? `<div class="gm-token-hp"><div class="gm-token-hp-fill${low ? ' is-low' : ''}" style="width:${ratio * 100}%"></div></div>` : '';
         const acBadge = (t.ac != null && t.ac !== '') ? `<span class="gm-token-ac" title="Classe d'armure">${esc(t.ac)}</span>` : '';
-        return `<div class="gm-token${t.hidden ? ' is-mj-hidden' : ''}${t.img ? ' has-img' : ''}" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}">`
+        const badges = tokenBadges(t);
+        const badgeHtml = badges ? `<span class="gm-token-badges" title="États">${esc(badges)}</span>` : '';
+        // Aura (rayon en mètres) : disque translucide rendu SOUS le jeton
+        let auraHtml = '';
+        if (t.aura && Number(t.aura.r) > 0) {
+            const apx = (Number(t.aura.r) / cellMeters()) * gpx;
+            auraHtml = `<div class="gm-token-aura" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${apx * 2}px; height:${apx * 2}px; --aura:${t.aura.color || '#3498db'};"></div>`;
+        }
+        return auraHtml + `<div class="gm-token${t.hidden ? ' is-mj-hidden' : ''}${t.img ? ' has-img' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}">`
             + (t.img ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
-            + acBadge + hpBar + `</div>`;
+            + acBadge + badgeHtml + hpBar + `</div>`;
     }
     function applyMapTransform() {
         const view = byId('gm-map-view'); if (!view) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const content = view.querySelector('.gm-map-content'); if (!content) return;   // zoom/pan sur le CONTENEUR (le board vit dedans)
         content.style.transform = `translate(${mapView.panX}px, ${mapView.panY}px) scale(${mapView.zoom})`;
     }
     // ----- Brouillard de guerre (fog of war) -----
@@ -1420,7 +1570,7 @@
     function renderFog() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('.gm-layer-fog'); if (!canvas) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
         const fog = (state.map && state.map.fog) || { on: false, reveals: [] };
         if (!fog.on) { canvas.style.display = 'none'; return; }
         canvas.style.display = 'block';
@@ -1438,7 +1588,7 @@
     }
     let _fogLast = null;
     function paintFogAt(e) {
-        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-board'); if (!content) return;
         const r = content.getBoundingClientRect();
         const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
         const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
@@ -1497,16 +1647,15 @@
         if (best) return best;
         const m = state.map || {};
         if (m.snap) {
-            const uw = w / (mapView.zoom || 1), uh = h / (mapView.zoom || 1);
-            const g = m.gridSize || 48;
-            const cw = g / uw, ch = g / uh;
+            const cw = (m.gridSize || 48) / 1000;
+            const ch = cw * (Number(m.stageAR) || (16 / 9));
             return { x: Math.max(0, Math.min(1, Math.round(fx / cw) * cw)), y: Math.max(0, Math.min(1, Math.round(fy / ch) * ch)) };
         }
         return { x: fx, y: fy };
     }
     function eraseWallAt(e) {
         if (!window.VTTGeo) return;
-        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-board'); if (!content) return;
         const r = content.getBoundingClientRect();
         const px = e.clientX - r.left, py = e.clientY - r.top;
         const walls = wallsData();
@@ -1520,7 +1669,7 @@
     function renderWalls() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('canvas.gm-layer-walls'); if (!canvas) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
         const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
         if (canvas.width !== w) canvas.width = w;
         if (canvas.height !== h) canvas.height = h;
@@ -1548,15 +1697,237 @@
         if (doorsHost) {
             doorsHost.innerHTML = ((state.map && state.map.walls) || []).filter(s => s.door).map(s => {
                 const mx = (s.x1 + s.x2) / 2 * 100, my = (s.y1 + s.y2) / 2 * 100;
-                return `<button class="gm-door-btn${s.open ? ' is-open' : ''}" data-door="${s.id}" style="left:${mx}%; top:${my}%;" title="${s.open ? 'Porte ouverte — clic : fermer' : 'Porte fermée — clic : ouvrir'}">🚪</button>`;
+                const ic = s.locked ? '🔒' : (s.open ? '🚪' : '🚪');
+                const cls = 'gm-door-btn' + (s.open ? ' is-open' : '') + (s.locked ? ' is-locked' : '') + (s.secret ? ' is-secret' : '');
+                const st = s.secret ? 'porte SECRÈTE (invisible aux joueurs)' : (s.locked ? 'porte VERROUILLÉE (joueurs bloqués)' : 'porte libre');
+                const tip = (mapTool === 'dooredit') ? ('Régler : ' + st) : (s.open ? 'Porte ouverte — clic : fermer' : 'Porte fermée — clic : ouvrir') + ' · ' + st;
+                return `<button class="${cls}" data-door="${s.id}" style="left:${mx}%; top:${my}%;" title="${tip}">${s.secret ? '👁️‍🗨️' : ic}</button>`;
             }).join('');
         }
+    }
+    // ----- Points de lumière (torches, lanternes…) : percent l'obscurité pour les joueurs -----
+    function lightsData() { const m = state.map || {}; if (!Array.isArray(m.lights)) m.lights = []; return m.lights; }
+    function clearLightsConfirm() { if (!confirm('Retirer toutes les lumières de cette carte ?')) return; if (state.map) state.map.lights = []; save(); renderMap(); broadcastMap(true); }
+    function eraseLights(ctx, w, h, segs) {
+        // Chaque lumière dévoile une zone (bloquée par les murs) — comme un jeton porteur de torche.
+        (lightsData()).forEach(l => {
+            const R = (Number(l.r) || lightRadius) * w;
+            window.VTTGeo.eraseVision(ctx, l.x * w, l.y * h, segs, R);
+        });
+    }
+    function renderLights() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const host = view.querySelector('.gm-layer-lights'); if (!host) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        const lights = lightsData();
+        // Halo lumineux (léger, joli) + pastilles éditables
+        host.innerHTML = lights.map(l => {
+            const rpx = (Number(l.r) || lightRadius) * w, dpx = rpx * 2;
+            const col = l.color || lightColor;
+            return `<div class="gm-light-halo" style="left:${l.x * 100}%; top:${l.y * 100}%; width:${dpx}px; height:${dpx}px; --lc:${col};"></div>`
+                + `<button class="gm-light-pin" data-light="${l.id}" style="left:${l.x * 100}%; top:${l.y * 100}%; --lc:${col};" title="Lumière — clic (outil 💡) : régler">💡</button>`;
+        }).join('');
+    }
+    function ensureLightPopover() {
+        let p = byId('gm-light-popover'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-light-popover'; p.className = 'gm-token-popover hidden no-print';
+        document.body.appendChild(p);
+        document.addEventListener('pointerdown', (e) => { if (!p.classList.contains('hidden') && !e.target.closest('#gm-light-popover') && !e.target.closest('.gm-light-pin')) p.classList.add('hidden'); });
+        return p;
+    }
+    function openLightPopover(id, e) {
+        const l = lightsData().find(x => x.id === id); if (!l) return;
+        const p = ensureLightPopover();
+        const rMeters = Math.round(((l.r || lightRadius) / (((state.map && state.map.gridSize) || 48))) * 0 + (l.r || lightRadius) * 100);
+        p.innerHTML = `
+            <div class="gm-tp-row"><label>💡 Lumière</label><input class="gm-tp-color" type="color" data-lp="color" value="${l.color || lightColor}" title="Couleur"></div>
+            <div class="gm-tp-row"><label>Rayon</label><input type="range" data-lp="r" min="4" max="45" step="1" value="${Math.round((l.r || lightRadius) * 100)}"><b class="gm-fly-wval" data-lp-rval>${Math.round((l.r || lightRadius) * 100)}</b></div>
+            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn gm-btn-danger" data-lp-act="del">🗑️ Supprimer</button></div>`;
+        p.classList.remove('hidden');
+        const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
+        p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
+        p.style.top = Math.max(8, Math.min(oy + 10, window.innerHeight - p.offsetHeight - 8)) + 'px';
+        p.querySelector('[data-lp="color"]').addEventListener('input', (ev) => { l.color = ev.target.value; save(); renderMap(); broadcastMap(true); });
+        p.querySelector('[data-lp="r"]').addEventListener('input', (ev) => { l.r = Math.max(0.04, Math.min(0.45, (parseInt(ev.target.value, 10) || 16) / 100)); const v = p.querySelector('[data-lp-rval]'); if (v) v.textContent = Math.round(l.r * 100); save(); renderMap(); broadcastMap(true); });
+        p.querySelector('[data-lp-act="del"]').addEventListener('click', () => { state.map.lights = lightsData().filter(x => x.id !== id); p.classList.add('hidden'); save(); renderMap(); broadcastMap(true); });
+    }
+    // ----- Échelle, gabarits de sorts, météo, journal, historique -----
+    function cellMeters() { return Number(state.map && state.map.cellM) || 1.5; }
+    function promptCellM() {
+        const v = prompt('Combien de mètres représente une case de la grille ?', String(cellMeters()));
+        if (v == null) return;
+        const n = parseFloat(String(v).replace(',', '.'));
+        if (!n || n <= 0) return;
+        state.map.cellM = n;
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast('📐 Échelle : 1 case = ' + n + ' m', '#2c3e50');
+    }
+    // px d'une case pour un board de largeur w (gridSize est stocké en px de référence largeur 1000)
+    function gridPxFor(w) { return ((state.map && state.map.gridSize) || 48) * w / 1000; }
+    // Migration des anciennes cartes (coordonnées relatives au viewport) vers le modèle « board »
+    // à ratio fixe : on fige le ratio ACTUEL et on convertit les px (grille, calage fond) en réf. 1000.
+    function migrateMapRef(m, view) {
+        if (!m || m.stageAR) return;
+        const vw = Math.max(1, view.clientWidth), vh = Math.max(1, view.clientHeight);
+        if (vw < 60 || vh < 60) return;                     // vue pas encore affichée : on migrera plus tard
+        m.stageAR = vw / vh;
+        const k = 1000 / vw;
+        m.gridSize = Math.max(8, Math.round(((m.gridSize || 48)) * k));
+        if (m.bgX) m.bgX = Math.round(m.bgX * k);
+        if (m.bgY) m.bgY = Math.round(m.bgY * k);
+        save();
+    }
+    function templatesData() { const m = state.map || {}; if (!Array.isArray(m.templates)) m.templates = []; return m.templates; }
+    function clearTemplatesConfirm() { if (!confirm('Retirer tous les gabarits de sorts ?')) return; if (state.map) state.map.templates = []; save(); renderMap(); broadcastMap(true); }
+    function renderTemplates() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-templates'); if (!canvas) return;
+        const board = view.querySelector('.gm-board'); if (!board) return;
+        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        if (!window.VTTGeo || !window.VTTGeo.drawTemplates) return;
+        const all = templatesData().concat(aoeDraft ? [aoeDraft] : []);
+        window.VTTGeo.drawTemplates(ctx, w, h, all, gridPxFor(w), cellMeters());
+    }
+    function eraseTemplateAt(e) {
+        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
+        const r = board.getBoundingClientRect();
+        const px = e.clientX - r.left, py = e.clientY - r.top;
+        const ts = templatesData();
+        let bi = -1, bd = 16;
+        ts.forEach((t, i) => { const d = Math.hypot(px - t.x * r.width, py - t.y * r.height); if (d < bd) { bd = d; bi = i; } });
+        if (bi >= 0) { ts.splice(bi, 1); save(); renderMap(); broadcastMap(true); }
+    }
+    function renderWeather() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-weather'); if (!canvas) return;
+        const board = view.querySelector('.gm-board'); if (!board) return;
+        if (!window.VTTWeather) return;
+        window.VTTWeather.apply(canvas, (state.map && state.map.weather) || '', Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
+    }
+    // ----- Badges d'état sur les jetons (manuels + auto depuis les fiches joueurs) -----
+    function matchCondIcon(lbl) {
+        const s = String(lbl || '').toLowerCase();
+        const c = CONDITIONS.find(x => s.includes(x.label.toLowerCase()));
+        return c ? c.icon : '⚠️';
+    }
+    function tokenBadges(t) {
+        let b = String(t.badges || '');
+        if (t.owner) {
+            const p = findLivePlayer(t.owner);
+            const conds = (p && p.snapshot && p.snapshot.conditions) || [];
+            b += conds.slice(0, 4).map(matchCondIcon).join('');
+        }
+        return b;
+    }
+    // Jetons envoyés aux joueurs : on y « cuit » les badges calculés côté MJ.
+    function tokensForShare() { return (state.tokens || []).map(t => Object.assign({}, t, { badges: tokenBadges(t) })); }
+    // ----- Journal de combat -----
+    function clog(text) {
+        if (!Array.isArray(state.combatLog)) state.combatLog = [];
+        state.combatLog.unshift({ ts: Date.now(), round: state.round || 1, text: String(text).slice(0, 200) });
+        if (state.combatLog.length > 120) state.combatLog.pop();
+        save(); renderCombatLog();
+    }
+    function renderCombatLog() {
+        const el = byId('gm-combatlog'); if (!el) return;
+        const rows = state.combatLog || [];
+        if (!rows.length) { el.innerHTML = '<div class="gm-empty">Les évènements de la partie s\'inscriront ici (rounds, dégâts, repos, jets…).</div>'; return; }
+        el.innerHTML = rows.map(r => `<div class="gm-dice-log-item"><span><span class="gm-clog-time">${new Date(r.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · R${r.round}</span> ${esc(r.text)}</span></div>`).join('');
+    }
+    // ----- Historique de la carte (Ctrl+Z) -----
+    function histPush() {
+        if (histLock) return;
+        try {
+            const snap = JSON.stringify({ map: state.map, tokens: tokensForShare() });
+            if (mapHist[mapHist.length - 1] !== snap) { mapHist.push(snap); if (mapHist.length > 40) mapHist.shift(); }
+        } catch (e) {}
+    }
+    function undoMap() {
+        if (mapHist.length < 2) { if (window.showAppToast) window.showAppToast('Rien à annuler sur la carte.', '#7a6050'); return; }
+        mapHist.pop();
+        try {
+            const prev = JSON.parse(mapHist[mapHist.length - 1]);
+            histLock = true;
+            state.map = prev.map; state.tokens = prev.tokens;
+            save(); renderMap(); broadcastMap(true);
+            histLock = false;
+            if (window.showAppToast) window.showAppToast('↩️ Carte : annulé', '#2c3e50');
+        } catch (e) { histLock = false; }
+    }
+    // ----- Points de sauvegarde de la campagne -----
+    function snapsKey() { return 'dnd-gm-snapshots-' + activeCampaignId; }
+    function loadSnaps() { try { return JSON.parse(localStorage.getItem(snapsKey()) || '[]'); } catch (e) { return []; } }
+    function saveSnaps(list) { try { localStorage.setItem(snapsKey(), JSON.stringify(list)); } catch (e) { if (window.showAppToast) window.showAppToast('⚠️ Stockage plein — supprime d\'anciens points de sauvegarde.', '#c0392b'); } }
+    function createSnap() {
+        const list = loadSnaps();
+        list.unshift({ id: uid(), ts: Date.now(), state: JSON.parse(JSON.stringify(state)) });
+        while (list.length > 8) list.pop();
+        saveSnaps(list); renderSnaps();
+        if (window.showAppToast) window.showAppToast('💾 Point de sauvegarde créé', '#2c3e50');
+    }
+    function renderSnaps() {
+        const el = byId('gm-snap-list'); if (!el) return;
+        const list = loadSnaps();
+        if (!list.length) { el.innerHTML = '<div class="gm-empty">Aucun point de sauvegarde.</div>'; return; }
+        el.innerHTML = list.map(s => `<div class="gm-snap-row">
+            <span class="gm-snap-label">🕓 ${new Date(s.ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+            <button class="gm-btn" data-act="snap-restore" data-id="${s.id}" title="Restaurer cet état">↩</button>
+            <button class="gm-del-x" data-act="snap-del" data-id="${s.id}" title="Supprimer">✕</button>
+        </div>`).join('');
+    }
+    // ----- Minuteur partagé (MJ + joueurs) -----
+    let gmTimerInt = null;
+    function showGmTimer(until) {
+        let el = byId('gm-timer-pill');
+        clearInterval(gmTimerInt);
+        if (!until || until <= Date.now()) { if (el) el.remove(); return; }
+        if (!el) { el = document.createElement('div'); el.id = 'gm-timer-pill'; el.className = 'no-print'; document.body.appendChild(el); }
+        const tick = () => {
+            const left = until - Date.now();
+            if (left <= 0) { clearInterval(gmTimerInt); el.remove(); if (window.showAppToast) window.showAppToast('⏰ Temps écoulé !', '#c0392b'); return; }
+            const s = Math.ceil(left / 1000);
+            el.textContent = '⏳ ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+            el.classList.toggle('is-low', s <= 10);
+        };
+        tick(); gmTimerInt = setInterval(tick, 500);
+    }
+
+    // ----- Réglage d'une porte (verrou / secrète) -----
+    function ensureDoorPopover() {
+        let p = byId('gm-door-popover'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-door-popover'; p.className = 'gm-token-popover hidden no-print';
+        document.body.appendChild(p);
+        document.addEventListener('pointerdown', (e) => { if (!p.classList.contains('hidden') && !e.target.closest('#gm-door-popover') && !e.target.closest('.gm-door-btn')) p.classList.add('hidden'); });
+        return p;
+    }
+    function openDoorPopover(id, e) {
+        const d = wallsData().find(w => w.id === id); if (!d) return;
+        const p = ensureDoorPopover();
+        p.innerHTML = `
+            <div class="gm-tp-row"><b>🚪 Réglage de la porte</b></div>
+            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-dp-act="toggle">${d.open ? '🚪 Fermer' : '🚪 Ouvrir'}</button></div>
+            <label class="gm-dp-check"><input type="checkbox" data-dp="locked" ${d.locked ? 'checked' : ''}> 🔒 Verrouillée (les joueurs ne peuvent pas l'ouvrir)</label>
+            <label class="gm-dp-check"><input type="checkbox" data-dp="secret" ${d.secret ? 'checked' : ''}> 👁️‍🗨️ Secrète (invisible pour les joueurs)</label>
+            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn gm-btn-danger" data-dp-act="del">🗑️ Supprimer la porte</button></div>`;
+        p.classList.remove('hidden');
+        const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
+        p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
+        p.style.top = Math.max(8, Math.min(oy + 10, window.innerHeight - p.offsetHeight - 8)) + 'px';
+        p.querySelector('[data-dp="locked"]').addEventListener('change', (ev) => { d.locked = ev.target.checked; save(); renderMap(); broadcastMap(true); });
+        p.querySelector('[data-dp="secret"]').addEventListener('change', (ev) => { d.secret = ev.target.checked; save(); renderMap(); broadcastMap(true); });
+        p.querySelector('[data-dp-act="toggle"]').addEventListener('click', () => { d.open = !d.open; save(); renderMap(); broadcastMap(true); p.classList.add('hidden'); });
+        p.querySelector('[data-dp-act="del"]').addEventListener('click', () => { state.map.walls = wallsData().filter(w => w.id !== id); p.classList.add('hidden'); save(); renderMap(); broadcastMap(true); });
     }
     // Aperçu MJ de l'obscurité : voile semi-transparent percé de la vision des jetons joueurs.
     function renderVisionPreview() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('canvas.gm-layer-vision'); if (!canvas) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
         const dark = (state.map && state.map.dark) || null;
         if (!mapView.visionPreview || !dark || !dark.on || !window.VTTGeo) { canvas.style.display = 'none'; return; }
         canvas.style.display = 'block';
@@ -1569,17 +1940,19 @@
         ctx.fillRect(0, 0, w, h);
         ctx.globalCompositeOperation = 'destination-out';
         const segs = window.VTTGeo.wallsToPx((state.map && state.map.walls) || [], w, h);
-        const g = (state.map && state.map.gridSize) || 48;
+        const g = Math.max(1, gridPxFor(w));                     // px d'une case sur CE board
+        const dk = Object.assign({}, dark, { cellM: cellMeters() });
         (state.tokens || []).filter(t => !t.hidden && (t.type === 'pj' || t.owner)).forEach(t => {
-            window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dark, g));
+            window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dk, g));
         });
+        eraseLights(ctx, w, h, segs);                            // les lumières éclairent aussi (aperçu)
         ctx.globalCompositeOperation = 'source-over';
     }
     // Règle : trait + étiquette de distance (1 case = 1,5 m), locale au MJ.
     function renderRuler() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('canvas.gm-layer-ruler'); if (!canvas) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
         const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
         if (canvas.width !== w) canvas.width = w;
         if (canvas.height !== h) canvas.height = h;
@@ -1592,9 +1965,9 @@
         ctx.setLineDash([]);
         ctx.fillStyle = '#C49B35';
         [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
-        const g = (state.map && state.map.gridSize) || 48;
+        const g = Math.max(1, gridPxFor(w));
         const cells = Math.hypot(x2 - x1, y2 - y1) / g;
-        const label = (Math.round(cells * 1.5 * 10) / 10).toLocaleString('fr-FR') + ' m (' + (Math.round(cells * 10) / 10).toLocaleString('fr-FR') + ' cases)';
+        const label = (Math.round(cells * cellMeters() * 10) / 10).toLocaleString('fr-FR') + ' m (' + (Math.round(cells * 10) / 10).toLocaleString('fr-FR') + ' cases)';
         ctx.font = 'bold 14px Lora, serif';
         const tw = ctx.measureText(label).width;
         const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 16;
@@ -1622,7 +1995,7 @@
     function renderStrokeLayer(cls, strokes) {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector(cls); if (!canvas) return;
-        const content = view.querySelector('.gm-map-content'); if (!content) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
         const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
         if (canvas.width !== w) canvas.width = w;
         if (canvas.height !== h) canvas.height = h;
@@ -1634,7 +2007,7 @@
     function renderGmNotes() { renderStrokeLayer('.gm-layer-gmnotes', (state.map && state.map.gmNotes) || []); }
     function clearDrawings() { if (state.map) state.map.drawings = []; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🧽 Dessins effacés', '#2c3e50'); }
     function showGmMapPing(x, y) {
-        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content'); if (!content) return;
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-board'); if (!content) return;
         const p = document.createElement('div'); p.className = 'gm-map-ping';
         p.style.left = (x * 100) + '%'; p.style.top = (y * 100) + '%';
         content.appendChild(p); setTimeout(() => p.remove(), 2200);
@@ -1643,26 +2016,42 @@
     function renderMap() {
         const view = byId('gm-map-view'); if (!view) return;
         const m = state.map || {};
-        const tokens = (state.tokens || []).map(tokenHtml).join('');
+        migrateMapRef(m, view);                              // anciennes cartes → modèle « board »
         const L = mapView.layers || {}, OP = mapView.layerOp || {};
         const layStyle = (k) => { let s = ''; if (L[k] === false) s += 'display:none;'; const o = OP[k]; if (o != null && o !== 1) s += 'opacity:' + o + ';'; return s ? ` style="${s}"` : ''; };
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas></div>`;
-        const content = view.querySelector('.gm-map-content');
-        content.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
-        const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
-        content.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
-        content.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
-        content.classList.toggle('show-grid', m.showGrid !== false && L.grid !== false);
-        content.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
-        content.style.setProperty('--gm-grid-op', OP.grid == null ? 1 : OP.grid);
+        // ===== BOARD : plateau à ratio FIXE, letterboxé — même géométrie chez les joueurs =====
+        // (les fractions x/y sont relatives au board, pas à la fenêtre → les murs restent
+        //  alignés avec l'image quel que soit l'écran : fix du « on voit à travers les murs »)
+        const vw = Math.max(1, view.clientWidth), vh = Math.max(1, view.clientHeight);
+        const AR = Number(m.stageAR) || (16 / 9);
+        let bw = Math.min(vw, vh * AR), bh = bw / AR;
+        boardWpx = bw;
+        const tokens = (state.tokens || []).map(tokenHtml).join('');
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas></div></div>`;
+        const board = view.querySelector('.gm-board');
+        const f = bw / 1000;                                 // facteur px de référence → px affichés
+        board.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        const bx = (m.bgX || 0) * f, by = (m.bgY || 0) * f, bs = Number(m.bgScale) || 1;
+        board.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
+        board.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
+        board.classList.toggle('show-grid', m.showGrid !== false && L.grid !== false);
+        const gsz = Math.max(4, gridPxFor(bw));
+        board.style.setProperty('--gm-grid', gsz + 'px');
+        // Débord de grille = multiple exact de la case (≥ ~4000px) pour couvrir le viewport à tout zoom
+        board.style.setProperty('--gm-grid-ext', (Math.ceil(4000 / gsz) * gsz) + 'px');
+        board.style.setProperty('--gm-grid-op', OP.grid == null ? 1 : OP.grid);
         applyMapTransform();
+        renderTemplates();
+        renderWeather();
         renderDraw();
         renderGmNotes();
+        renderLights();
         if (L.fog !== false) renderFog();
         if (L.walls !== false) renderWalls();
         renderVisionPreview();
         renderRuler();
-        view.classList.toggle('gm-tool-paint', mapTool === 'reveal' || mapTool === 'cover' || mapTool === 'draw' || mapTool === 'gmnote' || mapTool === 'bg' || mapTool === 'wall' || mapTool === 'door' || mapTool === 'wallerase' || mapTool === 'ruler');
+        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'aoe', 'aoeerase'];
+        view.classList.toggle('gm-tool-paint', paintTools.indexOf(mapTool) !== -1);
         const gi = byId('gm-map-grid'); if (gi && document.activeElement !== gi) gi.value = m.gridSize || 48;
         const sg = byId('gm-map-showgrid'); if (sg) sg.checked = m.showGrid !== false;
         renderMapBank();
@@ -1671,12 +2060,9 @@
     // Aimante une position (fraction 0..1) au centre de la case de grille la plus proche.
     function snapFraction(x, y) {
         const m = state.map || {}; if (!m.snap) return { x, y };
-        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-map-content');
-        if (!content) return { x, y };
-        const rect = content.getBoundingClientRect();
-        const uw = rect.width / (mapView.zoom || 1), uh = rect.height / (mapView.zoom || 1);
-        const g = m.gridSize || 48;
-        const cw = g / uw, ch = g / uh;
+        // Modèle board : 1 case = gridSize/1000 en fraction de largeur (× ratio pour la hauteur)
+        const cw = (m.gridSize || 48) / 1000;
+        const ch = cw * (Number(m.stageAR) || (16 / 9));
         const sx = (Math.floor(x / cw) + 0.5) * cw, sy = (Math.floor(y / ch) + 0.5) * ch;
         return { x: Math.max(0, Math.min(1, sx)), y: Math.max(0, Math.min(1, sy)) };
     }
@@ -1686,6 +2072,9 @@
         if (field === 'hp' || field === 'hpMax' || field === 'ac') t[field] = (value === '' ? null : (parseInt(value, 10) || 0));
         else if (field === 'size') t.size = parseFloat(value) || 1;
         else if (field === 'vision') t.vision = (value === '' ? null : Math.max(0, parseFloat(value) || 0));   // portée de vision propre (m), vide = réglage global
+        else if (field === 'auraR') { if (!t.aura) t.aura = {}; t.aura.r = Math.max(0, parseFloat(value) || 0); if (!t.aura.r) t.aura = null; }
+        else if (field === 'auraColor') { if (!t.aura) t.aura = { r: 3 }; t.aura.color = value; }
+        else if (field === 'badges') t.badges = String(value || '').slice(0, 12);
         else t[field] = value;
         save(); renderMap(); broadcastMap(true);
     }
@@ -1706,6 +2095,9 @@
             <div class="gm-tp-row"><label>❤️</label><input class="gm-input gm-num" type="number" data-tp="hp" value="${tok.hp != null ? tok.hp : ''}" placeholder="PV"><span class="gm-tp-sep">/</span><input class="gm-input gm-num" type="number" data-tp="hpMax" value="${tok.hpMax != null ? tok.hpMax : ''}" placeholder="max"><label>🛡️</label><input class="gm-input gm-num" type="number" data-tp="ac" value="${tok.ac != null ? tok.ac : ''}" placeholder="CA"></div>
             <div class="gm-tp-row"><label>📏</label><select class="gm-input" data-tp="size">${sizeOpts}</select></div>
             <div class="gm-tp-row" title="Distance de vision de CE jeton dans le noir (torche, vision dans le noir…). Vide = réglage global de la carte."><label>🌑</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="vision" value="${tok.vision != null ? tok.vision : ''}" placeholder="Vision (m)"><span class="gm-tp-sep">m</span></div>
+            <div class="gm-tp-row" title="Aura autour du jeton (rayon en mètres) — visible par tous"><label>🌀</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="auraR" value="${tok.aura && tok.aura.r ? tok.aura.r : ''}" placeholder="Aura (m)"><span class="gm-tp-sep">m</span><input class="gm-tp-color" type="color" data-tp="auraColor" value="${(tok.aura && tok.aura.color) || '#3498db'}" title="Couleur de l'aura"></div>
+            <div class="gm-tp-row" title="Badges d'état affichés sur le jeton (emojis) — les états de la fiche du joueur s'ajoutent automatiquement"><label>🏷️</label><input class="gm-input" data-tp="badges" value="${esc(tok.badges || '')}" placeholder="🤢💤… (états manuels)"></div>
+            <div class="gm-tp-row" title="Dégâts / soins rapides"><label>⚔️</label><input class="gm-input gm-num" type="number" min="1" data-tp-amt placeholder="X"><button class="gm-btn gm-btn-danger" data-tp-act="dmg" title="Infliger X dégâts">💥</button><button class="gm-btn" data-tp-act="heal" title="Soigner X PV">💚</button></div>
             <div class="gm-tp-row"><input class="gm-input" data-tp="img" value="${esc(tok.img || '')}" placeholder="URL image…"><label class="gm-btn gm-tp-upload" title="Importer une image">🖼️<input type="file" accept="image/*" data-tp="imgfile" style="display:none;"></label><input class="gm-tp-color" type="color" data-tp="color" value="${color}" title="Couleur"></div>
             <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-tp-act="hide">${tok.hidden ? '👁️ Montrer' : '🙈 Cacher aux joueurs'}</button><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️</button></div>`;
         p.classList.remove('hidden');
@@ -1720,8 +2112,19 @@
         });
         p.querySelectorAll('[data-tp-act]').forEach(b => b.addEventListener('click', () => {
             const t = find(state.tokens, tok.id); if (!t) return;
-            if (b.dataset.tpAct === 'hide') t.hidden = !t.hidden;
-            else if (b.dataset.tpAct === 'del') { state.tokens = state.tokens.filter(x => x.id !== tok.id); p.classList.add('hidden'); }
+            const act = b.dataset.tpAct;
+            if (act === 'hide') t.hidden = !t.hidden;
+            else if (act === 'del') { state.tokens = state.tokens.filter(x => x.id !== tok.id); p.classList.add('hidden'); }
+            else if (act === 'dmg' || act === 'heal') {
+                const amtEl = p.querySelector('[data-tp-amt]');
+                const amt = Math.abs(parseInt(amtEl && amtEl.value, 10)) || 1;
+                const max = Number(t.hpMax);
+                let hp = Number(t.hp); if (isNaN(hp)) hp = isNaN(max) ? 0 : max;
+                hp = act === 'dmg' ? Math.max(0, hp - amt) : (isNaN(max) ? hp + amt : Math.min(max, hp + amt));
+                t.hp = hp;
+                const hpInp = p.querySelector('[data-tp="hp"]'); if (hpInp) hpInp.value = hp;
+                clog((act === 'dmg' ? '💥 ' : '💚 ') + (t.name || 'Jeton') + (act === 'dmg' ? ' subit ' : ' récupère ') + amt + ' PV → ' + hp + (isNaN(max) ? '' : '/' + max));
+            }
             save(); renderMap(); broadcastMap(true);
         }));
     }
@@ -1742,19 +2145,27 @@
     // Copie de la carte à diffuser aux joueurs : on retire le calque privé « Notes MJ ».
     function mapForShare() { const m = state.map || {}; const c = {}; for (const k in m) if (k !== 'gmNotes') c[k] = m[k]; return c; }
     function broadcastMap(persist) {
-        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens });
-        if (persist && state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: state.tokens }); } catch (e) {} }
+        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: tokensForShare() });
+        if (persist && state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: tokensForShare() }); } catch (e) {} }
     }
     function throttleBroadcastMap() {
         const now = Date.now();
         if (now - mapThrottle < 70) return;
         mapThrottle = now;
-        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens });
+        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: tokensForShare() });
     }
     function addTokensFromCombat() {
         const add = (name, type, ref, owner) => { if (!state.tokens.find(t => t.ref === ref)) state.tokens.push({ id: uid(), ref, name, type, owner: owner || null, x: 0.1 + Math.random() * 0.8, y: 0.1 + Math.random() * 0.8 }); };
         (live.players || []).forEach(p => { const s = p.snapshot || {}; add(s.name || p.character_name || 'PJ', 'pj', 'pj:' + p.user_id, p.user_id); });
         state.monsters.forEach(m => add(m.name, 'monster', 'mon:' + m.id, null));
+        save(); renderMap(); broadcastMap(true);
+    }
+    // Un joueur ouvre/ferme une porte (autorité MJ : refuse si verrouillée ou secrète).
+    function onPlayerDoorToggle(p) {
+        if (!p || !p.id) return;
+        const d = (state.map && state.map.walls || []).find(w => w.id === p.id && w.door); if (!d) return;
+        if (d.locked || d.secret) return;                          // porte verrouillée / secrète : joueur ignoré
+        d.open = !d.open;
         save(); renderMap(); broadcastMap(true);
     }
     // Déplacement d'un jeton demandé par un joueur (broadcast 'token-move')
@@ -1774,19 +2185,31 @@
             const el = document.querySelector(`#gm-map-view .gm-token[data-token="${tok.id}"]`);
             if (el) { el.style.left = (tok.x * 100) + '%'; el.style.top = (tok.y * 100) + '%'; }
         } else renderMap();
-        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: state.tokens }); // relaye aux autres (sans les notes MJ)
+        if (live.presChannel) gmBroadcast('map', { map: mapForShare(), tokens: tokensForShare() }); // relaye aux autres (sans les notes MJ)
         clearTimeout(tokenMovePersistTimer);
-        tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: state.tokens }); } catch (e) {} } }, 400);
+        tokenMovePersistTimer = setTimeout(() => { save(); if (state.sessionId && window.SupaAuth) { try { window.SupaAuth.saveSessionState(state.sessionId, { map: mapForShare(), tokens: tokensForShare() }); } catch (e) {} } }, 400);
     }
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
         let cur = null, tokenEl = null, panning = false, painting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null;
-        const contentRect = () => { const c = view.querySelector('.gm-map-content'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
+        // Rect du BOARD (l'espace de coordonnées partagé) — pas du conteneur transformé.
+        const contentRect = () => { const c = view.querySelector('.gm-board'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
             startX = e.clientX; startY = e.clientY; moved = false;
-            // Pastille de porte : clic = ouvrir/fermer, quel que soit l'outil actif
+            // Clic molette (bouton du milieu) = se déplacer dans la carte, quel que soit l'outil.
+            // On rebascule aussi sur l'outil « souris » (feedback), sans re-rendre la carte.
+            if (e.button === 1) {
+                if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); closeToolFlyout(); view.classList.remove('gm-tool-paint'); }
+                panning = true; startPan = { x: mapView.panX, y: mapView.panY };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                view.classList.add('panning'); e.preventDefault(); return;
+            }
+            // Pastille de porte : outil « régler » → popover ; sinon clic = ouvrir/fermer.
             const doorBtn = e.target.closest('.gm-door-btn');
-            if (doorBtn) { toggleDoor(doorBtn.dataset.door); e.preventDefault(); return; }
+            if (doorBtn) { if (mapTool === 'dooredit') openDoorPopover(doorBtn.dataset.door, e); else toggleDoor(doorBtn.dataset.door); e.preventDefault(); return; }
+            // Pastille de lumière : clic (outil lumière) = éditer.
+            const lightPin = e.target.closest('.gm-light-pin');
+            if (lightPin && mapTool === 'light') { openLightPopover(lightPin.dataset.light, e); e.preventDefault(); return; }
             if (mapTool === 'reveal' || mapTool === 'cover') {   // mode brouillard : on peint
                 painting = true; _fogLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 paintFogAt(e); e.preventDefault(); return;
@@ -1807,6 +2230,30 @@
                 rulerDraft = { x1: x, y1: y, x2: x, y2: y };
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 renderRuler(); e.preventDefault(); return;
+            }
+            if (mapTool === 'light') {                           // pose une lumière au clic
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                lightsData().push({ id: uid(), x, y, r: lightRadius, color: lightColor });
+                save(); renderMap(); broadcastMap(true); e.preventDefault(); return;
+            }
+            if (mapTool === 'aoe') {                             // gabarit de sort : origine → glisser la taille
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                aoeDraft = { kind: aoeKind, x, y, x2: x, y2: y, color: aoeColor };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderTemplates(); e.preventDefault(); return;
+            }
+            if (mapTool === 'aoeerase') {                        // clic sur l'origine d'un gabarit = suppression
+                eraseTemplateAt(e); e.preventDefault(); return;
+            }
+            if (mapTool === 'placetoken') {                      // pose un jeton à l'endroit cliqué
+                const r = contentRect();
+                let x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                const sn = snapFraction(x, y); x = sn.x; y = sn.y;
+                const names = { pj: 'PJ', npc: 'PNJ', monster: 'Monstre' };
+                state.tokens.push({ id: uid(), name: names[placeTokenType] || 'Jeton', type: placeTokenType, x, y });
+                save(); renderMap(); broadcastMap(true); e.preventDefault(); return;
             }
             if (mapTool === 'bg') {   // calage du fond : on déplace l'image (pas la grille)
                 bgDrag = true; bgStart = { x: state.map.bgX || 0, y: state.map.bgY || 0 };
@@ -1862,14 +2309,24 @@
                 rulerDraft.y2 = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
                 renderRuler(); return;
             }
+            if (aoeDraft) {
+                const r = contentRect();
+                aoeDraft.x2 = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+                aoeDraft.y2 = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                renderTemplates(); return;
+            }
             if (drawStroke) {
                 const r = contentRect();
                 drawStroke.pts.push({ x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) });
                 drawIsNote ? renderGmNotes() : renderDraw(); return;
             }
             if (bgDrag) {
-                state.map.bgX = bgStart.x + (e.clientX - startX); state.map.bgY = bgStart.y + (e.clientY - startY);
-                const c = view.querySelector('.gm-map-content'); if (c) c.style.backgroundPosition = `calc(50% + ${state.map.bgX}px) calc(50% + ${state.map.bgY}px)`;
+                // Delta écran → px de RÉFÉRENCE (largeur 1000) pour rester stable à tout zoom / toute fenêtre
+                const br = contentRect(), kRef = 1000 / Math.max(1, br.width);
+                state.map.bgX = bgStart.x + (e.clientX - startX) * kRef;
+                state.map.bgY = bgStart.y + (e.clientY - startY) * kRef;
+                const b = view.querySelector('.gm-board');
+                if (b) { const f = b.clientWidth / 1000; b.style.backgroundPosition = `calc(50% + ${state.map.bgX * f}px) calc(50% + ${state.map.bgY * f}px)`; }
                 return;
             }
             if (cur && tokenEl) {
@@ -1896,6 +2353,12 @@
                 wallDraft = null; save(); renderMap(); broadcastMap(true); return;
             }
             if (rulerDraft) { rulerDraft = null; renderRuler(); return; }
+            if (aoeDraft) {
+                if (Math.hypot(aoeDraft.x2 - aoeDraft.x, aoeDraft.y2 - aoeDraft.y) > 0.008) {
+                    templatesData().push(Object.assign({ id: uid() }, aoeDraft));
+                }
+                aoeDraft = null; save(); renderMap(); broadcastMap(true); return;
+            }
             if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
             if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
             if (cur) {
@@ -1912,7 +2375,7 @@
             e.preventDefault();
             if (mapTool === 'bg') {   // molette = redimensionner le fond (calage grille)
                 state.map.bgScale = Math.max(0.2, Math.min(5, (Number(state.map.bgScale) || 1) * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
-                const c = view.querySelector('.gm-map-content'); if (c) c.style.backgroundSize = (state.map.bgScale * 100) + '%';
+                const b = view.querySelector('.gm-board'); if (b) b.style.backgroundSize = (state.map.bgScale * 100) + '%';
                 clearTimeout(bgWheelTimer); bgWheelTimer = setTimeout(() => { save(); broadcastMap(true); }, 250);
                 return;
             }
@@ -1924,6 +2387,11 @@
             if (mapTool === 'draw') {   // molette = épaisseur du trait
                 drawWidth = Math.max(1, Math.min(24, drawWidth + (e.deltaY < 0 ? 1 : -1)));
                 if (window.showAppToast) window.showAppToast('✏️ Épaisseur : ' + drawWidth + ' px', '#2c3e50');
+                return;
+            }
+            if (mapTool === 'light') {   // molette = rayon de la prochaine lumière posée
+                lightRadius = Math.max(0.04, Math.min(0.45, lightRadius * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+                if (window.showAppToast) window.showAppToast('💡 Rayon de lumière : ' + Math.round(lightRadius * 100) + '%', '#2c3e50');
                 return;
             }
             // Zoom molette centré SUR LE CURSEUR : le point de la carte sous la souris reste fixe.
@@ -2279,7 +2747,9 @@
         byId('gm-init-next').addEventListener('click', () => {
             if (!state.initiative.length) return;
             state.turnIndex++;
-            if (state.turnIndex >= state.initiative.length) { state.turnIndex = 0; state.round++; }
+            if (state.turnIndex >= state.initiative.length) { state.turnIndex = 0; state.round++; clog('🔄 Round ' + state.round); }
+            const cur = state.initiative[state.turnIndex];
+            if (cur && state.combatActive) clog('▶️ Tour de ' + cur.name);
             save(); renderInit(); broadcastCombat();
         });
         byId('gm-init-reset').addEventListener('click', () => {
@@ -2292,6 +2762,7 @@
             state.combatActive = !state.combatActive;
             if (state.combatActive) { addPlayersToInit(); if (!state.round) state.round = 1; }
             save(); renderInit(); broadcastCombat();
+            clog(state.combatActive ? '⚔️ Combat lancé' : '🕊️ Fin du combat');
             if (window.showAppToast) window.showAppToast(state.combatActive ? '⚔️ Combat lancé ! Les joueurs peuvent lancer leur initiative.' : '⏹ Combat terminé', state.combatActive ? '#2c3e50' : '#7A2828');
         });
         byId('gm-combat-addplayers').addEventListener('click', () => { addPlayersToInit(); save(); renderInit(); broadcastCombat(); });
@@ -2338,6 +2809,38 @@
             byId('gm-gen-out').textContent = pool[Math.floor(Math.random() * pool.length)];
         }));
 
+        // Minuteur partagé (compte à rebours chez le MJ ET les joueurs)
+        byId('gm-timer-start').addEventListener('click', () => {
+            const min = Math.max(0.1, parseFloat(byId('gm-timer-min').value) || 5);
+            const until = Date.now() + Math.round(min * 60000);
+            gmBroadcast('timer', { until: until });
+            showGmTimer(until);
+            clog('⏳ Minuteur lancé : ' + min + ' min');
+        });
+        byId('gm-timer-stop').addEventListener('click', () => { gmBroadcast('timer', { until: 0 }); showGmTimer(0); });
+
+        // Journal de combat + points de sauvegarde
+        byId('gm-combatlog-clear').addEventListener('click', () => { if (!confirm('Vider le journal de combat ?')) return; state.combatLog = []; save(); renderCombatLog(); });
+        byId('gm-snap-create').addEventListener('click', createSnap);
+
+        // Raccourcis clavier des outils carte (hors saisie) + Ctrl+Z = annuler sur la carte
+        const TOOL_KEYS = { s: ['select', '🖱️ Souris'], m: ['wall', '🧱 Mur'], p: ['door', '🚪 Porte'], d: ['draw', '✏️ Dessin'], l: ['light', '💡 Lumière'], r: ['ruler', '📏 Règle'], f: ['reveal', '🔦 Révéler (brouillard)'], j: ['placetoken', '📍 Poser un jeton'], a: ['aoe', '🎯 Gabarit'] };
+        document.addEventListener('keydown', (e) => {
+            if (!document.body.classList.contains('gm-active')) return;
+            const tag = (e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoMap(); return; }
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (e.key === 'Escape') { if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); renderMap(); } closeToolFlyout(); return; }
+            const def = TOOL_KEYS[e.key.toLowerCase()];
+            if (def) {
+                e.preventDefault();
+                if (mapTool !== def[0]) { mapTool = def[0]; if (def[0] === 'reveal') fogState().on = true; syncToolbar(); renderMap(); }
+                closeToolFlyout();
+                if (window.showAppToast) window.showAppToast(def[1], '#2c3e50');
+            }
+        });
+
         // Environnement + notes (sauvegarde sur saisie)
         byId('gm-env-time').addEventListener('input', e => { state.env.time = e.target.value; save(); });
         byId('gm-env-weather').addEventListener('change', e => { state.env.weather = e.target.value; save(); });
@@ -2370,6 +2873,12 @@
 
         // --- Carte tactique : fond, grille, jetons ---
         setupMapDrag();
+        // Le board (plateau à ratio fixe) se recalcule quand la zone carte change de taille
+        try {
+            let roT = null;
+            const ro = new ResizeObserver(() => { clearTimeout(roT); roT = setTimeout(() => { if (!gmDragBusy && document.body.classList.contains('gm-active')) renderMap(); }, 120); });
+            ro.observe(byId('gm-map-view'));
+        } catch (e) {}
         const mapApplyUrl = () => { const u = byId('gm-map-url').value.trim(); if (!u) return; state.map.bg = u; byId('gm-map-url').value = ''; save(); renderMap(); broadcastMap(true); };
         byId('gm-map-seturl').addEventListener('click', mapApplyUrl);
         byId('gm-map-url').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); mapApplyUrl(); } });
@@ -2432,6 +2941,26 @@
             const th = e.target.closest('.gm-page-thumb');
             if (th) promptRenameMap(th.dataset.page);
         });
+        // Glisser-déposer d'une vignette sur la carte pour l'AFFICHER (au lieu de cliquer).
+        pagesBar.addEventListener('dragstart', (e) => {
+            const th = e.target.closest('.gm-page-thumb');
+            if (!th) return;
+            e.dataTransfer.setData('text/gm-page', th.dataset.page);
+            e.dataTransfer.effectAllowed = 'move';
+            th.classList.add('gm-page-dragging');
+        });
+        pagesBar.addEventListener('dragend', (e) => { const th = e.target.closest('.gm-page-thumb'); if (th) th.classList.remove('gm-page-dragging'); });
+        const stage = byId('gm-map-view');
+        if (stage) {
+            const isPageDrag = (e) => Array.from(e.dataTransfer.types || []).indexOf('text/gm-page') !== -1;
+            stage.addEventListener('dragover', (e) => { if (!isPageDrag(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; stage.classList.add('gm-stage-drop'); });
+            stage.addEventListener('dragleave', (e) => { if (e.target === stage) stage.classList.remove('gm-stage-drop'); });
+            stage.addEventListener('drop', (e) => {
+                const pid = e.dataTransfer.getData('text/gm-page'); if (!pid) return;
+                e.preventDefault(); stage.classList.remove('gm-stage-drop');
+                switchMap(pid);
+            });
+        }
 
         // --- Préparation (arbre) ---
         setupTreeDnD();
@@ -2505,7 +3034,7 @@
                 case 'mon-del': state.monsters = state.monsters.filter(m => m.id !== id); save(); renderMonsters(); break;
                 case 'mon-eye': { const m = find(state.monsters, id); if (m) { m.hidden = !m.hidden; save(); renderMonsters(); } break; }
                 case 'init-eye': { const c = find(state.initiative, id); if (c) { c.hidden = !c.hidden; save(); renderInit(); } break; }
-                case 'mon-hp': { const m = find(state.monsters, id); if (m) { const amtEl = document.querySelector('[data-mon-hp-amount="' + id + '"]'); const amt = (amtEl && Math.abs(parseInt(amtEl.value, 10))) || 1; m.hpCur = Math.max(0, Math.min(m.hpMax, m.hpCur + parseInt(t.dataset.delta) * amt)); save(); renderMonsters(); } break; }
+                case 'mon-hp': { const m = find(state.monsters, id); if (m) { const amtEl = document.querySelector('[data-mon-hp-amount="' + id + '"]'); const amt = (amtEl && Math.abs(parseInt(amtEl.value, 10))) || 1; const delta = parseInt(t.dataset.delta) * amt; m.hpCur = Math.max(0, Math.min(m.hpMax, m.hpCur + delta)); clog((delta < 0 ? '💥 ' : '💚 ') + m.name + (delta < 0 ? ' subit ' + (-delta) : ' récupère ' + delta) + ' PV → ' + m.hpCur + '/' + m.hpMax + (m.hpCur <= 0 ? ' ☠️' : '')); save(); renderMonsters(); } break; }
                 case 'mon-cond': { const m = find(state.monsters, id); if (m) { const c = t.dataset.cond; m.conditions = m.conditions.includes(c) ? m.conditions.filter(x => x !== c) : [...m.conditions, c]; save(); renderMonsters(); } break; }
                 case 'mon-atk': { const m = find(state.monsters, id); if (m) { const a = m.attacks[parseInt(t.dataset.ai)]; if (a) logDice(`${m.name} — ${a.name}`, rollFormula(a.formula)); } break; }
                 case 'mon-atk-add': {
@@ -2545,6 +3074,36 @@
                 case 'player-sheet': case 'player-kick': openPlayerModal(t.dataset.uid); break;
                 case 'offline-sheet': openOfflineSheet(t.dataset.uid); break;
                 case 'offline-remove': removeOfflineSheet(t.dataset.uid); break;
+                case 'player-inspire': {
+                    const p = findLivePlayer(t.dataset.uid);
+                    const nm = (p && (p.snapshot && p.snapshot.name || p.character_name)) || 'Le joueur';
+                    if (gmBroadcast('inspiration', { targetUserId: t.dataset.uid })) {
+                        if (window.showAppToast) window.showAppToast('✨ Inspiration accordée à ' + nm, '#b8862c');
+                        clog('✨ Inspiration accordée à ' + nm);
+                    }
+                    break;
+                }
+                case 'npc-reveal': {
+                    const n = find(state.npcs, id); if (!n) break;
+                    const txt = prompt('Texte public affiché aux joueurs (optionnel) :', '');
+                    if (txt === null) break;
+                    const img = prompt('URL d\'un portrait (optionnel, laisse vide sinon) :', '');
+                    if (img === null) break;
+                    if (gmBroadcast('npc-card', { name: n.name, text: (txt || '').slice(0, 300), img: (img || '').trim() })) {
+                        if (window.showAppToast) window.showAppToast('🎴 « ' + n.name + ' » révélé aux joueurs', '#2c3e50');
+                        clog('🎴 PNJ révélé : ' + n.name);
+                    }
+                    break;
+                }
+                case 'snap-restore': {
+                    const s = loadSnaps().find(x => x.id === id); if (!s) break;
+                    if (!confirm('Restaurer la campagne à l\'état du ' + new Date(s.ts).toLocaleString('fr-FR') + ' ?\n(L\'état actuel sera remplacé.)')) break;
+                    state = Object.assign(defaultState(), JSON.parse(JSON.stringify(s.state)));
+                    ensureMaps(); save(); renderAll(); broadcastMap(true); broadcastCombat();
+                    if (window.showAppToast) window.showAppToast('↩️ Campagne restaurée', '#2c3e50');
+                    break;
+                }
+                case 'snap-del': { saveSnaps(loadSnaps().filter(x => x.id !== id)); renderSnaps(); break; }
             }
         });
         // Délégation : changements (checkboxes, champs de stats joueurs, secrets PNJ)
@@ -2671,6 +3230,8 @@
         try { if (location.hash !== '#gm/' + activeCampaignId) location.hash = '#gm/' + activeCampaignId; } catch (e) {}
         ensureMaps();
         renderAll();
+        // Point de départ de l'historique Ctrl+Z (carte + jetons)
+        try { mapHist = [JSON.stringify({ map: state.map, tokens: state.tokens })]; } catch (e) { mapHist = []; }
         loadTree();
         loadStateFromCloud(activeCampaignId);                 // rafraîchit depuis le cloud (multi-appareils)
         if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte

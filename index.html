@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fiche D&D Interactive</title>
+    <!-- PWA : installable sur mobile / bureau (manifest + service worker « réseau d'abord ») -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#7A2828">
+    <link rel="apple-touch-icon" href="IMG/dndimg.png">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="music-player.css">
@@ -431,5 +435,11 @@
 <script src="fiche-layout.js"></script>
 <script src="print-sheet.js"></script>
 <script src="gm-screen.js"></script>
+<script>
+// PWA : service worker « réseau d'abord » (jamais de version périmée en ligne, hors-ligne de secours)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
+</script>
 </body>
 </html>

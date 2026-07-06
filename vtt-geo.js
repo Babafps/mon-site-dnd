@@ -138,5 +138,133 @@
         return Math.max(8, (meters / cell) * (gridSize || 48));
     }
 
-    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, visionRadiusPx, blockingWalls };
+    // =====================================================
+    // GABARITS DE SORTS (AoE) — dessin partagé MJ / joueur.
+    // t = { kind:'circle'|'cone'|'line'|'cube', x,y (origine), x2,y2 (extrémité), color }
+    // gridPx = taille d'une case en px du canvas ; cellM = mètres par case.
+    // =====================================================
+    function drawTemplates(ctx, w, h, templates, gridPx, cellM) {
+        (templates || []).forEach(t => {
+            const x1 = t.x * w, y1 = t.y * h, x2 = (t.x2 != null ? t.x2 : t.x) * w, y2 = (t.y2 != null ? t.y2 : t.y) * h;
+            const dx = x2 - x1, dy = y2 - y1, dist = Math.hypot(dx, dy);
+            if (dist < 2) return;
+            const col = t.color || '#e67e22';
+            ctx.save();
+            ctx.globalAlpha = 0.28; ctx.fillStyle = col;
+            ctx.beginPath();
+            if (t.kind === 'cone') {
+                // Cône D&D : longueur = largeur à l'extrémité → demi-angle atan(0.5)
+                const a = Math.atan2(dy, dx), half = Math.atan(0.5);
+                ctx.moveTo(x1, y1);
+                ctx.arc(x1, y1, dist, a - half, a + half);
+                ctx.closePath();
+            } else if (t.kind === 'line') {
+                const a = Math.atan2(dy, dx), lw = Math.max(6, gridPx * 0.5);
+                const px = Math.sin(a) * lw / 2, py = -Math.cos(a) * lw / 2;
+                ctx.moveTo(x1 + px, y1 + py); ctx.lineTo(x2 + px, y2 + py);
+                ctx.lineTo(x2 - px, y2 - py); ctx.lineTo(x1 - px, y1 - py);
+                ctx.closePath();
+            } else if (t.kind === 'cube') {
+                const side = Math.max(Math.abs(dx), Math.abs(dy));
+                ctx.rect(x1, y1, side * (dx < 0 ? -1 : 1), side * (dy < 0 ? -1 : 1));
+            } else {           // circle (sphère)
+                ctx.arc(x1, y1, dist, 0, Math.PI * 2);
+            }
+            ctx.fill();
+            ctx.globalAlpha = 0.9; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+            ctx.stroke(); ctx.setLineDash([]);
+            // Point d'origine + étiquette de taille en mètres
+            ctx.beginPath(); ctx.arc(x1, y1, 4, 0, Math.PI * 2); ctx.fillStyle = col; ctx.globalAlpha = 1; ctx.fill();
+            const meters = Math.round((dist / Math.max(1, gridPx)) * (cellM || 1.5) * 10) / 10;
+            const label = meters.toLocaleString('fr-FR') + ' m';
+            ctx.font = 'bold 12px Lora, serif';
+            const tw = ctx.measureText(label).width;
+            const lx = Math.max(2, Math.min(w - tw - 12, (x1 + x2) / 2 - tw / 2 - 5)), ly = Math.max(14, (y1 + y2) / 2 - 8);
+            ctx.fillStyle = 'rgba(20,14,8,0.82)';
+            ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, ly - 11, tw + 10, 16, 5) : ctx.rect(lx, ly - 11, tw + 10, 16); ctx.fill();
+            ctx.fillStyle = '#f3e3bb'; ctx.fillText(label, lx + 5, ly + 1);
+            ctx.restore();
+        });
+    }
+
+    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, visionRadiusPx, blockingWalls, drawTemplates };
+})();
+
+// =====================================================
+// VTTWeather — effets de météo animés sur un canvas
+// (pluie / neige / brume / braises), partagé MJ / joueur.
+// Boucle rAF par canvas, s'arrête seule si le canvas sort
+// du DOM, si l'effet passe à '' ou si l'onglet est caché.
+// =====================================================
+(function () {
+    'use strict';
+    function makeParticles(kind, w, h) {
+        const n = Math.round((w * h) / (kind === 'fog' ? 90000 : (kind === 'embers' ? 22000 : 9000)));
+        const ps = [];
+        for (let i = 0; i < Math.max(6, n); i++) {
+            ps.push({
+                x: Math.random() * w, y: Math.random() * h,
+                v: 0.5 + Math.random() * 1.5, s: Math.random(),
+                drift: (Math.random() - 0.5) * 0.6
+            });
+        }
+        return ps;
+    }
+    function step(canvas) {
+        const fx = canvas.__wfx;
+        if (!fx || !canvas.isConnected || !fx.kind) { if (fx) fx.running = false; return; }
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        const k = fx.kind;
+        fx.t = (fx.t || 0) + 1;
+        fx.ps.forEach(p => {
+            if (k === 'rain') {
+                ctx.strokeStyle = 'rgba(160,190,230,0.45)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 2, p.y + 9 + p.v * 4); ctx.stroke();
+                p.y += 6 + p.v * 5; p.x += 1.2;
+                if (p.y > h) { p.y = -10; p.x = Math.random() * w; }
+            } else if (k === 'snow') {
+                ctx.fillStyle = 'rgba(240,244,250,0.7)';
+                ctx.beginPath(); ctx.arc(p.x, p.y, 1 + p.s * 2, 0, Math.PI * 2); ctx.fill();
+                p.y += 0.5 + p.v * 0.7; p.x += Math.sin((fx.t + p.s * 100) / 40) * 0.6 + p.drift;
+                if (p.y > h) { p.y = -4; p.x = Math.random() * w; }
+                if (p.x < -4) p.x = w + 4; if (p.x > w + 4) p.x = -4;
+            } else if (k === 'fog') {
+                const r = 60 + p.s * 140;
+                const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+                g.addColorStop(0, 'rgba(200,200,210,0.10)'); g.addColorStop(1, 'rgba(200,200,210,0)');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+                p.x += 0.25 + p.drift * 0.4;
+                if (p.x - r > w) p.x = -r;
+            } else if (k === 'embers') {
+                ctx.fillStyle = 'rgba(255,' + Math.round(120 + p.s * 90) + ',40,' + (0.35 + p.s * 0.5) + ')';
+                ctx.beginPath(); ctx.arc(p.x, p.y, 1 + p.s * 1.6, 0, Math.PI * 2); ctx.fill();
+                p.y -= 0.4 + p.v * 0.8; p.x += Math.sin((fx.t + p.s * 60) / 25) * 0.5;
+                if (p.y < -4) { p.y = h + 4; p.x = Math.random() * w; }
+            }
+        });
+        if (fx.running) requestAnimationFrame(() => step(canvas));
+    }
+    window.VTTWeather = {
+        // Applique (ou coupe) un effet sur un canvas. Relance la boucle si besoin.
+        apply(canvas, kind, w, h) {
+            if (!canvas) return;
+            if (canvas.width !== w) canvas.width = w;
+            if (canvas.height !== h) canvas.height = h;
+            let fx = canvas.__wfx;
+            if (!kind) {
+                if (fx) fx.kind = '';
+                const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+                canvas.style.display = 'none';
+                return;
+            }
+            canvas.style.display = 'block';
+            if (!fx || fx.kind !== kind || fx.w !== w || fx.h !== h) {
+                fx = canvas.__wfx = { kind, w, h, ps: makeParticles(kind, w, h), running: false, t: 0 };
+            }
+            if (!fx.running) { fx.running = true; requestAnimationFrame(() => step(canvas)); }
+        }
+    };
 })();

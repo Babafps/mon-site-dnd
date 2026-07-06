@@ -142,6 +142,10 @@
               .on('broadcast', { event: 'show-image' }, ({ payload }) => receiveSharedImage(payload))
               .on('broadcast', { event: 'dice' }, ({ payload }) => receiveDiceRoll(payload))
               .on('broadcast', { event: 'map-ping' }, ({ payload }) => showMapPing(payload))
+              .on('broadcast', { event: 'concentration' }, ({ payload }) => receiveConcentration(payload))
+              .on('broadcast', { event: 'inspiration' }, ({ payload }) => receiveInspiration(payload))
+              .on('broadcast', { event: 'npc-card' }, ({ payload }) => receiveNpcCard(payload))
+              .on('broadcast', { event: 'timer' }, ({ payload }) => receiveTimer(payload))
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
                       try { await ch.track({ role: 'player', name: snapName(), charId: state.charId, online: true }); } catch (e) {}
@@ -206,6 +210,7 @@
     // --- Image partagée par le MJ : notification « Ouvrir » → visionneuse plein écran ---
     function receiveSharedImage(p) {
         if (!p || !p.url) return;
+        if (p.targetUserId && p.targetUserId !== 'all' && p.targetUserId !== myUid()) return; // image ciblée : pas pour moi
         let wrap = document.getElementById('session-notifs');
         if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
         const card = document.createElement('div'); card.className = 'session-notif';
@@ -215,15 +220,83 @@
         actions.appendChild(mkBtn('Ignorer', 'refuse', () => card.remove()));
         wrap.appendChild(card);
     }
-    // Jet de dés public diffusé par le MJ → notification éphémère côté joueur.
+    // Jet de dés partagé (MJ ou joueur) → carte ANIMÉE : le dé tourne puis le résultat claque.
     function receiveDiceRoll(p) {
         if (!p) return;
         let wrap = document.getElementById('session-notifs');
         if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
-        const card = document.createElement('div'); card.className = 'session-notif';
-        card.innerHTML = `<div class="session-notif-head">🎲 ${escHtml(p.user || 'MJ')} lance ${escHtml(p.formula || '')}</div><div class="session-notif-body">Résultat : <b>${escHtml(String(p.total))}</b> <span style="opacity:.6;">(${escHtml(p.detail || '')})</span></div>`;
+        const card = document.createElement('div'); card.className = 'session-notif session-dice-card';
+        card.innerHTML = `<div class="session-notif-head"><span class="sdc-die">🎲</span> ${escHtml(p.user || 'MJ')} lance ${escHtml(p.formula || '')}</div>
+            <div class="session-notif-body sdc-body"><b class="sdc-total">${escHtml(String(p.total))}</b> <span style="opacity:.6;">(${escHtml(p.detail || '')})</span></div>`;
         wrap.appendChild(card);
         setTimeout(() => { card.style.transition = 'opacity .4s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 400); }, 6000);
+    }
+    // --- Concentration : le MJ signale qu'un jet de CON est requis (DD calculé) ---
+    function receiveConcentration(p) {
+        if (!p) return;
+        if (p.targetUserId && p.targetUserId !== myUid()) return;
+        let wrap = document.getElementById('session-notifs');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'session-notif';
+        card.innerHTML = `<div class="session-notif-head">🌀 Concentration menacée !</div>
+            <div class="session-notif-body">Tu subis <b>${escHtml(String(p.dmg || '?'))}</b> dégâts en te concentrant.<br>Jet de sauvegarde de <b>Constitution DD ${escHtml(String(p.dc || 10))}</b> pour maintenir le sort.</div>
+            <div class="session-notif-actions"></div>`;
+        const actions = card.querySelector('.session-notif-actions');
+        actions.appendChild(mkBtn('🎲 Jet de CON', 'accept', () => {
+            const modEl = document.getElementById('mod-con');
+            const mod = modEl ? (parseInt(String(modEl.textContent).replace('+', ''), 10) || 0) : 0;
+            const d = Math.floor(Math.random() * 20) + 1, total = d + mod;
+            const ok = total >= (p.dc || 10);
+            card.querySelector('.session-notif-body').innerHTML = `Jet de CON : ${d}${mod ? (mod > 0 ? ' +' + mod : ' ' + mod) : ''} = <b>${total}</b> → ${ok ? '✅ concentration maintenue !' : '❌ concentration perdue…'}`;
+            actions.innerHTML = '';
+            sendToGm('whisper', { name: snapName(), fromUid: myUid(), text: '🌀 Concentration DD ' + (p.dc || 10) + ' : ' + total + ' → ' + (ok ? 'maintenue ✅' : 'PERDUE ❌'), ts: Date.now() });
+            if (!ok) { const cb = document.getElementById('is-concentrating'); if (cb && cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change', { bubbles: true })); } }
+            setTimeout(() => card.remove(), 6000);
+        }));
+        actions.appendChild(mkBtn('Ignorer', 'refuse', () => card.remove()));
+        wrap.appendChild(card);
+    }
+    // --- ✨ Inspiration héroïque accordée par le MJ : coche la vraie case de la fiche ---
+    function receiveInspiration(p) {
+        if (!p) return;
+        if (p.targetUserId && p.targetUserId !== 'all' && p.targetUserId !== myUid()) return;
+        const cb = document.getElementById('heroic-inspiration');
+        if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (window.showAppToast) window.showAppToast('✨ Le MJ t\'accorde l\'inspiration héroïque !', '#b8862c');
+    }
+    // --- 🎴 Carte de PNJ révélée par le MJ (portrait + nom + description) ---
+    function receiveNpcCard(p) {
+        if (!p || !p.name) return;
+        let ov = document.getElementById('session-npc-card');
+        if (!ov) {
+            ov = document.createElement('div'); ov.id = 'session-npc-card'; ov.className = 'no-print';
+            ov.addEventListener('click', () => ov.classList.add('hidden'));
+            document.body.appendChild(ov);
+        }
+        ov.innerHTML = `<div class="snc-box" onclick="event.stopPropagation()">
+            ${p.img ? `<img class="snc-img" src="${escHtml(p.img)}" alt="">` : '<div class="snc-noimg">🎭</div>'}
+            <div class="snc-name">${escHtml(p.name)}</div>
+            ${p.text ? `<div class="snc-text">${escHtml(p.text)}</div>` : ''}
+            <button class="snc-close">✕</button>
+        </div>`;
+        ov.querySelector('.snc-close').addEventListener('click', () => ov.classList.add('hidden'));
+        ov.classList.remove('hidden');
+    }
+    // --- ⏳ Minuteur partagé lancé par le MJ ---
+    let sessTimerInt = null;
+    function receiveTimer(p) {
+        let el = document.getElementById('session-timer');
+        clearInterval(sessTimerInt);
+        if (!p || !p.until || p.until <= Date.now()) { if (el) el.remove(); return; }
+        if (!el) { el = document.createElement('div'); el.id = 'session-timer'; el.className = 'no-print'; document.body.appendChild(el); }
+        const tick = () => {
+            const left = p.until - Date.now();
+            if (left <= 0) { clearInterval(sessTimerInt); el.remove(); if (window.showAppToast) window.showAppToast('⏰ Temps écoulé !', '#c0392b'); return; }
+            const s = Math.ceil(left / 1000);
+            el.textContent = '⏳ ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+            el.classList.toggle('is-low', s <= 10);
+        };
+        tick(); sessTimerInt = setInterval(tick, 500);
     }
     function openSharedImage(url) {
         let ov = document.getElementById('session-image-viewer');
@@ -279,9 +352,41 @@
         fabPanel.style.transformOrigin = (left > r.left ? 'left' : 'right') + ' 24px';
     }
 
+    // Mini-parser de formule de dés (2d6+3, 1d20-1…) — équivalent léger du lanceur MJ.
+    function rollFormulaLite(raw) {
+        const clean = String(raw || '').toLowerCase().replace(/\s+/g, '');
+        if (!clean || !/^[0-9d+\-]+$/.test(clean)) return null;
+        let total = 0; const parts = [];
+        const tokens = clean.match(/[+\-]?[^+\-]+/g) || [];
+        for (const tk of tokens) {
+            const sign = tk[0] === '-' ? -1 : 1;
+            const body = tk.replace(/^[+\-]/, '');
+            const dm = body.match(/^(\d*)d(\d+)$/);
+            if (dm) {
+                const n = Math.min(50, parseInt(dm[1] || '1', 10)), faces = Math.min(1000, parseInt(dm[2], 10));
+                if (!n || !faces) return null;
+                for (let i = 0; i < n; i++) { const r = Math.floor(Math.random() * faces) + 1; total += sign * r; parts.push(r); }
+            } else {
+                const v = parseInt(body, 10); if (isNaN(v)) return null;
+                total += sign * v;
+            }
+        }
+        return { total, detail: parts.join(' ') };
+    }
+    function sendSharedRoll() {
+        const inp = document.getElementById('sfp-dice-formula'); if (!inp) return;
+        const f = (inp.value || '').trim() || '1d20';
+        const res = rollFormulaLite(f);
+        if (!res) { if (window.showAppToast) window.showAppToast('Formule invalide (ex : 2d6+3)', '#c0392b'); return; }
+        const payload = { user: snapName(), formula: f, total: res.total, detail: res.detail };
+        sendToGm('dice', payload);          // le MJ ET les autres joueurs le reçoivent
+        receiveDiceRoll(payload);           // soi-même (les broadcasts ne reviennent pas à l'émetteur)
+        inp.value = '';
+    }
     function renderFabPanel() {
         if (!fabPanel) return;
-        const whisperBtn = `<button id="sfp-whisper-open" class="sfp-btn sfp-btn-whisper" type="button">🤫 Murmurer au MJ</button>`;
+        const whisperBtn = `<button id="sfp-whisper-open" class="sfp-btn sfp-btn-whisper" type="button">🤫 Murmurer au MJ</button>`
+            + `<div class="sfp-manual"><input id="sfp-dice-formula" class="sfp-manual-input" placeholder="2d6+3 (dé partagé)"><button id="sfp-dice-share" class="sfp-btn sfp-btn-alt" title="Lancer devant tout le monde">🎲</button></div>`;
         // Hors combat : on n'affiche le message QUE dans le panneau ouvert (plus de badge flottant).
         if (!combatState.active) {
             fabPanel.innerHTML = `<div class="sfp-head">⚔️ Session</div>${whisperBtn}<div class="sfp-empty">Pas de combat pour le moment.</div>`;
@@ -304,6 +409,10 @@
         }
         const wb = document.getElementById('sfp-whisper-open');
         if (wb) wb.addEventListener('click', renderWhisperForm);
+        const ds = document.getElementById('sfp-dice-share');
+        if (ds) ds.addEventListener('click', sendSharedRoll);
+        const df = document.getElementById('sfp-dice-formula');
+        if (df) df.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendSharedRoll(); } });
         const rb = document.getElementById('sfp-roll-init');
         if (rb) rb.addEventListener('click', rollInitiative);
         const mb = document.getElementById('sfp-init-manual-btn');
@@ -368,7 +477,24 @@
         updateFabVisibility();
         if (fabPanel && !fabPanel.classList.contains('hidden')) { renderFabPanel(); placePanel(); }
         document.body.classList.toggle('session-combat-active', combatState.active);
+        renderTurnbar();
         maybeNotifyTurn();
+    }
+
+    // --- Barre de tour partagée (en haut de l'écran pendant le combat) ---
+    function renderTurnbar() {
+        let bar = document.getElementById('session-turnbar');
+        const app = document.getElementById('app-screen');
+        const show = combatState.active && !!state.sessionId && !!(app && !app.classList.contains('hidden'));
+        if (!show) { if (bar) bar.style.display = 'none'; return; }
+        if (!bar) { bar = document.createElement('div'); bar.id = 'session-turnbar'; bar.className = 'no-print'; document.body.appendChild(bar); }
+        bar.style.display = 'flex';
+        const myName = (snapName() || '').toLowerCase();
+        const chips = (combatState.order || []).map((c, i) => {
+            const me = c.name && c.name.toLowerCase() === myName;
+            return `<span class="stb-chip${i === combatState.turnIndex ? ' is-turn' : ''}${me ? ' is-me' : ''}">${c.type === 'monster' ? '👹' : '🧝'} ${escHtml(c.name)}</span>`;
+        }).join('');
+        bar.innerHTML = `<span class="stb-round">R${combatState.round || 1}</span>${chips || '<span class="stb-chip">En attente des initiatives…</span>'}`;
     }
 
     // Notification d'anticipation : prévient le joueur juste avant son tour
@@ -406,6 +532,8 @@
         combatState = { active: false, round: 1, turnIndex: 0, order: [] };
         if (fabEl) { fabEl.style.display = 'none'; fabEl.classList.remove('fab-combat'); }
         if (fabPanel) fabPanel.classList.add('hidden');
+        const tb = document.getElementById('session-turnbar'); if (tb) tb.style.display = 'none';
+        const tm = document.getElementById('session-timer'); if (tm) { clearInterval(sessTimerInt); tm.remove(); }
         document.body.classList.remove('session-combat-active');
     }
 
@@ -601,10 +729,17 @@
         const syncFullBtn = () => { fullBtn.title = mapPanel.classList.contains('smap-fullscreen') ? 'Réduire' : 'Plein écran'; fullBtn.textContent = mapPanel.classList.contains('smap-fullscreen') ? '🗗' : '⛶'; };
         // Rendu immédiat (lire clientWidth force la mise en page) + une passe rAF de sécurité.
         // (rAF seul ne suffit pas : il ne tourne pas si l'onglet est en arrière-plan.)
+        // Reconstruit tout le board : sa géométrie dépend de la taille de la fenêtre carte.
         const refreshMapCanvases = () => {
-            renderPlayerDraw(); renderPlayerFog(); renderPlayerDark();
-            requestAnimationFrame(() => { renderPlayerDraw(); renderPlayerFog(); renderPlayerDark(); });
+            if (playerDragBusy) { pendingMapRender = true; return; }
+            renderPlayerMap();
+            requestAnimationFrame(() => { if (!playerDragBusy) renderPlayerMap(); });
         };
+        let resizeT = null;
+        window.addEventListener('resize', () => {
+            if (mapPanel.classList.contains('hidden')) return;
+            clearTimeout(resizeT); resizeT = setTimeout(refreshMapCanvases, 150);
+        });
         // La carte s'ouvre en PETIT, avec une animation depuis le bouton ; ⛶ agrandit (animé).
         openMapPanel = () => {
             mapPanel.classList.remove('smap-fullscreen');
@@ -665,33 +800,84 @@
         renderPlayerMap();
     }
 
+    // Le BOARD : plateau à ratio fixe (m.stageAR), identique à celui du MJ — les fractions
+    // x/y y correspondent pile aux mêmes points de la carte (fix « voir à travers les murs »).
+    function playerBoard() { const v = document.getElementById('smap-view'); return v ? (v.querySelector('.smap-board') || v) : null; }
+    function playerGridPx(bw) {
+        const m = mapState.map || {};
+        return Number(m.stageAR) ? Math.max(4, (m.gridSize || 48) * bw / 1000) : (m.gridSize || 48);
+    }
+    function playerCellM() { return Number(mapState.map && mapState.map.cellM) || 1.5; }
     function renderPlayerMap() {
         const view = document.getElementById('smap-view'); if (!view) return;
         const m = mapState.map || {};
         const uid = myUid(), locked = !!m.tokensLocked;
-        view.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
-        const bx = m.bgX || 0, by = m.bgY || 0, bs = Number(m.bgScale) || 1;
-        view.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
-        view.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
-        view.classList.toggle('show-grid', m.showGrid !== false);
-        view.style.setProperty('--gm-grid', (m.gridSize || 48) + 'px');
+        // Géométrie du board : letterbox au ratio du MJ (repli : ancien modèle plein cadre)
+        const vw = Math.max(1, view.clientWidth), vh = Math.max(1, view.clientHeight);
+        const AR = Number(m.stageAR) || 0;
+        let bw = vw, bh = vh, bl = 0, bt = 0;
+        if (AR > 0) { bw = Math.min(vw, vh * AR); bh = bw / AR; bl = (vw - bw) / 2; bt = (vh - bh) / 2; }
+        const gpx = playerGridPx(bw);
         const tokensHtml = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
             const mine = !locked && t.owner && t.owner === uid;
             const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
-            const sz = Math.round(30 * (Number(t.size) || 1));
-            return `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}</div>`;
+            const sz = AR > 0 ? Math.max(12, Math.round(gpx * (Number(t.size) || 1) * 0.92)) : Math.round(30 * (Number(t.size) || 1));
+            let aura = '';
+            if (t.aura && Number(t.aura.r) > 0) {
+                const apx = (Number(t.aura.r) / playerCellM()) * gpx;
+                aura = `<div class="smap-aura" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${apx * 2}px; height:${apx * 2}px; --aura:${t.aura.color || '#3498db'};"></div>`;
+            }
+            const badges = t.badges ? `<span class="smap-badges">${escHtml(t.badges)}</span>` : '';
+            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}</div>`;
         }).join('');
-        view.innerHTML = tokensHtml + '<canvas class="smap-draw"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas>';
+        // Portes visibles par les joueurs (pas les portes secrètes). Verrouillées = 🔒 non cliquables.
+        const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret).map(s => {
+            const mx = (s.x1 + s.x2) / 2 * 100, my = (s.y1 + s.y2) / 2 * 100;
+            const cls = 'smap-door-btn' + (s.open ? ' is-open' : '') + (s.locked ? ' is-locked' : '');
+            const tip = s.locked ? 'Porte verrouillée' : (s.open ? 'Porte ouverte — clic : fermer' : 'Porte fermée — clic : ouvrir');
+            return `<button class="${cls}" data-door="${s.id}"${s.locked ? ' disabled' : ''} style="left:${mx}%; top:${my}%;" title="${tip}">${s.locked ? '🔒' : '🚪'}</button>`;
+        }).join('');
+        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;">` + tokensHtml + doorsHtml
+            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas></div>';
+        const board = view.querySelector('.smap-board');
+        board.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
+        const f = AR > 0 ? bw / 1000 : 1;
+        const bx = (m.bgX || 0) * f, by = (m.bgY || 0) * f, bs = Number(m.bgScale) || 1;
+        board.style.backgroundPosition = `calc(50% + ${bx}px) calc(50% + ${by}px)`;
+        board.style.backgroundSize = (bs === 1) ? 'contain' : (bs * 100) + '%';
+        board.classList.toggle('show-grid', m.showGrid !== false);
+        board.style.setProperty('--gm-grid', gpx + 'px');
+        view.classList.remove('show-grid'); view.style.backgroundImage = 'none';   // (ancien rendu sur la vue)
         renderPlayerDraw();
+        renderPlayerTemplates();
+        renderPlayerWeather();
         renderPlayerFog();
         renderPlayerDark();
+    }
+    // Gabarits de sorts posés par le MJ (sphère / cône / ligne / cube)
+    function renderPlayerTemplates() {
+        const board = playerBoard(); if (!board) return;
+        const canvas = board.querySelector('.smap-templates'); if (!canvas) return;
+        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        const ts = (mapState.map && mapState.map.templates) || [];
+        if (ts.length && window.VTTGeo && window.VTTGeo.drawTemplates) window.VTTGeo.drawTemplates(ctx, w, h, ts, playerGridPx(w), playerCellM());
+    }
+    // Météo d'ambiance décidée par le MJ (pluie, neige, brume, braises)
+    function renderPlayerWeather() {
+        const board = playerBoard(); if (!board) return;
+        const canvas = board.querySelector('.smap-weather'); if (!canvas) return;
+        if (window.VTTWeather) window.VTTWeather.apply(canvas, (mapState.map && mapState.map.weather) || '', Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
     }
     // --- Obscurité (vision limitée) : NOIR TOTAL hors de portée de vision de MES jetons.
     // Les murs invisibles posés par le MJ bloquent la ligne de vue (portes fermées incluses).
     let darkRaf = false;
     function scheduleDark() { if (darkRaf) return; darkRaf = true; requestAnimationFrame(() => { darkRaf = false; renderPlayerDark(); }); }
     function renderPlayerDark() {
-        const view = document.getElementById('smap-view'); if (!view) return;
+        const view = playerBoard(); if (!view) return;
         const canvas = view.querySelector('.smap-dark'); if (!canvas) return;
         const m = mapState.map || {};
         const dark = m.dark || null;
@@ -706,13 +892,18 @@
         ctx.fillRect(0, 0, w, h);
         const uid = myUid();
         const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
-        if (mine.length) {
+        const lights = (m.lights || []);
+        const segs = window.VTTGeo.wallsToPx(m.walls || [], w, h);
+        const g = playerGridPx(w);                          // px d'une case sur CE board (échelle partagée)
+        const dk = Object.assign({}, dark, { cellM: playerCellM() });
+        if (mine.length || lights.length) {
             ctx.globalCompositeOperation = 'destination-out';
-            const segs = window.VTTGeo.wallsToPx(m.walls || [], w, h);
-            const g = Number(m.gridSize) || 48;
-            mine.forEach(t => window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dark, g)));
+            mine.forEach(t => window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dk, g)));
+            // Les points de lumière du MJ (torches au sol, lanternes…) éclairent tout le monde.
+            lights.forEach(l => window.VTTGeo.eraseVision(ctx, l.x * w, l.y * h, segs, (Number(l.r) || 0.16) * w));
             ctx.globalCompositeOperation = 'source-over';
-        } else {
+        }
+        if (!mine.length && !lights.length) {
             ctx.fillStyle = 'rgba(232,216,182,0.75)';
             ctx.font = 'italic 13px Lora, serif'; ctx.textAlign = 'center';
             ctx.fillText('🌑 Il fait noir… vous ne voyez rien.', w / 2, h / 2);
@@ -721,7 +912,7 @@
     }
     // Dessin libre du MJ (synchronisé) côté joueur.
     function renderPlayerDraw() {
-        const view = document.getElementById('smap-view'); if (!view) return;
+        const view = playerBoard(); if (!view) return;
         const canvas = view.querySelector('.smap-draw'); if (!canvas) return;
         const strokes = (mapState.map && mapState.map.drawings) || [];
         const w = Math.max(1, view.clientWidth), h = Math.max(1, view.clientHeight);
@@ -743,14 +934,14 @@
         ensureMapUI();
         if (mapToggle) mapToggle.style.display = 'flex';
         if (mapPanel && mapPanel.classList.contains('hidden') && openMapPanel) openMapPanel();
-        const view = document.getElementById('smap-view'); if (!view) return;
+        const view = playerBoard(); if (!view) return;
         const ping = document.createElement('div'); ping.className = 'smap-ping';
         ping.style.left = ((p.x || 0.5) * 100) + '%'; ping.style.top = ((p.y || 0.5) * 100) + '%';
         view.appendChild(ping); setTimeout(() => ping.remove(), 2600);
     }
     // Brouillard côté joueur : OPAQUE (le joueur ne voit que les zones révélées par le MJ).
     function renderPlayerFog() {
-        const view = document.getElementById('smap-view'); if (!view) return;
+        const view = playerBoard(); if (!view) return;
         const canvas = view.querySelector('.smap-fog'); if (!canvas) return;
         const fog = (mapState.map && mapState.map.fog) || null;
         if (!fog || !fog.on) { canvas.style.display = 'none'; return; }
@@ -779,7 +970,15 @@
     function setupPlayerTokenDrag(view) {
         if (!view) return;
         let cur = null, el = null;
+        // Clic sur une porte visible non verrouillée → demande d'ouverture/fermeture au MJ (autorité).
+        view.addEventListener('click', (e) => {
+            const dEl = e.target.closest('.smap-door-btn'); if (!dEl) return;
+            if (dEl.disabled) { if (window.showAppToast) window.showAppToast('🔒 Cette porte est verrouillée.', '#c0392b'); return; }
+            sendToGm('door-toggle', { id: dEl.dataset.door, fromUid: myUid() });
+            if (window.showAppToast) window.showAppToast('🚪 …', '#2c3e50');
+        });
         view.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.smap-door-btn')) return;   // la porte gère son propre clic
             const tEl = e.target.closest('.smap-token'); if (!tEl) return;
             const t = (mapState.tokens || []).find(x => x.id === tEl.dataset.token); if (!t) return;
             if (mapState.map && mapState.map.tokensLocked) return;
@@ -789,7 +988,8 @@
         });
         view.addEventListener('pointermove', (e) => {
             if (!cur || !el) return;
-            const r = view.getBoundingClientRect();
+            const b = playerBoard() || view;
+            const r = b.getBoundingClientRect();               // coordonnées relatives au BOARD (espace partagé)
             const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
             const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
             // Les murs (et portes fermées) posés par le MJ sont infranchissables pour un joueur.
@@ -912,6 +1112,17 @@
         if (sheetWidget) { sheetWidget.classList.add('hidden'); clearInterval(sswTimer); }
     }
 
+    // Retour à la VRAIE page d'accueil. L'app choisit accueil-vs-fiche UNIQUEMENT au chargement
+    // (selon dnd-active-char) et navigue par rechargement : un simple navTo('home-screen')
+    // révélerait un accueil jamais peuplé. On reproduit donc le bouton « Retour Accueil ».
+    function goHomeHard(bannerMsg) {
+        try { localStorage.removeItem('dnd-active-char'); } catch (e) {}
+        try { if (bannerMsg) sessionStorage.setItem('dnd-boot-toast', bannerMsg); } catch (e) {}
+        try { if ((location.hash || '').indexOf('#gm') !== 0) location.hash = '#home'; } catch (e) {}
+        document.body.style.backgroundImage = ''; document.body.classList.remove('scene-active');
+        location.reload();
+    }
+
     // --- Exclusion ciblée d'un joueur (kick + ban temporaire) ---
     function onKicked(p) {
         if (!p) return;
@@ -920,20 +1131,17 @@
         const code = state.code;
         if (p.until && code) { try { localStorage.setItem('dnd-session-ban', JSON.stringify({ code: code, until: p.until })); } catch (e) {} }
         const mins = p.until ? Math.max(1, Math.round((p.until - Date.now()) / 60000)) : 0;
-        if (window.showAppToast) window.showAppToast(mins ? ('🚫 Exclu par le MJ (' + mins + ' min)') : '🚪 Exclu de la session par le MJ', '#c0392b');
-        leave().finally(() => { document.body.style.backgroundImage = ''; document.body.classList.remove('scene-active'); if (window.navTo) window.navTo('home-screen'); });
+        const msg = mins ? ('🚫 Exclu par le MJ (' + mins + ' min)') : '🚪 Exclu de la session par le MJ';
+        if (window.showAppToast) window.showAppToast(msg, '#c0392b');
+        // On quitte proprement (untrack présence + suppression de la ligne) PUIS on recharge sur l'accueil.
+        leave().finally(() => setTimeout(() => goHomeHard(msg), 700));
     }
 
     // --- Fermeture forcée par le MJ : déconnexion + retour accueil ---
     function onSessionClosed() {
-        if (window.showAppToast) window.showAppToast('🚪 La session a été fermée par le MJ.', '#7A2828');
-        leave().finally(() => {
-            // Nettoyage visuel de l'ambiance diffusée + retour à l'accueil
-            document.body.style.backgroundImage = '';
-            document.body.classList.remove('scene-active');
-            if (window.navTo) window.navTo('home-screen');
-            try { if ((location.hash || '').indexOf('#gm') !== 0) location.hash = '#home'; } catch (e) {}
-        });
+        const msg = '🚪 La session a été fermée par le MJ.';
+        if (window.showAppToast) window.showAppToast(msg, '#7A2828');
+        leave().finally(() => setTimeout(() => goHomeHard(msg), 700));
     }
 
     // --- Styles du module (notifications) ---
@@ -1010,8 +1218,13 @@
         #session-map.hidden { display:none; }
         .smap-head { display:flex; justify-content:space-between; align-items:center; font-family:'Cinzel',serif; font-weight:bold; color:var(--primary-color,#7A2828); margin-bottom:6px; }
         .smap-head button { background:none; border:none; cursor:pointer; font-size:1rem; color:var(--primary-color,#7A2828); }
-        .smap-view { position:relative; width:100%; aspect-ratio:16/9; background:#11100e; background-size:contain; background-position:center; background-repeat:no-repeat; border-radius:8px; overflow:hidden; }
-        .smap-view.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
+        .smap-view { position:relative; width:100%; aspect-ratio:16/9; background:#11100e; border-radius:8px; overflow:hidden; }
+        /* BOARD : plateau à ratio fixe, même espace de coordonnées que chez le MJ */
+        .smap-board { position:absolute; background-color:#171410; background-size:contain; background-position:center; background-repeat:no-repeat; box-shadow:0 0 0 1px rgba(196,155,53,0.2); }
+        .smap-board.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
+        .smap-templates, .smap-weather { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
+        .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; }
         .smap-token-mine { cursor:grab; box-shadow:0 0 0 2px #fff, 0 0 10px var(--accent-color,#C49B35); }
         .smap-token-mine:active { cursor:grabbing; }
@@ -1019,6 +1232,11 @@
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-draw { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-dark { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        /* Portes cliquables par les joueurs (au-dessus de l'obscurité) */
+        .smap-door-btn { position:absolute; transform:translate(-50%,-50%); z-index:8; width:28px; height:28px; padding:0; border-radius:50%; border:2px solid #d68a2b; background:rgba(34,24,14,0.92); font-size:0.9rem; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.5); }
+        .smap-door-btn:hover { transform:translate(-50%,-50%) scale(1.15); box-shadow:0 0 12px rgba(214,138,43,0.9); }
+        .smap-door-btn.is-open { border-color:#57a64a; }
+        .smap-door-btn.is-locked { border-color:#c0392b; cursor:not-allowed; opacity:0.85; }
         /* Ouverture de la carte : elle « jaillit » depuis le bouton flottant */
         @keyframes smap-open-anim { 0%{ transform:scale(0.25); opacity:0; } 60%{ opacity:1; } 100%{ transform:none; opacity:1; } }
         #session-map.smap-anim-open { animation:smap-open-anim 0.32s cubic-bezier(0.26,1.2,0.42,1); }
@@ -1063,7 +1281,34 @@
         body.theme-dark #session-sheet-widget { background:#241c16; color:var(--text-color,#ece3d2); }
         body.theme-dark .ssw-hp-btn { background:#2a221b; }
         body.theme-dark .ssw-hp-btn:hover { background:#332a20; }
-        body.theme-dark .ssw-cond { color:#e89a8c; }`;
+        body.theme-dark .ssw-cond { color:#e89a8c; }
+        /* --- Barre de tour (combat) en haut de l'écran joueur --- */
+        #session-turnbar { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:9970; display:flex; align-items:center; gap:6px; max-width:92vw; overflow-x:auto; padding:6px 10px; background:rgba(30,23,16,0.92); border:1px solid var(--accent-color,#C49B35); border-radius:24px; box-shadow:0 6px 18px rgba(0,0,0,0.4); scrollbar-width:none; }
+        .stb-round { font-family:'Cinzel',serif; font-weight:bold; color:var(--accent-color,#C49B35); font-size:0.82rem; flex:0 0 auto; padding-right:4px; border-right:1px solid rgba(196,155,53,0.4); }
+        .stb-chip { flex:0 0 auto; font-family:'Lora',serif; font-size:0.76rem; color:#d8cbb2; background:rgba(196,155,53,0.12); border-radius:14px; padding:3px 9px; white-space:nowrap; }
+        .stb-chip.is-turn { background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; font-weight:bold; box-shadow:0 0 10px rgba(196,155,53,0.7); }
+        .stb-chip.is-me { outline:1px dashed rgba(196,155,53,0.8); }
+        /* --- Carte de dé animée --- */
+        .session-dice-card .sdc-die { display:inline-block; animation:sdc-spin 0.7s cubic-bezier(0.3,0.8,0.4,1.4); }
+        .session-dice-card .sdc-total { display:inline-block; font-size:1.35rem; color:var(--primary-color,#7A2828); animation:sdc-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.35s backwards; }
+        @keyframes sdc-spin { 0%{ transform:rotate(0) scale(0.6); } 70%{ transform:rotate(680deg) scale(1.25); } 100%{ transform:rotate(720deg) scale(1); } }
+        @keyframes sdc-pop { 0%{ transform:scale(0); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+        /* --- Carte PNJ révélée --- */
+        #session-npc-card { position:fixed; inset:0; z-index:9998; background:rgba(8,6,4,0.75); display:flex; align-items:center; justify-content:center; padding:20px; }
+        #session-npc-card.hidden { display:none; }
+        .snc-box { position:relative; width:min(340px,92vw); background:#fffdf7; border:3px double var(--accent-color,#C49B35); border-radius:16px; padding:18px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.6); animation:snc-in 0.35s cubic-bezier(0.26,1.2,0.42,1); font-family:'Lora',serif; color:#3a2e1f; }
+        @keyframes snc-in { 0%{ transform:scale(0.6) rotate(-3deg); opacity:0; } 100%{ transform:none; opacity:1; } }
+        .snc-img { width:150px; height:150px; object-fit:cover; border-radius:50%; border:3px solid var(--accent-color,#C49B35); box-shadow:0 6px 18px rgba(0,0,0,0.35); }
+        .snc-noimg { font-size:3.4rem; }
+        .snc-name { font-family:'Cinzel',serif; font-weight:bold; font-size:1.25rem; color:var(--primary-color,#7A2828); margin-top:8px; }
+        .snc-text { margin-top:8px; font-style:italic; line-height:1.45; color:#5a4a36; }
+        .snc-close { position:absolute; top:8px; right:10px; background:none; border:none; cursor:pointer; font-size:1rem; color:var(--primary-color,#7A2828); }
+        body.theme-dark .snc-box { background:#241c16; color:#ece3d2; }
+        body.theme-dark .snc-text { color:#c2b094; }
+        /* --- Minuteur partagé --- */
+        #session-timer { position:fixed; top:8px; right:14px; z-index:9971; background:linear-gradient(160deg,#2c231b,#1d1712); color:#f3e3bb; border:2px solid var(--accent-color,#C49B35); border-radius:22px; padding:7px 14px; font-family:'Cinzel',serif; font-weight:bold; box-shadow:0 6px 18px rgba(0,0,0,0.45); pointer-events:none; }
+        #session-timer.is-low { border-color:#e74c3c; color:#ffb3a7; animation:st-blink 0.6s steps(2) infinite; }
+        @keyframes st-blink { 50% { opacity:0.5; } }`;
         document.head.appendChild(st);
     }
 
@@ -1138,9 +1383,17 @@
         });
     }
 
+    // Message reporté après un rechargement (ex : exclusion par le MJ)
+    function flushBootToast() {
+        let m = null;
+        try { m = sessionStorage.getItem('dnd-boot-toast'); sessionStorage.removeItem('dnd-boot-toast'); } catch (e) {}
+        if (m) setTimeout(() => { if (window.showAppToast) window.showAppToast(m, '#7A2828'); }, 900);
+    }
+
     // ---------- Câblage des changements de fiche ----------
     function init() {
         injectStyles();
+        flushBootToast();
         const app = document.getElementById('app-screen') || document.body;
         const onChange = () => pushSnapshot(false);
         app.addEventListener('input', onChange, true);
@@ -1148,9 +1401,12 @@
         // PV via boutons rapides (+/−) → pas forcément un input : on republie après clic
         app.addEventListener('click', (e) => {
             if (e.target.closest('#btn-hp-damage, #btn-hp-heal, #btn-short-rest, #btn-long-rest')) setTimeout(() => pushSnapshot(false), 50);
+            // Le MJ est prévenu quand un joueur entame un repos (journal de combat)
+            const rest = e.target.closest('#btn-short-rest, #btn-long-rest');
+            if (rest && state.sessionId) sendToGm('rest', { name: snapName(), kind: rest.id === 'btn-long-rest' ? 'long' : 'court' });
         }, true);
-        // Le bouton de combat suit l'écran actif (visible seulement sur la fiche joueur)
-        document.addEventListener('screen:change', updateFabVisibility);
+        // Le bouton de combat et la barre de tour suivent l'écran actif
+        document.addEventListener('screen:change', () => { updateFabVisibility(); renderTurnbar(); });
         restore();
     }
 
@@ -1158,7 +1414,12 @@
     else init();
 
     window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore,
-        // Crochet de TEST (preview sans Supabase) : simule une carte reçue du MJ.
-        // Aucun effet en usage normal ; permet de valider le rendu joueur sans session réelle.
-        debugApplyMap: function (map, tokens, uid) { if (uid) debugUid = uid; if (!state.sessionId) state.sessionId = 'debug'; applyMap(map, tokens); } };
+        // Crochets de TEST (preview sans Supabase) : simulent ce que le MJ diffuse.
+        // Aucun effet en usage normal ; permettent de valider le rendu joueur sans session réelle.
+        debugApplyMap: function (map, tokens, uid) { if (uid) debugUid = uid; if (!state.sessionId) state.sessionId = 'debug'; applyMap(map, tokens); },
+        debugEvent: function (event, payload) {
+            if (!state.sessionId) state.sessionId = 'debug';
+            const map = { combat: applyCombat, dice: receiveDiceRoll, concentration: receiveConcentration, inspiration: receiveInspiration, 'npc-card': receiveNpcCard, timer: receiveTimer, 'show-image': receiveSharedImage, gift: receiveGift };
+            if (map[event]) map[event](payload);
+        } };
 })();

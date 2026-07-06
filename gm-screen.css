@@ -18,6 +18,9 @@ body.gm-active #session-map,
 body.gm-active #session-notifs,
 body.gm-active #session-turn-notice,
 body.gm-active #session-sheet-widget,
+body.gm-active #session-turnbar,
+body.gm-active #session-timer,
+body.gm-active #session-npc-card,
 body.gm-active #session-combat-badge { display: none !important; }
 .gm-shell {
     max-width: none; margin: 0;
@@ -345,15 +348,22 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
     cursor: grab;
 }
 .gm-map-view.panning { cursor: grabbing; }
-/* Couche transformable (zoom + déplacement) qui porte fond + grille + jetons */
-.gm-map-content {
-    position: absolute; inset: 0; transform-origin: 0 0;
-    background-color: #11100e; background-size: contain; background-position: center; background-repeat: no-repeat;
+/* Couche transformable (zoom + déplacement). Le BOARD — plateau à ratio fixe,
+   espace de coordonnées partagé avec les joueurs — vit à l'intérieur. */
+.gm-map-content { position: absolute; inset: 0; transform-origin: 0 0; }
+.gm-board {
+    position: absolute;
+    background-color: #171410; background-size: contain; background-position: center; background-repeat: no-repeat;
+    box-shadow: 0 0 0 1px rgba(196,155,53,0.25);
 }
-.gm-map-content.show-grid::after {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
+.gm-board.show-grid::after {
+    content: ''; position: absolute; pointer-events: none;
+    /* La grille déborde LARGEMENT du board (multiple exact de la case → reste alignée)
+       pour couvrir tout le viewport même dézoomé au maximum. */
+    inset: calc(-1 * var(--gm-grid-ext, 0px));
     background-image: linear-gradient(rgba(255,255,255,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.13) 1px, transparent 1px);
     background-size: var(--gm-grid, 48px) var(--gm-grid, 48px);
+    background-position: 0 0;
     opacity: var(--gm-grid-op, 1);
 }
 .gm-layer-tokens { position: absolute; inset: 0; }
@@ -374,7 +384,24 @@ canvas.gm-layer-walls, .gm-layer-vision, .gm-layer-ruler { position: absolute; i
 }
 .gm-door-btn:hover { transform: translate(-50%, -50%) scale(1.18); box-shadow: 0 0 12px rgba(214,138,43,0.85); }
 .gm-door-btn.is-open { border-color: #57a64a; opacity: 0.85; }
+.gm-door-btn.is-locked { border-color: #c0392b; }
+.gm-door-btn.is-secret { border-style: dashed; border-color: #8e44ad; opacity: 0.8; }
 .gm-fly-wval-wide { flex: 0 0 46px !important; }
+/* Lumières : halo doux (non interactif) + pastille éditable */
+.gm-layer-lights { position: absolute; inset: 0; pointer-events: none; }
+.gm-light-halo { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, color-mix(in srgb, var(--lc, #ffcf7a) 55%, transparent) 0%, transparent 70%); mix-blend-mode: screen; }
+.gm-light-pin { position: absolute; transform: translate(-50%, -50%); z-index: 8; width: 24px; height: 24px; padding: 0;
+    border-radius: 50%; border: 2px solid var(--lc, #ffcf7a); background: rgba(30,22,10,0.9); font-size: 0.8rem; line-height: 1;
+    cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--lc, #ffcf7a); }
+.gm-light-pin:hover { transform: translate(-50%, -50%) scale(1.18); }
+/* Palette de type de jeton posé */
+.gm-place-type { display: inline-flex; gap: 4px; }
+.gm-place-type button { border: 1px solid rgba(122,40,40,0.3); background: #fffdf7; border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; cursor: pointer; }
+.gm-place-type button.is-on { background: rgba(196,155,53,0.34); border-color: var(--accent-color, #C49B35); font-weight: bold; }
+body.theme-dark .gm-place-type button { background: #2a2118; color: #e6d8bd; border-color: rgba(196,155,53,0.25); }
+.gm-dp-check { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: #4a3a26; padding: 4px 2px; cursor: pointer; }
+body.theme-dark .gm-dp-check { color: #d8cbb2; }
 .gm-map-ping { position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; border: 3px solid #C49B35; box-shadow: 0 0 18px #C49B35; pointer-events: none; z-index: 6; animation: gm-map-ping-anim 1s ease-out 2; }
 @keyframes gm-map-ping-anim { 0% { transform: translate(-50%,-50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; } }
 .gm-map-controls { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
@@ -419,6 +446,33 @@ body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155
 }
 .gm-token.has-img { border-color: #f3e8cf; }
 .gm-token.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); }
+/* Jeton dont c'est le tour en combat : anneau doré pulsé */
+.gm-token.is-turn { z-index: 6; box-shadow: 0 0 0 3px #C49B35, 0 0 16px 4px rgba(196,155,53,0.85); animation: gm-token-turn 1.4s ease-in-out infinite; }
+@keyframes gm-token-turn { 0%,100% { box-shadow: 0 0 0 3px #C49B35, 0 0 12px 3px rgba(196,155,53,0.7); } 50% { box-shadow: 0 0 0 4px #e2c25a, 0 0 22px 7px rgba(196,155,53,0.95); } }
+/* Aura de jeton (rayon en mètres, translucide) + badges d'état */
+.gm-token-aura { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, color-mix(in srgb, var(--aura, #3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura, #3498db) 14%, transparent) 70%, transparent 72%);
+    border: 1px dashed color-mix(in srgb, var(--aura, #3498db) 60%, transparent); }
+.gm-token-badges { position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+    font-size: 0.62rem; line-height: 1; background: rgba(20,14,8,0.78); border-radius: 8px; padding: 1px 4px; pointer-events: none; }
+/* Couches gabarits / météo */
+.gm-layer-templates, .gm-layer-weather { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* ✨ bouton inspiration (liste joueurs) */
+.gm-insp { background: none; border: none; cursor: pointer; font-size: 0.95rem; padding: 2px 4px; border-radius: 6px; filter: grayscale(0.4); }
+.gm-insp:hover { background: rgba(196,155,53,0.25); filter: none; transform: scale(1.15); }
+/* Points de sauvegarde */
+.gm-snap-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.gm-snap-row { display: flex; align-items: center; gap: 6px; background: rgba(196,155,53,0.1); border-radius: 8px; padding: 5px 8px; }
+.gm-snap-label { flex: 1; min-width: 0; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Minuteur partagé (pastille MJ) */
+#gm-timer-pill { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9500;
+    background: linear-gradient(160deg, #2c231b, #1d1712); color: #f3e3bb; border: 2px solid var(--accent-color, #C49B35);
+    border-radius: 22px; padding: 7px 16px; font-family: 'Cinzel', serif; font-weight: bold; font-size: 1rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45); pointer-events: none; }
+#gm-timer-pill.is-low { border-color: #e74c3c; color: #ffb3a7; animation: gm-timer-blink 0.6s steps(2) infinite; }
+@keyframes gm-timer-blink { 50% { opacity: 0.55; } }
+/* Horodatage du journal de combat */
+.gm-clog-time { color: #9a8a6e; font-size: 0.72rem; margin-right: 4px; }
 .gm-token-label { pointer-events: none; }
 .gm-token-ac { position: absolute; top: -6px; right: -6px; background: #2a1c0a; color: #f3e8cf; font-size: 0.58rem; line-height: 1; padding: 2px 4px; border-radius: 8px; border: 1px solid var(--accent-color, #C49B35); }
 .gm-token-hp { position: absolute; left: 2px; right: 2px; bottom: -7px; height: 4px; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; }
@@ -655,6 +709,11 @@ body.theme-dark .gm-tree-act, body.theme-dark .gm-tree-empty { color: #9a8a70; }
 }
 .gm-page-thumb:hover { transform: translateY(-2px); border-color: var(--accent-color, #C49B35); box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
 .gm-page-thumb.is-active { border-color: var(--accent-color, #C49B35); box-shadow: 0 0 0 2px rgba(196,155,53,0.4), 0 4px 12px rgba(0,0,0,0.15); }
+.gm-page-thumb[draggable="true"] { cursor: grab; }
+.gm-page-thumb.gm-page-dragging { opacity: 0.5; }
+/* Zone de dépôt d'une vignette de carte sur la scène */
+.gm-map-view.gm-stage-drop { outline: 3px dashed var(--accent-color, #C49B35); outline-offset: -6px; box-shadow: inset 0 0 60px rgba(196,155,53,0.28); }
+.gm-map-view.gm-stage-drop::before { content: '🗺️ Déposez pour afficher cette carte'; position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; color: #f3e3bb; font-family: 'Cinzel', serif; font-weight: bold; font-size: 1rem; pointer-events: none; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
 .gm-page-img {
     height: 54px; background: #11100e center/cover no-repeat;
     display: flex; align-items: center; justify-content: center;
