@@ -988,14 +988,19 @@
         const canvas = view.querySelector('.smap-dark'); if (!canvas) return;
         const m = mapState.map || {};
         const dark = m.dark || null;
-        if (!dark || !dark.on || !window.VTTGeo) { canvas.style.display = 'none'; return; }
+        const oldMsg = view.querySelector('.smap-dark-msg');
+        if (!dark || !dark.on || !window.VTTGeo) { canvas.style.display = 'none'; if (oldMsg) oldMsg.remove(); return; }
         canvas.style.display = 'block';
         const w = Math.max(1, view.clientWidth), h = Math.max(1, view.clientHeight);
         if (canvas.width !== w) canvas.width = w;
         if (canvas.height !== h) canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = 'rgb(4,3,2)';                       // noir complet : on ne voit RIEN au-delà
+        // Noir profond légèrement bleuté + vignette (plus joli qu'un aplat pur)
+        const bg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.72);
+        bg.addColorStop(0, 'rgb(11,10,16)');
+        bg.addColorStop(1, 'rgb(2,2,5)');
+        ctx.fillStyle = bg;
         ctx.fillRect(0, 0, w, h);
         const uid = myUid();
         const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
@@ -1003,19 +1008,35 @@
         const segs = window.VTTGeo.wallsToPx(m.walls || [], w, h);
         const g = playerGridPx(w);                          // px d'une case sur CE board (échelle partagée)
         const dk = Object.assign({}, dark, { cellM: playerCellM() });
+        // Murs nets, mais fondu doux en limite de portée (torche qui faiblit)
+        const erase = window.VTTGeo.eraseVisionSoft || window.VTTGeo.eraseVision;
+        const tintOrigins = [];
         if (mine.length || lights.length) {
             ctx.globalCompositeOperation = 'destination-out';
-            mine.forEach(t => window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dk, g)));
+            mine.forEach(t => {
+                const R = window.VTTGeo.visionRadiusPx(t, dk, g);
+                erase(ctx, t.x * w, t.y * h, segs, R);
+                tintOrigins.push({ x: t.x * w, y: t.y * h, R: R });
+            });
             // Les points de lumière du MJ (torches au sol, lanternes…) éclairent tout le monde.
-            lights.forEach(l => window.VTTGeo.eraseVision(ctx, l.x * w, l.y * h, segs, (Number(l.r) || 0.16) * w));
+            lights.forEach(l => {
+                const R = (Number(l.r) || 0.16) * w;
+                erase(ctx, l.x * w, l.y * h, segs, R);
+                tintOrigins.push({ x: l.x * w, y: l.y * h, R: R, c: l.color });
+            });
             ctx.globalCompositeOperation = 'source-over';
+            // Lueur chaude dans la zone dévoilée (derrière l'obscurité → aucune fuite)
+            if (window.VTTGeo.paintLightTint) window.VTTGeo.paintLightTint(ctx, tintOrigins);
         }
+        // Aucun jeton à moi ni lumière : message d'ambiance stylé (HTML, animé en CSS)
         if (!mine.length && !lights.length) {
-            ctx.fillStyle = 'rgba(232,216,182,0.75)';
-            ctx.font = 'italic 13px Lora, serif'; ctx.textAlign = 'center';
-            ctx.fillText('🌑 Il fait noir… vous ne voyez rien.', w / 2, h / 2);
-            ctx.textAlign = 'start';
-        }
+            if (!oldMsg) {
+                const msg = document.createElement('div');
+                msg.className = 'smap-dark-msg';
+                msg.innerHTML = '<span class="sdm-moon">🌑</span><div>Il fait noir…</div><small>Vous ne voyez rien. Approchez d\'une torche, ou attendez le MJ.</small>';
+                view.appendChild(msg);
+            }
+        } else if (oldMsg) oldMsg.remove();
     }
     // Dessin libre du MJ (synchronisé) côté joueur.
     function renderPlayerDraw() {
@@ -1355,6 +1376,8 @@
         .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }
+        /* Ombre elliptique « posée au sol » sous chaque jeton (Lot 24) */
+        .smap-token::after { content:''; position:absolute; left:8%; right:8%; bottom:-16%; height:24%; border-radius:50%; background:radial-gradient(ellipse at center, rgba(0,0,0,0.42), rgba(0,0,0,0) 68%); z-index:-1; pointer-events:none; }
         .smap-token-dragging { transition:none !important; z-index:9; }
         .smap-token-onmap { z-index:1; opacity:0.94; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
         .smap-aoe-bar { position:absolute; top:8px; left:8px; z-index:12; display:flex; gap:4px; align-items:center; background:rgba(28,20,12,0.92); border:1px solid rgba(196,155,53,0.5); border-radius:10px; padding:4px 6px; box-shadow:0 3px 10px rgba(0,0,0,0.5); }
@@ -1369,6 +1392,12 @@
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-draw { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-dark { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
+        /* Message d'ambiance quand le joueur ne voit rien (obscurité totale) */
+        .smap-dark-msg { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5; text-align:center; color:#cdc3ab; font-family:'Lora',serif; pointer-events:none; text-shadow:0 2px 10px #000, 0 0 4px #000; animation:sdmPulse 3.4s ease-in-out infinite; max-width:80%; }
+        .smap-dark-msg .sdm-moon { font-size:2.1rem; display:block; margin-bottom:6px; filter:drop-shadow(0 0 14px rgba(130,140,190,0.4)); }
+        .smap-dark-msg div { font-size:1.06rem; font-style:italic; letter-spacing:0.09em; }
+        .smap-dark-msg small { display:block; margin-top:4px; color:#8d8471; font-size:0.72rem; letter-spacing:0.05em; }
+        @keyframes sdmPulse { 0%,100% { opacity:0.55; } 50% { opacity:1; } }
         /* Portes cliquables par les joueurs (au-dessus de l'obscurité) */
         .smap-door-btn { position:absolute; transform:translate(-50%,-50%); z-index:8; width:28px; height:28px; padding:0; border-radius:50%; border:2px solid #d68a2b; background:rgba(34,24,14,0.92); font-size:0.9rem; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.5); }
         .smap-door-btn:hover { transform:translate(-50%,-50%) scale(1.15); box-shadow:0 0 12px rgba(214,138,43,0.9); }

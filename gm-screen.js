@@ -438,6 +438,12 @@
                                 <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
                                 <span class="gm-readonly-note" style="flex:1; text-align:right;">Jetons, dessin, brouillard, zoom : barre d'outils à gauche.</span>
                             </div>
+                            <div class="gm-set-h">⌨️ Raccourcis clavier</div>
+                            <div id="gm-set-shortcuts" class="gm-set-shortcuts"></div>
+                            <div class="gm-row" style="margin-top:6px;">
+                                <button id="gm-tuto-replay" class="gm-btn" title="Relancer la visite guidée de l'écran MJ">🎓 Revoir le tutoriel</button>
+                                <span class="gm-readonly-note" style="flex:1; text-align:right;">Touche <kbd>?</kbd> : aide raccourcis en grand.</span>
+                            </div>
                         </div>
                         <div id="gm-map-view" class="gm-map-view show-grid"></div>
                     </div>
@@ -1613,6 +1619,9 @@
     let aoeKind = 'circle';      // forme du prochain gabarit de sort
     let aoeColor = '#e67e22';    // couleur du prochain gabarit
     let aoeDraft = null;         // gabarit en cours de placement
+    let lightDraft = null;       // lumière en cours de pose { x,y,r,color } (glisser = régler le rayon)
+    let objHover = null;         // élément saisissable sous le curseur (outil ✥ / gomme 🧹) — surbrillance
+    let objHoverKey = '';        // clé du survol courant (évite les re-rendus inutiles)
     let boardWpx = 500;          // largeur ACTUELLE du board MJ en px (mise à jour par renderMap)
     let mapHist = [];            // historique {map,tokens} pour Ctrl+Z (annuler)
     let mapRedo = [];            // pile de rétablissement (Ctrl+Y / Ctrl+Maj+Z)
@@ -1702,6 +1711,7 @@
         mapTool = (mapTool === tool && tool !== 'select') ? 'select' : tool;
         if (mapTool === 'reveal' || mapTool === 'cover') fogState().on = true;
         if (prev === 'placecombatant' && mapTool !== 'placecombatant') removePlaceBar();
+        objHover = null; objHoverKey = '';                   // le survol ✥/🧹 ne suit pas l'outil
         syncToolbar();
         save(); renderMap(); broadcastMap(true);
     }
@@ -1727,11 +1737,13 @@
     }
     // Aimante le point de tracé : d'abord une extrémité de mur proche (murs continus),
     // sinon un coin de grille si l'aimant 🧲 est actif.
-    function wallSnapPoint(fx, fy, rect) {
+    // excludeSeg : segment à ignorer (le mur qu'on est en train de déplacer, outil ✥).
+    function wallSnapPoint(fx, fy, rect, excludeSeg) {
         fx = Math.max(0, Math.min(1, fx)); fy = Math.max(0, Math.min(1, fy));
         const w = rect.width, h = rect.height;
         let best = null, bd = 12;                                  // rayon d'accroche en px écran
         (state.map && state.map.walls || []).forEach(s => {
+            if (excludeSeg && s === excludeSeg) return;
             [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => {
                 const d = Math.hypot((pt[0] - fx) * w, (pt[1] - fy) * h);
                 if (d < bd) { bd = d; best = { x: pt[0], y: pt[1] }; }
@@ -1745,6 +1757,19 @@
             return { x: Math.max(0, Math.min(1, Math.round(fx / cw) * cw)), y: Math.max(0, Math.min(1, Math.round(fy / ch) * ch)) };
         }
         return { x: fx, y: fy };
+    }
+    // Maj enfoncée : contraint le point (x2,y2) à 0° / 45° / 90° du point (x1,y1),
+    // calculé en px ÉCRAN pour que l'angle soit visuellement juste quel que soit le ratio.
+    function constrain45(x1, y1, x2, y2, rect) {
+        const px1 = x1 * rect.width, py1 = y1 * rect.height, px2 = x2 * rect.width, py2 = y2 * rect.height;
+        const d = Math.hypot(px2 - px1, py2 - py1);
+        if (d < 2) return { x: x2, y: y2 };
+        const step = Math.PI / 4;
+        const a = Math.round(Math.atan2(py2 - py1, px2 - px1) / step) * step;
+        return {
+            x: Math.max(0, Math.min(1, (px1 + Math.cos(a) * d) / rect.width)),
+            y: Math.max(0, Math.min(1, (py1 + Math.sin(a) * d) / rect.height))
+        };
     }
     function eraseWallAt(e) {
         if (!window.VTTGeo) return;
@@ -1785,6 +1810,26 @@
         };
         ((state.map && state.map.walls) || []).forEach(s => paintSeg(s, false));
         if (wallDraft) paintSeg(wallDraft, true);
+        // Surbrillance de survol (outil ✥ déplacer / gomme 🧹) : on voit CE qu'on va saisir
+        if (objHover && (mapTool === 'objmove' || mapTool === 'wallerase')) {
+            const hovCol = mapTool === 'wallerase' ? 'rgba(231,76,60,0.55)' : 'rgba(255,214,90,0.6)';
+            ctx.save();
+            if (objHover.kind === 'wallpt') {
+                const s = objHover.ref, px = (objHover.end === '1' ? s.x1 : s.x2) * w, py = (objHover.end === '1' ? s.y1 : s.y2) * h;
+                ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2);
+                ctx.fillStyle = hovCol; ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+            } else if (objHover.kind === 'wallseg') {
+                const s = objHover.ref;
+                ctx.beginPath(); ctx.moveTo(s.x1 * w, s.y1 * h); ctx.lineTo(s.x2 * w, s.y2 * h);
+                ctx.lineWidth = 9; ctx.strokeStyle = hovCol; ctx.setLineDash([]); ctx.stroke();
+            } else if (objHover.kind === 'light' || objHover.kind === 'template') {
+                const o = objHover.ref;
+                ctx.beginPath(); ctx.arc(o.x * w, o.y * h, 13, 0, Math.PI * 2);
+                ctx.lineWidth = 3; ctx.strokeStyle = hovCol; ctx.setLineDash([4, 4]); ctx.stroke();
+            }
+            ctx.restore();
+        }
         // Pastilles de porte cliquables (au centre de chaque porte)
         const doorsHost = view.querySelector('.gm-layer-doors');
         if (doorsHost) {
@@ -1803,9 +1848,10 @@
     function clearLightsConfirm() { if (!confirm('Retirer toutes les lumières de cette carte ?')) return; if (state.map) state.map.lights = []; save(); renderMap(); broadcastMap(true); }
     function eraseLights(ctx, w, h, segs) {
         // Chaque lumière dévoile une zone (bloquée par les murs) — comme un jeton porteur de torche.
+        const erase = window.VTTGeo.eraseVisionSoft || window.VTTGeo.eraseVision;   // même rendu doux que côté joueur
         (lightsData()).forEach(l => {
             const R = (Number(l.r) || lightRadius) * w;
-            window.VTTGeo.eraseVision(ctx, l.x * w, l.y * h, segs, R);
+            erase(ctx, l.x * w, l.y * h, segs, R);
         });
     }
     function renderLights() {
@@ -1813,7 +1859,8 @@
         const host = view.querySelector('.gm-layer-lights'); if (!host) return;
         const content = view.querySelector('.gm-board'); if (!content) return;
         const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
-        const lights = lightsData();
+        // + aperçu de la lumière en cours de pose (glisser = régler le rayon)
+        const lights = lightsData().concat((lightDraft && lightDraft.r > 0.015) ? [Object.assign({ id: '__draft' }, lightDraft)] : []);
         // Halo lumineux (léger, joli) + pastilles éditables
         host.innerHTML = lights.map(l => {
             const rpx = (Number(l.r) || lightRadius) * w, dpx = rpx * 2;
@@ -1938,7 +1985,9 @@
     function histPush() {
         if (histLock) return;
         try {
-            const snap = JSON.stringify({ map: state.map, tokens: tokensForShare() });
+            // Jetons BRUTS (tous calques, badges non cuits) : tokensForShare() filtrait le
+            // calque MJ → un Ctrl+Z faisait disparaître les jetons MJ. (bugfix Lot 24)
+            const snap = JSON.stringify({ map: state.map, tokens: state.tokens });
             if (mapHist[mapHist.length - 1] !== snap) {
                 mapHist.push(snap); if (mapHist.length > 60) mapHist.shift();
                 mapRedo.length = 0;                          // une nouvelle action invalide le « rétablir »
@@ -2099,8 +2148,9 @@
         const segs = window.VTTGeo.wallsToPx((state.map && state.map.walls) || [], w, h);
         const g = Math.max(1, gridPxFor(w));                     // px d'une case sur CE board
         const dk = Object.assign({}, dark, { cellM: cellMeters() });
+        const erase = window.VTTGeo.eraseVisionSoft || window.VTTGeo.eraseVision;   // même rendu doux que côté joueur
         (state.tokens || []).filter(t => !t.hidden && (t.type === 'pj' || t.owner)).forEach(t => {
-            window.VTTGeo.eraseVision(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dk, g));
+            erase(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dk, g));
         });
         eraseLights(ctx, w, h, segs);                            // les lumières éclairent aussi (aperçu)
         ctx.globalCompositeOperation = 'source-over';
@@ -2444,11 +2494,35 @@
         });
         return sbest;
     }
-    function moveMovable(md, x, y) {
-        if (md.kind === 'wallpt') { const s = md.ref; if (md.end === '1') { s.x1 = x; s.y1 = y; } else { s.x2 = x; s.y2 = y; } }
+    function moveMovable(md, x, y, rect) {
+        if (md.kind === 'wallpt') {
+            // Extrémité aimantée aux extrémités des AUTRES murs (reconnexion facile) + grille si 🧲
+            if (rect) { const p = wallSnapPoint(x, y, rect, md.ref); x = p.x; y = p.y; }
+            const s = md.ref; if (md.end === '1') { s.x1 = x; s.y1 = y; } else { s.x2 = x; s.y2 = y; }
+        }
         else if (md.kind === 'wallseg') { const s = md.ref, dx = x - md.grabX, dy = y - md.grabY; s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; md.grabX = x; md.grabY = y; }
         else if (md.kind === 'light') { md.ref.x = x; md.ref.y = y; }
         else if (md.kind === 'template') { const t = md.ref, dx = x - t.x, dy = y - t.y; t.x = x; t.y = y; if (t.x2 != null) { t.x2 += dx; t.y2 += dy; } }
+    }
+    // À la dépose d'un mur entier (outil ✥) : si une de ses extrémités arrive près de
+    // l'extrémité d'un autre mur, on translate le segment pour les CONNECTER (mur continu).
+    function reconnectWallSeg(seg) {
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-board'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        let best = null, bd = 12;                                  // tolérance en px écran
+        (wallsData()).forEach(s => {
+            if (s === seg) return;
+            [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => {
+                [[seg.x1, seg.y1], [seg.x2, seg.y2]].forEach(my => {
+                    const d = Math.hypot((pt[0] - my[0]) * w, (pt[1] - my[1]) * h);
+                    if (d < bd) { bd = d; best = { dx: pt[0] - my[0], dy: pt[1] - my[1] }; }
+                });
+            });
+        });
+        if (best) {
+            seg.x1 += best.dx; seg.y1 += best.dy; seg.x2 += best.dx; seg.y2 += best.dy;
+            if (window.showAppToast) window.showAppToast('🧲 Mur connecté', '#2c3e50');
+        }
     }
     // Décale légèrement une position si une case est déjà occupée (évite les jetons empilés).
     function spreadFreeSpot(x, y) {
@@ -2525,11 +2599,12 @@
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 renderRuler(); e.preventDefault(); return;
             }
-            if (mapTool === 'light') {                           // pose une lumière au clic
+            if (mapTool === 'light') {                           // clic = pose ; GLISSER = régler le rayon
                 const r = contentRect();
                 const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-                lightsData().push({ id: uid(), x, y, r: lightRadius, color: lightColor });
-                save(); renderMap(); broadcastMap(true); e.preventDefault(); return;
+                lightDraft = { x, y, r: 0, color: lightColor };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderLights(); e.preventDefault(); return;
             }
             if (mapTool === 'aoe') {                             // gabarit de sort : origine → glisser la taille
                 const r = contentRect();
@@ -2605,26 +2680,35 @@
             if (objDrag) {
                 const r = contentRect();
                 const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-                moveMovable(objDrag, x, y);
+                moveMovable(objDrag, x, y, r);
                 renderWalls(); renderLights(); renderTemplates(); renderVisionPreview(); return;   // redraw léger (pas de rebuild DOM)
             }
             if (painting) { paintFogAt(e); return; }
             if (wallDraft) {
                 const r = contentRect();
-                const p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
+                let p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
+                if (e.shiftKey) p = constrain45(wallDraft.x1, wallDraft.y1, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
                 wallDraft.x2 = p.x; wallDraft.y2 = p.y;
                 renderWalls(); return;
             }
+            if (lightDraft) {                                  // glisser = régler le rayon de la lumière
+                const r = contentRect();
+                const px = e.clientX - r.left, py = e.clientY - r.top;
+                lightDraft.r = Math.max(0, Math.min(0.45, Math.hypot(px - lightDraft.x * r.width, py - lightDraft.y * r.height) / r.width));
+                renderLights(); return;
+            }
             if (rulerDraft) {
                 const r = contentRect();
-                rulerDraft.x2 = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-                rulerDraft.y2 = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                let p = { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
+                if (e.shiftKey) p = constrain45(rulerDraft.x1, rulerDraft.y1, p.x, p.y, r);
+                rulerDraft.x2 = p.x; rulerDraft.y2 = p.y;
                 renderRuler(); return;
             }
             if (aoeDraft) {
                 const r = contentRect();
-                aoeDraft.x2 = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-                aoeDraft.y2 = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                let p = { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
+                if (e.shiftKey) p = constrain45(aoeDraft.x, aoeDraft.y, p.x, p.y, r);
+                aoeDraft.x2 = p.x; aoeDraft.y2 = p.y;
                 renderTemplates(); return;
             }
             if (drawStroke) {
@@ -2653,10 +2737,38 @@
                 mapView.panX = startPan.x + (e.clientX - startX);
                 mapView.panY = startPan.y + (e.clientY - startY);
                 applyMapTransform();
+            } else if (mapTool === 'objmove' || mapTool === 'wallerase') {
+                // Survol (rien en cours de drag) : surbrillance de l'élément saisissable / effaçable
+                const r = contentRect();
+                const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+                let hov = null;
+                if (mapTool === 'objmove') hov = pickMovableAt(fx, fy, r);
+                else {                                          // gomme : mur le plus proche du curseur
+                    const px = fx * r.width, py = fy * r.height;
+                    let bd = 11, bs = null;
+                    (wallsData()).forEach(s => {
+                        const d = window.VTTGeo ? window.VTTGeo.distToSegment(px, py, s.x1 * r.width, s.y1 * r.height, s.x2 * r.width, s.y2 * r.height) : 99;
+                        if (d < bd) { bd = d; bs = s; }
+                    });
+                    if (bs) hov = { kind: 'wallseg', ref: bs };
+                }
+                const key = hov ? (hov.kind + ':' + ((hov.ref && hov.ref.id) || '') + ':' + (hov.end || '')) : '';
+                if (key !== objHoverKey) { objHoverKey = key; objHover = hov; renderWalls(); }
             }
         });
         const up = (e) => {
-            if (objDrag) { objDrag = null; save(); renderMap(); broadcastMap(true); return; }
+            if (objDrag) {
+                // Mur entier déposé près d'une extrémité d'un autre mur → on les connecte (🧲)
+                if (objDrag.kind === 'wallseg') reconnectWallSeg(objDrag.ref);
+                objDrag = null; save(); renderMap(); broadcastMap(true); return;
+            }
+            if (lightDraft) {
+                // Simple clic = rayon par défaut ; glisser = rayon choisi (mémorisé pour la prochaine)
+                const r = Math.max(0.04, Math.min(0.45, lightDraft.r > 0.02 ? lightDraft.r : lightRadius));
+                if (lightDraft.r > 0.02) lightRadius = r;
+                lightsData().push({ id: uid(), x: lightDraft.x, y: lightDraft.y, r: r, color: lightDraft.color });
+                lightDraft = null; save(); renderMap(); broadcastMap(true); return;
+            }
             if (drawStroke) { drawStroke = null; drawIsNote = false; save(); broadcastMap(true); return; }
             if (wallDraft) {
                 // On ne garde que les segments réels (pas les simples clics)
@@ -2684,6 +2796,17 @@
         };
         view.addEventListener('pointerup', up);
         view.addEventListener('pointercancel', up);
+        // Double-clic (outil souris) = signal 📍 aux joueurs, sans changer d'outil
+        view.addEventListener('dblclick', (e) => {
+            if (mapTool !== 'select') return;
+            if (e.target.closest('.gm-token') || e.target.closest('.gm-door-btn') || e.target.closest('.gm-light-pin')
+                || e.target.closest('#gm-layer-switch') || e.target.closest('#gm-place-bar')) return;
+            const r = contentRect();
+            const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+            gmBroadcast('map-ping', { x: x, y: y });
+            showGmMapPing(x, y);
+            if (window.showAppToast) window.showAppToast('📍 Signal envoyé aux joueurs', '#2c3e50');
+        });
         view.addEventListener('wheel', (e) => {
             e.preventDefault();
             if (mapTool === 'bg') {   // molette = redimensionner le fond (calage grille)
@@ -3145,8 +3268,14 @@
             ['M', 'Tracer un mur'], ['P', 'Tracer une porte'], ['D', 'Dessiner'], ['L', 'Poser une lumière'],
             ['R', 'Mesurer (règle)'], ['F', 'Révéler le brouillard'], ['J', 'Poser un jeton'], ['A', 'Gabarit de sort'],
             ['Échap', 'Revenir à la souris'], ['Ctrl + Z', 'Annuler'], ['Ctrl + Y', 'Rétablir'],
-            ['Molette', 'Zoom sous le curseur'], ['Clic molette', 'Déplacer la vue'], ['Ctrl + V', 'Coller une image sur la carte'], ['?', 'Afficher cette aide']
+            ['Molette', 'Zoom sous le curseur'], ['Clic molette', 'Déplacer la vue'], ['Ctrl + V', 'Coller une image sur la carte'],
+            ['Maj + glisser', 'Tracé droit (0° / 45° / 90°)'], ['Double-clic', 'Signal 📍 aux joueurs'], ['?', 'Afficher cette aide']
         ];
+        // Même table, en compact, dans le panneau ⚙️ Réglages (demande MJ Lot 24)
+        const scHost = byId('gm-set-shortcuts');
+        if (scHost) scHost.innerHTML = window.__gmShortcuts.map(s => `<span class="gm-set-sc"><kbd>${esc(s[0])}</kbd> ${esc(s[1])}</span>`).join('');
+        const tutoBtn = byId('gm-tuto-replay');
+        if (tutoBtn) tutoBtn.addEventListener('click', () => startGmTutorial(true));
         document.addEventListener('keydown', (e) => {
             if (!document.body.classList.contains('gm-active')) return;
             const tag = (e.target.tagName || '').toLowerCase();
@@ -3534,6 +3663,103 @@
     }
 
     // ---------- Ouverture / fermeture ----------
+    // ---------- Tutoriel MJ : visite guidée (première ouverture, ou « 🎓 Revoir » dans ⚙️ Réglages) ----------
+    const TUTO_KEY = 'dnd-gm-tuto-done';
+    let tutoIdx = 0;
+    function gmTutoSteps() {
+        return [
+            { icon: '🛡️', title: 'Bienvenue sur l\'Écran du Maître !', text: 'Petite visite guidée (1 minute). Tu peux la passer à tout moment, et la revoir plus tard depuis ⚙️ Réglages de la carte tactique.' },
+            { sel: '#gm-room-btn', icon: '📡', title: 'Joue avec tes joueurs', text: 'Crée une session pour obtenir un CODE à partager. Tes joueurs le saisissent depuis leur fiche, et tu les vois arriver ici en direct (PV, CA, conditions…).' },
+            { sel: '.gm-leftbar', icon: '🧰', title: 'La barre d\'outils', text: 'Tout pour animer la carte : souris, signal 📍, dessin ✏️, brouillard 🌫️, murs 🧱, lumières 💡, gabarits de sorts 🎯, jetons 🧝, vue 🗺️ et calques 🗂️. Un clic sur un groupe ouvre son sous-menu.' },
+            { sel: '#gm-map-card', icon: '🗺️', title: 'La carte tactique', text: 'Colle une image de fond (Ctrl+V fonctionne !), règle la grille dans ⚙️ Réglages, et gère plusieurs cartes avec 📑 Cartes. Zoom à la molette, déplacement au clic molette.' },
+            { sel: '.gm-leftbar [data-tgroup="walls"]', icon: '🧱', title: 'Murs, portes & obscurité', text: 'Trace des murs invisibles pour les joueurs : ils bloquent leurs jetons ET leur vision dans le noir. Les portes s\'ouvrent d\'un clic. Active l\'obscurité 🌑 pour limiter leur vision autour de leur jeton.' },
+            { sel: '.gm-leftbar [data-tgroup="tokens"]', icon: '🧝', title: 'Les jetons', text: 'Pose des jetons à l\'avance, assigne-les à tes joueurs (ils pourront les déplacer), et range-les par calques façon Roll20 : Carte, MJ (invisible aux joueurs) ou PJ.' },
+            { sel: '#gm-sidebar-toggle', icon: '📜', title: 'Le panneau latéral', text: 'Table des joueurs, lanceur de dés, audio & musique, préparation de séance, journal, et le compendium (règles + conditions 5e cherchables).' },
+            { sel: '#gm-shortcuts-btn', icon: '⌨️', title: 'Besoin d\'aide ?', text: 'La touche ? (ou ce bouton) affiche tous les raccourcis clavier. Tu peux revoir ce tutoriel depuis ⚙️ Réglages. Bonne partie ! 🎲' }
+        ];
+    }
+    function onTutoKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endGmTutorial(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); tutoIdx++; showTutoStep(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); tutoIdx = Math.max(0, tutoIdx - 1); showTutoStep(); }
+    }
+    function startGmTutorial(force) {
+        if (!force && localStorage.getItem(TUTO_KEY)) return;
+        if (!document.body.classList.contains('gm-active')) return;   // écran MJ refermé entre-temps
+        tutoIdx = 0;
+        ensureTutoDom();
+        document.addEventListener('keydown', onTutoKey, true);        // capture : prime sur les raccourcis d'outils
+        showTutoStep();
+    }
+    function endGmTutorial() {
+        try { localStorage.setItem(TUTO_KEY, '1'); } catch (e) {}
+        document.removeEventListener('keydown', onTutoKey, true);
+        const ov = byId('gm-tuto'); if (ov) ov.remove();
+    }
+    function ensureTutoDom() {
+        let ov = byId('gm-tuto'); if (ov) return ov;
+        ov = document.createElement('div'); ov.id = 'gm-tuto'; ov.className = 'no-print';
+        ov.innerHTML = '<div class="gm-tuto-spot"></div><div class="gm-tuto-card" role="dialog" aria-label="Tutoriel de l\'écran MJ"></div>';
+        document.body.appendChild(ov);
+        return ov;
+    }
+    function showTutoStep() {
+        const steps = gmTutoSteps();
+        if (tutoIdx >= steps.length) { endGmTutorial(); return; }
+        const st = steps[tutoIdx];
+        const ov = ensureTutoDom();
+        const spot = ov.querySelector('.gm-tuto-spot'), card = ov.querySelector('.gm-tuto-card');
+        // Cible mise en lumière (spotlight) — repli : pas de cadre si l'élément est masqué
+        let r = null;
+        if (st.sel) {
+            const el = document.querySelector(st.sel);
+            if (el && el.offsetParent !== null) {
+                try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+                r = el.getBoundingClientRect();
+            }
+        }
+        spot.classList.toggle('gm-tuto-spot-none', !r);
+        if (r) {
+            const pad = 6;
+            spot.style.left = (r.left - pad) + 'px'; spot.style.top = (r.top - pad) + 'px';
+            spot.style.width = (r.width + pad * 2) + 'px'; spot.style.height = (r.height + pad * 2) + 'px';
+        } else {
+            spot.style.left = '50%'; spot.style.top = '50%'; spot.style.width = '0'; spot.style.height = '0';
+        }
+        const last = tutoIdx === steps.length - 1;
+        const dots = steps.map((_, i) => `<span class="gm-tuto-dot${i === tutoIdx ? ' is-on' : ''}"></span>`).join('');
+        card.innerHTML = `
+            <div class="gm-tuto-head"><span class="gm-tuto-ic">${st.icon}</span><b>${esc(st.title)}</b></div>
+            <div class="gm-tuto-text">${esc(st.text)}</div>
+            <div class="gm-tuto-dots">${dots}</div>
+            <div class="gm-tuto-btns">
+                <button class="gm-btn gm-tuto-skip" data-tuto="skip">Passer</button>
+                <span class="gm-spacer"></span>
+                ${tutoIdx > 0 ? '<button class="gm-btn" data-tuto="prev">← Précédent</button>' : ''}
+                <button class="gm-btn gm-btn-primary" data-tuto="next">${last ? 'Terminer ✓' : 'Suivant →'}</button>
+            </div>`;
+        card.querySelectorAll('[data-tuto]').forEach(b => b.addEventListener('click', () => {
+            const act = b.dataset.tuto;
+            if (act === 'skip') { endGmTutorial(); return; }
+            if (act === 'prev') { tutoIdx = Math.max(0, tutoIdx - 1); showTutoStep(); return; }
+            tutoIdx++; showTutoStep();
+        }));
+        // Position de la bulle : à droite de la cible, sinon à gauche, sinon dessous, sinon centrée
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const cw = card.offsetWidth, chh = card.offsetHeight;
+        let cx = (vw - cw) / 2, cy = (vh - chh) / 2;
+        if (r) {
+            const M = 14;
+            if (r.right + M + cw <= vw - 8) { cx = r.right + M; cy = r.top; }
+            else if (r.left - M - cw >= 8) { cx = r.left - M - cw; cy = r.top; }
+            else if (r.bottom + M + chh <= vh - 8) { cx = r.left; cy = r.bottom + M; }
+            else if (r.top - M - chh >= 8) { cx = r.left; cy = r.top - M - chh; }
+            cx = Math.max(8, Math.min(cx, vw - cw - 8));
+            cy = Math.max(8, Math.min(cy, vh - chh - 8));
+        }
+        card.style.left = cx + 'px'; card.style.top = cy + 'px';
+    }
+
     function open(campaignId) {
         if (campaignId && campaignId !== activeCampaignId) { GmCloud.flushNow(); stopNetwork(); } // change de campagne → pousse l'état en attente, coupe l'ancien flux
         if (campaignId) { activeCampaignId = campaignId; state = load(); }
@@ -3562,6 +3788,8 @@
         loadTree();
         loadStateFromCloud(activeCampaignId);                 // rafraîchit depuis le cloud (multi-appareils)
         if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte
+        // Première visite : petite visite guidée (skippable, revisionnable dans ⚙️ Réglages)
+        if (!localStorage.getItem(TUTO_KEY)) setTimeout(() => startGmTutorial(false), 800);
     }
     function close() {
         // Restaure le rôle musique : « joueur » seulement si une session joueur est active, sinon « libre »

@@ -135,6 +135,53 @@
         ctx.restore();
     }
 
+    // Variante « jolie » de eraseVision (Lot 24) : la zone vue reste NETTE le long
+    // des murs (clip sur le polygone → aucune fuite de lumière), mais s'estompe en
+    // douceur en LIMITE DE PORTÉE (au-delà de innerFrac × R), comme une torche qui
+    // faiblit. ctx doit être en 'destination-out'.
+    function eraseVisionSoft(ctx, cx, cy, segs, R, innerFrac) {
+        const poly = visionPolygon(cx, cy, segs, R);
+        if (!poly.length) return;
+        ctx.save();
+        ctx.beginPath();
+        poly.forEach((p, i) => { i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+        ctx.clip();
+        const f = Math.max(0.5, Math.min(0.98, Number(innerFrac) || 0.82));
+        const g = ctx.createRadialGradient(cx, cy, Math.max(1, R * f), cx, cy, Math.max(2, R));
+        g.addColorStop(0, 'rgba(0,0,0,1)');   // pleinement dévoilé jusqu'à f × R
+        g.addColorStop(1, 'rgba(0,0,0,0)');   // fondu doux jusqu'à la limite de portée
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(2, R), 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+
+    // '#rrggbb' → 'rgba(r,g,b,a)' (teinte de lumière personnalisable)
+    function hexToRgba(hex, a) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+        if (!m) return 'rgba(255,190,110,' + a + ')';
+        const n = parseInt(m[1], 16);
+        return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Teinte chaude « lueur de torche » dans la zone dévoilée : à dessiner APRÈS les
+    // effacements, en 'destination-over' → ne colore que là où l'obscurité est devenue
+    // transparente, donc AUCUNE fuite à travers les murs. origins = [{x,y,R,c?}] en px.
+    function paintLightTint(ctx, origins) {
+        if (!origins || !origins.length) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        origins.forEach(o => {
+            const R = Math.max(2, o.R);
+            const g = ctx.createRadialGradient(o.x, o.y, 1, o.x, o.y, R);
+            g.addColorStop(0, hexToRgba(o.c, 0.16));
+            g.addColorStop(0.7, hexToRgba(o.c, 0.07));
+            g.addColorStop(1, hexToRgba(o.c, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(o.x, o.y, R, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.restore();
+    }
+
     // Un point (fraction 0..1) est-il visible depuis un jeton porteur de vision ?
     // Sert côté joueur à ne montrer une porte QUE si elle est réellement en vue.
     // origins = [{x,y,R}] en px (jetons + lumières) ; segs = murs bloquants en px.
@@ -213,7 +260,7 @@
         });
     }
 
-    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, visionRadiusPx, blockingWalls, drawTemplates, pointVisible };
+    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, eraseVisionSoft, paintLightTint, visionRadiusPx, blockingWalls, drawTemplates, pointVisible };
 })();
 
 // =====================================================
