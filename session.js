@@ -157,7 +157,21 @@
 
     let debugUid = null;   // uid simulé pour les tests hors session (voir debugApplyMap)
     function myUid() { return (window.SupaAuth && window.SupaAuth.currentUser && window.SupaAuth.currentUser.id) || debugUid; }
-    function sendToGm(event, payload) { if (state.channel) { try { state.channel.send({ type: 'broadcast', event, payload }); } catch (e) {} } }
+    // Envoi joueur → MJ avec filet : si Supabase répond autre chose que 'ok'
+    // (rate limited, timed out…), on retente UNE fois — sinon on trace en console.
+    function sendToGm(event, payload) {
+        const ch = state.channel; if (!ch) return;
+        const doSend = () => ch.send({ type: 'broadcast', event, payload });
+        try {
+            const p = doSend();
+            if (p && p.then) p.then(res => {
+                if (res !== 'ok') {
+                    console.warn('[session] envoi « ' + event + ' » → ' + res + ' — nouvelle tentative');
+                    setTimeout(() => { try { doSend(); } catch (e) {} }, 250);
+                }
+            }).catch(e => console.warn('[session] envoi « ' + event + ' » :', e));
+        } catch (e) { console.warn('[session] envoi « ' + event + ' » :', e); }
+    }
     function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
     // --- Scène diffusée par le MJ : change le fond + lance l'ambiance ---
@@ -873,7 +887,7 @@
             const mine = !locked && t.owner && t.owner === uid;
             const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
             // FORMULE IDENTIQUE au MJ (tokenHtml) → même taille apparente des jetons.
-            const sz = Math.max(12, Math.round(Math.max(6, gpx) * (Number(t.size) || 1) * 0.92));
+            const sz = Math.max(12, Math.round(Math.max(6, gpx) * (Number(t.size) || 1) * 0.78));   // MÊME facteur que le MJ (0.78 case, Lot 25)
             const onMap = t.layer === 'map';
             let aura = '';
             if (t.aura && Number(t.aura.r) > 0) {
@@ -945,7 +959,15 @@
         const canvas = board.querySelector('.smap-weather'); if (!canvas) return;
         if (window.VTTWeather) window.VTTWeather.apply(canvas, (mapState.map && mapState.map.weather) || '', Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
     }
-    // Origines de vision du joueur (SES jetons + les lumières du MJ), en px du board donné.
+    // Une lumière du MJ est-elle perçue par MOI ? Il faut qu'un de MES jetons ait une
+    // ligne de vue DÉGAGÉE vers elle (les murs bloquent) — sauf « toujours visible ».
+    // Une torche dans une pièce fermée ne doit pas trahir la pièce. (Lot 25)
+    function lightSeenByMe(l, myToks, walls) {
+        if (l.always) return true;
+        if (!window.VTTGeo) return true;
+        return (myToks || []).some(t => !window.VTTGeo.moveBlocked(walls, t.x, t.y, l.x, l.y));
+    }
+    // Origines de vision du joueur (SES jetons + les lumières du MJ en vue), en px du board donné.
     function playerVisionOrigins(w, h) {
         const m = mapState.map || {};
         if (!window.VTTGeo) return [];
@@ -953,9 +975,10 @@
         const dk = Object.assign({}, m.dark || {}, { cellM: playerCellM() });
         const g = playerGridPx(w);
         const origins = [];
-        (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid)
-            .forEach(t => origins.push({ x: t.x * w, y: t.y * h, R: window.VTTGeo.visionRadiusPx(t, dk, g) }));
-        (m.lights || []).forEach(l => origins.push({ x: l.x * w, y: l.y * h, R: (Number(l.r) || 0.16) * w }));
+        const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
+        mine.forEach(t => origins.push({ x: t.x * w, y: t.y * h, R: window.VTTGeo.visionRadiusPx(t, dk, g) }));
+        (m.lights || []).filter(l => lightSeenByMe(l, mine, m.walls || []))
+            .forEach(l => origins.push({ x: l.x * w, y: l.y * h, R: (Number(l.r) || 0.16) * w }));
         return origins;
     }
     // Murs bloquants en px, id conservé (pour exclure une porte de son propre test de vue).
@@ -1004,7 +1027,8 @@
         ctx.fillRect(0, 0, w, h);
         const uid = myUid();
         const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
-        const lights = (m.lights || []);
+        // Seules les lumières EN VUE d'un de mes jetons sont rendues (sauf « toujours visible »)
+        const lights = (m.lights || []).filter(l => lightSeenByMe(l, mine, m.walls || []));
         const segs = window.VTTGeo.wallsToPx(m.walls || [], w, h);
         const g = playerGridPx(w);                          // px d'une case sur CE board (échelle partagée)
         const dk = Object.assign({}, dark, { cellM: playerCellM() });
@@ -1065,6 +1089,7 @@
         const view = playerBoard(); if (!view) return;
         const ping = document.createElement('div'); ping.className = 'smap-ping';
         ping.style.left = ((p.x || 0.5) * 100) + '%'; ping.style.top = ((p.y || 0.5) * 100) + '%';
+        ping.style.setProperty('--ping', p.color || '#C49B35');   // couleur choisie par le MJ
         view.appendChild(ping); setTimeout(() => ping.remove(), 2600);
     }
     // Brouillard côté joueur : OPAQUE (le joueur ne voit que les zones révélées par le MJ).
@@ -1091,7 +1116,7 @@
     let tokenSendThrottle = 0;
     function sendTokenMove(t, final) {
         const now = Date.now();
-        if (!final && now - tokenSendThrottle < 70) return;
+        if (!final && now - tokenSendThrottle < 100) return;   // ≤10 msg/s : sous la limite realtime
         tokenSendThrottle = now;
         sendToGm('token-move', { id: t.id, x: t.x, y: t.y, fromUid: myUid(), final: !!final });
     }
@@ -1407,7 +1432,7 @@
         @keyframes smap-open-anim { 0%{ transform:scale(0.25); opacity:0; } 60%{ opacity:1; } 100%{ transform:none; opacity:1; } }
         #session-map.smap-anim-open { animation:smap-open-anim 0.32s cubic-bezier(0.26,1.2,0.42,1); }
         @media (prefers-reduced-motion: reduce) { #session-map { animation:none !important; transition:none !important; } }
-        .smap-ping { position:absolute; width:40px; height:40px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid #C49B35; box-shadow:0 0 16px #C49B35; pointer-events:none; z-index:6; animation:smap-ping-anim 1s ease-out 2; }
+        .smap-ping { position:absolute; width:40px; height:40px; transform:translate(-50%,-50%); border-radius:50%; border:3px solid var(--ping,#C49B35); box-shadow:0 0 16px var(--ping,#C49B35); pointer-events:none; z-index:6; animation:smap-ping-anim 1s ease-out 2; }
         @keyframes smap-ping-anim { 0%{ transform:translate(-50%,-50%) scale(0.3); opacity:0.95; } 100%{ transform:translate(-50%,-50%) scale(1.9); opacity:0; } }
         #session-image-viewer { position:fixed; inset:0; z-index:10000; background:rgba(8,6,4,0.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
         #session-image-viewer.hidden { display:none; }
@@ -1488,6 +1513,19 @@
         }
     }
 
+    // Détachement LOCAL uniquement (appelé par l'écran MJ quand il ouvre sa session) :
+    // on coupe le canal et l'UI joueur de CET onglet, sans rien toucher en base ni au
+    // localStorage — la session joueur d'une autre fenêtre continue de vivre. (Lot 25)
+    function detachLocal() {
+        if (!state.sessionId) return;
+        closePresence();
+        state.code = null; state.sessionId = null; state.charId = null;
+        setMusicRole('free');
+        try { teardownCombatUI(); teardownMapUI(); } catch (e) {}
+        try { updateFabVisibility(); } catch (e) {}
+        emit();
+    }
+
     // ---------- API publique ----------
     async function join(code) {
         code = String(code || '').toUpperCase().trim();
@@ -1532,6 +1570,11 @@
     }
 
     function restore() {
+        // ⚠️ Onglet ÉCRAN MJ : ne JAMAIS reconnecter la session joueur ici. Le localStorage
+        // étant partagé entre fenêtres, l'onglet MJ rejoindrait le même topic Supabase une
+        // 2e fois dans le MÊME client → le serveur ferme le canal MJ (il émet encore, mais
+        // ne REÇOIT plus rien des joueurs : jetons, portes, murmures…). (bugfix Lot 25)
+        if ((location.hash || '').indexOf('#gm/') === 0) return;
         let saved = null;
         try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) {}
         if (!saved || !saved.sessionId) return;
@@ -1579,7 +1622,7 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore,
+    window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore, detachLocal,
         // Crochets de TEST (preview sans Supabase) : simulent ce que le MJ diffuse.
         // Aucun effet en usage normal ; permettent de valider le rendu joueur sans session réelle.
         debugApplyMap: function (map, tokens, uid) { if (uid) debugUid = uid; if (!state.sessionId) state.sessionId = 'debug'; applyMap(map, tokens); },

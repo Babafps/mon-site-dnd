@@ -253,7 +253,7 @@
             <!-- ===== BARRE D'OUTILS VERTICALE (groupes + sous-menus, type Roll20) ===== -->
             <div class="gm-leftbar">
                 <button class="gm-tool is-active" data-tgroup="select" title="Sélection : déplacer les jetons et la carte">🖱️</button>
-                <button class="gm-tool" data-tgroup="ping" title="Signal : clique la carte → repère lumineux chez les joueurs">📍</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="ping" title="Signal : clique la carte → repère lumineux chez les joueurs (couleur réglable)">📍</button>
                 <div class="gm-tool-sep"></div>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="draw" title="Dessin &amp; notes MJ">✏️</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="fog" title="Brouillard de guerre">🌫️</button>
@@ -601,7 +601,8 @@
                 e.stopPropagation();
                 const key = btn.dataset.tgroup;
                 if (!key) return;                                    // boutons historique (undo/redo) : gérés à part
-                if (key === 'select' || key === 'ping') { closeToolFlyout(); setMapTool(key); return; }
+                if (key === 'select') { closeToolFlyout(); setMapTool(key); return; }
+                if (key === 'ping' && mapTool !== 'ping') setMapTool('ping');   // 1er clic : active l'outil ET montre le sous-menu (couleur)
                 if (key === 'layers') { closeToolFlyout(); toggleLayersPanel(); return; }
                 openToolFlyout(key, btn);
             }));
@@ -616,6 +617,14 @@
     function toolGroupItems(key) {
         const m = state.map || {};
         const fogOn = !!(m.fog && m.fog.on);
+        if (key === 'ping') return {
+            title: '📍 Signal aux joueurs',
+            hint: 'Clique la carte : un repère lumineux apparaît chez tous les joueurs. Astuce : double-clic avec la souris 🖱️ = signal aussi.',
+            items: [
+                { icon: '📍', label: 'Envoyer un signal (clic sur la carte)', type: 'tool', tool: 'ping' },
+                { type: 'pingcolor' }
+            ]
+        };
         if (key === 'draw') return {
             title: '✏️ Dessin & notes',
             hint: 'Astuce : molette sur la carte = épaisseur du trait',
@@ -743,6 +752,7 @@
             }
             if (it.type === 'aoekind') return `<div class="gm-fly-row"><span class="gm-fly-ic">🔷</span><span class="gm-fly-lbl">Forme</span><span class="gm-place-type" id="gm-aoe-kind">${[['circle', '⭕ Sphère'], ['cone', '🔺 Cône'], ['line', '➖ Ligne'], ['cube', '⬛ Cube']].map(t => `<button data-aoekind="${t[0]}" class="${aoeKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
             if (it.type === 'aoecolor') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur</span><input type="color" id="gm-aoe-color" value="${aoeColor}"></div>`;
+            if (it.type === 'pingcolor') return `<div class="gm-fly-row" title="Couleur du repère lumineux envoyé aux joueurs (mémorisée)."><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur</span><input type="color" id="gm-ping-color" value="${pingColor}"></div>`;
             if (it.type === 'weather') { const cur = (state.map && state.map.weather) || ''; return `<div class="gm-fly-row"><span class="gm-fly-ic">🌦️</span><span class="gm-fly-lbl">Météo</span><span class="gm-place-type" id="gm-weather-pick">${[['', '☀️'], ['rain', '🌧️'], ['snow', '❄️'], ['fog', '🌫️'], ['embers', '🔥']].map(t => `<button data-weather="${t[0]}" class="${cur === t[0] ? 'is-on' : ''}" title="${{ '': 'Aucune', rain: 'Pluie', snow: 'Neige', fog: 'Brume', embers: 'Braises' }[t[0]]}">${t[1]}</button>`).join('')}</span></div>`; }
             const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
             return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
@@ -784,6 +794,7 @@
             akind.querySelectorAll('[data-aoekind]').forEach(x => x.classList.toggle('is-on', x === b));
         }));
         const acol = p.querySelector('#gm-aoe-color'); if (acol) acol.addEventListener('input', (e) => { aoeColor = e.target.value; });
+        const pgcol = p.querySelector('#gm-ping-color'); if (pgcol) pgcol.addEventListener('input', (e) => { pingColor = e.target.value; try { localStorage.setItem('dnd-gm-ping-color', pingColor); } catch (_) {} });
         const wpick = p.querySelector('#gm-weather-pick');
         if (wpick) wpick.querySelectorAll('[data-weather]').forEach(b => b.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1262,7 +1273,17 @@
     // ---------- Couche réseau (MJ) ----------
     function gmBroadcast(event, payload) {
         if (!live.presChannel) { if (window.showAppToast) window.showAppToast('Ouvre une session pour diffuser aux joueurs.', '#c0392b'); return false; }
-        try { live.presChannel.send({ type: 'broadcast', event, payload }); return true; } catch (e) { console.warn('broadcast:', e); return false; }
+        try {
+            const p = live.presChannel.send({ type: 'broadcast', event, payload });
+            // Filet : un envoi refusé (rate limited / timed out) est retenté une fois.
+            if (p && p.then) p.then(res => {
+                if (res !== 'ok') {
+                    console.warn('[MJ] diffusion « ' + event + ' » → ' + res + ' — nouvelle tentative');
+                    setTimeout(() => { try { live.presChannel && live.presChannel.send({ type: 'broadcast', event, payload }); } catch (e) {} }, 250);
+                }
+            }).catch(e => console.warn('[MJ] diffusion « ' + event + ' » :', e));
+            return true;
+        } catch (e) { console.warn('broadcast:', e); return false; }
     }
     // Diffuse une image aux joueurs (ils reçoivent une notification « Ouvrir »).
     function sendSharedImage(url) {
@@ -1304,6 +1325,11 @@
     function startNetwork() {
         if (!window.SupaAuth || !window.SupaAuth.currentUser || !state.sessionId) return;
         stopNetwork();
+        // ⚠️ Si CET onglet a aussi une session JOUEUR ouverte (localStorage partagé entre
+        // fenêtres), son canal occupe déjà le topic « session:CODE » dans ce client Supabase :
+        // un 2e abonnement ferait fermer le canal MJ par le serveur → le MJ ne recevrait plus
+        // rien des joueurs (jetons, portes, murmures). On la détache LOCALEMENT. (bugfix Lot 25)
+        if (window.PlayerSession && window.PlayerSession.detachLocal) { try { window.PlayerSession.detachLocal(); } catch (e) {} }
         // Le lecteur du MJ diffuse désormais sa lecture aux joueurs de la session
         if (window.MusicPlayer && window.MusicPlayer.setBroadcaster) { window.MusicPlayer.setRole('free'); window.MusicPlayer.setBroadcaster((p) => gmBroadcast('music', p)); }
         const sid = state.sessionId, code = state.roomCode;
@@ -1612,6 +1638,7 @@
     let wallDraft = null;        // mur / porte en cours de tracé { x1,y1,x2,y2,door }
     let rulerDraft = null;       // mesure en cours { x1,y1,x2,y2 }
     let gmDragBusy = false;      // un drag de jeton MJ est en cours (évite un re-render qui casserait le pointer capture)
+    let pingColor = (function () { try { return localStorage.getItem('dnd-gm-ping-color') || '#C49B35'; } catch (e) { return '#C49B35'; } })();   // couleur du signal 📍 (mémorisée)
     let lightColor = '#ffcf7a';  // couleur de la prochaine lumière posée
     let lightRadius = 0.16;      // rayon par défaut d'une lumière (fraction de largeur ; molette pour ajuster)
     let placeTokenType = 'npc';  // type de jeton posé au clic (palette PJ/PNJ/monstre)
@@ -1642,7 +1669,7 @@
         // Taille liée à la grille du board : un jeton « Normal » remplit sa case.
         // FORMULE IDENTIQUE côté joueur (renderPlayerMap) → même taille apparente MJ / PJ.
         const gpx = Math.max(6, gridPxFor(boardWpx));
-        const sz = Math.max(12, Math.round(gpx * (Number(t.size) || 1) * 0.92));
+        const sz = Math.max(12, Math.round(gpx * (Number(t.size) || 1) * 0.78));   // 0.78 case : lisible sans remplir la case (Lot 25)
         const layer = tokenLayerOf(t);
         const hpBar = hpMax > 0 ? `<div class="gm-token-hp"><div class="gm-token-hp-fill${low ? ' is-low' : ''}" style="width:${ratio * 100}%"></div></div>` : '';
         const acBadge = (t.ac != null && t.ac !== '') ? `<span class="gm-token-ac" title="Classe d'armure">${esc(t.ac)}</span>` : '';
@@ -1846,10 +1873,13 @@
     // ----- Points de lumière (torches, lanternes…) : percent l'obscurité pour les joueurs -----
     function lightsData() { const m = state.map || {}; if (!Array.isArray(m.lights)) m.lights = []; return m.lights; }
     function clearLightsConfirm() { if (!confirm('Retirer toutes les lumières de cette carte ?')) return; if (state.map) state.map.lights = []; save(); renderMap(); broadcastMap(true); }
-    function eraseLights(ctx, w, h, segs) {
+    function eraseLights(ctx, w, h, segs, pjToks) {
         // Chaque lumière dévoile une zone (bloquée par les murs) — comme un jeton porteur de torche.
         const erase = window.VTTGeo.eraseVisionSoft || window.VTTGeo.eraseVision;   // même rendu doux que côté joueur
+        const walls = (state.map && state.map.walls) || [];
         (lightsData()).forEach(l => {
+            // Comme côté joueur : une lumière hors de vue des PJ ne leur apparaît pas (sauf « toujours »)
+            if (!l.always && pjToks && window.VTTGeo && !pjToks.some(t => !window.VTTGeo.moveBlocked(walls, t.x, t.y, l.x, l.y))) return;
             const R = (Number(l.r) || lightRadius) * w;
             erase(ctx, l.x * w, l.y * h, segs, R);
         });
@@ -1883,12 +1913,14 @@
         p.innerHTML = `
             <div class="gm-tp-row"><label>💡 Lumière</label><input class="gm-tp-color" type="color" data-lp="color" value="${l.color || lightColor}" title="Couleur"></div>
             <div class="gm-tp-row"><label>Rayon</label><input type="range" data-lp="r" min="4" max="45" step="1" value="${Math.round((l.r || lightRadius) * 100)}"><b class="gm-fly-wval" data-lp-rval>${Math.round((l.r || lightRadius) * 100)}</b></div>
+            <div class="gm-tp-row" title="Décoché (défaut) : les joueurs ne voient cette lumière que si l'un de leurs jetons a une ligne de vue dégagée vers elle (les murs bloquent). Coché : visible même dans une zone qu'ils ne voient pas."><label>👁️</label><label class="gm-map-ctl"><input type="checkbox" data-lp="always"${l.always ? ' checked' : ''}> Visible même hors de vue</label></div>
             <div class="gm-tp-row gm-tp-actions"><button class="gm-btn gm-btn-danger" data-lp-act="del">🗑️ Supprimer</button></div>`;
         p.classList.remove('hidden');
         const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
         p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
         p.style.top = Math.max(8, Math.min(oy + 10, window.innerHeight - p.offsetHeight - 8)) + 'px';
         p.querySelector('[data-lp="color"]').addEventListener('input', (ev) => { l.color = ev.target.value; save(); renderMap(); broadcastMap(true); });
+        p.querySelector('[data-lp="always"]').addEventListener('change', (ev) => { l.always = ev.target.checked || undefined; save(); renderMap(); broadcastMap(true); });
         p.querySelector('[data-lp="r"]').addEventListener('input', (ev) => { l.r = Math.max(0.04, Math.min(0.45, (parseInt(ev.target.value, 10) || 16) / 100)); const v = p.querySelector('[data-lp-rval]'); if (v) v.textContent = Math.round(l.r * 100); save(); renderMap(); broadcastMap(true); });
         p.querySelector('[data-lp-act="del"]').addEventListener('click', () => { state.map.lights = lightsData().filter(x => x.id !== id); p.classList.add('hidden'); save(); renderMap(); broadcastMap(true); });
     }
@@ -2149,10 +2181,11 @@
         const g = Math.max(1, gridPxFor(w));                     // px d'une case sur CE board
         const dk = Object.assign({}, dark, { cellM: cellMeters() });
         const erase = window.VTTGeo.eraseVisionSoft || window.VTTGeo.eraseVision;   // même rendu doux que côté joueur
-        (state.tokens || []).filter(t => !t.hidden && (t.type === 'pj' || t.owner)).forEach(t => {
+        const pjToks = (state.tokens || []).filter(t => !t.hidden && (t.type === 'pj' || t.owner));
+        pjToks.forEach(t => {
             erase(ctx, t.x * w, t.y * h, segs, window.VTTGeo.visionRadiusPx(t, dk, g));
         });
-        eraseLights(ctx, w, h, segs);                            // les lumières éclairent aussi (aperçu)
+        eraseLights(ctx, w, h, segs, pjToks);                    // les lumières éclairent aussi (si en vue des PJ)
         ctx.globalCompositeOperation = 'source-over';
     }
     // Règle : trait + étiquette de distance (1 case = 1,5 m), locale au MJ.
@@ -2213,10 +2246,11 @@
     function renderDraw() { renderStrokeLayer('.gm-layer-draw', (state.map && state.map.drawings) || []); }
     function renderGmNotes() { renderStrokeLayer('.gm-layer-gmnotes', (state.map && state.map.gmNotes) || []); }
     function clearDrawings() { if (state.map) state.map.drawings = []; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast('🧽 Dessins effacés', '#2c3e50'); }
-    function showGmMapPing(x, y) {
+    function showGmMapPing(x, y, color) {
         const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-board'); if (!content) return;
         const p = document.createElement('div'); p.className = 'gm-map-ping';
         p.style.left = (x * 100) + '%'; p.style.top = (y * 100) + '%';
+        p.style.setProperty('--ping', color || pingColor);
         content.appendChild(p); setTimeout(() => p.remove(), 2200);
     }
 
@@ -2658,7 +2692,7 @@
             if (mapTool === 'ping') {   // signal : repère lumineux chez les joueurs (au même endroit sur la carte)
                 const r = contentRect();
                 const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-                gmBroadcast('map-ping', { x: x, y: y });
+                gmBroadcast('map-ping', { x: x, y: y, color: pingColor });
                 showGmMapPing(x, y);
                 if (window.showAppToast) window.showAppToast('📍 Signal envoyé aux joueurs', '#2c3e50');
                 e.preventDefault(); return;
@@ -2803,7 +2837,7 @@
                 || e.target.closest('#gm-layer-switch') || e.target.closest('#gm-place-bar')) return;
             const r = contentRect();
             const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-            gmBroadcast('map-ping', { x: x, y: y });
+            gmBroadcast('map-ping', { x: x, y: y, color: pingColor });
             showGmMapPing(x, y);
             if (window.showAppToast) window.showAppToast('📍 Signal envoyé aux joueurs', '#2c3e50');
         });

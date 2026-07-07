@@ -5,7 +5,9 @@
 const SUPABASE_URL  = 'https://vttzjbmzduqtgnrjtijn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ';
 
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// eventsPerSecond : la limite par défaut (10/s) faisait JETER en silence des broadcasts
+// pendant un drag de jeton joueur (~14 msg/s) → le MJ ne voyait pas le déplacement. (Lot 25)
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { realtime: { params: { eventsPerSecond: 40 } } });
 
 // Lien « mot de passe oublié » : on lit le hash AVANT que supabase-js ne le consomme.
 const AUTH_RECOVERY   = location.hash.includes('type=recovery');

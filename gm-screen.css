@@ -402,7 +402,7 @@ canvas.gm-layer-walls, .gm-layer-vision, .gm-layer-ruler { position: absolute; i
 body.theme-dark .gm-place-type button { background: #2a2118; color: #e6d8bd; border-color: rgba(196,155,53,0.25); }
 .gm-dp-check { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: #4a3a26; padding: 4px 2px; cursor: pointer; }
 body.theme-dark .gm-dp-check { color: #d8cbb2; }
-.gm-map-ping { position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; border: 3px solid #C49B35; box-shadow: 0 0 18px #C49B35; pointer-events: none; z-index: 6; animation: gm-map-ping-anim 1s ease-out 2; }
+.gm-map-ping { position: absolute; width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%; border: 3px solid var(--ping, #C49B35); box-shadow: 0 0 18px var(--ping, #C49B35); pointer-events: none; z-index: 6; animation: gm-map-ping-anim 1s ease-out 2; }
 @keyframes gm-map-ping-anim { 0% { transform: translate(-50%,-50%) scale(0.3); opacity: 0.95; } 100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; } }
 .gm-map-controls { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
 #gm-map-card.gm-map-collapsed .gm-map-controls { display: none; }
