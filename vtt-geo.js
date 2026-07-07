@@ -77,10 +77,12 @@
         for (let i = 0; i < N; i++) angles.push((i / N) * Math.PI * 2);
         // Rayons vers CHAQUE extrémité de mur (± epsilon pour « glisser » derrière les coins) :
         // on ne cule plus par distance — un mur à peine plus loin que R laissait fuiter la lumière.
+        // 5 rayons par extrémité (±0.0006 ET ±0.003) : sous des angles rasants, 3 rayons ne
+        // suffisaient pas et le polygone « coupait » un coin → on voyait à travers. (Lot 26)
         (segs || []).forEach(s => {
             [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => {
                 const a = Math.atan2(pt[1] - cy, pt[0] - cx);
-                angles.push(a - 0.0006, a, a + 0.0006);
+                angles.push(a - 0.003, a - 0.0006, a, a + 0.0006, a + 0.003);
             });
         });
         angles.sort((a, b) => a - b);
@@ -102,9 +104,22 @@
         return pts;
     }
 
-    // Convertit les murs bloquants (fractions) en segments pixels pour un canvas w×h
+    // Convertit les murs bloquants (fractions) en segments pixels pour un canvas w×h.
+    // Chaque segment est légèrement PROLONGÉ (~1.5 px) à ses deux bouts : deux murs qui
+    // se touchent « presque » (tracés à la souris) laissaient fuir la lumière dans le
+    // micro-interstice sous certains angles — on soude les jonctions. (bugfix Lot 26)
     function wallsToPx(walls, w, h) {
-        return blockingWalls(walls).map(s => ({ x1: s.x1 * w, y1: s.y1 * h, x2: s.x2 * w, y2: s.y2 * h }));
+        const EXT = 1.5;
+        return blockingWalls(walls).map(s => {
+            let x1 = s.x1 * w, y1 = s.y1 * h, x2 = s.x2 * w, y2 = s.y2 * h;
+            const d = Math.hypot(x2 - x1, y2 - y1);
+            if (d > 0.001) {
+                const ux = (x2 - x1) / d, uy = (y2 - y1) / d;
+                x1 -= ux * EXT; y1 -= uy * EXT;
+                x2 += ux * EXT; y2 += uy * EXT;
+            }
+            return { x1: x1, y1: y1, x2: x2, y2: y2 };
+        });
     }
 
     // Dessine la « lumière » d'un jeton dans un ctx en mode effacement :

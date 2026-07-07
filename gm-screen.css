@@ -541,13 +541,19 @@ body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155
 
 /* Bulle contextuelle d'édition d'un jeton (PV / CA / nom / image / couleur) */
 .gm-token-popover {
-    position: fixed; z-index: 7500; width: 260px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
+    position: fixed; z-index: 7500; width: 280px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
     background: var(--widget-bg, #fffdf7); border: 1px solid var(--accent-color, #C49B35); border-radius: 12px;
     box-shadow: 0 12px 32px rgba(0,0,0,0.4); font-family: 'Lora', serif;
 }
 .gm-token-popover.hidden { display: none; }
 .gm-tp-row { display: flex; align-items: center; gap: 6px; }
-.gm-tp-row label { font-size: 0.82rem; color: #6a5a3e; }
+.gm-tp-row label { font-size: 0.82rem; color: #6a5a3e; flex: 0 0 auto; }
+/* Les champs nombre (PV / max / CA / vision / aura…) se PARTAGENT la largeur au lieu
+   d'avoir 58px fixes : la ligne ❤️ PV / max 🛡️ CA débordait du popover et les éléments
+   se chevauchaient / étaient rognés selon le zoom. (bugfix Lot 26) */
+.gm-tp-row .gm-num { flex: 1 1 44px; width: auto; min-width: 40px; }
+.gm-tp-row .gm-tp-sep { flex: 0 0 auto; }
+.gm-tp-row .gm-tp-color { flex: 0 0 auto; }
 .gm-tp-sep { color: #8a7a5e; }
 .gm-tp-color { width: 34px; height: 30px; padding: 0; border: 1px solid rgba(122,40,40,0.3); border-radius: 6px; background: none; cursor: pointer; }
 .gm-tp-upload { flex: 0 0 auto; }

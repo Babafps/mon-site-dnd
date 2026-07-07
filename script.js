@@ -299,7 +299,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(name) { 
                 let newId, newChar;
                 if(window.SupaAuth?.currentUser) { newChar = await window.SupaAuth.createCharacter(name); if(!newChar) { alert("Erreur lors de la création."); return; } newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
-                DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId); location.reload(); 
+                DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId);
+                DB.set('dnd-pj-wizard-pending', '1');   // fiche neuve → l'assistant de création se lance après le reload (pj-tutorial.js)
+                location.reload();
             } else { alert("Donne un nom à ton personnage."); }
         });
     }
