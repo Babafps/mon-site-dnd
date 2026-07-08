@@ -141,6 +141,7 @@
               .on('broadcast', { event: 'kick' }, ({ payload }) => onKicked(payload))
               .on('broadcast', { event: 'show-image' }, ({ payload }) => receiveSharedImage(payload))
               .on('broadcast', { event: 'dice' }, ({ payload }) => receiveDiceRoll(payload))
+              .on('broadcast', { event: 'roll-request' }, ({ payload }) => receiveRollRequest(payload))
               .on('broadcast', { event: 'map-ping' }, ({ payload }) => showMapPing(payload))
               .on('broadcast', { event: 'concentration' }, ({ payload }) => receiveConcentration(payload))
               .on('broadcast', { event: 'inspiration' }, ({ payload }) => receiveInspiration(payload))
@@ -240,10 +241,46 @@
         let wrap = document.getElementById('session-notifs');
         if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
         const card = document.createElement('div'); card.className = 'session-notif session-dice-card';
+        // Réussite / échec si un DD accompagne le jet (demande de jet du MJ) + critiques naturels
+        const dcHtml = (p.dc != null && p.dc !== '') ? (Number(p.total) >= Number(p.dc) ? ` <b class="sdc-ok">✅ DD ${escHtml(String(p.dc))}</b>` : ` <b class="sdc-ko">❌ DD ${escHtml(String(p.dc))}</b>`) : '';
+        const natHtml = p.nat === 20 ? ' <b class="sdc-ok">NAT 20 !</b>' : (p.nat === 1 ? ' <b class="sdc-ko">NAT 1…</b>' : '');
         card.innerHTML = `<div class="session-notif-head"><span class="sdc-die">🎲</span> ${escHtml(p.user || 'MJ')} lance ${escHtml(p.formula || '')}</div>
-            <div class="session-notif-body sdc-body"><b class="sdc-total">${escHtml(String(p.total))}</b> <span style="opacity:.6;">(${escHtml(p.detail || '')})</span></div>`;
+            <div class="session-notif-body sdc-body"><b class="sdc-total">${escHtml(String(p.total))}</b> <span style="opacity:.6;">(${escHtml(p.detail || '')})</span>${natHtml}${dcHtml}</div>`;
         wrap.appendChild(card);
+        // Critique naturel partagé : célébration chez TOUT le monde 🎉
+        if (window.TableFX) { if (p.nat === 20) window.TableFX.crit(); else if (p.nat === 1) window.TableFX.fumble(); }
         setTimeout(() => { card.style.transition = 'opacity .4s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 400); }, 6000);
+    }
+    // --- Demande de jet du MJ : « Lance Perception (DD 15) » → bouton qui lance
+    // AUTOMATIQUEMENT d20 + le modificateur lu sur MA fiche, et partage le résultat. ---
+    function receiveRollRequest(p) {
+        if (!p || !p.skill) return;
+        if (p.targetUserId && p.targetUserId !== 'all' && p.targetUserId !== myUid()) return;
+        let wrap = document.getElementById('session-notifs');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'session-notifs'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'session-notif';
+        const lbl = p.label || p.skill;
+        card.innerHTML = `<div class="session-notif-head">🎯 Le MJ demande un jet !</div>
+            <div class="session-notif-body"><b>${escHtml(lbl)}</b>${p.dc ? ` — DD ${escHtml(String(p.dc))}` : ''}</div>
+            <div class="session-notif-actions"><button class="snc-btn snc-roll">🎲 Lancer (mod. de ma fiche)</button></div>`;
+        wrap.appendChild(card);
+        card.querySelector('.snc-roll').addEventListener('click', () => {
+            // Mod lu sur MA fiche : carac brute (#mod-x), sauvegarde ou compétence (#skill-val-x)
+            let el = null;
+            if (/^(str|dex|con|int|wis|cha)$/.test(p.skill)) el = document.getElementById('mod-' + p.skill);
+            else el = document.getElementById('skill-val-' + p.skill);
+            const mod = el ? (parseInt(el.textContent, 10) || 0) : 0;
+            const r = Math.floor(Math.random() * 20) + 1;
+            const total = r + mod;
+            const ok = p.dc ? total >= Number(p.dc) : null;
+            card.querySelector('.session-notif-actions').innerHTML =
+                `<b class="sdc-total">${total}</b> <span style="opacity:.6;">(d20 : ${r} ${mod >= 0 ? '+' : ''}${mod})</span>` +
+                (ok === null ? '' : (ok ? ' <b class="sdc-ok">✅ Réussite</b>' : ' <b class="sdc-ko">❌ Échec</b>'));
+            const payload = { user: snapName(), formula: '🎯 ' + lbl, total: total, detail: 'd20 : ' + r + ' ' + (mod >= 0 ? '+' : '') + mod, nat: r, dc: p.dc || null };
+            sendToGm('dice', payload);
+            if (window.TableFX) { if (r === 20) window.TableFX.crit(); else if (r === 1) window.TableFX.fumble(); }
+            setTimeout(() => { card.style.transition = 'opacity .4s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 400); }, 7000);
+        });
     }
     // --- Concentration : le MJ signale qu'un jet de CON est requis (DD calculé) ---
     function receiveConcentration(p) {
@@ -397,10 +434,19 @@
         receiveDiceRoll(payload);           // soi-même (les broadcasts ne reviennent pas à l'émetteur)
         inp.value = '';
     }
+    // Partage AUTOMATIQUE des jets faits sur la fiche (caracs, compétences, macros,
+    // lanceur de dés) : appelé par script.js. Désactivable via la case du panneau ⚔️.
+    function shareRoll(name, total, detail, nat) {
+        if (!state.sessionId || !state.channel) return;                     // pas en session → silencieux
+        try { if (localStorage.getItem('dnd-share-rolls') === '0') return; } catch (e) {}
+        sendToGm('dice', { user: snapName(), formula: String(name || '🎲'), total: total, detail: String(detail || ''), nat: (nat === 20 || nat === 1) ? nat : null });
+    }
     function renderFabPanel() {
         if (!fabPanel) return;
+        const shareOn = (function () { try { return localStorage.getItem('dnd-share-rolls') !== '0'; } catch (e) { return true; } })();
         const whisperBtn = `<button id="sfp-whisper-open" class="sfp-btn sfp-btn-whisper" type="button">🤫 Murmurer au MJ</button>`
-            + `<div class="sfp-manual"><input id="sfp-dice-formula" class="sfp-manual-input" placeholder="2d6+3 (dé partagé)"><button id="sfp-dice-share" class="sfp-btn sfp-btn-alt" title="Lancer devant tout le monde">🎲</button></div>`;
+            + `<div class="sfp-manual"><input id="sfp-dice-formula" class="sfp-manual-input" placeholder="2d6+3 (dé partagé)"><button id="sfp-dice-share" class="sfp-btn sfp-btn-alt" title="Lancer devant tout le monde">🎲</button></div>`
+            + `<label class="sfp-share-toggle" title="Quand c'est coché, les jets faits sur ta fiche (caracs, compétences, attaques, dés) s'affichent chez le MJ et les autres joueurs."><input type="checkbox" id="sfp-share-rolls"${shareOn ? ' checked' : ''}> 🎲 Partager mes jets de fiche</label>`;
         // Hors combat : on n'affiche le message QUE dans le panneau ouvert (plus de badge flottant).
         if (!combatState.active) {
             fabPanel.innerHTML = `<div class="sfp-head">⚔️ Session</div>${whisperBtn}<div class="sfp-empty">Pas de combat pour le moment.</div>`;
@@ -817,7 +863,7 @@
             wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
             fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
             dark: !!(m.dark && m.dark.on), dR: (m.dark && m.dark.range) || 0, li: (m.lights || []).length,
-            tk: (ms.tokens || []).map(t => [t.id, t.owner || '', Number(t.size) || 1, t.img || '', t.name || '', !!t.hidden, (t.badges || ''), t.color || '', t.layer || '']).sort()
+            tk: (ms.tokens || []).map(t => [t.id, t.owner || '', Number(t.size) || 1, t.img || '', t.name || '', !!t.hidden, (t.badges || ''), t.color || '', t.layer || '', (ms.map && ms.map.hpBars) ? (t.hp + '/' + t.hpMax) : '']).sort()
         });
     }
     let lastMapSig = null;
@@ -895,7 +941,13 @@
                 aura = `<div class="smap-aura" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${apx * 2}px; height:${apx * 2}px; --aura:${t.aura.color || '#3498db'};"></div>`;
             }
             const badges = t.badges ? `<span class="smap-badges">${escHtml(t.badges)}</span>` : '';
-            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}${onMap ? ' smap-token-onmap' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}</div>`;
+            // Barre de PV (si le MJ l'a activée : 🧝 → « Barres de PV visibles des joueurs »)
+            let hpBar = '';
+            if (m.hpBars && Number(t.hpMax) > 0) {
+                const hpv = Number(t.hp), ratio = Math.max(0, Math.min(1, (isNaN(hpv) ? Number(t.hpMax) : hpv) / Number(t.hpMax)));
+                hpBar = `<i class="smap-hpbar"><b class="${ratio <= 0.33 ? 'is-low' : ''}" style="width:${Math.round(ratio * 100)}%"></b></i>`;
+            }
+            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}${onMap ? ' smap-token-onmap' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}${hpBar}</div>`;
         }).join('');
         // Portes : jamais les secrètes, et seulement celles RÉELLEMENT en vue quand
         // l'obscurité ou le brouillard sont actifs (le joueur ne devine plus les portes cachées).
@@ -1367,6 +1419,12 @@
         .sfp-init { font-family:'Courier New',monospace; font-weight:bold; min-width:22px; text-align:center; color:var(--primary-color,#7A2828); }
         .sfp-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .sfp-empty { font-style:italic; color:#8a7a5e; font-size:0.82rem; text-align:center; padding:6px; }
+        .sfp-share-toggle { display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#6a5a3e; margin-bottom:10px; cursor:pointer; user-select:none; }
+        body.theme-dark .sfp-share-toggle { color:#b6a074; }
+        .sdc-ok { color:#2e9e44; }
+        .sdc-ko { color:#c0392b; }
+        .snc-roll { border:none; border-radius:8px; padding:7px 12px; background:linear-gradient(160deg,#d9af45,#b8862c); color:#2a1c0a; font-family:'Cinzel',serif; font-weight:bold; cursor:pointer; }
+        .snc-roll:hover { filter:brightness(1.08); }
         /* --- Murmure au MJ --- */
         .sfp-btn-whisper { background:linear-gradient(160deg,#6d5a8c,#53446b); color:#f0eaf8; margin-top:8px; margin-bottom:6px; }
         .sfp-btn-whisper:hover { filter:brightness(1.1); }
@@ -1403,6 +1461,10 @@
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }
         /* Ombre elliptique « posée au sol » sous chaque jeton (Lot 24) */
         .smap-token::after { content:''; position:absolute; left:8%; right:8%; bottom:-16%; height:24%; border-radius:50%; background:radial-gradient(ellipse at center, rgba(0,0,0,0.42), rgba(0,0,0,0) 68%); z-index:-1; pointer-events:none; }
+        /* Barre de PV sous le jeton (activée par le MJ, Lot 28) */
+        .smap-hpbar { position:absolute; left:6%; right:6%; bottom:-26%; height:4px; border-radius:3px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.35); overflow:hidden; pointer-events:none; }
+        .smap-hpbar b { display:block; height:100%; background:linear-gradient(90deg,#37b24d,#69cc70); transition:width 0.25s ease; }
+        .smap-hpbar b.is-low { background:linear-gradient(90deg,#c0392b,#e2694f); }
         .smap-token-dragging { transition:none !important; z-index:9; }
         .smap-token-onmap { z-index:1; opacity:0.94; box-shadow:0 1px 3px rgba(0,0,0,0.5); }
         .smap-aoe-bar { position:absolute; top:8px; left:8px; z-index:12; display:flex; gap:4px; align-items:center; background:rgba(28,20,12,0.92); border:1px solid rgba(196,155,53,0.5); border-radius:10px; padding:4px 6px; box-shadow:0 3px 10px rgba(0,0,0,0.5); }
@@ -1622,13 +1684,73 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore, detachLocal,
+    // Case « partager mes jets » du panneau ⚔️ (délégué : le panneau est reconstruit à chaque ouverture)
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'sfp-share-rolls') {
+            try { localStorage.setItem('dnd-share-rolls', e.target.checked ? '1' : '0'); } catch (err) {}
+            if (window.showAppToast) window.showAppToast(e.target.checked ? '🎲 Tes jets de fiche sont partagés avec la table' : '🤫 Tes jets de fiche restent privés', '#2c3e50');
+        }
+    });
+
+    // =====================================================
+    // TableFX — célébrations de table partagées (nat 20 / nat 1).
+    // Léger, sans lib : particules dorées + flash, ou secousse + voile rouge.
+    // Respecte prefers-reduced-motion (aucune animation dans ce cas).
+    // =====================================================
+    (function () {
+        let styled = false;
+        function ensureFxStyles() {
+            if (styled) return; styled = true;
+            const css = `
+            .tfx-burst { position: fixed; inset: 0; pointer-events: none; z-index: 100050; overflow: hidden; }
+            .tfx-p { position: absolute; width: 10px; height: 10px; border-radius: 2px; opacity: 0.95; animation: tfxFall var(--d,1.6s) ease-out forwards; }
+            @keyframes tfxFall { 0% { transform: translate(0,0) rotate(0deg); opacity: 1; } 100% { transform: translate(var(--dx,0), var(--dy,80vh)) rotate(var(--rot,540deg)); opacity: 0; } }
+            .tfx-flash { position: fixed; inset: 0; pointer-events: none; z-index: 100049; background: radial-gradient(circle at 50% 45%, rgba(255,220,120,0.4), rgba(255,220,120,0) 60%); animation: tfxFlash 0.9s ease-out forwards; }
+            @keyframes tfxFlash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
+            .tfx-fumble { position: fixed; inset: 0; pointer-events: none; z-index: 100049; box-shadow: inset 0 0 120px 30px rgba(160,20,20,0.55); animation: tfxFlash 1.1s ease-out forwards; }
+            body.tfx-shake { animation: tfxShake 0.5s ease-in-out; }
+            @keyframes tfxShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,3px); } 40% { transform: translate(6px,-4px); } 60% { transform: translate(-5px,2px); } 80% { transform: translate(4px,-2px); } }`;
+            const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+        }
+        function reduced() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+        const COLS = ['#f5c542', '#e2a13a', '#fff2b2', '#c49b35', '#ffdf7e'];
+        function crit() {
+            if (reduced()) return;
+            ensureFxStyles();
+            const burst = document.createElement('div'); burst.className = 'tfx-burst no-print';
+            for (let i = 0; i < 26; i++) {
+                const p = document.createElement('i'); p.className = 'tfx-p';
+                p.style.left = (35 + Math.random() * 30) + '%';
+                p.style.top = (30 + Math.random() * 12) + '%';
+                p.style.background = COLS[i % COLS.length];
+                p.style.setProperty('--dx', (Math.random() * 60 - 30) + 'vw');
+                p.style.setProperty('--dy', (35 + Math.random() * 45) + 'vh');
+                p.style.setProperty('--rot', Math.round(Math.random() * 900 - 450) + 'deg');
+                p.style.setProperty('--d', (1.2 + Math.random() * 0.9) + 's');
+                burst.appendChild(p);
+            }
+            const flash = document.createElement('div'); flash.className = 'tfx-flash no-print';
+            document.body.appendChild(flash); document.body.appendChild(burst);
+            setTimeout(() => { burst.remove(); flash.remove(); }, 2300);
+        }
+        function fumble() {
+            if (reduced()) return;
+            ensureFxStyles();
+            const veil = document.createElement('div'); veil.className = 'tfx-fumble no-print';
+            document.body.appendChild(veil);
+            document.body.classList.add('tfx-shake');
+            setTimeout(() => { veil.remove(); document.body.classList.remove('tfx-shake'); }, 1200);
+        }
+        window.TableFX = { crit, fumble };
+    })();
+
+    window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore, detachLocal, shareRoll,
         // Crochets de TEST (preview sans Supabase) : simulent ce que le MJ diffuse.
         // Aucun effet en usage normal ; permettent de valider le rendu joueur sans session réelle.
         debugApplyMap: function (map, tokens, uid) { if (uid) debugUid = uid; if (!state.sessionId) state.sessionId = 'debug'; applyMap(map, tokens); },
         debugEvent: function (event, payload) {
             if (!state.sessionId) state.sessionId = 'debug';
-            const map = { combat: applyCombat, dice: receiveDiceRoll, concentration: receiveConcentration, inspiration: receiveInspiration, 'npc-card': receiveNpcCard, timer: receiveTimer, 'show-image': receiveSharedImage, gift: receiveGift };
+            const map = { combat: applyCombat, dice: receiveDiceRoll, concentration: receiveConcentration, inspiration: receiveInspiration, 'npc-card': receiveNpcCard, timer: receiveTimer, 'show-image': receiveSharedImage, gift: receiveGift, 'roll-request': receiveRollRequest };
             if (map[event]) map[event](payload);
         } };
 })();

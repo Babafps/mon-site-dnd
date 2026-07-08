@@ -604,6 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let poolTotal = 0;
             let resultsHTML = '';
+            const finalScores = [];
             poolSnapshot.forEach((faces, index) => {
                 const vals = groupMap[index].map(groupValue).filter(v => v !== null);
                 let finalScore, droppedScore, extraHTML = '';
@@ -615,6 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     finalScore = (vals[0] != null) ? vals[0] : (Math.floor(Math.random() * faces) + 1);
                 }
                 poolTotal += finalScore;
+                finalScores.push(finalScore);
                 let colorClass = '';
                 if (faces === 20 && finalScore === 20) colorClass = 'crit-success';
                 if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
@@ -624,6 +626,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (resultsBox) { resultsBox.innerHTML = resultsHTML; applyCustomDiceSkin(resultsBox); }
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
+            sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
+        }
+        // Diffuse un lancer du lanceur de dés à la table + célèbre un d20 naturel seul
+        function sharePoolRoll(poolSnapshot, poolTotal, scores) {
+            const nat = (poolSnapshot.length === 1 && poolSnapshot[0] === 20) ? scores[0] : null;
+            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(poolSnapshot.map(f => 'd' + f).join(' + '), poolTotal, scores.join(' + '), nat);
+            if (window.TableFX && nat) { if (nat === 20) window.TableFX.crit(); else if (nat === 1) window.TableFX.fumble(); }
         }
 
         // --- Repli : animation 2D (culbute CSS + chiffres qui défilent) ---
@@ -650,6 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearInterval(scramble);
 
             let poolTotal = 0;
+            const finalScores = [];
             poolSnapshot.forEach((faces, index) => {
                 let finalScore, droppedScore, extraHTML = '';
                 if (advMode !== 'normal') {
@@ -661,6 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     finalScore = Math.floor(Math.random() * faces) + 1;
                 }
                 poolTotal += finalScore;
+                finalScores.push(finalScore);
                 let colorClass = '';
                 if (faces === 20 && finalScore === 20) colorClass = 'crit-success';
                 if (faces === 20 && finalScore === 1) colorClass = 'crit-fail';
@@ -675,6 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyCustomDiceSkin(resultsBox);
 
             if (totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
+            sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
         }
 
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
@@ -1095,6 +1107,10 @@ document.addEventListener('DOMContentLoaded', () => {
             quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`;
             quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
             clearTimeout(quickToast._t); quickToast._t = setTimeout(() => { quickToast.classList.add('hidden'); }, 4000);
+            // Partagé avec la table si connecté à une session (case 🎲 du panneau ⚔️) + célébration critique
+            const advTxt = advMode === 'adv' ? ' (avantage)' : (advMode === 'dis' ? ' (désavantage)' : '');
+            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
+            if (window.TableFX) { if (finalRoll === 20) window.TableFX.crit(); else if (finalRoll === 1) window.TableFX.fumble(); }
         }
 
         // Lance 1 ou 2 d20 réels en 3D (via dice-box) et renvoie les valeurs obtenues
@@ -1135,6 +1151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let formula = macroBtn.getAttribute('data-formula'); let name = macroBtn.getAttribute('data-name'); let total = 0; let rolls = []; let parts = formula.replace(/\s+/g, '').split(/(?=[+-])/); if(parts[0] && !parts[0].startsWith('+') && !parts[0].startsWith('-')) parts[0] = '+' + parts[0];
                 parts.forEach(part => { if(!part) return; let sign = part.startsWith('-') ? -1 : 1; part = part.substring(1); if(part.includes('d')) { let [count, faces] = part.split('d'); count = parseInt(count) || 1; faces = parseInt(faces); for(let i=0; i<count; i++) { let r = Math.floor(Math.random() * faces) + 1; total += (r * sign); rolls.push(`${sign < 0 ? '-' : '+'}${r}`); } } else { let val = parseInt(part); if(!isNaN(val)) { total += (val * sign); rolls.push(`${sign < 0 ? '-' : '+'}${val}`); } } });
                 if(quickToast) { quickToast.innerHTML = `<span style="font-size:1rem;">${name}</span><br>= <span style="color:#f1c40f; font-size:2rem;">${total}</span> <br><span style="font-size:0.8rem; color:#ccc;">(${rolls.join(' ')})</span>`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4500); }
+                if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(name || formula, total, rolls.join(' '));   // partagé avec la table
             }
         });
 

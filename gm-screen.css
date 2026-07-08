@@ -396,8 +396,10 @@ canvas.gm-layer-walls, .gm-layer-vision, .gm-layer-ruler { position: absolute; i
     cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--lc, #ffcf7a); }
 .gm-light-pin:hover { transform: translate(-50%, -50%) scale(1.18); }
 /* Palette de type de jeton posé */
-.gm-place-type { display: inline-flex; gap: 4px; }
-.gm-place-type button { border: 1px solid rgba(122,40,40,0.3); background: #fffdf7; border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; cursor: pointer; }
+/* Chips (choix joueur / type / météo…) : passage à la ligne + noms longs tronqués
+   proprement — le libellé ne se fait plus recouvrir (bugfix Lot 28, capture Charlie). */
+.gm-place-type { display: inline-flex; gap: 4px; flex-wrap: wrap; min-width: 0; flex: 1; justify-content: flex-end; }
+.gm-place-type button { border: 1px solid rgba(122,40,40,0.3); background: #fffdf7; border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; cursor: pointer; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gm-place-type button.is-on { background: rgba(196,155,53,0.34); border-color: var(--accent-color, #C49B35); font-weight: bold; }
 body.theme-dark .gm-place-type button { background: #2a2118; color: #e6d8bd; border-color: rgba(196,155,53,0.25); }
 .gm-dp-check { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: #4a3a26; padding: 4px 2px; cursor: pointer; }
@@ -753,7 +755,8 @@ body.theme-dark .gm-tree-act, body.theme-dark .gm-tree-empty { color: #9a8a70; }
 .gm-fly-ic { flex: 0 0 22px; text-align: center; font-size: 1rem; }
 .gm-fly-lbl { flex: 1; min-width: 0; }
 .gm-fly-state { flex: 0 0 auto; font-size: 0.7rem; color: var(--primary-color, #7A2828); }
-.gm-fly-row { display: flex; align-items: center; gap: 9px; padding: 6px 9px; font-size: 0.84rem; color: #3a2e1f; }
+.gm-fly-row { display: flex; align-items: center; gap: 9px; padding: 6px 9px; font-size: 0.84rem; color: #3a2e1f; flex-wrap: wrap; }
+.gm-fly-row .gm-fly-lbl { flex: 0 0 auto; }   /* le libellé garde sa largeur, les chips passent à la ligne */
 .gm-fly-row input[type="color"] { width: 44px; height: 28px; padding: 0; border: 1px solid rgba(122,40,40,0.3); border-radius: 6px; background: none; cursor: pointer; }
 .gm-fly-row input[type="range"] { flex: 1; accent-color: var(--accent-color, #C49B35); cursor: pointer; min-width: 0; }
 .gm-fly-wval { flex: 0 0 22px; text-align: right; color: var(--primary-color, #7A2828); font-size: 0.8rem; }

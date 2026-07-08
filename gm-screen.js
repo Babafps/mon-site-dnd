@@ -126,6 +126,28 @@
         { name: 'Surprise & embuscade', text: 'Compare Discrétion du groupe embusqué vs Perception passive des cibles. Les surpris ne font rien au 1er tour.' }
     ];
 
+    // Règles RÉVISÉES 2024 (« 5.5 » / D&D 2024) — les principaux CHANGEMENTS par rapport à 2014.
+    const RULES_2024 = [
+        { name: 'Test de d20 (terme unifié)', text: '« Test de d20 » regroupe désormais jets de caractéristique, attaques et sauvegardes. Tout effet qui modifie un « test de d20 » s\'applique aux trois.' },
+        { name: 'Inspiration héroïque', text: 'Remplace l\'Inspiration : permet de RELANCER n\'importe quel d20 (on garde le nouveau résultat). Les Humains la regagnent à chaque repos long. Non cumulable.' },
+        { name: 'Maîtrise d\'armes (Weapon Mastery)', text: 'Grande nouveauté : chaque arme a une propriété de maîtrise utilisable par certaines classes (Guerrier, Barbare…) : Culbute (topple, sauvegarde CON ou à terre), Entaille (sap, désavantage à sa prochaine attaque), Ralentissement (slow, -3 m), Poussée (push, 3 m), Drainage (vex, avantage à ta prochaine attaque contre elle), Écorchure (graze, dégâts = mod. même si raté), Double entaille (nick, attaque supplémentaire de l\'autre main SANS action bonus), Perforation (cleave, touche une 2e créature adjacente).' },
+        { name: 'Surprise (révisée)', text: 'Plus de « tour de surpris » : être surpris donne simplement DÉSAVANTAGE au jet d\'initiative. Fini le tour entier perdu.' },
+        { name: 'Épuisement (révisé)', text: 'Chaque niveau d\'épuisement : -2 CUMULATIF à tous les tests de d20 et -1,5 m de vitesse (niv. 3 = -6 aux d20, -4,5 m). Mort au niveau 6. Un repos long retire 1 niveau.' },
+        { name: 'Agrippé (révisé)', text: 'Agripper = jet d\'ATTAQUE À MAINS NUES (plus de concours) ; s\'échapper = sauvegarde FOR ou DEX contre DD 8 + mod. FOR + maîtrise de l\'agresseur. L\'agrippé a le désavantage contre les autres cibles.' },
+        { name: 'Invisible (révisé)', text: 'La créature invisible a l\'AVANTAGE à l\'initiative. Ses attaques ont l\'avantage, celles contre elle le désavantage — SAUF si l\'attaquant la voit (magie, sens spéciaux).' },
+        { name: 'Action Influence', text: 'Nouvelle action sociale codifiée : Persuasion/Intimidation/Tromperie/Représentation contre DD = 15 ou Intelligence passive de la cible (selon attitude Amicale/Indifférente/Hostile).' },
+        { name: 'Action Étude / Utiliser / Magie', text: 'Actions renommées et codifiées : Étude (Study) = examiner/rappeler des connaissances ; Utiliser (Utilize) = objet ; Magie (Magic) = lancer un sort ou utiliser un pouvoir magique.' },
+        { name: 'Se cacher (révisé)', text: 'Action Se cacher : jet de Discrétion DD 15 (minimum) hors de vue ; on note le résultat, il sert de DD pour te repérer. Attaquer ou faire du bruit révèle.' },
+        { name: 'Saut (révisé)', text: 'Sauter utilise désormais ta VITESSE (déplacement normal), pas une action. Longueur = score de FOR en pieds avec élan (÷ 2 sans élan) ; hauteur = 3 + mod. FOR.' },
+        { name: 'Potions en action bonus', text: 'Boire une potion (dont soin) = ACTION BONUS désormais. L\'administrer à quelqu\'un d\'autre reste une action.' },
+        { name: 'Repos long (révisé)', text: 'Interruption d\'1 h de combat/marche/magie = repos raté MAIS on peut reprendre. Après un repos long réussi : PV max, moitié des dés de vie, 1 niveau d\'épuisement retiré.' },
+        { name: 'Incantation & composantes', text: 'Un sort par tour en action + 1 sort d\'action bonus SEULEMENT si c\'est un tour de magie mineure (cantrip) pour l\'autre. (Clarification de la règle 2014 des sorts d\'action bonus.)' },
+        { name: 'Créatures & CR (2024)', text: 'Les blocs de stats 2024 intègrent les attaques multiples plus lisibles, initiative propre (bonus affiché) et sauvegardes simplifiées.' },
+        { name: 'Origines (historique 2024)', text: 'L\'historique donne désormais : +2/+1 (ou +1/+1/+1) aux caractéristiques, un DON d\'origine (ex : Soldat → Savage Attacker, Sage → Magic Initiate) et 2 compétences. L\'espèce ne donne plus les bonus de caracs.' },
+        { name: 'Dons par paliers', text: 'Dons de niveau 4+ = « dons généraux » (souvent +1 carac inclus). Dons d\'origine au niveau 1. Dons épiques au niveau 19 (ex : Boon of Combat Prowess).' },
+        { name: 'Armes improvisées & à deux mains', text: 'Précisions 2024 : l\'arme de l\'autre main sans la propriété Légère nécessite le don approprié ; « Double entaille » (nick) permet l\'attaque secondaire sans action bonus.' }
+    ];
+
     // ---------- État (multi-campagnes) ----------
     // localStorage sert de CACHE rapide / repli hors-ligne ; la source de
     // vérité est le cloud (table gm_campaigns), pour retrouver ses profils
@@ -504,6 +526,18 @@
                         </div>
                         <div id="gm-dice-result" class="gm-dice-result"></div>
                     </div>
+                    <div class="gm-side-card">
+                        <div class="gm-side-card-head">🎯 Demander un jet</div>
+                        <div class="gm-row">
+                            <select id="gm-rollreq-skill" class="gm-select" style="flex:1;"></select>
+                            <input id="gm-rollreq-dc" class="gm-input gm-num" type="number" min="1" placeholder="DD" title="Difficulté (optionnel) : le joueur voit ✅/❌" style="width:56px;">
+                        </div>
+                        <div class="gm-row">
+                            <select id="gm-rollreq-target" class="gm-select" style="flex:1;"><option value="all">📢 Tous les joueurs</option></select>
+                            <button id="gm-rollreq-send" class="gm-add" title="Envoyer la demande">🎯</button>
+                        </div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Le joueur reçoit un bouton qui lance d20 + le modificateur de SA fiche, et le résultat s'affiche pour toute la table.</div>
+                    </div>
                     <div class="gm-side-card gm-side-grow">
                         <div class="gm-side-card-head">📜 Historique des lancers</div>
                         <div id="gm-dice-log" class="gm-dice-log"></div>
@@ -697,6 +731,7 @@
                 { icon: '⟳', label: 'Placer les combattants (choisir qui & où)', type: 'action', run: startPlaceCombatants },
                 { icon: m.tokensLocked ? '🔒' : '🔓', label: m.tokensLocked ? 'Verrouillés (MJ seul) — libérer' : 'Libres (joueurs) — verrouiller', type: 'toggle', on: !!m.tokensLocked, run: toggleTokensLock },
                 { icon: '🧲', label: 'Aimanter à la grille', type: 'toggle', on: !!m.snap, run: toggleSnap },
+                { icon: '❤️', label: 'Barres de PV visibles des joueurs', type: 'toggle', on: !!m.hpBars, run: toggleHpBars },
                 { icon: '🗑️', label: 'Vider tous les jetons', type: 'action', danger: true, run: clearTokensConfirm }
             ]
         };
@@ -824,6 +859,7 @@
     function clearTokensConfirm() { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); }
     function toggleTokensLock() { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); }
     function toggleSnap() { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); }
+    function toggleHpBars() { state.map.hpBars = !state.map.hpBars; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.hpBars ? '❤️ Barres de PV visibles des joueurs' : '❤️ Barres de PV masquées', '#2c3e50'); }
     function toggleGrid() { state.map.showGrid = (state.map.showGrid === false); save(); renderMap(); broadcastMap(true); }
     function promptAddMap() { const n = prompt('Nom de la nouvelle carte :', 'Carte ' + ((state.maps ? state.maps.length : 0) + 1)); if (n && n.trim()) addMap(n.trim()); }
     function promptRenameMap(id) { const p = (state.maps || []).find(x => x.id === id); if (!p) return; const n = prompt('Renommer la carte :', p.name); if (n && n.trim()) renameMap(p.id, n.trim()); }
@@ -945,8 +981,8 @@
             const dot = live.online.has(p.user_id) ? '🟢' : '⚪';
             return `<option value="${p.user_id}">${dot} ${esc(nm)}</option>`;
         })).join('');
-        // Même liste pour le troc/murmure ET pour « Montrer une image »
-        ['gm-trade-target', 'gm-showimg-target'].forEach(id => {
+        // Même liste pour le troc/murmure, « Montrer une image » ET « Demander un jet »
+        ['gm-trade-target', 'gm-showimg-target', 'gm-rollreq-target'].forEach(id => {
             const sel = byId(id); if (!sel) return;
             const prev = sel.value;
             sel.innerHTML = opts;
@@ -1405,8 +1441,12 @@
                 .on('broadcast', { event: 'template-clear' }, ({ payload }) => onPlayerTemplateClear(payload))
                 .on('broadcast', { event: 'dice' }, ({ payload }) => {   // jet partagé d'un joueur
                     if (!payload) return;
-                    if (window.showAppToast) window.showAppToast('🎲 ' + (payload.user || 'Joueur') + ' : ' + (payload.formula || '') + ' = ' + payload.total, '#2c3e50');
-                    clog('🎲 ' + (payload.user || 'Joueur') + ' lance ' + (payload.formula || '') + ' = ' + payload.total);
+                    // Réussite/échec si la demande portait un DD + mention des critiques naturels
+                    const okTxt = (payload.dc != null && payload.dc !== '') ? (Number(payload.total) >= Number(payload.dc) ? ' ✅ (DD ' + payload.dc + ')' : ' ❌ (DD ' + payload.dc + ')') : '';
+                    const natTxt = payload.nat === 20 ? ' — NAT 20 !' : (payload.nat === 1 ? ' — NAT 1…' : '');
+                    if (window.showAppToast) window.showAppToast('🎲 ' + (payload.user || 'Joueur') + ' : ' + (payload.formula || '') + ' = ' + payload.total + okTxt + natTxt, '#2c3e50');
+                    clog('🎲 ' + (payload.user || 'Joueur') + ' lance ' + (payload.formula || '') + ' = ' + payload.total + okTxt + natTxt);
+                    if (window.TableFX) { if (payload.nat === 20) window.TableFX.crit(); else if (payload.nat === 1) window.TableFX.fumble(); }
                 })
                 .on('broadcast', { event: 'rest' }, ({ payload }) => {   // un joueur prend un repos
                     if (!payload) return;
@@ -1434,6 +1474,8 @@
             .map(c => `<div class="gm-comp-item"><div class="gm-comp-title">⚠️ ${esc(c.name)}</div><div class="gm-comp-text">${esc(c.text)}</div></div>`);
         const rules = RULES_REF.filter(r => hit(r.name) || hit(r.text))
             .map(r => `<div class="gm-comp-item"><div class="gm-comp-title">📖 ${esc(r.name)}</div><div class="gm-comp-text">${esc(r.text)}</div></div>`);
+        const rules24 = RULES_2024.filter(r => hit(r.name) || hit(r.text))
+            .map(r => `<div class="gm-comp-item"><div class="gm-comp-title">📕 ${esc(r.name)}</div><div class="gm-comp-text">${esc(r.text)}</div></div>`);
         const mons = (state.monsters || []).filter(m => hit(m.name))
             .map(m => `<div class="gm-comp-item"><div class="gm-comp-title">👹 ${esc(m.name)}</div><div class="gm-comp-text">PV ${m.hpCur}/${m.hpMax}${m.ac ? ' · CA ' + m.ac : ''}${(m.attacks || []).length ? ' · ' + m.attacks.map(a => esc(a.name) + ' (' + esc(a.formula) + ')').join(', ') : ''}</div></div>`);
         const npcs = (state.npcs || []).filter(n => hit(n.name) || hit(n.secret))
@@ -1444,7 +1486,8 @@
             + section('npc', '🎭', 'Mes PNJ', npcs, false)
             + section('quest', '📜', 'Mes quêtes', quests, false)
             + section('cond', '⚠️', 'Conditions (5e)', conds, true)
-            + section('rule', '📖', 'Règles (5e)', rules, true);
+            + section('rule', '📖', 'Règles (5e · 2014)', rules, true)
+            + section('rule24', '📕', 'Règles 2024 (5.5) — les changements', rules24, true);
         el.innerHTML = html || `<div class="gm-empty">Aucun résultat pour « ${esc(query)} ».</div>`;
         // Repli / dépli des sections
         el.querySelectorAll('[data-comp-sec]').forEach(h => h.addEventListener('click', () => {
@@ -3272,6 +3315,40 @@
         document.querySelectorAll('.gm-die').forEach(b => b.addEventListener('click', () => logDice('1d' + b.dataset.die, rollFormula('1d' + b.dataset.die))));
         byId('gm-dice-roll').addEventListener('click', () => { const f = byId('gm-dice-formula').value.trim(); if (f) { handleDiceCommand(f); byId('gm-dice-formula').value = ''; } });
         byId('gm-dice-formula').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-dice-roll').click(); } });
+
+        // --- 🎯 Demander un jet : le joueur reçoit un bouton qui lance d20 + mod de SA fiche ---
+        // Les ids correspondent aux éléments de la fiche joueur (#skill-val-x / #mod-x).
+        const ROLLREQ_SKILLS = [
+            ['— Compétences —', [
+                ['perception', 'Perception'], ['stealth', 'Discrétion'], ['athletics', 'Athlétisme'], ['acrobatics', 'Acrobaties'],
+                ['insight', 'Intuition'], ['investigation', 'Investigation'], ['arcana', 'Arcanes'], ['history', 'Histoire'],
+                ['nature', 'Nature'], ['religion', 'Religion'], ['medicine', 'Médecine'], ['survival', 'Survie'],
+                ['animal', 'Dressage'], ['sleight', 'Escamotage'], ['deception', 'Tromperie'], ['intimidation', 'Intimidation'],
+                ['performance', 'Représentation'], ['persuasion', 'Persuasion']
+            ]],
+            ['— Sauvegardes —', [
+                ['save-str', 'Sauvegarde FOR'], ['save-dex', 'Sauvegarde DEX'], ['save-con', 'Sauvegarde CON'],
+                ['save-int', 'Sauvegarde INT'], ['save-wis', 'Sauvegarde SAG'], ['save-cha', 'Sauvegarde CHA']
+            ]],
+            ['— Caractéristiques brutes —', [
+                ['str', 'Force'], ['dex', 'Dextérité'], ['con', 'Constitution'],
+                ['int', 'Intelligence'], ['wis', 'Sagesse'], ['cha', 'Charisme']
+            ]]
+        ];
+        const rrSkill = byId('gm-rollreq-skill');
+        if (rrSkill) rrSkill.innerHTML = ROLLREQ_SKILLS.map(g => `<optgroup label="${g[0]}">` + g[1].map(s => `<option value="${s[0]}">${s[1]}</option>`).join('') + '</optgroup>').join('');
+        const rrSend = byId('gm-rollreq-send');
+        if (rrSend) rrSend.addEventListener('click', () => {
+            const skill = rrSkill ? rrSkill.value : 'perception';
+            let label = 'Jet';
+            ROLLREQ_SKILLS.forEach(g => g[1].forEach(s => { if (s[0] === skill) label = s[1]; }));
+            const dc = parseInt((byId('gm-rollreq-dc') || {}).value, 10) || null;
+            const target = (byId('gm-rollreq-target') || {}).value || 'all';
+            if (!gmBroadcast('roll-request', { skill: skill, label: label, dc: dc, targetUserId: target })) return;
+            const who = target === 'all' ? 'tous les joueurs' : 'un joueur';
+            if (window.showAppToast) window.showAppToast('🎯 Demande envoyée à ' + who + ' : ' + label + (dc ? ' (DD ' + dc + ')' : ''), '#2c3e50');
+            clog('🎯 Demande de jet : ' + label + (dc ? ' DD ' + dc : '') + ' → ' + who);
+        });
 
         // Générateurs
         document.querySelectorAll('[data-gen]').forEach(b => b.addEventListener('click', () => {
