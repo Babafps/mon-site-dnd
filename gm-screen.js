@@ -14,25 +14,114 @@
         { key: 'charm', icon: '💖', label: 'Charmé' }, { key: 'grap', icon: '✊', label: 'Empoigné' },
         { key: 'uncon', icon: '💤', label: 'Inconscient' }, { key: 'dead', icon: '☠️', label: 'Mort' }
     ];
-    // Générateur de PNJ : prénom + nom de famille (toujours les deux)
+    // Générateur de PNJ : prénom + nom de famille + métier + trait (fiche express jouable)
     const GEN_FIRST = ['Aldric', 'Maelle', 'Garrik', 'Sylphine', 'Thorin', 'Élora', 'Brann', 'Wynn', 'Cécile',
         'Vasco', 'Nessa', 'Kaeleth', 'Tobias', 'Aldwena', 'Roland', 'Lysandre', 'Gunnar', 'Mira', 'Edric', 'Yseult',
-        'Bram', 'Ophélie', 'Dorn', 'Selene', 'Hadrien', 'Faylen', 'Osric', 'Rowena'];
+        'Bram', 'Ophélie', 'Dorn', 'Selene', 'Hadrien', 'Faylen', 'Osric', 'Rowena', 'Corvin', 'Ludmilla',
+        'Théodric', 'Isaure', 'Malko', 'Perrine', 'Aldebert', 'Gwendoline', 'Ferran', 'Ismérie', 'Bastien', 'Aldoria',
+        'Cassian', 'Morgane', 'Ulric', 'Talia', 'Renaud', 'Aveline', 'Solveig', 'Léofric', 'Dagobert', 'Wilhelmina'];
     const GEN_LAST = ['Pierre-Poing', 'Vent-d\'Argent', 'Barbe-de-Fer', 'Tisse-Ombre', 'Cœur-Vaillant', 'd\'Aubéron',
         'Feuille-Rousse', 'Grise-Lune', 'le Borgne', 'la Murmurante', 'Sang-Noir', 'Haute-Tour', 'des Marais',
-        'Forge-Tonnerre', 'Brise-Lame', 'Aile-de-Corbeau', 'Or-en-Bouche', 'le Sombre', 'Val-Profond', 'Croc-Gelé'];
+        'Forge-Tonnerre', 'Brise-Lame', 'Aile-de-Corbeau', 'Or-en-Bouche', 'le Sombre', 'Val-Profond', 'Croc-Gelé',
+        'Tord-Boyaux', 'Fend-la-Bise', 'de Mortelune', 'Trois-Doigts', 'l\'Aubergiste', 'Chante-Pluie', 'du Bas-Quartier',
+        'Taille-Roc', 'Souffle-Court', 'Main-Leste', 'Bec-Salé', 'de Ronce-Épine', 'Œil-de-Faucon', 'Face-de-Craie'];
+    const GEN_JOB = ['aubergiste', 'forgeron', 'garde de la porte', 'apothicaire', 'prêtre défroqué', 'contrebandière',
+        'chasseuse de primes', 'marchand ambulant', 'ménestrel', 'batelier', 'scribe', 'meunière', 'mercenaire à la retraite',
+        'voleuse à la tire', 'herboriste', 'fossoyeur', 'palefrenier', 'diseuse de bonne aventure', 'capitaine de la milice',
+        'tenancière de bordel', 'alchimiste raté', 'noble désargenté', 'pêcheur superstitieux', 'tavernière borgne'];
+    const GEN_TRAIT = ['parle toujours à voix basse', 'a une dette de jeu énorme', 'ment sur son passé', 'connaît un secret dangereux',
+        'boite depuis une vieille bataille', 'collectionne les dents', 'a peur du noir', 'travaille pour deux camps',
+        'cherche son frère disparu', 'porte toujours une amulette', 'déteste les elfes', 'rit à des moments gênants',
+        'a un familier caché', 'jure sur d\'anciens dieux', 'ne dort jamais deux nuits au même endroit', 'est étonnamment cultivé',
+        'sent le poisson et l\'encens', 'a échappé à une pendaison', 'sait où sont enterrés les corps', 'cache un tatouage de guilde'];
     function genNpcName() {
-        return GEN_FIRST[Math.floor(Math.random() * GEN_FIRST.length)] + ' ' + GEN_LAST[Math.floor(Math.random() * GEN_LAST.length)];
+        const pick = a => a[Math.floor(Math.random() * a.length)];
+        return pick(GEN_FIRST) + ' ' + pick(GEN_LAST) + ', ' + pick(GEN_JOB) + ' — ' + pick(GEN_TRAIT) + '.';
     }
     const GEN_RUMORS = ['Une lumière étrange flotte chaque nuit au-dessus du vieux moulin.',
         'Le seigneur local n\'a plus été vu depuis trois lunes…', 'On dit qu\'un dragon dort sous la colline aux Corbeaux.',
         'Des marchands disparaissent sur la route de l\'Est.', 'La fille du forgeron parlerait aux morts.',
         'Un trésor maudit reposerait au fond du puits asséché.', 'Les loups descendent des montagnes plus tôt que d\'habitude.',
-        'Un culte se réunirait dans les égouts de la cité basse.'];
+        'Un culte se réunirait dans les égouts de la cité basse.',
+        'Le nouveau prêtre ne projette pas d\'ombre à la lumière des bougies.', 'Une porte est apparue dans une ruelle où il n\'y en avait pas.',
+        'Les cloches sonnent seules à minuit depuis la mort du bourgmestre.', 'On paie en or ancien qui se change en feuilles au matin.',
+        'La forêt a « avancé » de trois pas cette semaine, jurent les bûcherons.', 'Un enfant du village récite des noms de gens jamais nés.',
+        'Le pont-levis du château est baissé depuis dix ans, mais personne n\'ose entrer.', 'Des chants montent du lac gelé quand la lune est pleine.',
+        'Le fossoyeur creuse des tombes avant que les gens ne meurent.', 'Un colporteur vend des rêves en fioles — et certains marchent.',
+        'La comète rouge annoncerait le retour d\'un roi-sorcier.', 'Les rats fuient la ville par milliers, personne ne sait pourquoi.',
+        'Une auberge fantôme apparaît sur la lande les nuits de brouillard.', 'Le puits du marché renvoie parfois des pièces… et des doigts.'];
     const GEN_LOOT = ['Une potion de soins (2d4+2 PV)', '37 pièces d\'or dans une bourse en cuir', 'Une dague finement ouvragée (+1)',
         'Un parchemin de sort inconnu', 'Une gemme verte d\'une valeur de 50 po', 'Une carte au trésor déchirée en deux',
-        'Un anneau de cuivre gravé de runes', 'Une fiole de poison (CD 13)', 'Des bottes de marche silencieuse', 'Un médaillon avec un portrait inconnu'];
+        'Un anneau de cuivre gravé de runes', 'Une fiole de poison (CD 13)', 'Des bottes de marche silencieuse', 'Un médaillon avec un portrait inconnu',
+        'Une clé en os qui n\'ouvre aucune porte connue', 'Un carnet chiffré aux pages arrachées', 'Trois flèches à pointe d\'argent',
+        'Une bague de sceau d\'une maison noble déchue', 'Un flacon d\'huile qui brûle sans consumer', 'Un dé pipé qui tombe toujours sur 1',
+        'Une plume de créature volante, encore chaude', 'Une bourse cousue de fils d\'or (110 po)', 'Un miroir de poche fêlé qui montre autre chose',
+        'Une amulette tiède au toucher, froide au danger', 'Un contrat signé du sang d\'un diable', 'Une petite statuette de jade (75 po)',
+        'Un grimoire relié de cuir dont l\'auteur vous ressemble', 'Un cristal qui murmure quand on l\'approche du feu',
+        'Une paire de dés en ivoire dans un étui de velours', 'Une corde de soie qui ne s\'effiloche jamais (15 m)',
+        'Un anneau qui laisse une marque de brûlure quand on ment', 'Un sablier dont le sable remonte par moments'];
     const DICE = [4, 6, 8, 10, 12, 20, 100];
+
+    // ---------- Ambiances en un clic (météo + teinte + effet sonore, diffusées à la table) ----------
+    // weather : effet animé (rain/snow/fog/embers/'') · tint : voile coloré sur la carte (rgba)
+    // sfx : effet sonore intégré joué chez le MJ ET les joueurs.
+    const AMBIANCES = [
+        { key: 'tavern', icon: '🍺', label: 'Taverne', weather: '', tint: 'rgba(196,120,40,0.16)', sfx: 'tavern', note: 'Chaleur, brouhaha, feu de cheminée' },
+        { key: 'dungeon', icon: '🏚️', label: 'Donjon', weather: 'fog', tint: 'rgba(20,30,60,0.34)', sfx: 'door', note: 'Froid, humide, oppressant' },
+        { key: 'combat', icon: '⚔️', label: 'Combat', weather: 'embers', tint: 'rgba(150,20,20,0.20)', sfx: 'horn', note: 'Tension, cendres, cor de guerre' },
+        { key: 'storm', icon: '⛈️', label: 'Tempête', weather: 'rain', tint: 'rgba(40,55,90,0.30)', sfx: 'thunder', note: 'Pluie battante et tonnerre' },
+        { key: 'forest', icon: '🌲', label: 'Forêt', weather: '', tint: 'rgba(30,90,40,0.18)', sfx: '', note: 'Sous-bois verdoyant et calme' },
+        { key: 'snow', icon: '❄️', label: 'Blizzard', weather: 'snow', tint: 'rgba(150,180,220,0.20)', sfx: '', note: 'Neige et vent glacial' },
+        { key: 'night', icon: '🌙', label: 'Nuit', weather: '', tint: 'rgba(10,15,45,0.40)', sfx: 'bell', note: 'Obscurité paisible, cloche lointaine' },
+        { key: 'clear', icon: '☀️', label: 'Aucune', weather: '', tint: '', sfx: '', note: 'Retire météo et teinte' }
+    ];
+
+    // ---------- Générateur de rencontres : par environnement × palier de niveau ----------
+    // Chaque entrée = { name, hp, ac } — jetons/monstres posables directement.
+    const ENCOUNTERS = {
+        forest: {
+            1: [['Loups affamés (×3)', 11, 13], ['Gobelins embusqués (×4)', 7, 15], ['Araignée géante', 26, 14], ['Sanglier enragé', 16, 11], ['Bandits de grand chemin (×3)', 11, 12]],
+            2: [['Ours-hibou', 59, 13], ['Meute de loups sinistres (×3)', 37, 14], ['Druide dévoyé + lianes', 27, 11], ['Ettercap et ses araignées', 44, 13], ['Tigre à dents de sabre', 52, 12]],
+            3: [['Traquenard (plante monstrueuse)', 78, 13], ['Géant des collines', 105, 13], ['Loup-garou solitaire', 58, 12], ['Dryade et ses complices', 22, 11], ['Chimère', 114, 14]],
+            4: [['Traquefeuille ancien', 187, 15], ['Couvée de jeunes dragons verts', 136, 18], ['Géant des forêts', 200, 16], ['Élémentaire de bois éveillé', 152, 15]]
+        },
+        dungeon: {
+            1: [['Squelettes (×4)', 13, 13], ['Zombies lents (×3)', 22, 8], ['Gelée ocre', 45, 8], ['Culte de fanatiques (×3)', 22, 13], ['Mimic (coffre piégé)', 58, 12]],
+            2: [['Goule et ses goules-liges (×3)', 22, 12], ['Ombre affamée', 16, 12], ['Golem de pacotille', 33, 14], ['Sorcier et familiers', 40, 12], ['Ossuaire animé', 52, 13]],
+            3: [['Spectre gardien', 66, 12], ['Momie et malédiction', 58, 11], ['Golem de pierre', 178, 17], ['Cambion geôlier', 82, 19], ['Nuée de crânes hurlants', 90, 15]],
+            4: [['Liche mineure', 135, 17], ['Golem de fer', 210, 20], ['Cauchemar de l\'ossuaire', 187, 18], ['Seigneur-liche et sbires', 165, 17]]
+        },
+        city: {
+            1: [['Coupe-jarrets (×4)', 11, 12], ['Garde corrompue (×3)', 11, 16], ['Pickpocket et complices', 9, 13], ['Chien de combat lâché (×2)', 9, 12], ['Ivrogne magicien', 22, 11]],
+            2: [['Assassin de guilde', 78, 15], ['Capitaine de la milice + gardes', 65, 18], ['Réseau de voleurs (×4)', 27, 14], ['Mage de rue et golem', 40, 13], ['Diablotin espion + sbires', 33, 13]],
+            3: [['Vampire spawn en cavale', 82, 15], ['Chef de guilde et ses lames', 90, 16], ['Doppelganger infiltré', 52, 14], ['Cambion marchand d\'esclaves', 82, 19], ['Golem de chair (arène)', 93, 9]],
+            4: [['Archimage renégat', 99, 17], ['Vampire noble et goules', 144, 16], ['Prince du crime + gardes d\'élite', 120, 18], ['Diable barbelé conseiller', 110, 19]]
+        },
+        road: {
+            1: [['Bandits (×4)', 11, 12], ['Loups affamés (×3)', 11, 13], ['Gobelins à cheval (×3)', 7, 15], ['Ogre péager', 59, 11], ['Faux marchand + brigands', 22, 13]],
+            2: [['Bande de maraudeurs (×5)', 27, 14], ['Manticore', 68, 14], ['Chevalier renégat + hommes d\'armes', 52, 18], ['Ettin des collines', 85, 12], ['Basilic embusqué', 52, 15]],
+            3: [['Troll affamé', 84, 15], ['Groupe de mercenaires vétérans (×4)', 65, 17], ['Wyverne chasseresse', 110, 13], ['Géant des pierres', 126, 17], ['Cavaliers spectraux (×3)', 66, 13]],
+            4: [['Dragon rouge juvénile', 178, 18], ['Horde d\'orques (×8) + chef', 93, 16], ['Géant du givre + loups', 138, 15], ['Chimère et cavalerie', 114, 14]]
+        },
+        mountain: {
+            1: [['Aigles géants (×2)', 26, 13], ['Harpies (×3)', 38, 11], ['Gobelins des cimes (×4)', 7, 15], ['Ours brun', 34, 11], ['Contrebandiers (×3)', 11, 12]],
+            2: [['Griffon affamé', 59, 12], ['Ogres (×2)', 59, 11], ['Géant des collines', 105, 13], ['Cockatrice en nuée (×3)', 27, 11], ['Chef gobelin + loups', 40, 14]],
+            3: [['Géant des pierres', 126, 17], ['Wyverne + petits', 110, 13], ['Yéti ancien', 90, 12], ['Dragon blanc juvénile', 133, 17], ['Roc affamé', 145, 15]],
+            4: [['Géant du givre et sa meute', 138, 15], ['Dragon rouge adulte', 256, 19], ['Roc légendaire', 248, 15], ['Titan de pierre éveillé', 220, 18]]
+        },
+        swamp: {
+            1: [['Crocodiles (×2)', 19, 12], ['Vase grise', 45, 8], ['Hommes-lézards (×3)', 22, 15], ['Nuée de moustiques sanguinaires', 22, 12], ['Sorcière des marais (mineure)', 22, 11]],
+            2: [['Hydre juvénile', 84, 15], ['Troll des marais', 84, 15], ['Vouivre venimeuse', 68, 13], ['Chaman lézard + guerriers', 52, 15], ['Volée de stirges (×6)', 5, 14]],
+            3: [['Hydre à cinq têtes', 136, 15], ['Naga gardien', 75, 15], ['Nuée de mort-vivants noyés', 93, 10], ['Méphites et élémentaire de boue', 88, 13], ['Croque-mitaine des tourbières', 90, 14]],
+            4: [['Hydre ancienne', 172, 15], ['Dragon noir adulte', 195, 19], ['Nuée de nagas', 150, 16], ['Élémentaire de marée abyssal', 175, 15]]
+        },
+        coast: {
+            1: [['Pirates (×4)', 11, 12], ['Crabes géants (×3)', 15, 15], ['Sirènes trompeuses (×2)', 16, 11], ['Requin traqueur', 22, 12], ['Contrebandiers armés (×3)', 16, 13]],
+            2: [['Sahuagins pillards (×4)', 22, 15], ['Requin-taureau géant', 88, 13], ['Capitaine pirate + équipage', 65, 15], ['Élémentaire d\'eau', 114, 14], ['Méduse échouée', 127, 15]],
+            3: [['Kraken juvénile (tentacules)', 110, 14], ['Sahuagin baron + gardes', 90, 16], ['Épave hantée (spectres ×4)', 66, 12], ['Hydre côtière', 136, 15], ['Dragon de bronze juvénile', 142, 18]],
+            4: [['Kraken (rencontre légendaire)', 250, 18], ['Dragon de bronze adulte', 212, 19], ['Léviathan élémentaire', 200, 15], ['Cour de tritons + géant des mers', 180, 16]]
+        }
+    };
 
     // ---------- Référence rapide (Compendium) ----------
     const CONDITIONS_REF = [
@@ -381,6 +470,9 @@
                                 <option>⛈️ Orage</option><option>🌫️ Brouillard</option><option>❄️ Neige</option><option>🌙 Nuit</option>
                             </select>
                         </div>
+                        <div class="gm-set-h" style="margin-top:8px;">🎬 Ambiances (1 clic)</div>
+                        <div id="gm-ambiance-btns" class="gm-ambiance-btns"></div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Applique météo + teinte de la carte + effet sonore à toute la table.</div>
                         <div class="gm-music-mini">
                             <button class="gm-btn" data-act="music-toggle">🎵 Lecteur</button>
                             <button class="gm-btn" data-act="music-show">▶ Afficher</button>
@@ -530,7 +622,6 @@
                         <div class="gm-side-card-head">🎯 Demander un jet</div>
                         <div class="gm-row">
                             <select id="gm-rollreq-skill" class="gm-select" style="flex:1;"></select>
-                            <input id="gm-rollreq-dc" class="gm-input gm-num" type="number" min="1" placeholder="DD" title="Difficulté (optionnel) : le joueur voit ✅/❌" style="width:56px;">
                         </div>
                         <div class="gm-row">
                             <select id="gm-rollreq-target" class="gm-select" style="flex:1;"><option value="all">📢 Tous les joueurs</option></select>
@@ -604,8 +695,14 @@
                             <button class="gm-btn" data-gen="name">PNJ</button>
                             <button class="gm-btn" data-gen="rumor">Rumeur</button>
                             <button class="gm-btn" data-gen="loot">Trésor</button>
+                            <button class="gm-btn" data-gen="encounter">Rencontre</button>
+                        </div>
+                        <div class="gm-row" id="gm-gen-enc-opts" style="display:none; gap:6px; margin-top:6px;">
+                            <select id="gm-gen-env" class="gm-select" style="flex:1;"><option value="forest">🌲 Forêt</option><option value="dungeon">🏚️ Donjon</option><option value="city">🏙️ Ville</option><option value="road">🛣️ Route</option><option value="mountain">⛰️ Montagne</option><option value="swamp">🐸 Marais</option><option value="coast">🌊 Côte</option></select>
+                            <select id="gm-gen-tier" class="gm-select" style="flex:1;"><option value="1">Niv. 1-4</option><option value="2">Niv. 5-10</option><option value="3">Niv. 11-16</option><option value="4">Niv. 17-20</option></select>
                         </div>
                         <div id="gm-gen-out" class="gm-gen-out">Clique pour générer…</div>
+                        <div id="gm-gen-actions" class="gm-row" style="display:none; margin-top:6px;"></div>
                     </div>
                     <div class="gm-side-card gm-side-grow">
                         <div class="gm-side-card-head">🔎 Recherche rapide</div>
@@ -671,17 +768,21 @@
                 { icon: '🧽', label: 'Effacer tous les dessins', type: 'action', danger: true, run: () => { if (confirm('Effacer tous les dessins de cette carte ?')) clearDrawings(); } }
             ]
         };
-        if (key === 'fog') return {
+        if (key === 'fog') {
+            const autoRev = !!(m.fog && m.fog.autoReveal);
+            return {
             title: '🌫️ Brouillard de guerre',
             hint: 'Molette sur la carte = taille du pinceau',
             items: [
                 { icon: '🌫️', label: fogOn ? 'Brouillard actif — cliquer pour retirer' : 'Activer le brouillard', type: 'toggle', on: fogOn, run: toggleFog },
                 { icon: '🔦', label: 'Révéler une zone (pinceau)', type: 'tool', tool: 'reveal' },
                 { icon: '⬛', label: 'Recacher une zone (pinceau)', type: 'tool', tool: 'cover' },
+                { icon: '🧭', label: autoRev ? 'Exploration révélée : ON — les PJ dévoilent en avançant' : 'Exploration révélée : OFF', type: 'toggle', on: autoRev, run: toggleFogAutoReveal },
                 { icon: '👁️', label: 'Tout révéler', type: 'action', run: fogRevealAll, keep: true },
                 { icon: '🌑', label: 'Tout recouvrir', type: 'action', run: fogCoverAll, keep: true }
             ]
-        };
+            };
+        }
         if (key === 'walls') {
             const dark = m.dark || { on: false, range: 9 };
             return {
@@ -973,6 +1074,27 @@
         if (s.bg) document.body.style.backgroundImage = `url(${s.bg})`;
         if (s.music && window.MusicPlayer && window.MusicPlayer.playUrl) { try { window.MusicPlayer.playUrl(s.music, '🎬 ' + (s.name || 'Scène')); } catch (e) {} }
         if (window.showAppToast) window.showAppToast('🎬 Scène « ' + (s.name || '') + ' » appliquée', '#8a6320');
+    }
+    // ----- Ambiances en un clic (Lot 30) : météo + teinte carte + effet sonore, diffusés -----
+    function renderAmbianceBtns() {
+        const host = byId('gm-ambiance-btns'); if (!host) return;
+        const cur = (state.map && state.map.ambiance) || '';
+        host.innerHTML = AMBIANCES.map(a => `<button data-ambiance="${a.key}" class="${cur === a.key ? 'is-on' : ''}" title="${esc(a.note)}">${a.icon} ${esc(a.label)}</button>`).join('');
+    }
+    function applyAmbiance(key) {
+        const a = AMBIANCES.find(x => x.key === key); if (!a) return;
+        if (!state.map) state.map = {};
+        state.map.weather = a.weather || '';
+        state.map.tint = a.tint || '';
+        state.map.ambiance = a.key;
+        save(); renderMap(); broadcastMap(true);
+        renderAmbianceBtns();
+        // Effet sonore chez le MJ ET les joueurs
+        if (a.sfx) {
+            if (window.MusicPlayer && window.MusicPlayer.playBuiltinSfx) { try { window.MusicPlayer.playBuiltinSfx(a.sfx); } catch (e) {} }
+            if (live.presChannel) gmBroadcast('sfx', { builtin: a.sfx });
+        }
+        if (window.showAppToast) window.showAppToast(a.icon + ' Ambiance : ' + a.label, '#8a6320');
     }
     function renderTradeTargets() {
         const opts = ['<option value="all">📢 Tous les joueurs</option>'].concat(live.players.map(p => {
@@ -1501,6 +1623,7 @@
 
     function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers(); renderCombatLog(); renderSnaps();
         { const ci = byId('gm-comp-search'); renderCompendium(ci ? ci.value : ''); }
+        renderAmbianceBtns();
         const t = document.getElementById('gm-env-time'); if (t) t.value = state.env.time || '';
         const w = document.getElementById('gm-env-weather'); if (w) w.value = state.env.weather || '☀️ Dégagé';
         const n = document.getElementById('gm-notes'); if (n) n.value = state.notes || '';
@@ -1786,6 +1909,34 @@
         save(); renderMap(); broadcastMap(true);
     }
     function toggleFog() { const fog = fogState(); fog.on = !fog.on; if (!fog.on) setMapTool('select'); else { save(); renderMap(); broadcastMap(true); } if (window.showAppToast) window.showAppToast(fog.on ? '🌫️ Brouillard activé — 🔦 révèle, ⬛ recache' : '☀️ Brouillard retiré', '#2c3e50'); }
+    // Exploration révélée (Lot 31) : quand ON, les jetons des joueurs dévoilent le brouillard
+    // autour d'eux en se déplaçant (façon jeu vidéo). Activable par le MJ seulement.
+    function toggleFogAutoReveal() {
+        const fog = fogState(); fog.autoReveal = !fog.autoReveal;
+        if (fog.autoReveal) fog.on = true;                   // sans brouillard, la révélation n'a pas de sens
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast(fog.autoReveal ? '🧭 Exploration révélée : les joueurs dévoilent la carte en avançant' : '🧭 Exploration révélée désactivée', '#2c3e50');
+    }
+    // Rayon d'exploration en fraction de largeur (≈ 2,5 cases, borné pour rester lisible).
+    function fogExploreRadius() {
+        const cw = ((state.map && state.map.gridSize) || 48) / 1000;   // 1 case en fraction
+        return Math.max(0.06, Math.min(0.2, cw * 2.5));
+    }
+    // Dévoile le brouillard autour d'un jeton PJ (mémoire persistante). Renvoie true si un
+    // nouveau disque a été ajouté (→ l'appelant sauvegarde/diffuse).
+    function autoRevealAround(tok) {
+        const m = state.map || {}, fog = m.fog;
+        if (!fog || !fog.on || !fog.autoReveal || !tok) return false;
+        if (!(tok.type === 'pj' || tok.owner)) return false;           // seuls les PJ explorent
+        if (!Array.isArray(fog.reveals)) fog.reveals = [];
+        const R = fogExploreRadius();
+        // Dédup : pas de nouveau disque si un révélé couvre déjà (< R/2) la position actuelle.
+        const near = fog.reveals.some(rv => Math.hypot(rv.x - tok.x, rv.y - tok.y) < R * 0.5);
+        if (near) return false;
+        fog.reveals.push({ x: tok.x, y: tok.y, r: R });
+        if (fog.reveals.length > 4000) fog.reveals.shift();            // garde-fou mémoire
+        return true;
+    }
     function fogRevealAll() { const fog = fogState(); fog.on = true; fog.reveals = [{ x: 0.5, y: 0.5, r: 3 }]; save(); renderMap(); broadcastMap(true); }
     function fogCoverAll() { const fog = fogState(); fog.on = true; fog.reveals = []; save(); renderMap(); broadcastMap(true); }
 
@@ -2312,8 +2463,9 @@
         let bw = Math.min(vw, vh * AR), bh = bw / AR;
         boardWpx = bw;
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas></div></div>`;
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-tint"></div></div></div>`;
         const board = view.querySelector('.gm-board');
+        const tintEl = board.querySelector('.gm-layer-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';
         const f = bw / 1000;                                 // facteur px de référence → px affichés
         board.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const bx = (m.bgX || 0) * f, by = (m.bgY || 0) * f, bs = Number(m.bgScale) || 1;
@@ -2532,6 +2684,7 @@
         // Autorité MJ : un JOUEUR ne traverse jamais un mur ni une porte fermée (le MJ, lui, est libre).
         const blocked = window.VTTGeo && window.VTTGeo.moveBlocked((state.map && state.map.walls) || [], tok.x, tok.y, nx, ny);
         if (!blocked) { tok.x = nx; tok.y = ny; }
+        autoRevealAround(tok);                                      // exploration révélée : le PJ dévoile en avançant
         // Pendant un drag MJ, un re-render complet détruirait le jeton en cours de déplacement
         // (pointer capture perdu) : on ne met à jour que le jeton déplacé par le joueur.
         if (gmDragBusy) {
@@ -2808,6 +2961,7 @@
                 const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
                 cur.x = x; cur.y = y;
                 tokenEl.style.left = (x * 100) + '%'; tokenEl.style.top = (y * 100) + '%';
+                if (autoRevealAround(cur)) renderFog();              // exploration révélée : dévoile en avançant
                 if (mapView.visionPreview) renderVisionPreview();   // l'aperçu de vision suit le jeton
                 throttleBroadcastMap();
             } else if (panning) {
@@ -2865,7 +3019,7 @@
             if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
-                else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; }
+                else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; autoRevealAround(cur); }
                 if (tokenEl) tokenEl.classList.remove('dragging');
                 cur = null; tokenEl = null; gmDragBusy = false; save(); renderMap(); broadcastMap(true);
             }
@@ -3342,20 +3496,84 @@
             const skill = rrSkill ? rrSkill.value : 'perception';
             let label = 'Jet';
             ROLLREQ_SKILLS.forEach(g => g[1].forEach(s => { if (s[0] === skill) label = s[1]; }));
-            const dc = parseInt((byId('gm-rollreq-dc') || {}).value, 10) || null;
             const target = (byId('gm-rollreq-target') || {}).value || 'all';
-            if (!gmBroadcast('roll-request', { skill: skill, label: label, dc: dc, targetUserId: target })) return;
+            if (!gmBroadcast('roll-request', { skill: skill, label: label, targetUserId: target })) return;
             const who = target === 'all' ? 'tous les joueurs' : 'un joueur';
-            if (window.showAppToast) window.showAppToast('🎯 Demande envoyée à ' + who + ' : ' + label + (dc ? ' (DD ' + dc + ')' : ''), '#2c3e50');
-            clog('🎯 Demande de jet : ' + label + (dc ? ' DD ' + dc : '') + ' → ' + who);
+            if (window.showAppToast) window.showAppToast('🎯 Demande envoyée à ' + who + ' : ' + label, '#2c3e50');
+            clog('🎯 Demande de jet : ' + label + ' → ' + who);
         });
 
-        // Générateurs
+        // Générateurs (PNJ jouable · rumeur · trésor · rencontre) + actions contextuelles
+        let lastGen = null;   // { type, npc?, encounter? }
+        function renderGenActions() {
+            const box = byId('gm-gen-actions'); if (!box) return;
+            if (lastGen && lastGen.type === 'name') {
+                box.style.display = 'flex';
+                box.innerHTML = `<button class="gm-gen-actions-btn" data-genact="keep-npc">💾 Garder ce PNJ</button>`;
+            } else if (lastGen && lastGen.type === 'encounter' && lastGen.encounter) {
+                box.style.display = 'flex';
+                box.innerHTML = `<button class="gm-gen-actions-btn" data-genact="add-enc">⚔️ Ajouter au combat</button>`;
+            } else { box.style.display = 'none'; box.innerHTML = ''; }
+        }
+        function genEncounter() {
+            const env = (byId('gm-gen-env') || {}).value || 'forest';
+            const tier = (byId('gm-gen-tier') || {}).value || '1';
+            const list = (ENCOUNTERS[env] && ENCOUNTERS[env][tier]) || [];
+            if (!list.length) return null;
+            const e = list[Math.floor(Math.random() * list.length)];
+            return { name: e[0], hp: e[1], ac: e[2] };
+        }
         document.querySelectorAll('[data-gen]').forEach(b => b.addEventListener('click', () => {
-            if (b.dataset.gen === 'name') { byId('gm-gen-out').textContent = genNpcName(); return; }
-            const pool = b.dataset.gen === 'rumor' ? GEN_RUMORS : GEN_LOOT;
-            byId('gm-gen-out').textContent = pool[Math.floor(Math.random() * pool.length)];
+            const kind = b.dataset.gen;
+            const encOpts = byId('gm-gen-enc-opts'); if (encOpts) encOpts.style.display = (kind === 'encounter') ? 'flex' : 'none';
+            const out = byId('gm-gen-out');
+            if (kind === 'name') { lastGen = { type: 'name', npc: genNpcName() }; out.textContent = lastGen.npc; }
+            else if (kind === 'encounter') {
+                const e = genEncounter();
+                lastGen = { type: 'encounter', encounter: e };
+                out.textContent = e ? ('⚔️ ' + e.name + '  —  PV ' + e.hp + ' · CA ' + e.ac) : 'Aucune rencontre pour ce filtre.';
+            } else {
+                const pool = kind === 'rumor' ? GEN_RUMORS : GEN_LOOT;
+                lastGen = { type: kind };
+                out.textContent = pool[Math.floor(Math.random() * pool.length)];
+            }
+            renderGenActions();
         }));
+        // Actions : garder le PNJ dans la campagne / ajouter la rencontre aux monstres
+        byId('gm-gen-actions').addEventListener('click', (e) => {
+            const b = e.target.closest('[data-genact]'); if (!b) return;
+            if (b.dataset.genact === 'keep-npc' && lastGen && lastGen.npc) {
+                // « Prénom Nom, métier — trait. » → nom = avant la virgule, reste en secret/note
+                const full = lastGen.npc;
+                const comma = full.indexOf(',');
+                const name = comma > 0 ? full.slice(0, comma).trim() : full.trim();
+                const secret = comma > 0 ? full.slice(comma + 1).trim() : '';
+                state.npcs.push({ id: uid(), name: name, secret: secret, present: true });
+                save(); renderNpcs();
+                if (window.showAppToast) window.showAppToast('🎭 PNJ ajouté au Journal : ' + name, '#2c3e50');
+            } else if (b.dataset.genact === 'add-enc' && lastGen && lastGen.encounter) {
+                const e2 = lastGen.encounter;
+                // Parse un « (×N) » pour créer N monstres numérotés (sinon 1 seul).
+                const mm = e2.name.match(/^(.*?)\s*\(×(\d+)\)\s*$/);
+                const base = mm ? mm[1].trim() : e2.name;
+                const count = mm ? Math.min(12, parseInt(mm[2], 10) || 1) : 1;
+                for (let i = 0; i < count; i++) {
+                    const nm = count > 1 ? (base + ' ' + (i + 1)) : base;
+                    state.monsters.push({ id: uid(), name: nm, hpCur: e2.hp, hpMax: e2.hp, ac: e2.ac, conditions: [], attacks: [] });
+                }
+                save(); renderMonsters();
+                if (window.showAppToast) window.showAppToast('⚔️ ' + count + ' monstre(s) ajouté(s) — pose-les via « Placer les combattants »', '#2c3e50');
+            }
+        });
+        // Régénère la rencontre quand on change environnement / palier
+        ['gm-gen-env', 'gm-gen-tier'].forEach(id => { const s = byId(id); if (s) s.addEventListener('change', () => {
+            const e3 = genEncounter(); lastGen = { type: 'encounter', encounter: e3 };
+            byId('gm-gen-out').textContent = e3 ? ('⚔️ ' + e3.name + '  —  PV ' + e3.hp + ' · CA ' + e3.ac) : 'Aucune rencontre pour ce filtre.';
+            renderGenActions();
+        }); });
+        // Boutons d'ambiance
+        renderAmbianceBtns();
+        byId('gm-ambiance-btns').addEventListener('click', (e) => { const b = e.target.closest('[data-ambiance]'); if (b) applyAmbiance(b.dataset.ambiance); });
 
         // Minuteur partagé (compte à rebours chez le MJ ET les joueurs)
         byId('gm-timer-start').addEventListener('click', () => {

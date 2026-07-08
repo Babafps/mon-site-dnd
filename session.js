@@ -858,7 +858,7 @@
         const m = ms.map || {}, walls = m.walls || [];
         return JSON.stringify({
             bg: m.bg || '', ar: m.stageAR || 0, grid: m.gridSize || 48, sg: m.showGrid !== false,
-            bx: m.bgX || 0, by: m.bgY || 0, bs: m.bgScale || 1, w: m.weather || '',
+            bx: m.bgX || 0, by: m.bgY || 0, bs: m.bgScale || 1, w: m.weather || '', tint: m.tint || '',
             doors: walls.filter(w => w.door).map(w => [w.id, !!w.open, !!w.locked, !!w.secret]),
             wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
             fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
@@ -955,8 +955,9 @@
         const doorSegs = playerBlockingSegsPx(bw, bh);
         const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret && doorVisibleToPlayer(s, bw, bh, doorOrigins, doorSegs)).map(doorButtonHtml).join('');
         view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;">` + tokensHtml + doorsHtml
-            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas></div>';
+            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas><div class="smap-tint"></div></div>';
         const board = view.querySelector('.smap-board');
+        const tintEl = board.querySelector('.smap-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';   // teinte d'ambiance (Lot 30)
         board.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const f = AR > 0 ? bw / 1000 : 1;
         const bx = (m.bgX || 0) * f, by = (m.bgY || 0) * f, bs = Number(m.bgScale) || 1;
@@ -1456,6 +1457,7 @@
         .smap-board { position:absolute; background-color:#171410; background-size:contain; background-position:center; background-repeat:no-repeat; box-shadow:0 0 0 1px rgba(196,155,53,0.2); }
         .smap-board.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
         .smap-templates, .smap-weather { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .smap-tint { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.6s ease; border-radius:8px; z-index:2; }
         .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }

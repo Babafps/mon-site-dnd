@@ -519,6 +519,17 @@ body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155
     font-size: 0.62rem; line-height: 1; background: rgba(20,14,8,0.78); border-radius: 8px; padding: 1px 4px; pointer-events: none; }
 /* Couches gabarits / météo */
 .gm-layer-templates, .gm-layer-weather { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Teinte d'ambiance (voile coloré sur la carte, Lot 30) */
+.gm-layer-tint { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; transition: background 0.6s ease; z-index: 2; }
+/* Boutons d'ambiance (Environnement) */
+.gm-ambiance-btns { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 2px; }
+.gm-ambiance-btns button { flex: 1 1 auto; min-width: 68px; border: 1px solid rgba(122,40,40,0.3); background: #fffdf7; border-radius: 8px; padding: 5px 6px; font-size: 0.74rem; cursor: pointer; }
+.gm-ambiance-btns button:hover { border-color: var(--accent-color, #C49B35); background: rgba(196,155,53,0.12); }
+.gm-ambiance-btns button.is-on { background: rgba(196,155,53,0.34); border-color: var(--accent-color, #C49B35); font-weight: bold; }
+body.theme-dark .gm-ambiance-btns button { background: #2a2118; color: #e6d8bd; border-color: rgba(196,155,53,0.25); }
+/* Générateur : bouton d'action (garder PNJ / ajouter rencontre) */
+.gm-gen-actions-btn { flex: 1; border: none; border-radius: 8px; padding: 6px; font-size: 0.78rem; cursor: pointer; background: linear-gradient(160deg, #d9af45, #b8862c); color: #2a1c0a; font-weight: bold; }
+.gm-gen-actions-btn:hover { filter: brightness(1.08); }
 /* ✨ bouton inspiration (liste joueurs) */
 .gm-insp { background: none; border: none; cursor: pointer; font-size: 0.95rem; padding: 2px 4px; border-radius: 6px; filter: grayscale(0.4); }
 .gm-insp:hover { background: rgba(196,155,53,0.25); filter: none; transform: scale(1.15); }
