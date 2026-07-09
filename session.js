@@ -861,6 +861,7 @@
             bx: m.bgX || 0, by: m.bgY || 0, bs: m.bgScale || 1, w: m.weather || '', tint: m.tint || '',
             dn: (m.dayNight && m.dayNight.on) ? (m.dayNight.time == null ? 12 : m.dayNight.time) : -1,
             hz: (m.hazards || []).map(z => [z.kind, Math.round(z.x * 100), Math.round(z.y * 100), Math.round((z.r || 0) * 100)]),
+            ter: (m.terrain || []).length,
             doors: walls.filter(w => w.door).map(w => [w.id, !!w.open, !!w.locked, !!w.secret]),
             wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
             fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
@@ -971,8 +972,8 @@
         const doorOrigins = playerVisionOrigins(bw, bh);
         const doorSegs = playerBlockingSegsPx(bw, bh);
         const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret && doorVisibleToPlayer(s, bw, bh, doorOrigins, doorSegs)).map(doorButtonHtml).join('');
-        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;"><canvas class="smap-hazards"></canvas>` + tokensHtml + doorsHtml
-            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas><div class="smap-daynight"></div><div class="smap-tint"></div></div>';
+        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;"><canvas class="smap-terrain"></canvas><canvas class="smap-hazards"></canvas>` + tokensHtml + doorsHtml
+            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas><div class="smap-daynight"></div><div class="smap-tint"></div><canvas class="smap-measure"></canvas></div>';
         const board = view.querySelector('.smap-board');
         const tintEl = board.querySelector('.smap-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';   // teinte d'ambiance (Lot 30)
         const dnEl = board.querySelector('.smap-daynight'); if (dnEl) dnEl.style.background = ((m.dayNight && m.dayNight.on) ? playerDayNightTint(m.dayNight.time == null ? 12 : m.dayNight.time) : '') || 'transparent';   // cycle jour/nuit (Lot 32)
@@ -986,6 +987,7 @@
         view.classList.remove('show-grid'); view.style.backgroundImage = 'none';   // (ancien rendu sur la vue)
         renderPlayerDraw();
         renderPlayerTemplates();
+        renderPlayerTerrain();
         renderPlayerHazards();
         renderPlayerWeather();
         renderPlayerFog();
@@ -1036,6 +1038,22 @@
         const board = playerBoard(); if (!board) return;
         const canvas = board.querySelector('.smap-hazards'); if (!canvas) return;
         if (window.VTTHazards) window.VTTHazards.apply(canvas, (mapState.map && mapState.map.hazards) || [], Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
+    }
+    // Terrain difficile posé par le MJ, Lot 34b2
+    function renderPlayerTerrain() {
+        const board = playerBoard(); if (!board) return;
+        const canvas = board.querySelector('.smap-terrain'); if (!canvas) return;
+        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        if (window.VTTGeo && window.VTTGeo.paintTerrain) window.VTTGeo.paintTerrain(canvas.getContext('2d'), (mapState.map && mapState.map.terrain) || [], w, h);
+    }
+    function playerTerrainFractionOnPath(x1, y1, x2, y2) {
+        // La glace (kind 'ice') est visuelle : seul le terrain difficile double la distance.
+        const ter = ((mapState.map && mapState.map.terrain) || []).filter(z => z.kind !== 'ice'); if (!ter.length) return 0;
+        const N = 24; let inC = 0;
+        for (let i = 0; i <= N; i++) { const t = i / N, px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t; if (ter.some(z => Math.hypot(z.x - px, z.y - py) <= (z.r || 0.06))) inC++; }
+        return inC / (N + 1);
     }
     // Une lumière du MJ est-elle perçue par MOI ? Il faut qu'un de MES jetons ait une
     // ligne de vue DÉGAGÉE vers elle (les murs bloquent) — sauf « toujours visible ».
@@ -1198,6 +1216,41 @@
         tokenSendThrottle = now;
         sendToGm('token-move', { id: t.id, x: t.x, y: t.y, fromUid: myUid(), final: !!final });
     }
+    // Vitesse de mon perso en mètres (lue sur la fiche #speed, sinon 9 m). Pour le déplacement mesuré.
+    function playerTokenSpeed() {
+        const el = document.getElementById('speed');
+        if (el) { const n = parseFloat(String(el.value || '').replace(',', '.')); if (n && n > 0) return n; }
+        return 9;
+    }
+    let playerMeasure = null;   // { x1,y1,x2,y2,speed } pendant que JE déplace mon jeton (Lot 34)
+    function renderPlayerMeasure() {
+        const board = playerBoard(); if (!board) return;
+        const canvas = board.querySelector('.smap-measure'); if (!canvas) return;
+        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+        if (!playerMeasure) return;
+        const x1 = playerMeasure.x1 * w, y1 = playerMeasure.y1 * h, x2 = playerMeasure.x2 * w, y2 = playerMeasure.y2 * h;
+        const g = Math.max(1, playerGridPx(w));
+        const base = (Math.hypot(x2 - x1, y2 - y1) / g) * playerCellM();
+        const tf = playerTerrainFractionOnPath(playerMeasure.x1, playerMeasure.y1, playerMeasure.x2, playerMeasure.y2);
+        const meters = base * (1 + tf);                     // terrain difficile = ×2
+        const spd = playerMeasure.speed || 9;
+        const col = meters <= spd + 1e-6 ? '#57a64a' : (meters <= spd * 2 + 1e-6 ? '#d68a2b' : '#e23b3b');
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = col;
+        [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
+        const tag = meters <= spd + 1e-6 ? '' : (meters <= spd * 2 + 1e-6 ? ' ⚡' : ' 🚫');
+        const label = (Math.round(meters * 10) / 10).toLocaleString('fr-FR') + ' m / ' + spd + ' m' + (tf > 0.01 ? ' 🏔️' : '') + tag;
+        ctx.font = 'bold 13px Lora, serif'; const tw = ctx.measureText(label).width;
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 16;
+        const bx = Math.max(4, Math.min(w - tw - 16, mx - tw / 2 - 6));
+        ctx.fillStyle = 'rgba(20,14,8,0.85)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, my - 15, tw + 12, 22, 6) : ctx.rect(bx, my - 15, tw + 12, 22); ctx.fill();
+        ctx.fillStyle = '#f3e3bb'; ctx.fillText(label, bx + 6, my + 1);
+    }
     function setupPlayerTokenDrag(view) {
         if (!view) return;
         let cur = null, el = null;
@@ -1224,6 +1277,7 @@
             if (mapState.map && mapState.map.tokensLocked) return;
             if (!t.owner || t.owner !== myUid()) return;   // un joueur ne bouge que son jeton
             cur = t; el = tEl; playerDragBusy = true;
+            playerMeasure = { x1: t.x, y1: t.y, x2: t.x, y2: t.y, speed: playerTokenSpeed() };   // déplacement mesuré
             el.classList.add('smap-token-dragging');
             try { tEl.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
         });
@@ -1241,6 +1295,7 @@
             const walls = (mapState.map && mapState.map.walls) || [];
             if (walls.length && window.VTTGeo && window.VTTGeo.moveBlocked(walls, cur.x, cur.y, x, y)) return;
             cur.x = x; cur.y = y; el.style.left = (x * 100) + '%'; el.style.top = (y * 100) + '%';
+            if (playerMeasure) { playerMeasure.x2 = x; playerMeasure.y2 = y; renderPlayerMeasure(); }   // distance parcourue
             scheduleDark();                                // ma vision suit mon jeton en direct
             sendTokenMove(cur, false);
         });
@@ -1254,6 +1309,7 @@
             }
             if (!cur) return;
             if (el) el.classList.remove('smap-token-dragging');
+            playerMeasure = null; renderPlayerMeasure();   // fin du drag : efface la mesure
             sendTokenMove(cur, true); cur = null; el = null; playerDragBusy = false;
             if (pendingMapRender) { pendingMapRender = false; renderPlayerMap(); }
         };
@@ -1481,9 +1537,10 @@
         /* BOARD : plateau à ratio fixe, même espace de coordonnées que chez le MJ */
         .smap-board { position:absolute; background-color:#171410; background-size:contain; background-position:center; background-repeat:no-repeat; box-shadow:0 0 0 1px rgba(196,155,53,0.2); }
         .smap-board.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
-        .smap-templates, .smap-weather, .smap-hazards { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .smap-templates, .smap-weather, .smap-hazards, .smap-terrain { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
         .smap-tint { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.6s ease; border-radius:8px; z-index:2; }
         .smap-daynight { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.8s ease; border-radius:8px; z-index:2; }
+        .smap-measure { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:7; }
         .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }

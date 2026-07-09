@@ -275,7 +275,33 @@
         });
     }
 
-    window.VTTGeo = { segCross, moveBlocked, distToSegment, visionPolygon, wallsToPx, eraseVision, eraseVisionSoft, paintLightTint, visionRadiusPx, blockingWalls, drawTemplates, pointVisible };
+    // Terrain (Lot 34b2/b3) : zones translucides par type, partagées MJ / joueur.
+    // terrain = [{ x, y, r, kind }] en fractions. kind ∈ rough/water/sand/ice.
+    //   fill = remplissage, line = hachure. 'ice' : trame perpendiculaire (glissant).
+    const TERRAIN_STYLE = {
+        rough: { fill: 'rgba(120,80,40,0.28)', line: 'rgba(90,55,25,0.35)' },
+        water: { fill: 'rgba(50,110,190,0.30)', line: 'rgba(30,80,150,0.35)' },
+        sand: { fill: 'rgba(205,180,110,0.32)', line: 'rgba(160,135,70,0.35)' },
+        ice: { fill: 'rgba(150,205,225,0.30)', line: 'rgba(200,235,245,0.5)' }
+    };
+    function paintTerrain(ctx, terrain, w, h) {
+        ctx.clearRect(0, 0, w, h);
+        if (!terrain || !terrain.length) return;
+        terrain.forEach(z => {
+            const st = TERRAIN_STYLE[z.kind || 'rough'] || TERRAIN_STYLE.rough;
+            const cx = z.x * w, cy = z.y * h, R = (z.r || 0.05) * w;
+            ctx.save();
+            ctx.fillStyle = st.fill;
+            ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+            // Trame : diagonale pour les terrains, croisée pour la glace
+            ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+            ctx.strokeStyle = st.line; ctx.lineWidth = 1.5;
+            for (let d = -R; d <= R; d += 7) { ctx.beginPath(); ctx.moveTo(cx - R + d, cy - R); ctx.lineTo(cx + R + d, cy + R); ctx.stroke(); }
+            if (z.kind === 'ice') { for (let d = -R; d <= R; d += 7) { ctx.beginPath(); ctx.moveTo(cx + R - d, cy - R); ctx.lineTo(cx - R - d, cy + R); ctx.stroke(); } }
+            ctx.restore();
+        });
+    }
+    window.VTTGeo = { segCross, moveBlocked, moveBlockedPx, distToSegment, visionPolygon, wallsToPx, eraseVision, eraseVisionSoft, paintLightTint, visionRadiusPx, blockingWalls, drawTemplates, pointVisible, paintTerrain };
 })();
 
 // =====================================================

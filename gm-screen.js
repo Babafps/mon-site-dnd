@@ -804,6 +804,7 @@
                     { icon: '🌑', label: dark.on ? 'Obscurité active — cliquer pour rallumer' : 'Plonger la pièce dans le noir', type: 'toggle', on: !!dark.on, run: toggleDark },
                     { type: 'vision' },
                     { icon: '👀', label: 'Aperçu : voir comme les joueurs', type: 'toggle', on: !!mapView.visionPreview, run: toggleVisionPreview },
+                    { icon: '📐', label: 'Ligne de vue / couverture (2 clics : tireur → cible)', type: 'tool', tool: 'los' },
                     { icon: '🗑️', label: 'Supprimer tous les murs', type: 'action', danger: true, run: clearWallsConfirm }
                 ]
             };
@@ -841,6 +842,9 @@
                 { icon: m.tokensLocked ? '🔒' : '🔓', label: m.tokensLocked ? 'Verrouillés (MJ seul) — libérer' : 'Libres (joueurs) — verrouiller', type: 'toggle', on: !!m.tokensLocked, run: toggleTokensLock },
                 { icon: '🧲', label: 'Aimanter à la grille', type: 'toggle', on: !!m.snap, run: toggleSnap },
                 { icon: '❤️', label: 'Barres de PV visibles des joueurs', type: 'toggle', on: !!m.hpBars, run: toggleHpBars },
+                { icon: '🏔️', label: 'Peindre du terrain (pinceau)', type: 'tool', tool: 'terrain' },
+                { type: 'terrainkind' },
+                { icon: '🧹', label: 'Effacer du terrain', type: 'tool', tool: 'terrainerase' },
                 { icon: '🗑️', label: 'Vider tous les jetons', type: 'action', danger: true, run: clearTokensConfirm }
             ]
         };
@@ -879,7 +883,7 @@
         return null;
     }
     // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
-    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase'], light: ['light'], aoe: ['aoe', 'aoeerase'], fx: [], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant'], layers: [] };
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase', 'los'], light: ['light'], aoe: ['aoe', 'aoeerase'], fx: [], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant', 'terrain', 'terrainerase'], layers: [] };
     let flyoutKey = null;
     function ensureToolFlyout() {
         let p = byId('gm-tool-flyout'); if (p) return p;
@@ -918,6 +922,7 @@
             if (it.type === 'daynight') { const dn = (state.map && state.map.dayNight) || {}; const hh = dn.time == null ? 12 : dn.time; const off = !dn.on; return `<div class="gm-fly-row${off ? ' gm-fly-row-disabled' : ''}" title="Heure de la journée : la carte se teinte (aube, plein jour, crépuscule, nuit). Le curseur n'a d'effet que si le cycle est affiché."><span class="gm-fly-ic">${dayNightIcon(hh)}</span><span class="gm-fly-lbl">Heure</span><input type="range" id="gm-daynight" min="0" max="23" step="1" value="${hh}"${off ? ' disabled' : ''}><b class="gm-fly-wval gm-fly-wval-wide" id="gm-daynight-val">${dayNightLabel(hh)}</b></div>`; }
             if (it.type === 'daynightpresets') return `<div class="gm-fly-row" title="Régler l'heure d'un clic (affiche le cycle jour/nuit)."><span class="gm-fly-ic">⏱️</span><span class="gm-fly-lbl">Rapide</span><span class="gm-place-type" id="gm-dn-presets">${[[6, '🌅 Aube'], [12, '☀️ Midi'], [18, '🌇 Crép.'], [23, '🌙 Nuit']].map(t => `<button data-dnpreset="${t[0]}">${t[1]}</button>`).join('')}</span></div>`;
             if (it.type === 'hazardkind') return `<div class="gm-fly-row"><span class="gm-fly-ic">🌋</span><span class="gm-fly-lbl">Type</span><span class="gm-place-type" id="gm-hazard-kind">${[['lava', '🌋 Lave'], ['poison', '☠️ Poison'], ['fire', '🔥 Feu']].map(t => `<button data-hazardkind="${t[0]}" class="${hazardKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
+            if (it.type === 'terrainkind') return `<div class="gm-fly-row" title="🪨 Accidenté / 💧 Eau / 🏜️ Sable = déplacement ×2. 🧊 Glace = visuel (glissant)."><span class="gm-fly-ic">🏔️</span><span class="gm-fly-lbl">Type</span><span class="gm-place-type" id="gm-terrain-kind">${TERRAIN_KINDS.map(t => `<button data-terrainkind="${t[0]}" class="${terrainKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
             const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
             return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
         }).join('') + (grp.hint ? `<div class="gm-fly-hint">${grp.hint}</div>` : '');
@@ -962,6 +967,11 @@
         if (hkind) hkind.querySelectorAll('[data-hazardkind]').forEach(b => b.addEventListener('click', (e) => {
             e.stopPropagation(); hazardKind = b.dataset.hazardkind; if (mapTool !== 'hazard') setMapTool('hazard');
             hkind.querySelectorAll('[data-hazardkind]').forEach(x => x.classList.toggle('is-on', x === b));
+        }));
+        const tkind = p.querySelector('#gm-terrain-kind');
+        if (tkind) tkind.querySelectorAll('[data-terrainkind]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation(); terrainKind = b.dataset.terrainkind; if (mapTool !== 'terrain') setMapTool('terrain');
+            tkind.querySelectorAll('[data-terrainkind]').forEach(x => x.classList.toggle('is-on', x === b));
         }));
         const pgcol = p.querySelector('#gm-ping-color'); if (pgcol) pgcol.addEventListener('input', (e) => { pingColor = e.target.value; try { localStorage.setItem('dnd-gm-ping-color', pingColor); } catch (_) {} });
         const wpick = p.querySelector('#gm-weather-pick');
@@ -1880,12 +1890,24 @@
     }
     let mapTool = 'select';      // 'select'|'pan'|'objmove'|'bg'|'reveal'|'cover'|'draw'|'wall'|'door'|'dooredit'|'wallerase'|'ruler'|'light'|'placetoken'|'placecombatant'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
+    let terrainBrush = 0.05;     // rayon du pinceau de terrain difficile
+    let terrainKind = 'rough';   // type du prochain terrain peint
+    // Types de terrain : difficult = coûte double au déplacement. (Lot 34b3)
+    const TERRAIN_KINDS = [
+        ['rough', '🪨 Accidenté', true], ['water', '💧 Eau', true],
+        ['sand', '🏜️ Sable', true], ['ice', '🧊 Glace', false]
+    ];
+    function terrainIsDifficult(kind) { const d = TERRAIN_KINDS.find(k => k[0] === (kind || 'rough')); return d ? d[2] : true; }
     let drawColor = '#e23b3b';   // couleur du dessin libre
     let drawWidth = 3;           // épaisseur du dessin libre (molette en mode ✏️)
     let drawStroke = null;       // tracé en cours
     let drawIsNote = false;      // le tracé en cours appartient au calque privé « Notes MJ »
     let wallDraft = null;        // mur / porte en cours de tracé { x1,y1,x2,y2,door }
     let rulerDraft = null;       // mesure en cours { x1,y1,x2,y2 }
+    let moveMeasure = null;      // déplacement mesuré d'un jeton en cours de drag { x1,y1,x2,y2,speed } (Lot 34)
+    const tokenUndoPos = {};     // { tokenId: {x,y} } position AVANT le dernier déplacement (pour « ↩️ Position précédente »)
+    const tokenMoveLast = {};    // { tokenId: ts } dernier déplacement (détecte le début d'un nouveau mouvement)
+    let losA = null, losB = null; // ligne de vue : extrémités { x,y } en fractions (Lot 34b)
     let gmDragBusy = false;      // un drag de jeton MJ est en cours (évite un re-render qui casserait le pointer capture)
     let pingColor = (function () { try { return localStorage.getItem('dnd-gm-ping-color') || '#C49B35'; } catch (e) { return '#C49B35'; } })();   // couleur du signal 📍 (mémorisée)
     let lightColor = '#ffcf7a';  // couleur de la prochaine lumière posée
@@ -1990,6 +2012,8 @@
         if (mapTool === 'reveal' || mapTool === 'cover') fogState().on = true;
         if (prev === 'placecombatant' && mapTool !== 'placecombatant') removePlaceBar();
         objHover = null; objHoverKey = '';                   // le survol ✥/🧹 ne suit pas l'outil
+        if (mapTool !== 'los') { losA = null; losB = null; }  // quitter la ligne de vue efface le tracé
+        if (mapTool !== 'ruler') rulerDraft = null;           // quitter la règle efface le chemin mesuré
         syncToolbar();
         save(); renderMap(); broadcastMap(true);
     }
@@ -2272,6 +2296,40 @@
         window.VTTHazards.apply(canvas, list, Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
     }
     function clearHazardsConfirm() { if (!confirm('Retirer tous les dangers de cette carte ?')) return; if (state.map) state.map.hazards = []; save(); renderMap(); broadcastMap(true); }
+    // ----- Terrain difficile (Lot 34b2) : zones où le déplacement mesuré compte double -----
+    function terrainData() { const m = state.map || {}; if (!Array.isArray(m.terrain)) m.terrain = []; return m.terrain; }
+    function clearTerrainConfirm() { if (!confirm('Retirer tout le terrain difficile ?')) return; if (state.map) state.map.terrain = []; save(); renderMap(); broadcastMap(true); }
+    function renderTerrain() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-terrain'); if (!canvas) return;
+        const board = view.querySelector('.gm-board'); if (!board) return;
+        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        window.VTTGeo && window.VTTGeo.paintTerrain ? window.VTTGeo.paintTerrain(canvas.getContext('2d'), terrainData(), w, h) : null;
+    }
+    let _terrainLast = null;
+    function paintTerrainAt(e) {
+        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
+        const r = board.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+        const ter = terrainData();
+        const pts = [];
+        if (_terrainLast) { const dx = x - _terrainLast.x, dy = y - _terrainLast.y, dist = Math.hypot(dx, dy); const n = Math.min(60, Math.ceil(dist / Math.max(terrainBrush * 0.5, 0.008))); for (let i = 1; i <= n; i++) pts.push({ x: _terrainLast.x + dx * (i / n), y: _terrainLast.y + dy * (i / n) }); }
+        if (!pts.length) pts.push({ x, y });
+        if (mapTool === 'terrain') pts.forEach(p => ter.push({ x: p.x, y: p.y, r: terrainBrush, kind: terrainKind }));
+        else pts.forEach(p => { const keep = ter.filter(t => Math.hypot(t.x - p.x, t.y - p.y) > terrainBrush); ter.length = 0; keep.forEach(t => ter.push(t)); });
+        _terrainLast = { x, y };
+        renderTerrain();
+    }
+    // Fraction du trajet A→B qui traverse du terrain DIFFICILE (0..1) — pour doubler la distance.
+    // La glace (kind 'ice') est visuelle : elle ne compte pas comme terrain difficile.
+    function terrainFractionOnPath(x1, y1, x2, y2) {
+        const ter = ((state.map && state.map.terrain) || []).filter(z => terrainIsDifficult(z.kind)); if (!ter.length) return 0;
+        const N = 24; let inCount = 0;
+        for (let i = 0; i <= N; i++) { const t = i / N, px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t; if (ter.some(z => Math.hypot(z.x - px, z.y - py) <= (z.r || 0.06))) inCount++; }
+        return inCount / (N + 1);
+    }
     function eraseHazardAt(e) {
         const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
         const r = board.getBoundingClientRect();
@@ -2496,17 +2554,111 @@
         if (canvas.height !== h) canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, w, h);
-        if (!rulerDraft) return;
-        const x1 = rulerDraft.x1 * w, y1 = rulerDraft.y1 * h, x2 = rulerDraft.x2 * w, y2 = rulerDraft.y2 * h;
-        ctx.strokeStyle = '#C49B35'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        if (!rulerDraft || !rulerDraft.pts || !rulerDraft.pts.length) return;
+        // Chaîne de points + segment élastique jusqu'au curseur (chemin coudé)
+        const nodes = rulerDraft.pts.concat(rulerDraft.cur ? [rulerDraft.cur] : []).map(p => [p.x * w, p.y * h]);
+        ctx.strokeStyle = '#C49B35'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); nodes.forEach((n, i) => i === 0 ? ctx.moveTo(n[0], n[1]) : ctx.lineTo(n[0], n[1])); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = '#C49B35';
-        [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
+        nodes.forEach(n => { ctx.beginPath(); ctx.arc(n[0], n[1], 4, 0, Math.PI * 2); ctx.fill(); });
+        const g = Math.max(1, gridPxFor(w));
+        let cells = 0;
+        for (let i = 1; i < nodes.length; i++) cells += Math.hypot(nodes[i][0] - nodes[i - 1][0], nodes[i][1] - nodes[i - 1][1]) / g;
+        const label = (Math.round(cells * cellMeters() * 10) / 10).toLocaleString('fr-FR') + ' m (' + (Math.round(cells * 10) / 10).toLocaleString('fr-FR') + ' cases)' + (rulerDraft.pts.length > 1 ? ' ⟿' : '');
+        ctx.font = 'bold 14px Lora, serif';
+        const tw = ctx.measureText(label).width;
+        const endN = nodes[nodes.length - 1];
+        const mx = endN[0], my = endN[1] - 16;
+        const bx = Math.max(4, Math.min(w - tw - 16, mx - tw / 2 - 6));
+        ctx.fillStyle = 'rgba(20,14,8,0.85)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, my - 15, tw + 12, 22, 6) : ctx.rect(bx, my - 15, tw + 12, 22); ctx.fill();
+        ctx.fillStyle = '#f3e3bb';
+        ctx.fillText(label, bx + 6, my + 1);
+    }
+    // Vitesse d'un jeton en mètres (t.speed sinon 9 m = 6 cases, valeur 5e par défaut).
+    function tokenSpeed(t) { return Math.max(1.5, Number(t && t.speed) || 9); }
+    // Jeton sous un point (fraction) — pour accrocher la ligne de vue aux combattants.
+    function tokenAtFraction(fx, fy) {
+        const view = byId('gm-map-view'); const content = view && view.querySelector('.gm-board'); if (!content) return null;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        const gpx = Math.max(6, gridPxFor(w));
+        let best = null, bd = 1e9;
+        (state.tokens || []).forEach(t => {
+            const rad = gpx * (Number(t.size) || 1) * 0.5 + 4;
+            const d = Math.hypot((t.x - fx) * w, (t.y - fy) * h);
+            if (d < rad && d < bd) { bd = d; best = t; }
+        });
+        return best;
+    }
+    // Ligne de vue / couverture (Lot 34b) : dessine A→B et indique si des murs bloquent.
+    // 5 rayons (centre + 4 décalés d'une demi-case perpendiculaire) → estime la couverture.
+    function renderLos() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-ruler'); if (!canvas) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+        if (!losA) return;
+        ctx.fillStyle = '#C49B35';
+        ctx.beginPath(); ctx.arc(losA.x * w, losA.y * h, 5, 0, Math.PI * 2); ctx.fill();
+        if (!losB) { return; }
+        const segs = window.VTTGeo ? window.VTTGeo.wallsToPx((state.map && state.map.walls) || [], w, h) : [];
+        const ax = losA.x * w, ay = losA.y * h, bx = losB.x * w, by = losB.y * h;
+        // Vecteur perpendiculaire (demi-case) pour tester les côtés de la cible
+        const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+        const g = Math.max(1, gridPxFor(w)) * 0.45;
+        const px = -dy / len * g, py = dx / len * g;
+        const rays = [[0, 0], [px, py], [-px, -py], [px * 0.5, py * 0.5], [-px * 0.5, -py * 0.5]];
+        let blockedCount = 0;
+        rays.forEach(o => { if (window.VTTGeo && window.VTTGeo.moveBlockedPx ? window.VTTGeo.moveBlockedPx(ax, ay, bx + o[0], by + o[1], segs) : false) blockedCount++; });
+        const clear = blockedCount === 0;
+        const total = blockedCount >= rays.length;
+        const col = clear ? '#57a64a' : (total ? '#e23b3b' : '#d68a2b');
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash(clear ? [] : [7, 5]); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = col;
+        [[ax, ay], [bx, by]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 5, 0, Math.PI * 2); ctx.fill(); });
+        const who = (losA.name || losB.name) ? ((losA.name || 'point') + ' → ' + (losB.name || 'point') + ' · ') : '';
+        const label = who + (clear ? '👁️ Vue dégagée' : (total ? '🚫 Bloqué (couvert total)' : '🛡️ À couvert (' + (blockedCount >= 3 ? '¾' : '½') + ')'));
+        ctx.font = 'bold 13px Lora, serif';
+        const tw = ctx.measureText(label).width;
+        const mx = (ax + bx) / 2, my = (ay + by) / 2 - 16;
+        const bxp = Math.max(4, Math.min(w - tw - 16, mx - tw / 2 - 6));
+        ctx.fillStyle = 'rgba(20,14,8,0.85)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bxp, my - 15, tw + 12, 22, 6) : ctx.rect(bxp, my - 15, tw + 12, 22); ctx.fill();
+        ctx.fillStyle = '#f3e3bb'; ctx.fillText(label, bxp + 6, my + 1);
+    }
+    // Déplacement mesuré (Lot 34) : trait + distance parcourue pendant le drag d'un jeton,
+    // coloré selon le budget de vitesse (vert = dans la vitesse, orange = jusqu'au x2 « Foncer », rouge = au-delà).
+    function renderMoveMeasure() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-ruler'); if (!canvas) return;
+        const content = view.querySelector('.gm-board'); if (!content) return;
+        const w = Math.max(1, content.clientWidth), h = Math.max(1, content.clientHeight);
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        if (!moveMeasure) return;
+        const x1 = moveMeasure.x1 * w, y1 = moveMeasure.y1 * h, x2 = moveMeasure.x2 * w, y2 = moveMeasure.y2 * h;
         const g = Math.max(1, gridPxFor(w));
         const cells = Math.hypot(x2 - x1, y2 - y1) / g;
-        const label = (Math.round(cells * cellMeters() * 10) / 10).toLocaleString('fr-FR') + ' m (' + (Math.round(cells * 10) / 10).toLocaleString('fr-FR') + ' cases)';
-        ctx.font = 'bold 14px Lora, serif';
+        const base = cells * cellMeters();
+        const tf = terrainFractionOnPath(moveMeasure.x1, moveMeasure.y1, moveMeasure.x2, moveMeasure.y2);  // portion en terrain difficile
+        const meters = base * (1 + tf);                     // terrain difficile = coûte double
+        const spd = moveMeasure.speed || 9;
+        const col = meters <= spd + 1e-6 ? '#57a64a' : (meters <= spd * 2 + 1e-6 ? '#d68a2b' : '#e23b3b');
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = col;
+        [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
+        const tag = meters <= spd + 1e-6 ? '' : (meters <= spd * 2 + 1e-6 ? ' ⚡Foncer' : ' 🚫');
+        const label = (Math.round(meters * 10) / 10).toLocaleString('fr-FR') + ' m / ' + spd + ' m' + (tf > 0.01 ? ' 🏔️' : '') + tag;
+        ctx.font = 'bold 13px Lora, serif';
         const tw = ctx.measureText(label).width;
         const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 16;
         const bx = Math.max(4, Math.min(w - tw - 16, mx - tw / 2 - 6));
@@ -2567,7 +2719,7 @@
         let bw = Math.min(vw, vh * AR), bh = bw / AR;
         boardWpx = bw;
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><canvas class="gm-layer gm-layer-hazards"></canvas><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-daynight"></div><div class="gm-layer gm-layer-tint"></div></div></div>`;
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><canvas class="gm-layer gm-layer-terrain"></canvas><canvas class="gm-layer gm-layer-hazards"></canvas><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-daynight"></div><div class="gm-layer gm-layer-tint"></div></div></div>`;
         const board = view.querySelector('.gm-board');
         const tintEl = board.querySelector('.gm-layer-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';
         const dnEl = board.querySelector('.gm-layer-daynight'); if (dnEl) dnEl.style.background = ((m.dayNight && m.dayNight.on) ? dayNightTint(m.dayNight.time == null ? 12 : m.dayNight.time) : '') || 'transparent';
@@ -2584,6 +2736,7 @@
         board.style.setProperty('--gm-grid-op', OP.grid == null ? 1 : OP.grid);
         applyMapTransform();
         renderTemplates();
+        renderTerrain();
         renderHazards();
         renderWeather();
         renderDraw();
@@ -2593,7 +2746,8 @@
         if (L.walls !== false) renderWalls();
         renderVisionPreview();
         renderRuler();
-        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase', 'hazard', 'hazarderase'];
+        if (losA) renderLos();                              // ligne de vue : persiste au re-render
+        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase', 'hazard', 'hazarderase', 'los', 'terrain', 'terrainerase'];
         view.classList.toggle('gm-tool-paint', paintTools.indexOf(mapTool) !== -1);
         view.classList.toggle('gm-tool-grab', mapTool === 'pan');
         view.classList.toggle('gm-tool-move', mapTool === 'objmove');
@@ -2631,6 +2785,7 @@
         if (field === 'hp' || field === 'hpMax' || field === 'ac') t[field] = (value === '' ? null : (parseInt(value, 10) || 0));
         else if (field === 'size') t.size = parseFloat(value) || 1;
         else if (field === 'vision') t.vision = (value === '' ? null : Math.max(0, parseFloat(value) || 0));   // portée de vision propre (m), vide = réglage global
+        else if (field === 'speed') t.speed = (value === '' ? null : Math.max(0, parseFloat(value) || 0));     // vitesse de déplacement (m), vide = 9 m par défaut
         else if (field === 'auraR') { if (!t.aura) t.aura = {}; t.aura.r = Math.max(0, parseFloat(value) || 0); if (!t.aura.r) t.aura = null; }
         else if (field === 'auraColor') { if (!t.aura) t.aura = { r: 3 }; t.aura.color = value; }
         else if (field === 'badges') t.badges = String(value || '').slice(0, 12);
@@ -2655,13 +2810,13 @@
             <div class="gm-tp-row"><label>❤️</label><input class="gm-input gm-num" type="number" data-tp="hp" value="${tok.hp != null ? tok.hp : ''}" placeholder="PV"><span class="gm-tp-sep">/</span><input class="gm-input gm-num" type="number" data-tp="hpMax" value="${tok.hpMax != null ? tok.hpMax : ''}" placeholder="max"><label>🛡️</label><input class="gm-input gm-num" type="number" data-tp="ac" value="${tok.ac != null ? tok.ac : ''}" placeholder="CA"></div>
             <div class="gm-tp-row"><label>📏</label><select class="gm-input" data-tp="size">${sizeOpts}</select></div>
             <div class="gm-tp-row" title="Assigner ce jeton à un joueur : il devient SON jeton (il peut le déplacer)."><label>🔗</label><select class="gm-input" data-tp="owner"><option value="">— libre / MJ —</option>${(live.players || []).map(pl => { const s = pl.snapshot || {}; const nm = s.name || pl.character_name || 'Joueur'; return `<option value="${pl.user_id}"${tok.owner === pl.user_id ? ' selected' : ''}>${esc(nm)}</option>`; }).join('')}</select></div>
-            <div class="gm-tp-row" title="Distance de vision de CE jeton dans le noir (torche, vision dans le noir…). Vide = réglage global de la carte."><label>🌑</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="vision" value="${tok.vision != null ? tok.vision : ''}" placeholder="Vision (m)"><span class="gm-tp-sep">m</span></div>
+            <div class="gm-tp-row" title="Distance de vision de CE jeton dans le noir (torche, vision dans le noir…). Vide = réglage global de la carte."><label>🌑</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="vision" value="${tok.vision != null ? tok.vision : ''}" placeholder="Vision (m)"><span class="gm-tp-sep">m</span><label title="Vitesse de déplacement (pour la mesure au drag). Vide = 9 m.">🏃</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="speed" value="${tok.speed != null ? tok.speed : ''}" placeholder="Vit."><span class="gm-tp-sep">m</span></div>
             <div class="gm-tp-row" title="Aura autour du jeton (rayon en mètres) — visible par tous"><label>🌀</label><input class="gm-input gm-num" type="number" min="0" step="1.5" data-tp="auraR" value="${tok.aura && tok.aura.r ? tok.aura.r : ''}" placeholder="Aura (m)"><span class="gm-tp-sep">m</span><input class="gm-tp-color" type="color" data-tp="auraColor" value="${(tok.aura && tok.aura.color) || '#3498db'}" title="Couleur de l'aura"></div>
             <div class="gm-tp-row" title="Badges d'état affichés sur le jeton (emojis) — les états de la fiche du joueur s'ajoutent automatiquement"><label>🏷️</label><input class="gm-input" data-tp="badges" value="${esc(tok.badges || '')}" placeholder="🤢💤… (états manuels)"></div>
             <div class="gm-tp-row" title="Dégâts / soins rapides"><label>⚔️</label><input class="gm-input gm-num" type="number" min="1" data-tp-amt placeholder="X"><button class="gm-btn gm-btn-danger" data-tp-act="dmg" title="Infliger X dégâts">💥</button><button class="gm-btn" data-tp-act="heal" title="Soigner X PV">💚</button></div>
             <div class="gm-tp-row"><input class="gm-input" data-tp="img" value="${esc(tok.img || '')}" placeholder="URL image…"><label class="gm-btn gm-tp-upload" title="Importer une image">🖼️<input type="file" accept="image/*" data-tp="imgfile" style="display:none;"></label><input class="gm-tp-color" type="color" data-tp="color" value="${color}" title="Couleur"></div>
             <div class="gm-tp-row gm-tp-layer" title="Calque du jeton (façon Roll20). MJ = invisible aux joueurs ; PJ = visible. Transférer = déplacer d'un calque à l'autre."><label>🗂️</label>${OBJ_LAYERS.map(d => `<button class="gm-tp-lbtn${tokenLayerOf(tok) === d.key ? ' is-on' : ''}" data-tp-layer="${d.key}" title="${d.tip}">${d.icon} ${d.label}</button>`).join('')}</div>
-            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️ Supprimer</button></div>`;
+            <div class="gm-tp-row gm-tp-actions">${tokenUndoPos[tok.id] ? '<button class="gm-btn" data-tp-act="undomove" title="Remettre le jeton là où il était avant son dernier déplacement">↩️ Position précédente</button>' : ''}<button class="gm-btn gm-btn-danger" data-tp-act="del">🗑️ Supprimer</button></div>`;
         p.classList.remove('hidden');
         const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
         p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
@@ -2680,6 +2835,10 @@
             const t = find(state.tokens, tok.id); if (!t) return;
             const act = b.dataset.tpAct;
             if (act === 'del') { state.tokens = state.tokens.filter(x => x.id !== tok.id); p.classList.add('hidden'); }
+            else if (act === 'undomove') {
+                const u = tokenUndoPos[t.id];
+                if (u) { t.x = u.x; t.y = u.y; delete tokenUndoPos[t.id]; p.classList.add('hidden'); if (window.showAppToast) window.showAppToast('↩️ ' + (t.name || 'Jeton') + ' remis à sa position précédente', '#2c3e50'); }
+            }
             else if (act === 'dmg' || act === 'heal') {
                 const amtEl = p.querySelector('[data-tp-amt]');
                 const amt = Math.abs(parseInt(amtEl && amtEl.value, 10)) || 1;
@@ -2789,6 +2948,10 @@
         const nx = Math.max(0, Math.min(1, p.x)), ny = Math.max(0, Math.min(1, p.y));
         // Autorité MJ : un JOUEUR ne traverse jamais un mur ni une porte fermée (le MJ, lui, est libre).
         const blocked = window.VTTGeo && window.VTTGeo.moveBlocked((state.map && state.map.walls) || [], tok.x, tok.y, nx, ny);
+        // Mémorise la position d'avant au DÉBUT d'un mouvement joueur (nouveau burst) pour « ↩️ Position précédente »
+        const now2 = Date.now();
+        if (!tokenMoveLast[tok.id] || now2 - tokenMoveLast[tok.id] > 800) tokenUndoPos[tok.id] = { x: tok.x, y: tok.y };
+        tokenMoveLast[tok.id] = now2;
         if (!blocked) { tok.x = nx; tok.y = ny; }
         autoRevealAround(tok);                                      // exploration révélée : le PJ dévoile en avançant
         // Pendant un drag MJ, un re-render complet détruirait le jeton en cours de déplacement
@@ -2879,7 +3042,7 @@
 
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
-        let cur = null, tokenEl = null, panning = false, painting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null, objDrag = null;
+        let cur = null, tokenEl = null, panning = false, painting = false, terrainPainting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null, objDrag = null;
         // Rect du BOARD (l'espace de coordonnées partagé) — pas du conteneur transformé.
         const contentRect = () => { const c = view.querySelector('.gm-board'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
@@ -2918,6 +3081,10 @@
                 painting = true; _fogLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 paintFogAt(e); e.preventDefault(); return;
             }
+            if (mapTool === 'terrain' || mapTool === 'terrainerase') {   // terrain difficile : pinceau
+                terrainPainting = true; _terrainLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                paintTerrainAt(e); e.preventDefault(); return;
+            }
             if (mapTool === 'wall' || mapTool === 'door') {      // tracé d'un mur / d'une porte
                 const r = contentRect();
                 const p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
@@ -2928,11 +3095,13 @@
             if (mapTool === 'wallerase') {                       // gomme : clic sur un mur = suppression
                 eraseWallAt(e); e.preventDefault(); return;
             }
-            if (mapTool === 'ruler') {                           // règle : glisser = mesurer
+            if (mapTool === 'ruler') {                           // règle multi-points : clic = ajoute une étape (chemin coudé)
                 const r = contentRect();
-                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-                rulerDraft = { x1: x, y1: y, x2: x, y2: y };
-                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                let x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                if (!rulerDraft || !rulerDraft.pts) rulerDraft = { pts: [], cur: { x, y } };
+                const last = rulerDraft.pts[rulerDraft.pts.length - 1];
+                if (last && e.shiftKey) { const p = constrain45(last.x, last.y, x, y, r); x = p.x; y = p.y; }
+                rulerDraft.pts.push({ x, y }); rulerDraft.cur = { x, y };
                 renderRuler(); e.preventDefault(); return;
             }
             if (mapTool === 'light') {                           // clic = pose ; GLISSER = régler le rayon
@@ -2961,6 +3130,14 @@
             }
             if (mapTool === 'hazarderase') {                     // clic sur un danger = suppression
                 eraseHazardAt(e); e.preventDefault(); return;
+            }
+            if (mapTool === 'los') {                             // ligne de vue : clic 1 = tireur, clic 2 = cible
+                const r = contentRect();
+                const fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                const tk = tokenAtFraction(fx, fy);              // accroche au jeton cliqué s'il y en a un
+                const pt = tk ? { x: tk.x, y: tk.y, name: tk.name || '' } : { x: fx, y: fy };
+                if (!losA || losB) { losA = pt; losB = null; } else { losB = pt; }
+                renderLos(); e.preventDefault(); return;
             }
             if (mapTool === 'placetoken') {                      // pose un jeton à l'endroit cliqué
                 const r = contentRect();
@@ -3013,6 +3190,7 @@
             if (el) {
                 cur = find(state.tokens, el.dataset.token); tokenEl = el; if (!cur) return;
                 gmDragBusy = true;
+                moveMeasure = { x1: cur.x, y1: cur.y, x2: cur.x, y2: cur.y, speed: tokenSpeed(cur) };   // déplacement mesuré
                 try { el.setPointerCapture(e.pointerId); } catch (_) {}
                 el.classList.add('dragging'); e.preventDefault();
             } else {
@@ -3030,6 +3208,7 @@
                 renderWalls(); renderLights(); renderTemplates(); renderVisionPreview(); return;   // redraw léger (pas de rebuild DOM)
             }
             if (painting) { paintFogAt(e); return; }
+            if (terrainPainting) { paintTerrainAt(e); return; }
             if (wallDraft) {
                 const r = contentRect();
                 let p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
@@ -3049,11 +3228,12 @@
                 hazardDraft.r = Math.max(0, Math.min(0.5, Math.hypot(px - hazardDraft.x * r.width, py - hazardDraft.y * r.height) / r.width));
                 renderHazards(); return;
             }
-            if (rulerDraft) {
+            if (rulerDraft && rulerDraft.pts) {                  // règle : le dernier segment suit le curseur (élastique)
                 const r = contentRect();
                 let p = { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
-                if (e.shiftKey) p = constrain45(rulerDraft.x1, rulerDraft.y1, p.x, p.y, r);
-                rulerDraft.x2 = p.x; rulerDraft.y2 = p.y;
+                const last = rulerDraft.pts[rulerDraft.pts.length - 1];
+                if (last && e.shiftKey) p = constrain45(last.x, last.y, p.x, p.y, r);
+                rulerDraft.cur = p;
                 renderRuler(); return;
             }
             if (aoeDraft) {
@@ -3081,8 +3261,12 @@
                 const r = contentRect();
                 const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
                 const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                // Au PREMIER vrai mouvement seulement : mémorise la position d'avant (pour « ↩️ »)
+                // — un simple clic (ouverture de bulle) ne doit pas écraser ce point.
+                if (moveMeasure && !moveMeasure._undoSet) { tokenUndoPos[cur.id] = { x: moveMeasure.x1, y: moveMeasure.y1 }; moveMeasure._undoSet = true; }
                 cur.x = x; cur.y = y;
                 tokenEl.style.left = (x * 100) + '%'; tokenEl.style.top = (y * 100) + '%';
+                if (moveMeasure) { moveMeasure.x2 = x; moveMeasure.y2 = y; renderMoveMeasure(); }   // distance parcourue
                 if (autoRevealAround(cur)) renderFog();              // exploration révélée : dévoile en avançant
                 if (mapView.visionPreview) renderVisionPreview();   // l'aperçu de vision suit le jeton
                 throttleBroadcastMap();
@@ -3136,7 +3320,7 @@
                 }
                 wallDraft = null; save(); renderMap(); broadcastMap(true); return;
             }
-            if (rulerDraft) { rulerDraft = null; renderRuler(); return; }
+            if (rulerDraft && rulerDraft.pts) { return; }        // règle multi-points : on garde le chemin (fin = Échap / double-clic / autre outil)
             if (aoeDraft) {
                 if (Math.hypot(aoeDraft.x2 - aoeDraft.x, aoeDraft.y2 - aoeDraft.y) > 0.008) {
                     templatesData().push(Object.assign({ id: uid() }, aoeDraft));
@@ -3145,10 +3329,12 @@
             }
             if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
             if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
+            if (terrainPainting) { terrainPainting = false; _terrainLast = null; save(); renderMap(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
                 else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; autoRevealAround(cur); }
                 if (tokenEl) tokenEl.classList.remove('dragging');
+                moveMeasure = null;                                   // fin du drag : efface la mesure de déplacement
                 cur = null; tokenEl = null; gmDragBusy = false; save(); renderMap(); broadcastMap(true);
             }
             if (panning) { panning = false; view.classList.remove('panning'); }
@@ -3157,6 +3343,7 @@
         view.addEventListener('pointercancel', up);
         // Double-clic (outil souris) = signal 📍 aux joueurs, sans changer d'outil
         view.addEventListener('dblclick', (e) => {
+            if (mapTool === 'ruler') { rulerDraft = null; renderRuler(); return; }   // termine la mesure coudée
             if (mapTool !== 'select') return;
             if (e.target.closest('.gm-token') || e.target.closest('.gm-door-btn') || e.target.closest('.gm-light-pin')
                 || e.target.closest('#gm-layer-switch') || e.target.closest('#gm-place-bar')) return;
@@ -3177,6 +3364,11 @@
             if (mapTool === 'reveal' || mapTool === 'cover') {   // molette = taille du pinceau de brouillard
                 fogBrush = Math.max(0.02, Math.min(0.25, fogBrush * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
                 if (window.showAppToast) window.showAppToast('🖌️ Pinceau : ' + Math.round(fogBrush * 100) + '%', '#2c3e50');
+                return;
+            }
+            if (mapTool === 'terrain' || mapTool === 'terrainerase') {   // molette = taille du pinceau de terrain
+                terrainBrush = Math.max(0.02, Math.min(0.25, terrainBrush * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+                if (window.showAppToast) window.showAppToast('🏔️ Pinceau terrain : ' + Math.round(terrainBrush * 100) + '%', '#2c3e50');
                 return;
             }
             if (mapTool === 'draw') {   // molette = épaisseur du trait
@@ -3742,7 +3934,7 @@
             if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); undoMap(); return; }
             if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redoMap(); return; }
             if (e.ctrlKey || e.metaKey || e.altKey) return;
-            if (e.key === 'Escape') { if (placeQueue.length) removePlaceBar(); if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); renderMap(); } closeToolFlyout(); return; }
+            if (e.key === 'Escape') { if (placeQueue.length) removePlaceBar(); rulerDraft = null; losA = null; losB = null; if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); renderMap(); } closeToolFlyout(); return; }
             if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); toggleShortcutsHelp(); return; }
             const def = TOOL_KEYS[k];
             if (def) {
