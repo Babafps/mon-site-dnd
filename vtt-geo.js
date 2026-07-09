@@ -356,3 +356,81 @@
         }
     };
 })();
+
+// =====================================================
+// VTTHazards — zones de danger animées (lave / poison / feu),
+// posées sur la carte, partagées MJ / joueur. Boucle rAF par
+// canvas, s'arrête si le canvas sort du DOM ou si la liste est vide.
+// Chaque danger = { id, kind:'lava'|'poison'|'fire', x, y, r } en fractions.
+// =====================================================
+(function () {
+    'use strict';
+    function drawHazard(ctx, z, w, h, t) {
+        const cx = z.x * w, cy = z.y * h, R = Math.max(6, (z.r || 0.08) * w);
+        ctx.save();
+        if (z.kind === 'poison') {
+            ctx.globalAlpha = 0.55;
+            for (let i = 0; i < 4; i++) {
+                const a = t / 60 + i * 1.6;
+                const ox = Math.cos(a) * R * 0.22, oy = Math.sin(a * 1.2) * R * 0.22;
+                const g = ctx.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, R * 0.92);
+                g.addColorStop(0, 'rgba(130,225,70,0.35)'); g.addColorStop(0.7, 'rgba(80,170,45,0.22)'); g.addColorStop(1, 'rgba(60,140,40,0)');
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + ox, cy + oy, R * 0.92, 0, Math.PI * 2); ctx.fill();
+            }
+        } else if (z.kind === 'fire') {
+            const flick = 0.6 + 0.3 * Math.sin(t / 6) + 0.15 * Math.sin(t / 3.3);
+            const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
+            g.addColorStop(0, 'rgba(255,240,150,' + (0.8 * flick).toFixed(2) + ')');
+            g.addColorStop(0.4, 'rgba(255,130,25,0.6)'); g.addColorStop(1, 'rgba(120,20,0,0)');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+            for (let i = 0; i < 7; i++) {
+                const ph = ((t / 55) + i / 7) % 1;
+                const ex = cx + Math.sin(t / 18 + i * 1.7) * R * 0.35;
+                const ey = cy - ph * R * 1.15 + R * 0.35;
+                ctx.fillStyle = 'rgba(255,' + (150 + ((i * 37) % 70)) + ',40,' + (0.55 * (1 - ph)).toFixed(2) + ')';
+                ctx.beginPath(); ctx.arc(ex, ey, R * 0.045, 0, Math.PI * 2); ctx.fill();
+            }
+        } else { // lava (défaut)
+            const pulse = 0.5 + 0.5 * Math.sin(t / 26);
+            const g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R);
+            g.addColorStop(0, 'rgba(255,' + Math.round(120 + 70 * pulse) + ',30,0.78)');
+            g.addColorStop(0.6, 'rgba(200,55,12,0.5)'); g.addColorStop(1, 'rgba(70,10,0,0)');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+            for (let i = 0; i < 5; i++) {
+                const ph = ((i * 0.2) + (t / 90)) % 1;
+                const a = t / 45 + i * 1.3, rr = R * (0.15 + 0.55 * ph);
+                const bx = cx + Math.cos(a) * rr, by = cy + Math.sin(a * 1.3) * rr;
+                ctx.fillStyle = 'rgba(255,205,70,' + (0.45 * (1 - ph)).toFixed(2) + ')';
+                ctx.beginPath(); ctx.arc(bx, by, R * 0.07, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+    function hzStep(canvas) {
+        const fx = canvas.__hz;
+        if (!fx || !canvas.isConnected || !fx.list || !fx.list.length) { if (fx) fx.running = false; return; }
+        const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        fx.t += 1;
+        fx.list.forEach(z => drawHazard(ctx, z, w, h, fx.t));
+        if (fx.running) requestAnimationFrame(() => hzStep(canvas));
+    }
+    window.VTTHazards = {
+        apply(canvas, hazards, w, h) {
+            if (!canvas) return;
+            if (canvas.width !== w) canvas.width = w;
+            if (canvas.height !== h) canvas.height = h;
+            let fx = canvas.__hz;
+            if (!hazards || !hazards.length) {
+                if (fx) fx.list = [];
+                const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+                canvas.style.display = 'none';
+                return;
+            }
+            canvas.style.display = 'block';
+            if (!fx) fx = canvas.__hz = { list: hazards, w, h, t: 0, running: false };
+            else { fx.list = hazards; fx.w = w; fx.h = h; }
+            if (!fx.running) { fx.running = true; requestAnimationFrame(() => hzStep(canvas)); }
+        }
+    };
+})();

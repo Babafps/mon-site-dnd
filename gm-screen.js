@@ -363,17 +363,25 @@
         <div class="gm-workspace">
             <!-- ===== BARRE D'OUTILS VERTICALE (groupes + sous-menus, type Roll20) ===== -->
             <div class="gm-leftbar">
+                <!-- Interaction -->
                 <button class="gm-tool is-active" data-tgroup="select" title="Sélection : déplacer les jetons et la carte">🖱️</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="ping" title="Signal : clique la carte → repère lumineux chez les joueurs (couleur réglable)">📍</button>
-                <div class="gm-tool-sep"></div>
-                <button class="gm-tool gm-tool-flyable" data-tgroup="draw" title="Dessin &amp; notes MJ">✏️</button>
+                <div class="gm-tool-sep" data-sep="Vision &amp; lumière"></div>
+                <!-- Vision & lumière : ce que voient les joueurs -->
                 <button class="gm-tool gm-tool-flyable" data-tgroup="fog" title="Brouillard de guerre">🌫️</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="walls" title="Murs, portes &amp; obscurité (vision des joueurs)">🧱</button>
                 <button class="gm-tool gm-tool-flyable" data-tgroup="light" title="Points de lumière (torches, lanternes…)">💡</button>
-                <button class="gm-tool gm-tool-flyable" data-tgroup="aoe" title="Gabarits de sorts (sphère, cône, ligne, cube)">🎯</button>
+                <div class="gm-tool-sep" data-sep="Contenu"></div>
+                <!-- Contenu de la carte -->
                 <button class="gm-tool gm-tool-flyable" data-tgroup="tokens" title="Jetons">🧝</button>
-                <button class="gm-tool gm-tool-flyable" data-tgroup="view" title="Carte &amp; zoom">🗺️</button>
-                <div class="gm-tool-sep"></div>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="draw" title="Dessin &amp; notes MJ">✏️</button>
+                <button class="gm-tool gm-tool-flyable" data-tgroup="aoe" title="Gabarits de sorts (sphère, cône, ligne, cube)">🎯</button>
+                <div class="gm-tool-sep" data-sep="Ambiance"></div>
+                <!-- Ambiance & effets visuels -->
+                <button class="gm-tool gm-tool-flyable" data-tgroup="fx" title="Ambiance &amp; effets : météo, cycle jour/nuit, teintes">🎬</button>
+                <div class="gm-tool-sep" data-sep="Vue"></div>
+                <!-- Navigation -->
+                <button class="gm-tool gm-tool-flyable" data-tgroup="view" title="Vue : déplacer, zoom, mesurer, échelle">🗺️</button>
                 <button class="gm-tool" data-tgroup="layers" title="Calques (visibilité &amp; opacité)">🗂️</button>
                 <div class="gm-tool-sep"></div>
                 <button class="gm-tool gm-tool-hist" id="gm-undo" title="Annuler (Ctrl+Z)" disabled>↶</button>
@@ -836,15 +844,32 @@
                 { icon: '🗑️', label: 'Vider tous les jetons', type: 'action', danger: true, run: clearTokensConfirm }
             ]
         };
+        if (key === 'fx') {
+            const dnOn = !!(m.dayNight && m.dayNight.on);
+            return {
+                title: '🎬 Ambiance & Effets',
+                hint: 'Effets visuels diffusés à toute la table. Les « Ambiances » (taverne, donjon…) sont dans l\'onglet Table → Environnement.',
+                items: [
+                    { type: 'weather' },
+                    { icon: dnOn ? '🌗' : '🌗', label: dnOn ? 'Cycle jour/nuit : AFFICHÉ' : 'Cycle jour/nuit : masqué', type: 'toggle', on: dnOn, run: toggleDayNight },
+                    { type: 'daynight' },
+                    { type: 'daynightpresets' },
+                    { icon: '🎨', label: (m.tint ? 'Retirer la teinte d\'ambiance' : 'Aucune teinte d\'ambiance'), type: 'action', run: clearMapTint, keep: true },
+                    { icon: '🌋', label: 'Poser un danger (glisser = taille)', type: 'tool', tool: 'hazard' },
+                    { type: 'hazardkind' },
+                    { icon: '🧹', label: 'Effacer un danger (cliquer dessus)', type: 'tool', tool: 'hazarderase' },
+                    { icon: '🗑️', label: 'Retirer tous les dangers', type: 'action', danger: true, run: clearHazardsConfirm }
+                ]
+            };
+        }
         if (key === 'view') return {
-            title: '🗺️ Carte & zoom',
+            title: '🗺️ Vue & navigation',
             hint: 'Molette = zoom sous le curseur · ✋ ou clic-molette = déplacer la vue',
             items: [
                 { icon: '✋', label: 'Déplacer la vue (glisser)', type: 'tool', tool: 'pan' },
                 { icon: '🖼️', label: 'Caler l\'image de fond sous la grille', type: 'tool', tool: 'bg' },
                 { icon: '📏', label: 'Mesurer une distance (glisser)', type: 'tool', tool: 'ruler' },
                 { icon: '📐', label: 'Échelle : 1 case = ' + cellMeters() + ' m', type: 'action', run: promptCellM, keep: true },
-                { type: 'weather' },
                 { icon: '▦', label: 'Afficher la grille', type: 'toggle', on: m.showGrid !== false, run: toggleGrid },
                 { icon: '🔍➕', label: 'Zoomer', type: 'action', run: () => zoomAtCenter(1.2), keep: true },
                 { icon: '🔍➖', label: 'Dézoomer', type: 'action', run: () => zoomAtCenter(1 / 1.2), keep: true },
@@ -854,7 +879,7 @@
         return null;
     }
     // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
-    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase'], light: ['light'], aoe: ['aoe', 'aoeerase'], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant'], layers: [] };
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase'], light: ['light'], aoe: ['aoe', 'aoeerase'], fx: [], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant'], layers: [] };
     let flyoutKey = null;
     function ensureToolFlyout() {
         let p = byId('gm-tool-flyout'); if (p) return p;
@@ -890,6 +915,9 @@
             if (it.type === 'aoecolor') return `<div class="gm-fly-row"><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur</span><input type="color" id="gm-aoe-color" value="${aoeColor}"></div>`;
             if (it.type === 'pingcolor') return `<div class="gm-fly-row" title="Couleur du repère lumineux envoyé aux joueurs (mémorisée)."><span class="gm-fly-ic">🎨</span><span class="gm-fly-lbl">Couleur</span><input type="color" id="gm-ping-color" value="${pingColor}"></div>`;
             if (it.type === 'weather') { const cur = (state.map && state.map.weather) || ''; return `<div class="gm-fly-row"><span class="gm-fly-ic">🌦️</span><span class="gm-fly-lbl">Météo</span><span class="gm-place-type" id="gm-weather-pick">${[['', '☀️'], ['rain', '🌧️'], ['snow', '❄️'], ['fog', '🌫️'], ['embers', '🔥']].map(t => `<button data-weather="${t[0]}" class="${cur === t[0] ? 'is-on' : ''}" title="${{ '': 'Aucune', rain: 'Pluie', snow: 'Neige', fog: 'Brume', embers: 'Braises' }[t[0]]}">${t[1]}</button>`).join('')}</span></div>`; }
+            if (it.type === 'daynight') { const dn = (state.map && state.map.dayNight) || {}; const hh = dn.time == null ? 12 : dn.time; const off = !dn.on; return `<div class="gm-fly-row${off ? ' gm-fly-row-disabled' : ''}" title="Heure de la journée : la carte se teinte (aube, plein jour, crépuscule, nuit). Le curseur n'a d'effet que si le cycle est affiché."><span class="gm-fly-ic">${dayNightIcon(hh)}</span><span class="gm-fly-lbl">Heure</span><input type="range" id="gm-daynight" min="0" max="23" step="1" value="${hh}"${off ? ' disabled' : ''}><b class="gm-fly-wval gm-fly-wval-wide" id="gm-daynight-val">${dayNightLabel(hh)}</b></div>`; }
+            if (it.type === 'daynightpresets') return `<div class="gm-fly-row" title="Régler l'heure d'un clic (affiche le cycle jour/nuit)."><span class="gm-fly-ic">⏱️</span><span class="gm-fly-lbl">Rapide</span><span class="gm-place-type" id="gm-dn-presets">${[[6, '🌅 Aube'], [12, '☀️ Midi'], [18, '🌇 Crép.'], [23, '🌙 Nuit']].map(t => `<button data-dnpreset="${t[0]}">${t[1]}</button>`).join('')}</span></div>`;
+            if (it.type === 'hazardkind') return `<div class="gm-fly-row"><span class="gm-fly-ic">🌋</span><span class="gm-fly-lbl">Type</span><span class="gm-place-type" id="gm-hazard-kind">${[['lava', '🌋 Lave'], ['poison', '☠️ Poison'], ['fire', '🔥 Feu']].map(t => `<button data-hazardkind="${t[0]}" class="${hazardKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
             const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
             return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
         }).join('') + (grp.hint ? `<div class="gm-fly-hint">${grp.hint}</div>` : '');
@@ -930,6 +958,11 @@
             akind.querySelectorAll('[data-aoekind]').forEach(x => x.classList.toggle('is-on', x === b));
         }));
         const acol = p.querySelector('#gm-aoe-color'); if (acol) acol.addEventListener('input', (e) => { aoeColor = e.target.value; });
+        const hkind = p.querySelector('#gm-hazard-kind');
+        if (hkind) hkind.querySelectorAll('[data-hazardkind]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation(); hazardKind = b.dataset.hazardkind; if (mapTool !== 'hazard') setMapTool('hazard');
+            hkind.querySelectorAll('[data-hazardkind]').forEach(x => x.classList.toggle('is-on', x === b));
+        }));
         const pgcol = p.querySelector('#gm-ping-color'); if (pgcol) pgcol.addEventListener('input', (e) => { pingColor = e.target.value; try { localStorage.setItem('dnd-gm-ping-color', pingColor); } catch (_) {} });
         const wpick = p.querySelector('#gm-weather-pick');
         if (wpick) wpick.querySelectorAll('[data-weather]').forEach(b => b.addEventListener('click', (e) => {
@@ -946,6 +979,24 @@
             const lb = p.querySelector('#gm-dark-range-val'); if (lb) lb.textContent = v + ' m';
             clearTimeout(dkr._t); dkr._t = setTimeout(() => { save(); renderMap(); broadcastMap(true); }, 250);
         });
+        // Curseur heure (cycle jour/nuit) : teinte la carte en direct, diffusion débauncée
+        const dnr = p.querySelector('#gm-daynight'); if (dnr) dnr.addEventListener('input', (e) => {
+            const h = Math.max(0, Math.min(23, parseInt(e.target.value, 10) || 0));
+            dayNightState().time = h;
+            const lb = p.querySelector('#gm-daynight-val'); if (lb) lb.textContent = dayNightLabel(h);
+            const ic = dnr.closest('.gm-fly-row').querySelector('.gm-fly-ic'); if (ic) ic.textContent = dayNightIcon(h);
+            applyDayNightLayer();                                // rendu immédiat (léger, pas de rebuild)
+            clearTimeout(dnr._t); dnr._t = setTimeout(() => { save(); broadcastMap(true); }, 250);
+        });
+        // Préréglages d'heure rapides (affichent le cycle et sautent à l'heure)
+        const dnp = p.querySelector('#gm-dn-presets');
+        if (dnp) dnp.querySelectorAll('[data-dnpreset]').forEach(b => b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const h = parseInt(b.dataset.dnpreset, 10); const dn = dayNightState();
+            dn.time = isNaN(h) ? 12 : h; dn.on = true;
+            save(); renderMap(); broadcastMap(true);
+            const k = flyoutKey; flyoutKey = null; openToolFlyout(k, btn);   // rafraîchit l'affichage
+        }));
         syncToolbar();
     }
     // Surligne le groupe dont un outil est actif (appelé par setMapTool)
@@ -961,6 +1012,38 @@
     function toggleTokensLock() { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); }
     function toggleSnap() { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); }
     function toggleHpBars() { state.map.hpBars = !state.map.hpBars; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.hpBars ? '❤️ Barres de PV visibles des joueurs' : '❤️ Barres de PV masquées', '#2c3e50'); }
+    // ----- Cycle jour/nuit (Lot 32) : teinte globale calculée depuis l'heure. Affichage optionnel (MJ). -----
+    function dayNightState() { const m = state.map || {}; if (!m.dayNight) m.dayNight = { on: false, time: 12 }; return m.dayNight; }
+    function dayNightIcon(h) { return h < 5 || h >= 21 ? '🌙' : (h < 8 ? '🌅' : (h < 18 ? '☀️' : (h < 20 ? '🌇' : '🌆'))); }
+    function dayNightLabel(h) { const hh = ((h % 24) + 24) % 24; return (hh < 10 ? '0' + hh : hh) + ' h'; }
+    // Couleur de teinte (rgba) interpolée entre points d'ancrage horaires. '' = plein jour (aucune).
+    function dayNightTint(h) {
+        const anchors = [
+            [0, [8, 12, 40, 0.58]], [5, [20, 25, 65, 0.5]], [7, [235, 150, 80, 0.26]],
+            [9, [255, 244, 210, 0.05]], [12, [255, 255, 255, 0]], [16, [255, 240, 205, 0.05]],
+            [18, [235, 120, 65, 0.28]], [20, [40, 35, 85, 0.42]], [24, [8, 12, 40, 0.58]]
+        ];
+        h = ((h % 24) + 24) % 24;
+        let a = anchors[0], b = anchors[anchors.length - 1];
+        for (let i = 0; i < anchors.length - 1; i++) { if (h >= anchors[i][0] && h <= anchors[i + 1][0]) { a = anchors[i]; b = anchors[i + 1]; break; } }
+        const t = b[0] === a[0] ? 0 : (h - a[0]) / (b[0] - a[0]);
+        const c = a[1].map((v, i) => v + (b[1][i] - v) * t);
+        if (c[3] < 0.02) return '';
+        return 'rgba(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ',' + (Math.round(c[3] * 100) / 100) + ')';
+    }
+    function toggleDayNight() {
+        const dn = dayNightState(); dn.on = !dn.on;
+        save(); renderMap(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast(dn.on ? '🌗 Cycle jour/nuit affiché (' + dayNightLabel(dn.time) + ')' : '🌗 Cycle jour/nuit masqué', '#2c3e50');
+    }
+    // Applique juste la couleur au calque jour/nuit (sans rebuild du board) — pour le curseur en direct.
+    function applyDayNightLayer() {
+        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
+        const el = board.querySelector('.gm-layer-daynight'); if (!el) return;
+        const dn = (state.map && state.map.dayNight) || {};
+        el.style.background = (dn.on ? dayNightTint(dn.time == null ? 12 : dn.time) : '') || 'transparent';
+    }
+    function clearMapTint() { if (state.map && state.map.tint) { state.map.tint = ''; state.map.ambiance = ''; save(); renderMap(); broadcastMap(true); renderAmbianceBtns(); if (window.showAppToast) window.showAppToast('🎨 Teinte d\'ambiance retirée', '#2c3e50'); } }
     function toggleGrid() { state.map.showGrid = (state.map.showGrid === false); save(); renderMap(); broadcastMap(true); }
     function promptAddMap() { const n = prompt('Nom de la nouvelle carte :', 'Carte ' + ((state.maps ? state.maps.length : 0) + 1)); if (n && n.trim()) addMap(n.trim()); }
     function promptRenameMap(id) { const p = (state.maps || []).find(x => x.id === id); if (!p) return; const n = prompt('Renommer la carte :', p.name); if (n && n.trim()) renameMap(p.id, n.trim()); }
@@ -1813,6 +1896,8 @@
     let aoeColor = '#e67e22';    // couleur du prochain gabarit
     let aoeDraft = null;         // gabarit en cours de placement
     let lightDraft = null;       // lumière en cours de pose { x,y,r,color } (glisser = régler le rayon)
+    let hazardKind = 'lava';     // type du prochain danger posé (lave / poison / feu)
+    let hazardDraft = null;      // danger en cours de placement { kind,x,y,r } (glisser = rayon)
     let objHover = null;         // élément saisissable sous le curseur (outil ✥ / gomme 🧹) — surbrillance
     let objHoverKey = '';        // clé du survol courant (évite les re-rendus inutiles)
     let boardWpx = 500;          // largeur ACTUELLE du board MJ en px (mise à jour par renderMap)
@@ -2176,6 +2261,25 @@
         if (!window.VTTWeather) return;
         window.VTTWeather.apply(canvas, (state.map && state.map.weather) || '', Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
     }
+    // ----- Dangers animés (lave / poison / feu) : posés sur la carte, diffusés aux joueurs -----
+    function hazardsData() { const m = state.map || {}; if (!Array.isArray(m.hazards)) m.hazards = []; return m.hazards; }
+    function renderHazards() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const canvas = view.querySelector('canvas.gm-layer-hazards'); if (!canvas) return;
+        const board = view.querySelector('.gm-board'); if (!board) return;
+        if (!window.VTTHazards) return;
+        const list = hazardsData().concat(hazardDraft ? [hazardDraft] : []);
+        window.VTTHazards.apply(canvas, list, Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
+    }
+    function clearHazardsConfirm() { if (!confirm('Retirer tous les dangers de cette carte ?')) return; if (state.map) state.map.hazards = []; save(); renderMap(); broadcastMap(true); }
+    function eraseHazardAt(e) {
+        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
+        const r = board.getBoundingClientRect();
+        const px = e.clientX - r.left, py = e.clientY - r.top;
+        const hz = hazardsData(); let bi = -1, bd = 1e9;
+        hz.forEach((z, i) => { const d = Math.hypot(px - z.x * r.width, py - z.y * r.height); if (d < (z.r || 0.08) * r.width && d < bd) { bd = d; bi = i; } });
+        if (bi >= 0) { hz.splice(bi, 1); save(); renderMap(); broadcastMap(true); }
+    }
     // ----- Badges d'état sur les jetons (manuels + auto depuis les fiches joueurs) -----
     function matchCondIcon(lbl) {
         const s = String(lbl || '').toLowerCase();
@@ -2463,9 +2567,10 @@
         let bw = Math.min(vw, vh * AR), bh = bw / AR;
         boardWpx = bw;
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-tint"></div></div></div>`;
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><canvas class="gm-layer gm-layer-hazards"></canvas><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-daynight"></div><div class="gm-layer gm-layer-tint"></div></div></div>`;
         const board = view.querySelector('.gm-board');
         const tintEl = board.querySelector('.gm-layer-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';
+        const dnEl = board.querySelector('.gm-layer-daynight'); if (dnEl) dnEl.style.background = ((m.dayNight && m.dayNight.on) ? dayNightTint(m.dayNight.time == null ? 12 : m.dayNight.time) : '') || 'transparent';
         const f = bw / 1000;                                 // facteur px de référence → px affichés
         board.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const bx = (m.bgX || 0) * f, by = (m.bgY || 0) * f, bs = Number(m.bgScale) || 1;
@@ -2479,6 +2584,7 @@
         board.style.setProperty('--gm-grid-op', OP.grid == null ? 1 : OP.grid);
         applyMapTransform();
         renderTemplates();
+        renderHazards();
         renderWeather();
         renderDraw();
         renderGmNotes();
@@ -2487,7 +2593,7 @@
         if (L.walls !== false) renderWalls();
         renderVisionPreview();
         renderRuler();
-        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase'];
+        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase', 'hazard', 'hazarderase'];
         view.classList.toggle('gm-tool-paint', paintTools.indexOf(mapTool) !== -1);
         view.classList.toggle('gm-tool-grab', mapTool === 'pan');
         view.classList.toggle('gm-tool-move', mapTool === 'objmove');
@@ -2846,6 +2952,16 @@
             if (mapTool === 'aoeerase') {                        // clic sur l'origine d'un gabarit = suppression
                 eraseTemplateAt(e); e.preventDefault(); return;
             }
+            if (mapTool === 'hazard') {                          // danger animé : origine → glisser le rayon
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                hazardDraft = { kind: hazardKind, x, y, r: 0 };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderHazards(); e.preventDefault(); return;
+            }
+            if (mapTool === 'hazarderase') {                     // clic sur un danger = suppression
+                eraseHazardAt(e); e.preventDefault(); return;
+            }
             if (mapTool === 'placetoken') {                      // pose un jeton à l'endroit cliqué
                 const r = contentRect();
                 let x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
@@ -2927,6 +3043,12 @@
                 lightDraft.r = Math.max(0, Math.min(0.45, Math.hypot(px - lightDraft.x * r.width, py - lightDraft.y * r.height) / r.width));
                 renderLights(); return;
             }
+            if (hazardDraft) {                                 // glisser = régler le rayon du danger
+                const r = contentRect();
+                const px = e.clientX - r.left, py = e.clientY - r.top;
+                hazardDraft.r = Math.max(0, Math.min(0.5, Math.hypot(px - hazardDraft.x * r.width, py - hazardDraft.y * r.height) / r.width));
+                renderHazards(); return;
+            }
             if (rulerDraft) {
                 const r = contentRect();
                 let p = { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
@@ -2999,6 +3121,12 @@
                 if (lightDraft.r > 0.02) lightRadius = r;
                 lightsData().push({ id: uid(), x: lightDraft.x, y: lightDraft.y, r: r, color: lightDraft.color });
                 lightDraft = null; save(); renderMap(); broadcastMap(true); return;
+            }
+            if (hazardDraft) {
+                // Clic simple = rayon par défaut ; glisser = rayon choisi
+                const r = Math.max(0.05, Math.min(0.5, hazardDraft.r > 0.02 ? hazardDraft.r : 0.1));
+                hazardsData().push({ id: uid(), kind: hazardDraft.kind, x: hazardDraft.x, y: hazardDraft.y, r: r });
+                hazardDraft = null; save(); renderMap(); broadcastMap(true); return;
             }
             if (drawStroke) { drawStroke = null; drawIsNote = false; save(); broadcastMap(true); return; }
             if (wallDraft) {

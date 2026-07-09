@@ -859,6 +859,8 @@
         return JSON.stringify({
             bg: m.bg || '', ar: m.stageAR || 0, grid: m.gridSize || 48, sg: m.showGrid !== false,
             bx: m.bgX || 0, by: m.bgY || 0, bs: m.bgScale || 1, w: m.weather || '', tint: m.tint || '',
+            dn: (m.dayNight && m.dayNight.on) ? (m.dayNight.time == null ? 12 : m.dayNight.time) : -1,
+            hz: (m.hazards || []).map(z => [z.kind, Math.round(z.x * 100), Math.round(z.y * 100), Math.round((z.r || 0) * 100)]),
             doors: walls.filter(w => w.door).map(w => [w.id, !!w.open, !!w.locked, !!w.secret]),
             wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
             fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
@@ -920,6 +922,21 @@
         return Math.max(4, (m.gridSize || 48) * bw / 1000);
     }
     function playerCellM() { return Number(mapState.map && mapState.map.cellM) || 1.5; }
+    // Teinte du cycle jour/nuit (identique au calcul MJ) — reçue via m.dayNight (Lot 32)
+    function playerDayNightTint(h) {
+        const anchors = [
+            [0, [8, 12, 40, 0.58]], [5, [20, 25, 65, 0.5]], [7, [235, 150, 80, 0.26]],
+            [9, [255, 244, 210, 0.05]], [12, [255, 255, 255, 0]], [16, [255, 240, 205, 0.05]],
+            [18, [235, 120, 65, 0.28]], [20, [40, 35, 85, 0.42]], [24, [8, 12, 40, 0.58]]
+        ];
+        h = ((h % 24) + 24) % 24;
+        let a = anchors[0], b = anchors[anchors.length - 1];
+        for (let i = 0; i < anchors.length - 1; i++) { if (h >= anchors[i][0] && h <= anchors[i + 1][0]) { a = anchors[i]; b = anchors[i + 1]; break; } }
+        const t = b[0] === a[0] ? 0 : (h - a[0]) / (b[0] - a[0]);
+        const c = a[1].map((v, i) => v + (b[1][i] - v) * t);
+        if (c[3] < 0.02) return '';
+        return 'rgba(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ',' + (Math.round(c[3] * 100) / 100) + ')';
+    }
     function renderPlayerMap() {
         const view = document.getElementById('smap-view'); if (!view) return;
         const m = mapState.map || {};
@@ -954,10 +971,11 @@
         const doorOrigins = playerVisionOrigins(bw, bh);
         const doorSegs = playerBlockingSegsPx(bw, bh);
         const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret && doorVisibleToPlayer(s, bw, bh, doorOrigins, doorSegs)).map(doorButtonHtml).join('');
-        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;">` + tokensHtml + doorsHtml
-            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas><div class="smap-tint"></div></div>';
+        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;"><canvas class="smap-hazards"></canvas>` + tokensHtml + doorsHtml
+            + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas><div class="smap-daynight"></div><div class="smap-tint"></div></div>';
         const board = view.querySelector('.smap-board');
         const tintEl = board.querySelector('.smap-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';   // teinte d'ambiance (Lot 30)
+        const dnEl = board.querySelector('.smap-daynight'); if (dnEl) dnEl.style.background = ((m.dayNight && m.dayNight.on) ? playerDayNightTint(m.dayNight.time == null ? 12 : m.dayNight.time) : '') || 'transparent';   // cycle jour/nuit (Lot 32)
         board.style.backgroundImage = m.bg ? `url(${m.bg})` : 'none';
         const f = AR > 0 ? bw / 1000 : 1;
         const bx = (m.bgX || 0) * f, by = (m.bgY || 0) * f, bs = Number(m.bgScale) || 1;
@@ -968,6 +986,7 @@
         view.classList.remove('show-grid'); view.style.backgroundImage = 'none';   // (ancien rendu sur la vue)
         renderPlayerDraw();
         renderPlayerTemplates();
+        renderPlayerHazards();
         renderPlayerWeather();
         renderPlayerFog();
         renderPlayerDark();
@@ -1011,6 +1030,12 @@
         const board = playerBoard(); if (!board) return;
         const canvas = board.querySelector('.smap-weather'); if (!canvas) return;
         if (window.VTTWeather) window.VTTWeather.apply(canvas, (mapState.map && mapState.map.weather) || '', Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
+    }
+    // Dangers animés posés par le MJ (lave / poison / feu), Lot 33
+    function renderPlayerHazards() {
+        const board = playerBoard(); if (!board) return;
+        const canvas = board.querySelector('.smap-hazards'); if (!canvas) return;
+        if (window.VTTHazards) window.VTTHazards.apply(canvas, (mapState.map && mapState.map.hazards) || [], Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
     }
     // Une lumière du MJ est-elle perçue par MOI ? Il faut qu'un de MES jetons ait une
     // ligne de vue DÉGAGÉE vers elle (les murs bloquent) — sauf « toujours visible ».
@@ -1456,8 +1481,9 @@
         /* BOARD : plateau à ratio fixe, même espace de coordonnées que chez le MJ */
         .smap-board { position:absolute; background-color:#171410; background-size:contain; background-position:center; background-repeat:no-repeat; box-shadow:0 0 0 1px rgba(196,155,53,0.2); }
         .smap-board.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
-        .smap-templates, .smap-weather { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .smap-templates, .smap-weather, .smap-hazards { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
         .smap-tint { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.6s ease; border-radius:8px; z-index:2; }
+        .smap-daynight { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.8s ease; border-radius:8px; z-index:2; }
         .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
         .smap-token { position:absolute; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:var(--tok,#2980b9); border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Cinzel',serif; font-weight:bold; font-size:0.68rem; box-shadow:0 2px 5px rgba(0,0,0,0.5); touch-action:none; transition:left 0.1s linear, top 0.1s linear; }
