@@ -861,7 +861,6 @@
             bx: m.bgX || 0, by: m.bgY || 0, bs: m.bgScale || 1, w: m.weather || '', tint: m.tint || '',
             dn: (m.dayNight && m.dayNight.on) ? (m.dayNight.time == null ? 12 : m.dayNight.time) : -1,
             hz: (m.hazards || []).map(z => [z.kind, Math.round(z.x * 100), Math.round(z.y * 100), Math.round((z.r || 0) * 100)]),
-            ter: (m.terrain || []).length,
             doors: walls.filter(w => w.door).map(w => [w.id, !!w.open, !!w.locked, !!w.secret]),
             wl: walls.length, tpl: (m.templates || []).length, dr: (m.drawings || []).length,
             fog: !!(m.fog && m.fog.on), fr: ((m.fog && m.fog.reveals) || []).length,
@@ -869,6 +868,69 @@
             tk: (ms.tokens || []).map(t => [t.id, t.owner || '', Number(t.size) || 1, t.img || '', t.name || '', !!t.hidden, (t.badges || ''), t.color || '', t.layer || '', (ms.map && ms.map.hpBars) ? (t.hp + '/' + t.hpMax) : '']).sort()
         });
     }
+    // ===== ZONES SONORES SPATIALISÉES (#3, Lot 33b) — côté joueur =====
+    // Chaque zone (m.soundZones) joue une boucle audio dont le volume monte quand MON jeton
+    // s'en approche. On utilise des <audio> (HTMLMediaElement) : pas de contrainte CORS pour la
+    // simple lecture (contrairement à Web Audio decodeAudioData), et le volume est réglable.
+    const zoneAudio = {
+        els: {},            // id -> { el, url, target }
+        blocked: false,
+        // Position d'écoute = MON jeton le plus proche (le joueur n'entend qu'à travers son perso).
+        update() {
+            const m = (mapState && mapState.map) || {};
+            const zones = Array.isArray(m.soundZones) ? m.soundZones : [];
+            const board = playerBoard();
+            const bw = board ? Math.max(1, board.clientWidth) : 1000;
+            const bh = board ? Math.max(1, board.clientHeight) : bw * 9 / 16;
+            const uid = myUid();
+            const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
+            const ids = {};
+            zones.forEach(z => { if (z && z.id) ids[z.id] = 1; });
+            // Retirer les audios des zones disparues
+            Object.keys(this.els).forEach(id => { if (!ids[id]) { try { this.els[id].el.pause(); } catch (e) {} delete this.els[id]; } });
+            zones.forEach(z => {
+                if (!z || !z.url) { if (z && this.els[z.id]) { try { this.els[z.id].el.pause(); } catch (e) {} delete this.els[z.id]; } return; }
+                let slot = this.els[z.id];
+                if (!slot || slot.url !== z.url) {
+                    if (slot) { try { slot.el.pause(); } catch (e) {} }
+                    const a = new Audio(z.url); a.loop = true; a.preload = 'auto'; a.volume = 0;
+                    slot = this.els[z.id] = { el: a, url: z.url, target: 0 };
+                }
+                let vol = 0;
+                if (mine.length) {
+                    let best = Infinity;
+                    mine.forEach(t => { const d = Math.hypot((t.x - z.x) * bw, (t.y - z.y) * bh); if (d < best) best = d; });
+                    const rPx = Math.max(1, (Number(z.r) || 0.15) * bw), inner = rPx * 0.3;
+                    if (best <= inner) vol = 1; else if (best >= rPx) vol = 0; else vol = 1 - (best - inner) / (rPx - inner);
+                    vol *= (z.vol != null ? Number(z.vol) : 0.8);
+                }
+                slot.target = Math.max(0, Math.min(1, vol));
+                slot.el.volume = slot.target;
+                if (slot.target > 0.001) {
+                    if (slot.el.paused) { const pr = slot.el.play(); if (pr && pr.catch) pr.catch(() => { zoneAudio.blocked = true; showAudioUnlock(); }); }
+                } else if (!slot.el.paused) { try { slot.el.pause(); } catch (e) {} }
+            });
+        },
+        unlock() {
+            this.blocked = false;
+            Object.keys(this.els).forEach(id => { const s = this.els[id]; if ((s.target || 0) > 0.001 && s.el.paused) { const pr = s.el.play(); if (pr && pr.catch) pr.catch(() => {}); } });
+        },
+        stopAll() { Object.keys(this.els).forEach(id => { try { this.els[id].el.pause(); } catch (e) {} }); this.els = {}; this.blocked = false; hideAudioUnlock(); }
+    };
+    function updateZoneAudio() { try { zoneAudio.update(); } catch (e) {} }
+    // Bouton de déblocage (politique autoplay des navigateurs) : un geste utilisateur suffit.
+    function showAudioUnlock() {
+        if (!zoneAudio.blocked) return;
+        let b = document.getElementById('smap-audio-unlock');
+        if (b) return;
+        b = document.createElement('button'); b.id = 'smap-audio-unlock'; b.className = 'no-print';
+        b.textContent = '🔊 Activer les sons d\'ambiance';
+        b.style.cssText = 'position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:9999; padding:10px 16px; border-radius:22px; border:1px solid #C49B35; background:rgba(20,28,42,0.95); color:#f3e3bb; font-family:Lora,serif; font-size:0.9rem; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.5);';
+        b.addEventListener('click', () => { zoneAudio.unlock(); hideAudioUnlock(); });
+        document.body.appendChild(b);
+    }
+    function hideAudioUnlock() { const b = document.getElementById('smap-audio-unlock'); if (b) b.remove(); }
+
     let lastMapSig = null;
     function applyMap(map, tokens) {
         mapState = { map: map || {}, tokens: tokens || [] };
@@ -885,6 +947,7 @@
         if (board && lastMapSig !== null && sig === lastMapSig && !hasAura) patchTokenPositions();
         else renderPlayerMap();
         lastMapSig = sig;
+        updateZoneAudio();                                 // zones sonores : (re)calcule les volumes
     }
     // Déplace seulement les jetons déjà présents (fluide), rafraîchit vision + portes visibles.
     function patchTokenPositions() {
@@ -972,7 +1035,7 @@
         const doorOrigins = playerVisionOrigins(bw, bh);
         const doorSegs = playerBlockingSegsPx(bw, bh);
         const doorsHtml = (m.walls || []).filter(s => s.door && !s.secret && doorVisibleToPlayer(s, bw, bh, doorOrigins, doorSegs)).map(doorButtonHtml).join('');
-        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;"><canvas class="smap-terrain"></canvas><canvas class="smap-hazards"></canvas>` + tokensHtml + doorsHtml
+        view.innerHTML = `<div class="smap-board" style="left:${bl}px; top:${bt}px; width:${bw}px; height:${bh}px;"><canvas class="smap-hazards"></canvas>` + tokensHtml + doorsHtml
             + '<canvas class="smap-draw"></canvas><canvas class="smap-templates"></canvas><canvas class="smap-weather"></canvas><canvas class="smap-fog"></canvas><canvas class="smap-dark"></canvas><div class="smap-daynight"></div><div class="smap-tint"></div><canvas class="smap-measure"></canvas></div>';
         const board = view.querySelector('.smap-board');
         const tintEl = board.querySelector('.smap-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';   // teinte d'ambiance (Lot 30)
@@ -987,7 +1050,6 @@
         view.classList.remove('show-grid'); view.style.backgroundImage = 'none';   // (ancien rendu sur la vue)
         renderPlayerDraw();
         renderPlayerTemplates();
-        renderPlayerTerrain();
         renderPlayerHazards();
         renderPlayerWeather();
         renderPlayerFog();
@@ -1038,22 +1100,6 @@
         const board = playerBoard(); if (!board) return;
         const canvas = board.querySelector('.smap-hazards'); if (!canvas) return;
         if (window.VTTHazards) window.VTTHazards.apply(canvas, (mapState.map && mapState.map.hazards) || [], Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
-    }
-    // Terrain difficile posé par le MJ, Lot 34b2
-    function renderPlayerTerrain() {
-        const board = playerBoard(); if (!board) return;
-        const canvas = board.querySelector('.smap-terrain'); if (!canvas) return;
-        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
-        if (canvas.width !== w) canvas.width = w;
-        if (canvas.height !== h) canvas.height = h;
-        if (window.VTTGeo && window.VTTGeo.paintTerrain) window.VTTGeo.paintTerrain(canvas.getContext('2d'), (mapState.map && mapState.map.terrain) || [], w, h);
-    }
-    function playerTerrainFractionOnPath(x1, y1, x2, y2) {
-        // La glace (kind 'ice') est visuelle : seul le terrain difficile double la distance.
-        const ter = ((mapState.map && mapState.map.terrain) || []).filter(z => z.kind !== 'ice'); if (!ter.length) return 0;
-        const N = 24; let inC = 0;
-        for (let i = 0; i <= N; i++) { const t = i / N, px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t; if (ter.some(z => Math.hypot(z.x - px, z.y - py) <= (z.r || 0.06))) inC++; }
-        return inC / (N + 1);
     }
     // Une lumière du MJ est-elle perçue par MOI ? Il faut qu'un de MES jetons ait une
     // ligne de vue DÉGAGÉE vers elle (les murs bloquent) — sauf « toujours visible ».
@@ -1233,9 +1279,7 @@
         if (!playerMeasure) return;
         const x1 = playerMeasure.x1 * w, y1 = playerMeasure.y1 * h, x2 = playerMeasure.x2 * w, y2 = playerMeasure.y2 * h;
         const g = Math.max(1, playerGridPx(w));
-        const base = (Math.hypot(x2 - x1, y2 - y1) / g) * playerCellM();
-        const tf = playerTerrainFractionOnPath(playerMeasure.x1, playerMeasure.y1, playerMeasure.x2, playerMeasure.y2);
-        const meters = base * (1 + tf);                     // terrain difficile = ×2
+        const meters = (Math.hypot(x2 - x1, y2 - y1) / g) * playerCellM();
         const spd = playerMeasure.speed || 9;
         const col = meters <= spd + 1e-6 ? '#57a64a' : (meters <= spd * 2 + 1e-6 ? '#d68a2b' : '#e23b3b');
         ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
@@ -1243,7 +1287,7 @@
         ctx.fillStyle = col;
         [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
         const tag = meters <= spd + 1e-6 ? '' : (meters <= spd * 2 + 1e-6 ? ' ⚡' : ' 🚫');
-        const label = (Math.round(meters * 10) / 10).toLocaleString('fr-FR') + ' m / ' + spd + ' m' + (tf > 0.01 ? ' 🏔️' : '') + tag;
+        const label = (Math.round(meters * 10) / 10).toLocaleString('fr-FR') + ' m / ' + spd + ' m' + tag;
         ctx.font = 'bold 13px Lora, serif'; const tw = ctx.measureText(label).width;
         const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 16;
         const bx = Math.max(4, Math.min(w - tw - 16, mx - tw / 2 - 6));
@@ -1297,6 +1341,7 @@
             cur.x = x; cur.y = y; el.style.left = (x * 100) + '%'; el.style.top = (y * 100) + '%';
             if (playerMeasure) { playerMeasure.x2 = x; playerMeasure.y2 = y; renderPlayerMeasure(); }   // distance parcourue
             scheduleDark();                                // ma vision suit mon jeton en direct
+            updateZoneAudio();                             // le volume des zones sonores suit mon jeton
             sendTokenMove(cur, false);
         });
         const up = () => {
@@ -1312,6 +1357,7 @@
             playerMeasure = null; renderPlayerMeasure();   // fin du drag : efface la mesure
             sendTokenMove(cur, true); cur = null; el = null; playerDragBusy = false;
             if (pendingMapRender) { pendingMapRender = false; renderPlayerMap(); }
+            updateZoneAudio();
         };
         view.addEventListener('pointerup', up);
         view.addEventListener('pointercancel', up);
@@ -1419,6 +1465,7 @@
         if (mapToggle) mapToggle.style.display = 'none';
         if (mapPanel) mapPanel.classList.add('hidden');
         if (sheetWidget) { sheetWidget.classList.add('hidden'); clearInterval(sswTimer); }
+        try { zoneAudio.stopAll(); } catch (e) {}          // couper les boucles d'ambiance
     }
 
     // Retour à la VRAIE page d'accueil. L'app choisit accueil-vs-fiche UNIQUEMENT au chargement
@@ -1537,9 +1584,9 @@
         /* BOARD : plateau à ratio fixe, même espace de coordonnées que chez le MJ */
         .smap-board { position:absolute; background-color:#171410; background-size:contain; background-position:center; background-repeat:no-repeat; box-shadow:0 0 0 1px rgba(196,155,53,0.2); }
         .smap-board.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
-        .smap-templates, .smap-weather, .smap-hazards, .smap-terrain { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-        .smap-tint { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.6s ease; border-radius:8px; z-index:2; }
-        .smap-daynight { position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; transition:background 0.8s ease; border-radius:8px; z-index:2; }
+        .smap-templates, .smap-weather, .smap-hazards { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .smap-tint { position:absolute; inset:0; pointer-events:none; transition:background 0.6s ease; border-radius:8px; z-index:2; }
+        .smap-daynight { position:absolute; inset:0; pointer-events:none; transition:background 0.8s ease; border-radius:8px; z-index:2; }
         .smap-measure { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:7; }
         .smap-aura { position:absolute; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; background:radial-gradient(circle, color-mix(in srgb, var(--aura,#3498db) 26%, transparent) 0%, color-mix(in srgb, var(--aura,#3498db) 14%, transparent) 70%, transparent 72%); border:1px dashed color-mix(in srgb, var(--aura,#3498db) 60%, transparent); }
         .smap-badges { position:absolute; bottom:calc(100% + 1px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:0.6rem; line-height:1; background:rgba(20,14,8,0.78); border-radius:8px; padding:1px 4px; pointer-events:none; }
@@ -1644,7 +1691,7 @@
         body.theme-dark .snc-box { background:#241c16; color:#ece3d2; }
         body.theme-dark .snc-text { color:#c2b094; }
         /* --- Minuteur partagé --- */
-        #session-timer { position:fixed; top:8px; right:14px; z-index:9971; background:linear-gradient(160deg,#2c231b,#1d1712); color:#f3e3bb; border:2px solid var(--accent-color,#C49B35); border-radius:22px; padding:7px 14px; font-family:'Cinzel',serif; font-weight:bold; box-shadow:0 6px 18px rgba(0,0,0,0.45); pointer-events:none; }
+        #session-timer { position:fixed; top:8px; right:14px; z-index:9998; background:linear-gradient(160deg,#2c231b,#1d1712); color:#f3e3bb; border:2px solid var(--accent-color,#C49B35); border-radius:22px; padding:7px 14px; font-family:'Cinzel',serif; font-weight:bold; box-shadow:0 6px 18px rgba(0,0,0,0.45); pointer-events:none; }
         #session-timer.is-low { border-color:#e74c3c; color:#ffb3a7; animation:st-blink 0.6s steps(2) infinite; }
         @keyframes st-blink { 50% { opacity:0.5; } }`;
         document.head.appendChild(st);

@@ -842,9 +842,6 @@
                 { icon: m.tokensLocked ? '🔒' : '🔓', label: m.tokensLocked ? 'Verrouillés (MJ seul) — libérer' : 'Libres (joueurs) — verrouiller', type: 'toggle', on: !!m.tokensLocked, run: toggleTokensLock },
                 { icon: '🧲', label: 'Aimanter à la grille', type: 'toggle', on: !!m.snap, run: toggleSnap },
                 { icon: '❤️', label: 'Barres de PV visibles des joueurs', type: 'toggle', on: !!m.hpBars, run: toggleHpBars },
-                { icon: '🏔️', label: 'Peindre du terrain (pinceau)', type: 'tool', tool: 'terrain' },
-                { type: 'terrainkind' },
-                { icon: '🧹', label: 'Effacer du terrain', type: 'tool', tool: 'terrainerase' },
                 { icon: '🗑️', label: 'Vider tous les jetons', type: 'action', danger: true, run: clearTokensConfirm }
             ]
         };
@@ -862,7 +859,9 @@
                     { icon: '🌋', label: 'Poser un danger (glisser = taille)', type: 'tool', tool: 'hazard' },
                     { type: 'hazardkind' },
                     { icon: '🧹', label: 'Effacer un danger (cliquer dessus)', type: 'tool', tool: 'hazarderase' },
-                    { icon: '🗑️', label: 'Retirer tous les dangers', type: 'action', danger: true, run: clearHazardsConfirm }
+                    { icon: '🗑️', label: 'Retirer tous les dangers', type: 'action', danger: true, run: clearHazardsConfirm },
+                    { icon: '🔊', label: 'Zone sonore (glisser = portée)', type: 'tool', tool: 'sound' },
+                    { icon: '🗑️', label: 'Retirer toutes les zones sonores', type: 'action', danger: true, run: clearSoundZonesConfirm }
                 ]
             };
         }
@@ -883,7 +882,7 @@
         return null;
     }
     // Outils appartenant à chaque groupe (pour surligner le bouton du groupe quand un de ses outils est actif)
-    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase', 'los'], light: ['light'], aoe: ['aoe', 'aoeerase'], fx: [], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant', 'terrain', 'terrainerase'], layers: [] };
+    const GROUP_TOOLS = { select: ['select'], ping: ['ping'], draw: ['draw', 'gmnote'], fog: ['reveal', 'cover'], walls: ['wall', 'door', 'dooredit', 'wallerase', 'los'], light: ['light'], aoe: ['aoe', 'aoeerase'], fx: ['hazard', 'hazarderase', 'sound'], view: ['bg', 'ruler', 'pan'], tokens: ['placetoken', 'objmove', 'placecombatant'], layers: [] };
     let flyoutKey = null;
     function ensureToolFlyout() {
         let p = byId('gm-tool-flyout'); if (p) return p;
@@ -922,7 +921,6 @@
             if (it.type === 'daynight') { const dn = (state.map && state.map.dayNight) || {}; const hh = dn.time == null ? 12 : dn.time; const off = !dn.on; return `<div class="gm-fly-row${off ? ' gm-fly-row-disabled' : ''}" title="Heure de la journée : la carte se teinte (aube, plein jour, crépuscule, nuit). Le curseur n'a d'effet que si le cycle est affiché."><span class="gm-fly-ic">${dayNightIcon(hh)}</span><span class="gm-fly-lbl">Heure</span><input type="range" id="gm-daynight" min="0" max="23" step="1" value="${hh}"${off ? ' disabled' : ''}><b class="gm-fly-wval gm-fly-wval-wide" id="gm-daynight-val">${dayNightLabel(hh)}</b></div>`; }
             if (it.type === 'daynightpresets') return `<div class="gm-fly-row" title="Régler l'heure d'un clic (affiche le cycle jour/nuit)."><span class="gm-fly-ic">⏱️</span><span class="gm-fly-lbl">Rapide</span><span class="gm-place-type" id="gm-dn-presets">${[[6, '🌅 Aube'], [12, '☀️ Midi'], [18, '🌇 Crép.'], [23, '🌙 Nuit']].map(t => `<button data-dnpreset="${t[0]}">${t[1]}</button>`).join('')}</span></div>`;
             if (it.type === 'hazardkind') return `<div class="gm-fly-row"><span class="gm-fly-ic">🌋</span><span class="gm-fly-lbl">Type</span><span class="gm-place-type" id="gm-hazard-kind">${[['lava', '🌋 Lave'], ['poison', '☠️ Poison'], ['fire', '🔥 Feu']].map(t => `<button data-hazardkind="${t[0]}" class="${hazardKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
-            if (it.type === 'terrainkind') return `<div class="gm-fly-row" title="🪨 Accidenté / 💧 Eau / 🏜️ Sable = déplacement ×2. 🧊 Glace = visuel (glissant)."><span class="gm-fly-ic">🏔️</span><span class="gm-fly-lbl">Type</span><span class="gm-place-type" id="gm-terrain-kind">${TERRAIN_KINDS.map(t => `<button data-terrainkind="${t[0]}" class="${terrainKind === t[0] ? 'is-on' : ''}">${t[1]}</button>`).join('')}</span></div>`;
             const on = (it.type === 'tool') ? (mapTool === it.tool) : !!it.on;
             return `<button class="gm-fly-item${on ? ' is-on' : ''}${it.danger ? ' is-danger' : ''}" data-fi="${i}"><span class="gm-fly-ic">${it.icon}</span><span class="gm-fly-lbl">${it.label}</span>${it.type !== 'action' ? `<span class="gm-fly-state">${on ? '●' : '○'}</span>` : ''}</button>`;
         }).join('') + (grp.hint ? `<div class="gm-fly-hint">${grp.hint}</div>` : '');
@@ -967,11 +965,6 @@
         if (hkind) hkind.querySelectorAll('[data-hazardkind]').forEach(b => b.addEventListener('click', (e) => {
             e.stopPropagation(); hazardKind = b.dataset.hazardkind; if (mapTool !== 'hazard') setMapTool('hazard');
             hkind.querySelectorAll('[data-hazardkind]').forEach(x => x.classList.toggle('is-on', x === b));
-        }));
-        const tkind = p.querySelector('#gm-terrain-kind');
-        if (tkind) tkind.querySelectorAll('[data-terrainkind]').forEach(b => b.addEventListener('click', (e) => {
-            e.stopPropagation(); terrainKind = b.dataset.terrainkind; if (mapTool !== 'terrain') setMapTool('terrain');
-            tkind.querySelectorAll('[data-terrainkind]').forEach(x => x.classList.toggle('is-on', x === b));
         }));
         const pgcol = p.querySelector('#gm-ping-color'); if (pgcol) pgcol.addEventListener('input', (e) => { pingColor = e.target.value; try { localStorage.setItem('dnd-gm-ping-color', pingColor); } catch (_) {} });
         const wpick = p.querySelector('#gm-weather-pick');
@@ -1084,13 +1077,28 @@
         const el = document.getElementById('gm-init-list'); if (!el) return;
         const rv = document.getElementById('gm-round-val'); if (rv) rv.textContent = state.round;
         if (!state.initiative.length) { el.innerHTML = `<div class="gm-empty">Personne dans l'ordre d'initiative.</div>`; return; }
-        el.innerHTML = state.initiative.map((c, i) => `<div class="gm-init-item ${i === state.turnIndex ? 'is-active' : ''}${c.hidden ? ' is-mj-hidden' : ''}">
+        el.innerHTML = state.initiative.map((c, i) => {
+            const fx = (c.effects || []).map(f => `<span class="gm-init-fx${f.rounds <= 1 ? ' is-last' : ''}" title="Encore ${f.rounds} tour(s)" data-act="init-fx-del" data-id="${c.id}" data-fx="${esc(f.label)}">${esc(f.label)} <b>${f.rounds}</b> ✕</span>`).join('');
+            return `<div class="gm-init-item ${i === state.turnIndex ? 'is-active' : ''}${c.hidden ? ' is-mj-hidden' : ''}">
             <span class="gm-init-init">${c.init == null ? '—' : c.init}</span>
             <span class="gm-init-type">${c.type === 'pj' ? '🧝' : '👹'}</span>
             <span class="gm-init-name">${esc(c.name)}</span>
+            <button class="gm-init-fxadd" data-act="init-fx-add" data-id="${c.id}" title="Ajouter un effet temporaire (durée en tours)">✨</button>
             <button class="gm-eye${c.hidden ? ' is-hidden' : ''}" data-act="init-eye" data-id="${c.id}" title="${c.hidden ? 'Caché des joueurs' : 'Masquer aux joueurs'}">${c.hidden ? '🙈' : '👁️'}</button>
             <button class="gm-init-del" data-act="init-del" data-id="${c.id}">✕</button>
-        </div>`).join('');
+            ${fx ? `<div class="gm-init-fxrow">${fx}</div>` : ''}
+        </div>`;
+        }).join('');
+    }
+    // Décrémente les effets temporaires de tous les combattants (à chaque nouveau round). Alerte à l'expiration.
+    function tickCombatEffects() {
+        (state.initiative || []).forEach(c => {
+            if (!c.effects || !c.effects.length) return;
+            c.effects.forEach(f => { f.rounds = (f.rounds || 1) - 1; });
+            const expired = c.effects.filter(f => f.rounds <= 0);
+            expired.forEach(f => clog('⏳ ' + (c.name || 'Combattant') + ' : effet « ' + f.label + ' » terminé'));
+            c.effects = c.effects.filter(f => f.rounds > 0);
+        });
     }
     function renderMonsters() {
         const el = document.getElementById('gm-mon-list'); if (!el) return;
@@ -1890,14 +1898,6 @@
     }
     let mapTool = 'select';      // 'select'|'pan'|'objmove'|'bg'|'reveal'|'cover'|'draw'|'wall'|'door'|'dooredit'|'wallerase'|'ruler'|'light'|'placetoken'|'placecombatant'
     let fogBrush = 0.06;         // rayon du pinceau de brouillard (fraction de la largeur)
-    let terrainBrush = 0.05;     // rayon du pinceau de terrain difficile
-    let terrainKind = 'rough';   // type du prochain terrain peint
-    // Types de terrain : difficult = coûte double au déplacement. (Lot 34b3)
-    const TERRAIN_KINDS = [
-        ['rough', '🪨 Accidenté', true], ['water', '💧 Eau', true],
-        ['sand', '🏜️ Sable', true], ['ice', '🧊 Glace', false]
-    ];
-    function terrainIsDifficult(kind) { const d = TERRAIN_KINDS.find(k => k[0] === (kind || 'rough')); return d ? d[2] : true; }
     let drawColor = '#e23b3b';   // couleur du dessin libre
     let drawWidth = 3;           // épaisseur du dessin libre (molette en mode ✏️)
     let drawStroke = null;       // tracé en cours
@@ -1917,9 +1917,12 @@
     let aoeKind = 'circle';      // forme du prochain gabarit de sort
     let aoeColor = '#e67e22';    // couleur du prochain gabarit
     let aoeDraft = null;         // gabarit en cours de placement
+    let aoeSaveKind = 'save-dex';// type de sauvegarde par défaut dans le panneau « gabarit intelligent »
     let lightDraft = null;       // lumière en cours de pose { x,y,r,color } (glisser = régler le rayon)
     let hazardKind = 'lava';     // type du prochain danger posé (lave / poison / feu)
     let hazardDraft = null;      // danger en cours de placement { kind,x,y,r } (glisser = rayon)
+    let soundDraft = null;       // zone sonore en cours de pose { x,y,r } (glisser = portée)
+    let sndPreview = { id: null, el: null };  // aperçu audio MJ d'une zone sonore (▶ dans le popover)
     let objHover = null;         // élément saisissable sous le curseur (outil ✥ / gomme 🧹) — surbrillance
     let objHoverKey = '';        // clé du survol courant (évite les re-rendus inutiles)
     let boardWpx = 500;          // largeur ACTUELLE du board MJ en px (mise à jour par renderMap)
@@ -2278,6 +2281,122 @@
         ts.forEach((t, i) => { const d = Math.hypot(px - t.x * r.width, py - t.y * r.height); if (d < bd) { bd = d; bi = i; } });
         if (bi >= 0) { ts.splice(bi, 1); save(); renderMap(); broadcastMap(true); }
     }
+
+    // ===== GABARIT INTELLIGENT (#8) : jetons touchés + jets de sauvegarde =====
+    const SAVE_KINDS = [
+        ['save-dex', 'DEX', 'dex'], ['save-con', 'CON', 'con'], ['save-wis', 'SAG', 'wis'],
+        ['save-str', 'FOR', 'str'], ['save-int', 'INT', 'int'], ['save-cha', 'CHA', 'cha']
+    ];
+    function tokenTypeIcon(t) {
+        const l = tokenLayerOf(t);
+        if (t.owner || t.type === 'pj') return '🧑';
+        if (t.type === 'monster') return '👹';
+        if (l === 'gm') return '🫥';
+        return '🧝';
+    }
+    // Renvoie les jetons-créatures dont le CENTRE est dans le gabarit t (px du board).
+    function tokensInTemplate(t) {
+        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board');
+        if (!board || !t || !window.VTTGeo || !window.VTTGeo.pointInTemplate) return [];
+        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
+        const gridPx = gridPxFor(w);
+        return (state.tokens || []).filter(tok => {
+            if (tokenLayerOf(tok) === 'map') return false;   // décor / image de fond, pas une cible
+            return window.VTTGeo.pointInTemplate(t, (tok.x || 0) * w, (tok.y || 0) * h, w, h, gridPx);
+        });
+    }
+    function ensureAoePanel() {
+        let p = byId('gm-aoe-panel'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-aoe-panel'; p.className = 'gm-aoe-panel hidden no-print';
+        document.body.appendChild(p);
+        // Un clic hors du panneau (et pas sur la carte pour re-glisser) le ferme.
+        document.addEventListener('pointerdown', (e) => {
+            if (p.classList.contains('hidden')) return;
+            if (e.target.closest('#gm-aoe-panel')) return;
+            if (e.target.closest('#gm-map-view')) return;   // laisser tracer un nouveau gabarit
+            p.classList.add('hidden');
+        });
+        return p;
+    }
+    // Ouvre le panneau listant les jetons touchés par le gabarit t + jets de sauvegarde.
+    function openAoeTargetPanel(t, e) {
+        if (!t) return;
+        const targets = tokensInTemplate(t);
+        const p = ensureAoePanel();
+        const KIND_LBL = { circle: '⭕ Sphère', cone: '🔺 Cône', line: '➖ Ligne', cube: '⬛ Cube' };
+        if (!targets.length) {
+            p.innerHTML = `<div class="gm-aoe-head">🎯 ${KIND_LBL[t.kind] || 'Gabarit'} — aucune cible</div>
+                <div class="gm-aoe-empty">Aucun jeton dans la zone.</div>
+                <div class="gm-aoe-actions"><button class="gm-btn" data-aoe-act="close">Fermer</button></div>`;
+        } else {
+            const saveSel = `<select class="gm-input" id="gm-aoe-save">${SAVE_KINDS.map(s => `<option value="${s[0]}"${aoeSaveKind === s[0] ? ' selected' : ''}>Sauv. ${s[1]}</option>`).join('')}</select>`;
+            const rows = targets.map(tok => {
+                return `<label class="gm-aoe-row"><input type="checkbox" data-aoe-tid="${esc(tok.id)}" checked>
+                    <span class="gm-aoe-ic">${tokenTypeIcon(tok)}</span>
+                    <span class="gm-aoe-nm">${esc(tok.name || 'Jeton')}</span>
+                    <span class="gm-aoe-res" data-aoe-res="${esc(tok.id)}"></span></label>`;
+            }).join('');
+            p.innerHTML = `<div class="gm-aoe-head">🎯 ${KIND_LBL[t.kind] || 'Gabarit'} — ${targets.length} cible${targets.length > 1 ? 's' : ''}</div>
+                <div class="gm-aoe-list">${rows}</div>
+                <div class="gm-aoe-cfg">
+                    <label class="gm-aoe-cfg-l">Jet</label>${saveSel}
+                    <label class="gm-aoe-cfg-l" title="Degré de difficulté (optionnel)">DD</label>
+                    <input class="gm-input gm-num" type="number" id="gm-aoe-dc" placeholder="—" min="1" style="width:56px;flex:0 0 auto;">
+                </div>
+                <div class="gm-aoe-actions">
+                    <button class="gm-btn gm-btn-primary" data-aoe-act="roll" title="Demander le jet aux joueurs concernés et lancer pour les PNJ/monstres">🎲 Lancer les sauvegardes</button>
+                    <button class="gm-btn" data-aoe-act="close">Fermer</button>
+                </div>`;
+        }
+        p.classList.remove('hidden');
+        const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
+        // positionner puis corriger si ça déborde (offsetWidth dispo après remove hidden)
+        p.style.left = Math.max(8, Math.min(ox + 12, window.innerWidth - p.offsetWidth - 8)) + 'px';
+        p.style.top = Math.max(8, Math.min(oy + 12, window.innerHeight - p.offsetHeight - 8)) + 'px';
+        const saveEl = p.querySelector('#gm-aoe-save');
+        if (saveEl) saveEl.addEventListener('change', () => { aoeSaveKind = saveEl.value; });
+        p.querySelectorAll('[data-aoe-act]').forEach(b => b.addEventListener('click', () => {
+            const act = b.dataset.aoeAct;
+            if (act === 'close') { p.classList.add('hidden'); return; }
+            if (act === 'roll') rollAoeSaves(p, t);
+        }));
+    }
+    // Déclenche les sauvegardes des cibles cochées : demande aux joueurs (roll-request)
+    // et lance un d20 local pour les PNJ/monstres (résultat affiché + journalisé).
+    function rollAoeSaves(p, t) {
+        const kind = (p.querySelector('#gm-aoe-save') || {}).value || aoeSaveKind;
+        const meta = SAVE_KINDS.find(s => s[0] === kind) || SAVE_KINDS[0];
+        const dcRaw = (p.querySelector('#gm-aoe-dc') || {}).value;
+        const dc = dcRaw ? parseInt(dcRaw, 10) : null;
+        const label = 'Sauvegarde ' + meta[1];
+        const checked = Array.from(p.querySelectorAll('[data-aoe-tid]')).filter(c => c.checked);
+        if (!checked.length) { if (window.showAppToast) window.showAppToast('Aucune cible cochée.', '#c0392b'); return; }
+        let asked = 0, rolled = 0;
+        checked.forEach(c => {
+            const tok = find(state.tokens, c.dataset.aoeTid); if (!tok) return;
+            const resEl = p.querySelector(`[data-aoe-res="${CSS.escape(tok.id)}"]`);
+            if (tok.owner) {
+                // Jeton d'un joueur → on lui demande le jet (il roule avec le mod. de SA fiche)
+                gmBroadcast('roll-request', { skill: kind, label: label, dc: dc, targetUserId: tok.owner });
+                asked++;
+                if (resEl) resEl.textContent = '⏳ demandé';
+            } else {
+                // PNJ / monstre → jet automatique local (d20 nu ; le MJ ajuste au besoin)
+                const r = Math.floor(Math.random() * 20) + 1;
+                rolled++;
+                let txt = '🎲 ' + r;
+                if (dc != null) txt += (r >= dc ? ' ✅' : ' ❌');
+                if (resEl) { resEl.textContent = txt; resEl.classList.toggle('is-ok', dc != null && r >= dc); resEl.classList.toggle('is-ko', dc != null && r < dc); }
+                clog('🎯 ' + (tok.name || 'Jeton') + ' — ' + label + ' : ' + r + (dc != null ? (r >= dc ? ' (réussite)' : ' (échec)') : ''));
+            }
+        });
+        const parts = [];
+        if (asked) parts.push(asked + ' joueur' + (asked > 1 ? 's' : ''));
+        if (rolled) parts.push(rolled + ' PNJ/monstre' + (rolled > 1 ? 's' : ''));
+        clog('🎯 Gabarit — ' + label + (dc != null ? ' DD ' + dc : '') + ' → ' + parts.join(' + '));
+        if (window.showAppToast) window.showAppToast('🎯 ' + label + ' demandé(e) — ' + parts.join(' + '), '#2c3e50');
+    }
+
     function renderWeather() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('canvas.gm-layer-weather'); if (!canvas) return;
@@ -2296,40 +2415,6 @@
         window.VTTHazards.apply(canvas, list, Math.max(1, board.clientWidth), Math.max(1, board.clientHeight));
     }
     function clearHazardsConfirm() { if (!confirm('Retirer tous les dangers de cette carte ?')) return; if (state.map) state.map.hazards = []; save(); renderMap(); broadcastMap(true); }
-    // ----- Terrain difficile (Lot 34b2) : zones où le déplacement mesuré compte double -----
-    function terrainData() { const m = state.map || {}; if (!Array.isArray(m.terrain)) m.terrain = []; return m.terrain; }
-    function clearTerrainConfirm() { if (!confirm('Retirer tout le terrain difficile ?')) return; if (state.map) state.map.terrain = []; save(); renderMap(); broadcastMap(true); }
-    function renderTerrain() {
-        const view = byId('gm-map-view'); if (!view) return;
-        const canvas = view.querySelector('canvas.gm-layer-terrain'); if (!canvas) return;
-        const board = view.querySelector('.gm-board'); if (!board) return;
-        const w = Math.max(1, board.clientWidth), h = Math.max(1, board.clientHeight);
-        if (canvas.width !== w) canvas.width = w;
-        if (canvas.height !== h) canvas.height = h;
-        window.VTTGeo && window.VTTGeo.paintTerrain ? window.VTTGeo.paintTerrain(canvas.getContext('2d'), terrainData(), w, h) : null;
-    }
-    let _terrainLast = null;
-    function paintTerrainAt(e) {
-        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
-        const r = board.getBoundingClientRect();
-        const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-        const ter = terrainData();
-        const pts = [];
-        if (_terrainLast) { const dx = x - _terrainLast.x, dy = y - _terrainLast.y, dist = Math.hypot(dx, dy); const n = Math.min(60, Math.ceil(dist / Math.max(terrainBrush * 0.5, 0.008))); for (let i = 1; i <= n; i++) pts.push({ x: _terrainLast.x + dx * (i / n), y: _terrainLast.y + dy * (i / n) }); }
-        if (!pts.length) pts.push({ x, y });
-        if (mapTool === 'terrain') pts.forEach(p => ter.push({ x: p.x, y: p.y, r: terrainBrush, kind: terrainKind }));
-        else pts.forEach(p => { const keep = ter.filter(t => Math.hypot(t.x - p.x, t.y - p.y) > terrainBrush); ter.length = 0; keep.forEach(t => ter.push(t)); });
-        _terrainLast = { x, y };
-        renderTerrain();
-    }
-    // Fraction du trajet A→B qui traverse du terrain DIFFICILE (0..1) — pour doubler la distance.
-    // La glace (kind 'ice') est visuelle : elle ne compte pas comme terrain difficile.
-    function terrainFractionOnPath(x1, y1, x2, y2) {
-        const ter = ((state.map && state.map.terrain) || []).filter(z => terrainIsDifficult(z.kind)); if (!ter.length) return 0;
-        const N = 24; let inCount = 0;
-        for (let i = 0; i <= N; i++) { const t = i / N, px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t; if (ter.some(z => Math.hypot(z.x - px, z.y - py) <= (z.r || 0.06))) inCount++; }
-        return inCount / (N + 1);
-    }
     function eraseHazardAt(e) {
         const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
         const r = board.getBoundingClientRect();
@@ -2338,6 +2423,80 @@
         hz.forEach((z, i) => { const d = Math.hypot(px - z.x * r.width, py - z.y * r.height); if (d < (z.r || 0.08) * r.width && d < bd) { bd = d; bi = i; } });
         if (bi >= 0) { hz.splice(bi, 1); save(); renderMap(); broadcastMap(true); }
     }
+    // ===== ZONES SONORES SPATIALISÉES (#3, Lot 33b) =====
+    // Modèle : state.map.soundZones = [{ id, x, y (centre, fractions board), r (fraction largeur = portée),
+    //          url (audio partageable), name, vol (0..1 = volume max au cœur) }].
+    // Côté MJ : marqueur visuel + aperçu audio local. Côté joueur : boucle audio dont le volume
+    // monte quand SON jeton approche du centre (session.js).
+    function soundZonesData() { const m = state.map || {}; if (!Array.isArray(m.soundZones)) m.soundZones = []; return m.soundZones; }
+    function clearSoundZonesConfirm() { if (!confirm('Retirer toutes les zones sonores de cette carte ?')) return; stopSoundPreview(); if (state.map) state.map.soundZones = []; save(); renderMap(); broadcastMap(true); }
+    function renderSoundZones() {
+        const view = byId('gm-map-view'); if (!view) return;
+        const host = view.querySelector('.gm-layer-sound'); if (!host) return;
+        const board = view.querySelector('.gm-board'); if (!board) return;
+        const w = Math.max(1, board.clientWidth);
+        const zones = soundZonesData().concat((soundDraft && soundDraft.r > 0.01) ? [Object.assign({ id: '__draft' }, soundDraft)] : []);
+        host.innerHTML = zones.map(z => {
+            const rpx = (Number(z.r) || 0.15) * w, dpx = rpx * 2;
+            const playing = sndPreview.id === z.id;
+            const muted = z.id !== '__draft' && !z.url;
+            return `<div class="gm-sound-ring${playing ? ' is-playing' : ''}" style="left:${z.x * 100}%; top:${z.y * 100}%; width:${dpx}px; height:${dpx}px;"></div>`
+                + (z.id === '__draft' ? '' : `<button class="gm-sound-pin${muted ? ' is-muted' : ''}" data-sound="${z.id}" style="left:${z.x * 100}%; top:${z.y * 100}%;" title="Zone sonore${z.name ? ' — ' + esc(z.name) : ''}${muted ? ' (aucun son défini)' : ''} · clic (outil 🔊) : régler">${muted ? '🔇' : '🔊'}</button>`);
+        }).join('');
+    }
+    function ensureSoundPopover() {
+        let p = byId('gm-sound-popover'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-sound-popover'; p.className = 'gm-token-popover hidden no-print';
+        document.body.appendChild(p);
+        document.addEventListener('pointerdown', (e) => { if (!p.classList.contains('hidden') && !e.target.closest('#gm-sound-popover') && !e.target.closest('.gm-sound-pin')) { p.classList.add('hidden'); stopSoundPreview(); } });
+        return p;
+    }
+    function stopSoundPreview() { if (sndPreview.el) { try { sndPreview.el.pause(); } catch (_) {} } sndPreview = { id: null, el: null }; }
+    function toggleSoundPreview(z) {
+        if (sndPreview.id === z.id) { stopSoundPreview(); renderSoundZones(); return; }
+        stopSoundPreview();
+        if (!z.url) { if (window.showAppToast) window.showAppToast('Choisis d\'abord un son (liste ou URL).', '#c0392b'); return; }
+        try {
+            const a = new Audio(z.url); a.loop = true; a.volume = Math.max(0, Math.min(1, z.vol != null ? Number(z.vol) : 0.8));
+            const pr = a.play();
+            if (pr && pr.catch) pr.catch(() => { if (window.showAppToast) window.showAppToast('Lecture impossible (URL ou format).', '#c0392b'); });
+            sndPreview = { id: z.id, el: a };
+        } catch (_) {}
+        renderSoundZones();
+    }
+    function openSoundZonePopover(id, e) {
+        const z = soundZonesData().find(x => x.id === id); if (!z) return;
+        const p = ensureSoundPopover();
+        if (z.vol == null) z.vol = 0.8;
+        // Sons de la table utilisables comme source (les sons « locaux » ne sont pas diffusables aux joueurs)
+        const pads = (state.soundboard || []).filter(s => s.url && !s.local);
+        const padOpts = ['<option value="">— Choisir un son de la table —</option>']
+            .concat(pads.map(s => `<option value="${esc(s.url)}"${z.url === s.url ? ' selected' : ''}>🔊 ${esc(s.name || 'Son')}</option>`)).join('');
+        p.innerHTML = `
+            <div class="gm-tp-row"><input class="gm-input" data-sp="name" value="${esc(z.name || '')}" placeholder="Nom de l'ambiance (cascade, foule…)"></div>
+            <div class="gm-tp-row" title="Choisir un son importé dans l'onglet Audio (soundboard)"><label>🎵</label><select class="gm-input" data-sp="pad">${padOpts}</select></div>
+            <div class="gm-tp-row" title="Ou coller une URL audio directe (.mp3, .ogg…)"><label>🔗</label><input class="gm-input" data-sp="url" value="${esc(z.url || '')}" placeholder="https://…/ambiance.mp3"></div>
+            <div class="gm-tp-row"><label>🔊 Volume</label><input type="range" data-sp="vol" min="0" max="100" step="5" value="${Math.round((z.vol != null ? z.vol : 0.8) * 100)}"><b class="gm-fly-wval" data-sp-vval>${Math.round((z.vol != null ? z.vol : 0.8) * 100)}</b></div>
+            <div class="gm-tp-row"><label>📏 Portée</label><input type="range" data-sp="r" min="5" max="50" step="1" value="${Math.round((z.r || 0.15) * 100)}"><b class="gm-fly-wval" data-sp-rval>${Math.round((z.r || 0.15) * 100)}</b></div>
+            <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-sp-act="preview">${sndPreview.id === z.id ? '⏹️ Stop' : '▶️ Écouter'}</button><button class="gm-btn gm-btn-danger" data-sp-act="del">🗑️ Supprimer</button></div>
+            <div class="gm-tp-hint">Chaque joueur entend cette zone d'autant plus fort que SON jeton en est proche.</div>`;
+        p.classList.remove('hidden');
+        const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
+        p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
+        p.style.top = Math.max(8, Math.min(oy + 10, window.innerHeight - p.offsetHeight - 8)) + 'px';
+        const commit = (rerender) => { save(); if (rerender) renderMap(); broadcastMap(true); };
+        p.querySelector('[data-sp="name"]').addEventListener('input', (ev) => { z.name = ev.target.value; commit(false); });
+        p.querySelector('[data-sp="pad"]').addEventListener('change', (ev) => { if (ev.target.value) { z.url = ev.target.value; const u = p.querySelector('[data-sp="url"]'); if (u) u.value = z.url; commit(true); } });
+        p.querySelector('[data-sp="url"]').addEventListener('change', (ev) => { z.url = ev.target.value.trim(); commit(true); });
+        p.querySelector('[data-sp="vol"]').addEventListener('input', (ev) => { z.vol = Math.max(0, Math.min(1, (parseInt(ev.target.value, 10) || 0) / 100)); const v = p.querySelector('[data-sp-vval]'); if (v) v.textContent = Math.round(z.vol * 100); if (sndPreview.id === z.id && sndPreview.el) sndPreview.el.volume = z.vol; commit(false); });
+        p.querySelector('[data-sp="r"]').addEventListener('input', (ev) => { z.r = Math.max(0.05, Math.min(0.5, (parseInt(ev.target.value, 10) || 15) / 100)); const v = p.querySelector('[data-sp-rval]'); if (v) v.textContent = Math.round(z.r * 100); commit(true); });
+        p.querySelectorAll('[data-sp-act]').forEach(b => b.addEventListener('click', () => {
+            const act = b.dataset.spAct;
+            if (act === 'preview') { toggleSoundPreview(z); b.textContent = sndPreview.id === z.id ? '⏹️ Stop' : '▶️ Écouter'; }
+            else if (act === 'del') { stopSoundPreview(); state.map.soundZones = soundZonesData().filter(x => x.id !== id); p.classList.add('hidden'); commit(true); }
+        }));
+    }
+
     // ----- Badges d'état sur les jetons (manuels + auto depuis les fiches joueurs) -----
     function matchCondIcon(lbl) {
         const s = String(lbl || '').toLowerCase();
@@ -2646,9 +2805,7 @@
         const x1 = moveMeasure.x1 * w, y1 = moveMeasure.y1 * h, x2 = moveMeasure.x2 * w, y2 = moveMeasure.y2 * h;
         const g = Math.max(1, gridPxFor(w));
         const cells = Math.hypot(x2 - x1, y2 - y1) / g;
-        const base = cells * cellMeters();
-        const tf = terrainFractionOnPath(moveMeasure.x1, moveMeasure.y1, moveMeasure.x2, moveMeasure.y2);  // portion en terrain difficile
-        const meters = base * (1 + tf);                     // terrain difficile = coûte double
+        const meters = cells * cellMeters();
         const spd = moveMeasure.speed || 9;
         const col = meters <= spd + 1e-6 ? '#57a64a' : (meters <= spd * 2 + 1e-6 ? '#d68a2b' : '#e23b3b');
         ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineCap = 'round';
@@ -2657,7 +2814,7 @@
         ctx.fillStyle = col;
         [[x1, y1], [x2, y2]].forEach(pt => { ctx.beginPath(); ctx.arc(pt[0], pt[1], 4, 0, Math.PI * 2); ctx.fill(); });
         const tag = meters <= spd + 1e-6 ? '' : (meters <= spd * 2 + 1e-6 ? ' ⚡Foncer' : ' 🚫');
-        const label = (Math.round(meters * 10) / 10).toLocaleString('fr-FR') + ' m / ' + spd + ' m' + (tf > 0.01 ? ' 🏔️' : '') + tag;
+        const label = (Math.round(meters * 10) / 10).toLocaleString('fr-FR') + ' m / ' + spd + ' m' + tag;
         ctx.font = 'bold 13px Lora, serif';
         const tw = ctx.measureText(label).width;
         const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 16;
@@ -2719,7 +2876,7 @@
         let bw = Math.min(vw, vh * AR), bh = bw / AR;
         boardWpx = bw;
         const tokens = (state.tokens || []).map(tokenHtml).join('');
-        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><canvas class="gm-layer gm-layer-terrain"></canvas><canvas class="gm-layer gm-layer-hazards"></canvas><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-daynight"></div><div class="gm-layer gm-layer-tint"></div></div></div>`;
+        view.innerHTML = `<div class="gm-map-content"><div class="gm-board" style="left:${(vw - bw) / 2}px; top:${(vh - bh) / 2}px; width:${bw}px; height:${bh}px;"><div class="gm-layer gm-layer-lights"></div><canvas class="gm-layer gm-layer-hazards"></canvas><div class="gm-layer gm-layer-tokens"${layStyle('tokens')}>${tokens}</div><canvas class="gm-layer gm-layer-draw"${layStyle('draw')}></canvas><canvas class="gm-layer gm-layer-templates"></canvas><canvas class="gm-layer gm-layer-weather"></canvas><canvas class="gm-layer gm-layer-fog"${layStyle('fog')}></canvas><canvas class="gm-layer gm-layer-vision"></canvas><canvas class="gm-layer gm-layer-walls"${layStyle('walls')}></canvas><canvas class="gm-layer gm-layer-gmnotes"${layStyle('gmnotes')}></canvas><div class="gm-layer gm-layer-doors gm-layer-walls"${layStyle('walls')}></div><div class="gm-layer gm-layer-sound"></div><canvas class="gm-layer gm-layer-ruler"></canvas><div class="gm-layer gm-layer-daynight"></div><div class="gm-layer gm-layer-tint"></div></div></div>`;
         const board = view.querySelector('.gm-board');
         const tintEl = board.querySelector('.gm-layer-tint'); if (tintEl) tintEl.style.background = m.tint || 'transparent';
         const dnEl = board.querySelector('.gm-layer-daynight'); if (dnEl) dnEl.style.background = ((m.dayNight && m.dayNight.on) ? dayNightTint(m.dayNight.time == null ? 12 : m.dayNight.time) : '') || 'transparent';
@@ -2736,18 +2893,18 @@
         board.style.setProperty('--gm-grid-op', OP.grid == null ? 1 : OP.grid);
         applyMapTransform();
         renderTemplates();
-        renderTerrain();
         renderHazards();
         renderWeather();
         renderDraw();
         renderGmNotes();
         renderLights();
+        renderSoundZones();
         if (L.fog !== false) renderFog();
         if (L.walls !== false) renderWalls();
         renderVisionPreview();
         renderRuler();
         if (losA) renderLos();                              // ligne de vue : persiste au re-render
-        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase', 'hazard', 'hazarderase', 'los', 'terrain', 'terrainerase'];
+        const paintTools = ['reveal', 'cover', 'draw', 'gmnote', 'bg', 'wall', 'door', 'dooredit', 'wallerase', 'ruler', 'light', 'placetoken', 'placecombatant', 'aoe', 'aoeerase', 'hazard', 'hazarderase', 'sound', 'los'];
         view.classList.toggle('gm-tool-paint', paintTools.indexOf(mapTool) !== -1);
         view.classList.toggle('gm-tool-grab', mapTool === 'pan');
         view.classList.toggle('gm-tool-move', mapTool === 'objmove');
@@ -3042,7 +3199,7 @@
 
     function setupMapDrag() {
         const view = byId('gm-map-view'); if (!view) return;
-        let cur = null, tokenEl = null, panning = false, painting = false, terrainPainting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null, objDrag = null;
+        let cur = null, tokenEl = null, panning = false, painting = false, bgDrag = false, startX = 0, startY = 0, moved = false, startPan = null, bgStart = null, bgWheelTimer = null, objDrag = null;
         // Rect du BOARD (l'espace de coordonnées partagé) — pas du conteneur transformé.
         const contentRect = () => { const c = view.querySelector('.gm-board'); return c ? c.getBoundingClientRect() : view.getBoundingClientRect(); };
         view.addEventListener('pointerdown', (e) => {
@@ -3077,13 +3234,12 @@
             // Pastille de lumière : clic (outil lumière) = éditer.
             const lightPin = e.target.closest('.gm-light-pin');
             if (lightPin && mapTool === 'light') { openLightPopover(lightPin.dataset.light, e); e.preventDefault(); return; }
+            // Pastille de zone sonore : clic (outil 🔊) = régler.
+            const soundPin = e.target.closest('.gm-sound-pin');
+            if (soundPin && mapTool === 'sound') { openSoundZonePopover(soundPin.dataset.sound, e); e.preventDefault(); return; }
             if (mapTool === 'reveal' || mapTool === 'cover') {   // mode brouillard : on peint
                 painting = true; _fogLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 paintFogAt(e); e.preventDefault(); return;
-            }
-            if (mapTool === 'terrain' || mapTool === 'terrainerase') {   // terrain difficile : pinceau
-                terrainPainting = true; _terrainLast = null; try { view.setPointerCapture(e.pointerId); } catch (_) {}
-                paintTerrainAt(e); e.preventDefault(); return;
             }
             if (mapTool === 'wall' || mapTool === 'door') {      // tracé d'un mur / d'une porte
                 const r = contentRect();
@@ -3110,6 +3266,13 @@
                 lightDraft = { x, y, r: 0, color: lightColor };
                 try { view.setPointerCapture(e.pointerId); } catch (_) {}
                 renderLights(); e.preventDefault(); return;
+            }
+            if (mapTool === 'sound') {                           // zone sonore : origine → glisser la portée
+                const r = contentRect();
+                const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+                soundDraft = { x, y, r: 0 };
+                try { view.setPointerCapture(e.pointerId); } catch (_) {}
+                renderSoundZones(); e.preventDefault(); return;
             }
             if (mapTool === 'aoe') {                             // gabarit de sort : origine → glisser la taille
                 const r = contentRect();
@@ -3208,7 +3371,6 @@
                 renderWalls(); renderLights(); renderTemplates(); renderVisionPreview(); return;   // redraw léger (pas de rebuild DOM)
             }
             if (painting) { paintFogAt(e); return; }
-            if (terrainPainting) { paintTerrainAt(e); return; }
             if (wallDraft) {
                 const r = contentRect();
                 let p = wallSnapPoint((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r);
@@ -3227,6 +3389,12 @@
                 const px = e.clientX - r.left, py = e.clientY - r.top;
                 hazardDraft.r = Math.max(0, Math.min(0.5, Math.hypot(px - hazardDraft.x * r.width, py - hazardDraft.y * r.height) / r.width));
                 renderHazards(); return;
+            }
+            if (soundDraft) {                                  // glisser = régler la portée de la zone sonore
+                const r = contentRect();
+                const px = e.clientX - r.left, py = e.clientY - r.top;
+                soundDraft.r = Math.max(0, Math.min(0.5, Math.hypot(px - soundDraft.x * r.width, py - soundDraft.y * r.height) / r.width));
+                renderSoundZones(); return;
             }
             if (rulerDraft && rulerDraft.pts) {                  // règle : le dernier segment suit le curseur (élastique)
                 const r = contentRect();
@@ -3312,6 +3480,14 @@
                 hazardsData().push({ id: uid(), kind: hazardDraft.kind, x: hazardDraft.x, y: hazardDraft.y, r: r });
                 hazardDraft = null; save(); renderMap(); broadcastMap(true); return;
             }
+            if (soundDraft) {
+                // Clic simple = portée par défaut ; glisser = portée choisie. On ouvre le popover pour choisir le son.
+                const r = Math.max(0.05, Math.min(0.5, soundDraft.r > 0.02 ? soundDraft.r : 0.15));
+                const z = { id: uid(), x: soundDraft.x, y: soundDraft.y, r: r, url: '', name: '', vol: 0.8 };
+                soundZonesData().push(z);
+                soundDraft = null; save(); renderMap(); broadcastMap(true);
+                openSoundZonePopover(z.id, e); return;
+            }
             if (drawStroke) { drawStroke = null; drawIsNote = false; save(); broadcastMap(true); return; }
             if (wallDraft) {
                 // On ne garde que les segments réels (pas les simples clics)
@@ -3322,14 +3498,21 @@
             }
             if (rulerDraft && rulerDraft.pts) { return; }        // règle multi-points : on garde le chemin (fin = Échap / double-clic / autre outil)
             if (aoeDraft) {
+                let placed = null;
+                const ox = aoeDraft.x, oy = aoeDraft.y;
                 if (Math.hypot(aoeDraft.x2 - aoeDraft.x, aoeDraft.y2 - aoeDraft.y) > 0.008) {
-                    templatesData().push(Object.assign({ id: uid() }, aoeDraft));
+                    placed = Object.assign({ id: uid() }, aoeDraft);
+                    templatesData().push(placed);
                 }
-                aoeDraft = null; save(); renderMap(); broadcastMap(true); return;
+                aoeDraft = null; save(); renderMap(); broadcastMap(true);
+                // Gabarit intelligent : lister les jetons touchés + proposer les sauvegardes.
+                // Glisser = nouveau gabarit ; clic simple sur l'origine d'un gabarit existant = ré-ouvrir son panneau.
+                if (placed) openAoeTargetPanel(placed, e);
+                else { const near = templatesData().find(tt => Math.hypot(tt.x - ox, tt.y - oy) < 0.02); if (near) openAoeTargetPanel(near, e); }
+                return;
             }
             if (bgDrag) { bgDrag = false; save(); broadcastMap(true); return; }
             if (painting) { painting = false; _fogLast = null; save(); broadcastMap(true); return; }
-            if (terrainPainting) { terrainPainting = false; _terrainLast = null; save(); renderMap(); broadcastMap(true); return; }
             if (cur) {
                 if (!moved) { openTokenPopover(cur, e); }              // clic simple → bulle d'édition
                 else { const sn = snapFraction(cur.x, cur.y); cur.x = sn.x; cur.y = sn.y; autoRevealAround(cur); }
@@ -3364,11 +3547,6 @@
             if (mapTool === 'reveal' || mapTool === 'cover') {   // molette = taille du pinceau de brouillard
                 fogBrush = Math.max(0.02, Math.min(0.25, fogBrush * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
                 if (window.showAppToast) window.showAppToast('🖌️ Pinceau : ' + Math.round(fogBrush * 100) + '%', '#2c3e50');
-                return;
-            }
-            if (mapTool === 'terrain' || mapTool === 'terrainerase') {   // molette = taille du pinceau de terrain
-                terrainBrush = Math.max(0.02, Math.min(0.25, terrainBrush * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
-                if (window.showAppToast) window.showAppToast('🏔️ Pinceau terrain : ' + Math.round(terrainBrush * 100) + '%', '#2c3e50');
                 return;
             }
             if (mapTool === 'draw') {   // molette = épaisseur du trait
@@ -3735,7 +3913,7 @@
         byId('gm-init-next').addEventListener('click', () => {
             if (!state.initiative.length) return;
             state.turnIndex++;
-            if (state.turnIndex >= state.initiative.length) { state.turnIndex = 0; state.round++; clog('🔄 Round ' + state.round); }
+            if (state.turnIndex >= state.initiative.length) { state.turnIndex = 0; state.round++; clog('🔄 Round ' + state.round); tickCombatEffects(); }
             const cur = state.initiative[state.turnIndex];
             if (cur && state.combatActive) clog('▶️ Tour de ' + cur.name);
             save(); renderInit(); broadcastCombat();
@@ -4136,6 +4314,25 @@
                     if (state.turnIndex >= state.initiative.length) state.turnIndex = 0;
                     save(); renderInit(); break;
                 }
+                case 'init-fx-add': {
+                    const c = find(state.initiative, id); if (!c) break;
+                    const raw = prompt('Effet temporaire (la durée en tours peut suivre, ex : « Bénédiction 3 ») :', '');
+                    if (raw == null || !raw.trim()) break;
+                    const m = raw.trim().match(/^(.*?)[\s:]*(\d+)\s*(?:tours?|rounds?)?$/i);
+                    const label = (m && m[1].trim()) ? m[1].trim() : raw.trim();
+                    const rounds = (m && m[2]) ? Math.max(1, parseInt(m[2], 10)) : 1;
+                    if (!c.effects) c.effects = [];
+                    c.effects.push({ label: label.slice(0, 24), rounds: Math.min(99, rounds) });
+                    clog('✨ ' + (c.name || 'Combattant') + ' : effet « ' + label + ' » (' + rounds + ' tour' + (rounds > 1 ? 's' : '') + ')');
+                    save(); renderInit(); break;
+                }
+                case 'init-fx-del': {
+                    const c = find(state.initiative, id); if (!c || !c.effects) break;
+                    const lbl = t.dataset.fx;
+                    const idx2 = c.effects.findIndex(f => f.label === lbl);
+                    if (idx2 >= 0) c.effects.splice(idx2, 1);
+                    save(); renderInit(); break;
+                }
                 case 'mon-del': state.monsters = state.monsters.filter(m => m.id !== id); save(); renderMonsters(); break;
                 case 'mon-eye': { const m = find(state.monsters, id); if (m) { m.hidden = !m.hidden; save(); renderMonsters(); } break; }
                 case 'init-eye': { const c = find(state.initiative, id); if (c) { c.hidden = !c.hidden; save(); renderInit(); } break; }
@@ -4441,6 +4638,7 @@
         if (!localStorage.getItem(TUTO_KEY)) setTimeout(() => startGmTutorial(false), 800);
     }
     function close() {
+        stopSoundPreview();                                 // couper un éventuel aperçu de zone sonore
         // Restaure le rôle musique : « joueur » seulement si une session joueur est active, sinon « libre »
         if (window.MusicPlayer && window.MusicPlayer.setRole) {
             const asPlayer = !!(window.PlayerSession && window.PlayerSession.isConnected && window.PlayerSession.isConnected());

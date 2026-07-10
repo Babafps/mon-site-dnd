@@ -275,33 +275,42 @@
         });
     }
 
-    // Terrain (Lot 34b2/b3) : zones translucides par type, partagées MJ / joueur.
-    // terrain = [{ x, y, r, kind }] en fractions. kind ∈ rough/water/sand/ice.
-    //   fill = remplissage, line = hachure. 'ice' : trame perpendiculaire (glissant).
-    const TERRAIN_STYLE = {
-        rough: { fill: 'rgba(120,80,40,0.28)', line: 'rgba(90,55,25,0.35)' },
-        water: { fill: 'rgba(50,110,190,0.30)', line: 'rgba(30,80,150,0.35)' },
-        sand: { fill: 'rgba(205,180,110,0.32)', line: 'rgba(160,135,70,0.35)' },
-        ice: { fill: 'rgba(150,205,225,0.30)', line: 'rgba(200,235,245,0.5)' }
-    };
-    function paintTerrain(ctx, terrain, w, h) {
-        ctx.clearRect(0, 0, w, h);
-        if (!terrain || !terrain.length) return;
-        terrain.forEach(z => {
-            const st = TERRAIN_STYLE[z.kind || 'rough'] || TERRAIN_STYLE.rough;
-            const cx = z.x * w, cy = z.y * h, R = (z.r || 0.05) * w;
-            ctx.save();
-            ctx.fillStyle = st.fill;
-            ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
-            // Trame : diagonale pour les terrains, croisée pour la glace
-            ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
-            ctx.strokeStyle = st.line; ctx.lineWidth = 1.5;
-            for (let d = -R; d <= R; d += 7) { ctx.beginPath(); ctx.moveTo(cx - R + d, cy - R); ctx.lineTo(cx + R + d, cy + R); ctx.stroke(); }
-            if (z.kind === 'ice') { for (let d = -R; d <= R; d += 7) { ctx.beginPath(); ctx.moveTo(cx + R - d, cy - R); ctx.lineTo(cx - R - d, cy + R); ctx.stroke(); } }
-            ctx.restore();
-        });
+    // Teste si un point (px,py en px du canvas) est DANS un gabarit de sort.
+    // Géométrie STRICTEMENT alignée sur drawTemplates ci-dessus (sinon un jeton
+    // dessiné hors de la zone serait compté, ou l'inverse).
+    // t = même modèle que drawTemplates ; w,h = dimensions du canvas ; gridPx = taille d'une case en px.
+    function pointInTemplate(t, px, py, w, h, gridPx) {
+        if (!t) return false;
+        const x1 = t.x * w, y1 = t.y * h, x2 = (t.x2 != null ? t.x2 : t.x) * w, y2 = (t.y2 != null ? t.y2 : t.y) * h;
+        const dx = x2 - x1, dy = y2 - y1, dist = Math.hypot(dx, dy);
+        if (dist < 2) return false;
+        const rx = px - x1, ry = py - y1;
+        if (t.kind === 'cone') {
+            const r = Math.hypot(rx, ry);
+            if (r > dist) return false;
+            const a = Math.atan2(dy, dx), half = Math.atan(0.5);   // même demi-angle que le dessin
+            let da = Math.atan2(ry, rx) - a;
+            while (da > Math.PI) da -= 2 * Math.PI;
+            while (da < -Math.PI) da += 2 * Math.PI;
+            return Math.abs(da) <= half;
+        }
+        if (t.kind === 'line') {
+            const lw = Math.max(6, (gridPx || 24) * 0.5);          // même largeur que le dessin
+            const ux = dx / dist, uy = dy / dist;
+            const along = rx * ux + ry * uy;
+            if (along < 0 || along > dist) return false;
+            const perp = Math.abs(rx * (-uy) + ry * ux);
+            return perp <= lw / 2;
+        }
+        if (t.kind === 'cube') {
+            const side = Math.max(Math.abs(dx), Math.abs(dy));
+            const ex = x1 + side * (dx < 0 ? -1 : 1), ey = y1 + side * (dy < 0 ? -1 : 1);
+            return px >= Math.min(x1, ex) && px <= Math.max(x1, ex) && py >= Math.min(y1, ey) && py <= Math.max(y1, ey);
+        }
+        return Math.hypot(rx, ry) <= dist;                          // circle (sphère)
     }
-    window.VTTGeo = { segCross, moveBlocked, moveBlockedPx, distToSegment, visionPolygon, wallsToPx, eraseVision, eraseVisionSoft, paintLightTint, visionRadiusPx, blockingWalls, drawTemplates, pointVisible, paintTerrain };
+
+    window.VTTGeo = { segCross, moveBlocked, moveBlockedPx, distToSegment, visionPolygon, wallsToPx, eraseVision, eraseVisionSoft, paintLightTint, visionRadiusPx, blockingWalls, drawTemplates, pointInTemplate, pointVisible };
 })();
 
 // =====================================================

@@ -217,7 +217,17 @@ body.theme-dark .gm-tool-sep { background: rgba(196,155,53,0.2); }
 .gm-round b { color: var(--primary-color, #7A2828); font-size: 1.15rem; }
 .gm-combat-status { font-size: 0.72rem; font-weight: bold; color: #9a8a6e; background: rgba(0,0,0,0.05); border-radius: 12px; padding: 2px 9px; white-space: nowrap; }
 .gm-combat-status.is-active { color: #1e8449; background: rgba(39,174,96,0.16); }
-.gm-init-item { display: flex; align-items: center; gap: 8px; background: #fffdf9; border: 1px solid rgba(122,40,40,0.16); border-left: 4px solid transparent; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }
+.gm-init-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #fffdf9; border: 1px solid rgba(122,40,40,0.16); border-left: 4px solid transparent; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }
+/* Effets temporaires à compteur de tours (Lot 34b4) */
+.gm-init-fxadd { background: none; border: none; cursor: pointer; font-size: 0.95rem; padding: 2px 4px; border-radius: 6px; filter: grayscale(0.3); }
+.gm-init-fxadd:hover { background: rgba(196,155,53,0.22); filter: none; transform: scale(1.12); }
+.gm-init-fxrow { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.gm-init-fx { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; background: rgba(122,40,40,0.1); border: 1px solid rgba(122,40,40,0.25); border-radius: 10px; padding: 1px 7px; cursor: pointer; color: #6a4a2a; }
+.gm-init-fx b { color: var(--primary-color, #7A2828); }
+.gm-init-fx.is-last { background: rgba(231,76,60,0.16); border-color: rgba(231,76,60,0.4); }
+.gm-init-fx:hover { background: rgba(231,76,60,0.22); }
+body.theme-dark .gm-init-fx { background: rgba(196,155,53,0.14); color: #d8cbb2; border-color: rgba(196,155,53,0.3); }
+body.theme-dark .gm-init-fx b { color: #e2c25a; }
 .gm-init-item.is-active { border-left-color: var(--accent-color, #C49B35); background: rgba(196,155,53,0.14); box-shadow: inset 0 0 0 1px rgba(196,155,53,0.35); }
 .gm-init-item.is-mj-hidden { opacity: 0.6; border-style: dashed; }
 .gm-init-init { font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.05rem; color: var(--primary-color, #7A2828); min-width: 26px; text-align: center; }
@@ -395,6 +405,19 @@ canvas.gm-layer-walls, .gm-layer-vision, .gm-layer-ruler { position: absolute; i
     border-radius: 50%; border: 2px solid var(--lc, #ffcf7a); background: rgba(30,22,10,0.9); font-size: 0.8rem; line-height: 1;
     cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--lc, #ffcf7a); }
 .gm-light-pin:hover { transform: translate(-50%, -50%) scale(1.18); }
+/* Zones sonores spatialisées (marqueur MJ uniquement — les joueurs les ENTENDENT) */
+.gm-layer-sound { position: absolute; inset: 0; pointer-events: none; z-index: 9; }
+.gm-sound-ring { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    border: 2px dashed rgba(120,200,255,0.55); background: radial-gradient(circle, rgba(90,170,240,0.14) 0%, transparent 72%); }
+.gm-sound-ring.is-playing { border-color: rgba(120,220,255,0.95); animation: gm-sound-pulse 1.4s ease-in-out infinite; }
+@keyframes gm-sound-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(120,200,255,0.35); } 50% { box-shadow: 0 0 22px 4px rgba(120,200,255,0.45); } }
+.gm-sound-pin { position: absolute; transform: translate(-50%, -50%); z-index: 10; width: 24px; height: 24px; padding: 0;
+    border-radius: 50%; border: 2px solid rgba(120,200,255,0.9); background: rgba(14,24,38,0.92); font-size: 0.8rem; line-height: 1;
+    cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(90,170,240,0.6); }
+.gm-sound-pin:hover { transform: translate(-50%, -50%) scale(1.18); }
+.gm-sound-pin.is-muted { border-color: rgba(150,150,150,0.7); box-shadow: none; opacity: 0.85; }
+.gm-tp-hint { font-size: 0.74rem; color: #8a7a5e; line-height: 1.3; }
+body.theme-dark .gm-tp-hint { color: #b3a488; }
 /* Palette de type de jeton posé */
 /* Chips (choix joueur / type / météo…) : passage à la ligne + noms longs tronqués
    proprement — le libellé ne se fait plus recouvrir (bugfix Lot 28, capture Charlie). */
@@ -518,11 +541,11 @@ body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155
 .gm-token-badges { position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); white-space: nowrap;
     font-size: 0.62rem; line-height: 1; background: rgba(20,14,8,0.78); border-radius: 8px; padding: 1px 4px; pointer-events: none; }
 /* Couches gabarits / météo */
-.gm-layer-templates, .gm-layer-weather, .gm-layer-hazards, .gm-layer-terrain { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-/* Teinte d'ambiance (voile coloré sur la carte, Lot 30) */
-.gm-layer-tint { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; transition: background 0.6s ease; z-index: 2; }
+.gm-layer-templates, .gm-layer-weather, .gm-layer-hazards { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Teinte d'ambiance (voile coloré sur la carte, Lot 30 ; superposition normale = toujours visible même sans image de fond, Lot 34b4) */
+.gm-layer-tint { position: absolute; inset: 0; pointer-events: none; transition: background 0.6s ease; z-index: 2; }
 /* Cycle jour/nuit (teinte globale selon l'heure, Lot 32) */
-.gm-layer-daynight { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; transition: background 0.8s ease; z-index: 2; }
+.gm-layer-daynight { position: absolute; inset: 0; pointer-events: none; transition: background 0.8s ease; z-index: 2; }
 /* Ligne de flyout grisée (curseur inactif tant que l'effet est masqué) */
 .gm-fly-row-disabled { opacity: 0.5; }
 .gm-fly-row-disabled input { pointer-events: none; }
@@ -577,6 +600,33 @@ body.theme-dark .gm-ambiance-btns button { background: #2a2118; color: #e6d8bd; 
 .gm-tp-upload { flex: 0 0 auto; }
 .gm-tp-actions { justify-content: space-between; }
 body.theme-dark .gm-token-popover { background: linear-gradient(172deg, #241c16, #2c231b); }
+
+/* ---- Gabarit intelligent (jetons touchés + sauvegardes) ---- */
+.gm-aoe-panel {
+    position: fixed; z-index: 7600; width: 268px; padding: 11px; display: flex; flex-direction: column; gap: 8px;
+    background: var(--widget-bg, #fffdf7); border: 1px solid var(--accent-color, #C49B35); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4); font-family: 'Lora', serif;
+}
+.gm-aoe-panel.hidden { display: none; }
+.gm-aoe-head { font-weight: bold; color: var(--primary-color, #7A2828); font-size: 0.96rem; }
+.gm-aoe-empty { font-size: 0.85rem; color: #8a7a5e; font-style: italic; }
+.gm-aoe-list { display: flex; flex-direction: column; gap: 3px; max-height: 230px; overflow-y: auto; }
+.gm-aoe-row { display: flex; align-items: center; gap: 7px; padding: 3px 5px; border-radius: 7px; cursor: pointer; }
+.gm-aoe-row:hover { background: rgba(196,155,53,0.12); }
+.gm-aoe-row input[type="checkbox"] { flex: 0 0 auto; }
+.gm-aoe-ic { flex: 0 0 auto; }
+.gm-aoe-nm { flex: 1 1 auto; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-aoe-res { flex: 0 0 auto; font-size: 0.82rem; font-weight: bold; color: #8a7a5e; min-width: 34px; text-align: right; }
+.gm-aoe-res.is-ok { color: #2e7d32; }
+.gm-aoe-res.is-ko { color: #c0392b; }
+.gm-aoe-cfg { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gm-aoe-cfg-l { font-size: 0.82rem; color: #6a5a3e; flex: 0 0 auto; }
+.gm-aoe-cfg #gm-aoe-save { flex: 1 1 auto; min-width: 90px; }
+.gm-aoe-actions { display: flex; gap: 6px; }
+.gm-aoe-actions .gm-btn-primary { flex: 1; text-align: center; }
+body.theme-dark .gm-aoe-panel { background: linear-gradient(172deg, #241c16, #2c231b); }
+body.theme-dark .gm-aoe-empty, body.theme-dark .gm-aoe-cfg-l { color: #b3a488; }
+body.theme-dark .gm-aoe-res { color: #b3a488; }
 
 /* ---- Préparation (arbre) ---- */
 .gm-tree-toolbar .gm-input { flex: 1; }
