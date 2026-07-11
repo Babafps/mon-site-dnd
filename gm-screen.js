@@ -327,9 +327,9 @@
     }
 
     // Parser de chat de dés : « /r 1d20+5 » (public, diffusé aux joueurs) ; « /w gm 1d20 » (secret, MJ seul).
-    function handleDiceCommand(raw) {
+    function handleDiceCommand(raw, forceSecret) {
         raw = String(raw || '').trim(); if (!raw) return;
-        let secret = false, formula = raw;
+        let secret = !!forceSecret, formula = raw;
         const mw = raw.match(/^\/w\s+gm\s+(.+)$/i), mr = raw.match(/^\/r\s+(.+)$/i);
         if (mw) { secret = true; formula = mw[1].trim(); }
         else if (mr) { formula = mr[1].trim(); }
@@ -455,6 +455,13 @@
                             <input id="gm-mon-ac" class="gm-input gm-num" type="number" placeholder="CA">
                             <button id="gm-mon-add" class="gm-add" title="Ajouter">＋</button>
                         </div>
+                        <button id="gm-statblock-toggle" class="gm-btn" style="width:100%;" title="Colle le texte d'un bloc de stats (livre, PDF…) : CA, PV et attaques sont extraits automatiquement.">📋 Coller un bloc de stats</button>
+                        <div id="gm-statblock-zone" style="display:none;">
+                            <textarea id="gm-statblock-text" class="gm-textarea" placeholder="Colle ici le bloc de stats complet du monstre (nom, Classe d'armure, Points de vie, caracs, attaques…)"></textarea>
+                            <button id="gm-statblock-parse" class="gm-btn gm-btn-primary" style="width:100%;">🔍 Analyser le bloc</button>
+                            <div id="gm-statblock-preview"></div>
+                        </div>
+                        <div id="gm-bestiary"></div>
                         <div id="gm-mon-list"></div>
                     </div>
                 </div>
@@ -462,6 +469,7 @@
                 <div class="gm-card gm-span-2">
                     <div class="gm-card-head"><span class="gm-card-icon">📜</span> Journal de combat
                         <span class="gm-spacer"></span>
+                        <button id="gm-session-summary" class="gm-btn" title="Générer le résumé de la session (journal + quêtes + butin), copiable">🧾 Résumé</button>
                         <button id="gm-combatlog-clear" class="gm-btn" title="Vider le journal">🧹</button>
                     </div>
                     <div class="gm-card-body"><div id="gm-combatlog" class="gm-dice-log"></div></div>
@@ -518,6 +526,24 @@
                     </div>
                 </div>
 
+                <div id="gm-card-banner" class="gm-card">
+                    <div class="gm-card-head"><span class="gm-card-icon">🎭</span> Bannière d'annonce</div>
+                    <div class="gm-card-body">
+                        <div class="gm-row"><input id="gm-banner-title" class="gm-input" placeholder="Titre (ex. Chapitre 2 : Les Cavernes Oubliées)"></div>
+                        <div class="gm-row"><input id="gm-banner-sub" class="gm-input" placeholder="Sous-titre (optionnel — ex. 3 heures plus tard…)"><button id="gm-banner-send" class="gm-add" title="Afficher chez les joueurs">📢</button></div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Un grand bandeau apparaît en plein écran chez les joueurs, puis disparaît tout seul.</div>
+                    </div>
+                </div>
+
+                <div id="gm-card-loot" class="gm-card">
+                    <div class="gm-card-head"><span class="gm-card-icon">🎒</span> Butin du groupe (partagé)</div>
+                    <div class="gm-card-body">
+                        <div class="gm-row"><input id="gm-loot-name" class="gm-input" placeholder="Objet (ex. Corde 15 m)"><input id="gm-loot-qty" class="gm-input gm-num" type="number" min="1" value="1" style="width:64px;"><button id="gm-loot-add" class="gm-add" title="Ajouter au butin du groupe">＋</button></div>
+                        <div id="gm-loot-list"></div>
+                        <div class="gm-readonly-note gm-hint">ⓘ Visible et modifiable par tous les joueurs en session. Chacun peut ajouter / retirer.</div>
+                    </div>
+                </div>
+
                 <div id="gm-card-scenes" class="gm-card">
                     <div class="gm-card-head"><span class="gm-card-icon">🎬</span> Scènes (ambiance)</div>
                     <div class="gm-card-body">
@@ -526,9 +552,9 @@
                             <label class="gm-btn" id="gm-scene-img-label" style="flex:0 0 auto;" title="Image de fond (optionnel)">🖼️<input type="file" id="gm-scene-img" accept="image/*" style="display:none;"></label>
                             <button id="gm-scene-add" class="gm-add" title="Créer la scène">＋</button>
                         </div>
-                        <input id="gm-scene-music" class="gm-input" placeholder="🎵 Lien musique/ambiance (YouTube ou .mp3, optionnel)">
+                        <input id="gm-scene-music" class="gm-input" placeholder="🎵 1re piste (YouTube ou .mp3, optionnel)">
                         <div id="gm-scene-list" class="gm-scene-list"></div>
-                        <div class="gm-readonly-note gm-hint">ⓘ « Appliquer » change le fond ET la musique de tous les joueurs connectés, en direct.</div>
+                        <div class="gm-readonly-note gm-hint">ⓘ « Appliquer » change le fond ET lance la playlist chez tous les joueurs, en direct. Le bouton 🎵 d'une scène gère sa playlist (plusieurs pistes en boucle).</div>
                     </div>
                 </div>
 
@@ -621,9 +647,10 @@
                         <div class="gm-side-card-head">🎲 Lanceur de dés</div>
                         <div class="gm-dice-quick">${DICE.map(d => `<button class="gm-die" data-die="${d}">d${d}</button>`).join('')}</div>
                         <div class="gm-row">
-                            <input id="gm-dice-formula" class="gm-input" placeholder="2d6+3 · /r 1d20+5 · /w gm 1d20 (secret)">
+                            <input id="gm-dice-formula" class="gm-input" placeholder="2d6+3 · d20…">
                             <button id="gm-dice-roll" class="gm-add" title="Lancer">🎲</button>
                         </div>
+                        <label class="gm-map-ctl" title="Quand c'est coché, le résultat reste chez toi (les joueurs ne le voient pas). Les dés rapides ci-dessus sont toujours secrets."><input type="checkbox" id="gm-dice-secret"> 🤫 Jet secret (MJ seul)</label>
                         <div id="gm-dice-result" class="gm-dice-result"></div>
                     </div>
                     <div class="gm-side-card">
@@ -704,6 +731,15 @@
                             <button class="gm-btn" data-gen="rumor">Rumeur</button>
                             <button class="gm-btn" data-gen="loot">Trésor</button>
                             <button class="gm-btn" data-gen="encounter">Rencontre</button>
+                            <button class="gm-btn" data-gen="shop" title="Boutique aléatoire : marchand + étal d'objets avec prix">🛒 Boutique</button>
+                            <button class="gm-btn" data-gen="dungeon" title="Trace un donjon aléatoire (salles + couloirs + portes) sur la carte tactique">🏰 Donjon</button>
+                        </div>
+                        <div class="gm-row" id="gm-gen-shop-opts" style="display:none; gap:6px; margin-top:6px;">
+                            <select id="gm-gen-shoptype" class="gm-select" style="flex:1;"><option value="general">🧺 Marchand général</option><option value="blacksmith">⚒️ Forgeron</option><option value="alchemist">⚗️ Alchimiste</option><option value="magic">✨ Boutique de magie</option><option value="tavern">🍺 Taverne</option></select>
+                        </div>
+                        <div id="gm-gen-dungeon-opts" style="display:none; margin-top:6px;">
+                            <label class="gm-map-ctl" title="Remplit les salles avec des monstres (calque MJ, invisibles des joueurs), trésors et pièges."><input type="checkbox" id="gm-gen-dungeon-populate" checked> 🎲 Peupler les salles (monstres, trésors, pièges)</label>
+                            <select id="gm-gen-dungeon-tier" class="gm-select" style="width:100%; margin-top:4px;"><option value="1">Difficulté : Niv. 1-4</option><option value="2">Niv. 5-10</option><option value="3">Niv. 11-16</option><option value="4">Niv. 17-20</option></select>
                         </div>
                         <div class="gm-row" id="gm-gen-enc-opts" style="display:none; gap:6px; margin-top:6px;">
                             <select id="gm-gen-env" class="gm-select" style="flex:1;"><option value="forest">🌲 Forêt</option><option value="dungeon">🏚️ Donjon</option><option value="city">🏙️ Ville</option><option value="road">🛣️ Route</option><option value="mountain">⛰️ Montagne</option><option value="swamp">🐸 Marais</option><option value="coast">🌊 Côte</option></select>
@@ -861,7 +897,8 @@
                     { icon: '🧹', label: 'Effacer un danger (cliquer dessus)', type: 'tool', tool: 'hazarderase' },
                     { icon: '🗑️', label: 'Retirer tous les dangers', type: 'action', danger: true, run: clearHazardsConfirm },
                     { icon: '🔊', label: 'Zone sonore (glisser = portée)', type: 'tool', tool: 'sound' },
-                    { icon: '🗑️', label: 'Retirer toutes les zones sonores', type: 'action', danger: true, run: clearSoundZonesConfirm }
+                    { icon: '🗑️', label: 'Retirer toutes les zones sonores', type: 'action', danger: true, run: clearSoundZonesConfirm },
+                    { icon: '💥', label: (m.playerFxOff ? 'Effets d\'état plein écran des joueurs : COUPÉS' : 'Effets d\'état plein écran des joueurs : ON'), type: 'toggle', on: !m.playerFxOff, run: togglePlayerFx }
                 ]
             };
         }
@@ -1116,6 +1153,7 @@
                         <span class="gm-hp-val ${dead ? 'is-dead' : ''}">${m.hpCur}/${m.hpMax}</span>
                         <button class="gm-hp-btn" data-act="mon-hp" data-id="${m.id}" data-delta="1" title="Ajouter ces PV (soin)">＋</button>
                     </div>
+                    <button class="gm-mon-reveal" data-act="monster-reveal" data-id="${m.id}" title="Révélation cinématique aux joueurs (plein écran)">🐉</button>
                     <button class="gm-eye${m.hidden ? ' is-hidden' : ''}" data-act="mon-eye" data-id="${m.id}" title="${m.hidden ? 'Caché des joueurs (clic = montrer)' : 'Visible (clic = masquer aux joueurs)'}">${m.hidden ? '🙈' : '👁️'}</button>
                     <button class="gm-del-x" data-act="mon-del" data-id="${m.id}">✕</button>
                 </div>
@@ -1154,13 +1192,14 @@
     function renderScenes() {
         const el = document.getElementById('gm-scene-list'); if (!el) return;
         if (!state.scenes.length) { el.innerHTML = `<div class="gm-empty">Aucune scène préparée.</div>`; return; }
-        el.innerHTML = state.scenes.map(s => `<div class="gm-scene" data-id="${s.id}"${s.bg ? ` style="background-image:url(${s.bg})"` : ''}>
+        el.innerHTML = state.scenes.map(s => { const n = scenePlaylistOf(s).length; return `<div class="gm-scene" data-id="${s.id}"${s.bg ? ` style="background-image:url(${s.bg})"` : ''}>
             <span class="gm-scene-name">🎬 ${esc(s.name)}</span>
             <div class="gm-scene-actions">
+                <button class="gm-btn" data-act="scene-playlist" data-id="${s.id}" title="Playlist d'ambiance de cette scène">🎵${n ? ' ' + n : ''}</button>
                 <button class="gm-btn" data-act="scene-apply" data-id="${s.id}">Appliquer</button>
                 <button class="gm-del-x" data-act="scene-del" data-id="${s.id}">✕</button>
             </div>
-        </div>`).join('');
+        </div>`; }).join('');
     }
     function renderSoundboard() {
         const el = byId('gm-soundboard-pads'); if (!el) return;
@@ -1170,11 +1209,61 @@
             <button class="gm-del-x" data-act="sfx-del" data-id="${s.id}" title="Retirer">✕</button>
         </div>`).join('');
     }
+    // Playlist d'une scène (migre l'ancien champ unique `music` → 1 piste). (Lot 38)
+    function scenePlaylistOf(s) {
+        if (!s) return [];
+        if (Array.isArray(s.playlist)) return s.playlist;
+        if (s.music) return [{ url: s.music, title: s.name || 'Ambiance' }];
+        return [];
+    }
     function applyScene(s) {
         if (!s) return;
         if (s.bg) document.body.style.backgroundImage = `url(${s.bg})`;
-        if (s.music && window.MusicPlayer && window.MusicPlayer.playUrl) { try { window.MusicPlayer.playUrl(s.music, '🎬 ' + (s.name || 'Scène')); } catch (e) {} }
+        const pl = scenePlaylistOf(s);
+        if (pl.length && window.MusicPlayer) {
+            try {
+                if (pl.length > 1 && window.MusicPlayer.playPlaylist) window.MusicPlayer.playPlaylist(pl, '🎬 ' + (s.name || 'Scène'));
+                else if (window.MusicPlayer.playUrl) window.MusicPlayer.playUrl(pl[0].url, '🎬 ' + (s.name || 'Scène'));
+            } catch (e) {}
+        }
         if (window.showAppToast) window.showAppToast('🎬 Scène « ' + (s.name || '') + ' » appliquée', '#8a6320');
+    }
+    function ensureScenePlaylistPopover() {
+        let p = byId('gm-scene-pl-popover'); if (p) return p;
+        p = document.createElement('div'); p.id = 'gm-scene-pl-popover'; p.className = 'gm-token-popover hidden no-print';
+        document.body.appendChild(p);
+        document.addEventListener('pointerdown', (e) => { if (!p.classList.contains('hidden') && !e.target.closest('#gm-scene-pl-popover') && !e.target.closest('[data-act="scene-playlist"]')) p.classList.add('hidden'); });
+        return p;
+    }
+    function openScenePlaylistEditor(id, e) {
+        const s = find(state.scenes, id); if (!s) return;
+        if (!Array.isArray(s.playlist)) s.playlist = scenePlaylistOf(s).slice();  // migre l'ancien champ music
+        const p = ensureScenePlaylistPopover();
+        const draw = () => {
+            const rows = s.playlist.length
+                ? s.playlist.map((t, i) => `<div class="gm-tp-row gm-scene-pl-row"><span class="gm-scene-pl-num">${i + 1}</span><span class="gm-scene-pl-title" title="${esc(t.url)}">${esc(t.title || t.url)}</span><button class="gm-del-x" data-pl-del="${i}" title="Retirer">✕</button></div>`).join('')
+                : '<div class="gm-empty">Aucune piste. Ajoute des liens ci-dessous.</div>';
+            p.innerHTML = `<div class="gm-tp-row" style="font-weight:bold;">🎵 Playlist — ${esc(s.name)}</div>
+                <div class="gm-scene-pl-list">${rows}</div>
+                <div class="gm-tp-row"><input class="gm-input" data-pl="title" placeholder="Titre (optionnel)"></div>
+                <div class="gm-tp-row"><input class="gm-input" data-pl="url" placeholder="🔗 Lien YouTube ou .mp3…"><button class="gm-add" data-pl-add title="Ajouter la piste">＋</button></div>
+                <div class="gm-tp-hint">Les pistes s'enchaînent en boucle quand tu appliques la scène. Diffusé aux joueurs.</div>`;
+            p.querySelectorAll('[data-pl-del]').forEach(b => b.addEventListener('click', () => { s.playlist.splice(parseInt(b.dataset.plDel, 10), 1); save(); renderScenes(); draw(); }));
+            const addTrack = () => {
+                const url = (p.querySelector('[data-pl="url"]').value || '').trim(); if (!url) return;
+                const title = (p.querySelector('[data-pl="title"]').value || '').trim();
+                s.playlist.push({ url: url, title: title || '' });
+                if (!s.music) s.music = url;   // rétro-compat : 1er lien = champ music
+                save(); renderScenes(); draw();
+            };
+            const addBtn = p.querySelector('[data-pl-add]'); if (addBtn) addBtn.addEventListener('click', addTrack);
+            const urlInp = p.querySelector('[data-pl="url"]'); if (urlInp) urlInp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); addTrack(); } });
+        };
+        draw();
+        p.classList.remove('hidden');
+        const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
+        p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
+        p.style.top = Math.max(8, Math.min(oy + 10, window.innerHeight - p.offsetHeight - 8)) + 'px';
     }
     // ----- Ambiances en un clic (Lot 30) : météo + teinte carte + effet sonore, diffusés -----
     function renderAmbianceBtns() {
@@ -1678,6 +1767,9 @@
                     clog('🛌 ' + (payload.name || 'Un joueur') + ' — ' + lbl);
                 })
                 .on('broadcast', { event: 'whisper' }, ({ payload }) => onPlayerWhisper(payload))
+                .on('broadcast', { event: 'loot-add' }, ({ payload }) => onPlayerLootAdd(payload))
+                .on('broadcast', { event: 'loot-del' }, ({ payload }) => onPlayerLootDel(payload))
+                .on('broadcast', { event: 'annotation-add' }, ({ payload }) => onPlayerAnnotation(payload))
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') { try { await live.presChannel.track({ role: 'gm' }); } catch (e) {} } });
         } catch (e) { console.warn('presence GM:', e); }
     }
@@ -1722,7 +1814,52 @@
         }));
     }
 
-    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers(); renderCombatLog(); renderSnaps();
+    // ----- Butin de groupe : réception des ajouts/retraits des joueurs (autorité MJ) -----
+    function onPlayerLootAdd(p) {
+        if (!p || !p.name) return;
+        partyLootData().push({ id: uid(), name: String(p.name).slice(0, 80), qty: Math.max(1, parseInt(p.qty, 10) || 1), by: (p.by || '').slice(0, 24) });
+        save(); renderPartyLoot(); broadcastMap(true);
+        if (window.showAppToast) window.showAppToast('🎒 ' + (p.by || 'Un joueur') + ' ajoute : ' + p.name, '#2c3e50');
+    }
+    function onPlayerLootDel(p) {
+        if (!p || !p.id) return;
+        state.map.partyLoot = partyLootData().filter(x => x.id !== p.id);
+        save(); renderPartyLoot(); broadcastMap(true);
+    }
+    // ----- 📌 Annotations des joueurs sur la carte (validées par le MJ) -----
+    function annotationsData() { const m = state.map || {}; if (!Array.isArray(m.annotations)) m.annotations = []; return m.annotations; }
+    function onPlayerAnnotation(p) {
+        if (!p || !p.text) return;
+        let wrap = byId('gm-annot-pending');
+        if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gm-annot-pending'; wrap.className = 'no-print'; document.body.appendChild(wrap); }
+        const card = document.createElement('div'); card.className = 'gm-whisper-card';
+        card.innerHTML = `<div class="gm-whisper-head"><span>📌 ${esc(p.name || 'Un joueur')} propose une note</span></div>
+            <div class="gm-whisper-text">« ${esc(String(p.text).slice(0, 80))} »</div>
+            <div style="display:flex; gap:6px; margin-top:6px;"><button class="gm-btn gm-btn-primary gm-annot-ok" style="flex:1;">✔ Valider</button><button class="gm-btn gm-annot-no" style="flex:1;">✕ Rejeter</button></div>`;
+        card.querySelector('.gm-annot-ok').addEventListener('click', () => {
+            annotationsData().push({ id: uid(), x: p.x, y: p.y, text: String(p.text).slice(0, 80), by: (p.name || '').slice(0, 24) });
+            save(); renderMap(); broadcastMap(true); card.remove();
+            if (window.showAppToast) window.showAppToast('📌 Annotation validée et partagée', '#2c3e50');
+            clog('📌 Annotation validée (' + (p.name || 'joueur') + ') : ' + p.text);
+        });
+        card.querySelector('.gm-annot-no').addEventListener('click', () => card.remove());
+        wrap.appendChild(card);
+    }
+    function renderAnnotations() {
+        const view = byId('gm-map-view'); const board = view && view.querySelector('.gm-board'); if (!board) return;
+        board.querySelectorAll('.gm-annot').forEach(el => el.remove());
+        const list = annotationsData();
+        if (!list.length) return;
+        const html = list.map(a => `<div class="gm-annot" data-annot="${esc(a.id)}" style="left:${a.x * 100}%; top:${a.y * 100}%;" title="Annotation de ${esc(a.by || 'joueur')} — clic pour retirer"><span class="ga-lbl">${esc(a.text)}</span><span class="ga-pin">📌</span></div>`).join('');
+        board.insertAdjacentHTML('beforeend', html);
+        board.querySelectorAll('.gm-annot').forEach(el => el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.map.annotations = annotationsData().filter(x => x.id !== el.dataset.annot);
+            save(); renderMap(); broadcastMap(true);
+            if (window.showAppToast) window.showAppToast('📌 Annotation retirée', '#2c3e50');
+        }));
+    }
+    function renderAll() { renderParty(); renderInit(); renderMonsters(); renderBestiary(); renderDice(); renderNpcs(); renderQuests(); renderScenes(); renderSoundboard(); renderMap(); renderLivePlayers(); renderCombatLog(); renderSnaps(); renderPartyLoot();
         { const ci = byId('gm-comp-search'); renderCompendium(ci ? ci.value : ''); }
         renderAmbianceBtns();
         const t = document.getElementById('gm-env-time'); if (t) t.value = state.env.time || '';
@@ -2054,6 +2191,158 @@
 
     // ----- Murs & portes (invisibles pour les joueurs : bloquent jetons + ligne de vue) -----
     function wallsData() { const m = state.map || {}; if (!Array.isArray(m.walls)) m.walls = []; return m.walls; }
+
+    // ===== GÉNÉRATEUR DE DONJON PROCÉDURAL (#13, Lot 37) =====
+    // Trace salles + couloirs + portes directement en MURS sur la carte tactique.
+    // Grille de cellules alignée sur la grille visible : 1 cellule = 1 case
+    // (cw = gridSize/1000 en fraction de largeur, ch = cw × ratio — même convention que snapFraction).
+    // Renvoie { rooms, doors } ou null (annulé / impossible).
+    function generateDungeonToMap() {
+        const m = state.map || (state.map = {});
+        if ((m.walls || []).length && !confirm('Remplacer les murs et portes actuels par un donjon généré ? (Ctrl+Z pour annuler ensuite)')) return null;
+        const cw = ((m.gridSize || 48) / 1000);
+        const AR = Number(m.stageAR) || (16 / 9);
+        const ch = cw * AR;
+        const cols = Math.floor(0.96 / cw), rows = Math.floor(0.96 / ch);
+        if (cols < 8 || rows < 5) { if (window.showAppToast) window.showAppToast('Cases trop grandes pour un donjon — réduis la taille de la grille.', '#c0392b'); return null; }
+        const ox = (1 - cols * cw) / 2, oy = (1 - rows * ch) / 2;   // marges centrées
+        const K = (c, r) => c + ',' + r;
+        // 1) Salles rectangulaires sans chevauchement (1 case d'écart mini)
+        const rooms = [];
+        let guard = 0;
+        const targetRooms = Math.min(8, Math.max(4, Math.floor(cols * rows / 28)));
+        while (rooms.length < targetRooms && guard++ < 90) {
+            const w = 2 + Math.floor(Math.random() * Math.min(4, cols - 4));
+            const h = 2 + Math.floor(Math.random() * Math.min(3, rows - 3));
+            const cMax = cols - w - 1, rMax = rows - h - 1;
+            if (cMax < 2 || rMax < 2) continue;
+            const c = 1 + Math.floor(Math.random() * (cMax - 1));
+            const r = 1 + Math.floor(Math.random() * (rMax - 1));
+            const overlaps = rooms.some(o => c < o.c + o.w + 1 && o.c < c + w + 1 && r < o.r + o.h + 1 && o.r < r + h + 1);
+            if (!overlaps) rooms.push({ c, r, w, h });
+        }
+        if (rooms.length < 3) { if (window.showAppToast) window.showAppToast('Pas assez de place pour les salles — réessaie ou réduis la grille.', '#c0392b'); return null; }
+        const walk = new Set(), roomCell = new Set(), corridorCell = new Set();
+        rooms.forEach(o => { for (let c = o.c; c < o.c + o.w; c++) for (let r = o.r; r < o.r + o.h; r++) { walk.add(K(c, r)); roomCell.add(K(c, r)); } });
+        // 2) Couloirs en L entre salles voisines (triées par x) + PORTES enregistrées
+        //    au moment où le chemin FRANCHIT le périmètre d'une salle (entrée/sortie).
+        rooms.sort((a, b) => (a.c + a.w / 2) - (b.c + b.w / 2));
+        const doorEdges = new Set();
+        const edgeBetween = (c1, r1, c2, r2) => (c1 !== c2) ? ('v:' + Math.max(c1, c2) + ':' + r1) : ('h:' + Math.max(r1, r2) + ':' + c1);
+        for (let i = 0; i + 1 < rooms.length; i++) {
+            const a = rooms[i], b = rooms[i + 1];
+            const path = [];
+            let c1 = Math.floor(a.c + a.w / 2), r1 = Math.floor(a.r + a.h / 2);
+            const c2 = Math.floor(b.c + b.w / 2), r2 = Math.floor(b.r + b.h / 2);
+            path.push([c1, r1]);
+            while (c1 !== c2) { c1 += c1 < c2 ? 1 : -1; path.push([c1, r1]); }
+            while (r1 !== r2) { r1 += r1 < r2 ? 1 : -1; path.push([c1, r1]); }
+            for (let j = 1; j < path.length; j++) {
+                const p0 = path[j - 1], p1 = path[j];
+                const k0 = K(p0[0], p0[1]), k1 = K(p1[0], p1[1]);
+                if (roomCell.has(k0) !== roomCell.has(k1)) doorEdges.add(edgeBetween(p0[0], p0[1], p1[0], p1[1]));
+                if (!walk.has(k1)) { walk.add(k1); corridorCell.add(k1); }
+            }
+        }
+        // 3) Extraction des arêtes : mur si limite marchable/roche, mur AUSSI entre
+        //    couloir et salle sans porte enregistrée (scelle les couloirs qui longent une salle).
+        const edgeType = {};   // clé arête → 'wall' | 'door'
+        walk.forEach(k => {
+            const parts = k.split(','), c = +parts[0], r = +parts[1];
+            [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(d => {
+                const nk = K(c + d[0], r + d[1]);
+                const ek = (d[0] !== 0) ? ('v:' + Math.max(c, c + d[0]) + ':' + r) : ('h:' + Math.max(r, r + d[1]) + ':' + c);
+                if (!walk.has(nk)) { if (edgeType[ek] !== 'door') edgeType[ek] = doorEdges.has(ek) ? 'door' : 'wall'; return; }
+                // deux cellules marchables : frontière salle/couloir → porte enregistrée sinon mur scellé
+                if (roomCell.has(k) !== roomCell.has(nk)) edgeType[ek] = doorEdges.has(ek) ? 'door' : (edgeType[ek] === 'door' ? 'door' : 'wall');
+            });
+        });
+        // 4) Fusion des murs colinéaires (réduit le nombre de segments → perfs vision)
+        const hRuns = {}, vRuns = {}, doors = [];
+        Object.keys(edgeType).forEach(ek => {
+            const p = ek.split(':'), a = +p[1], b = +p[2];
+            if (edgeType[ek] === 'door') { doors.push(ek); return; }
+            if (p[0] === 'h') (hRuns[a] = hRuns[a] || []).push(b);   // y = a, colonne b
+            else (vRuns[a] = vRuns[a] || []).push(b);                // x = a, rangée b
+        });
+        const segs = [];
+        const mergeRuns = (runsByLine, horizontal) => {
+            Object.keys(runsByLine).forEach(line => {
+                const list = runsByLine[line].sort((x, y) => x - y);
+                let s = list[0], prev = list[0];
+                const flush = (from, to) => {
+                    const L = +line;
+                    if (horizontal) segs.push({ id: uid(), x1: ox + from * cw, y1: oy + L * ch, x2: ox + (to + 1) * cw, y2: oy + L * ch, door: false, open: false });
+                    else segs.push({ id: uid(), x1: ox + L * cw, y1: oy + from * ch, x2: ox + L * cw, y2: oy + (to + 1) * ch, door: false, open: false });
+                };
+                for (let i = 1; i < list.length; i++) {
+                    if (list[i] === prev + 1) { prev = list[i]; continue; }
+                    flush(s, prev); s = list[i]; prev = list[i];
+                }
+                flush(s, prev);
+            });
+        };
+        mergeRuns(hRuns, true); mergeRuns(vRuns, false);
+        doors.forEach(ek => {
+            const p = ek.split(':'), a = +p[1], b = +p[2];
+            if (p[0] === 'h') segs.push({ id: uid(), x1: ox + b * cw, y1: oy + a * ch, x2: ox + (b + 1) * cw, y2: oy + a * ch, door: true, open: false });
+            else segs.push({ id: uid(), x1: ox + a * cw, y1: oy + b * ch, x2: ox + a * cw, y2: oy + (b + 1) * ch, door: true, open: false });
+        });
+        m.walls = segs;
+        // Habillage des salles (monstres calque MJ + trésors + pièges) — optionnel.
+        let filled = 0;
+        const doPopulate = (byId('gm-gen-dungeon-populate') || {}).checked;
+        if (doPopulate) filled = populateDungeonRooms(rooms, ox, oy, cw, ch);
+        save(); renderMap(); broadcastMap(true);
+        clog('🏰 Donjon généré : ' + rooms.length + ' salles, ' + doors.length + ' portes' + (filled ? ' · ' + filled + ' salle(s) peuplée(s)' : ''));
+        return { rooms: rooms.length, doors: doors.length, walls: segs.length, filled: filled };
+    }
+    const DUNGEON_TRAPS = ['Fosse à pieux (2d10)', 'Dard empoisonné (DD 13 CON)', 'Dalle à effondrement', 'Filet suspendu', 'Flèches murales (DEX DD 14)', 'Gaz de sommeil', 'Lames rotatives', 'Runes explosives', 'Sol gluant (entravé)', 'Herse qui s\'abat'];
+    const DUNGEON_FIND = ['Coffre verrouillé (DD 15)', 'Bourse de 2d6×10 po', 'Gemme (50 po)', 'Potion de soins', 'Parchemin de sort', 'Vieille carte au trésor', 'Relique en argent', 'Clé mystérieuse', 'Fioles d\'alchimie', 'Anneau gravé'];
+    // Peuple les salles d'un donjon généré : jetons monstres (calque MJ, invisibles des joueurs)
+    // + marqueurs 💰 trésor / ⚠️ piège. Renvoie le nombre de salles peuplées. (Lot 37+, idée 1)
+    function populateDungeonRooms(rooms, ox, oy, cw, ch) {
+        const tier = (byId('gm-gen-dungeon-tier') || {}).value || '1';
+        const encList = (ENCOUNTERS.dungeon && ENCOUNTERS.dungeon[tier]) || [];
+        const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
+        // cellules libres d'une salle (pour étaler les jetons)
+        const cellsOf = room => { const cs = []; for (let c = room.c; c < room.c + room.w; c++) for (let r = room.r; r < room.r + room.h; r++) cs.push([c, r]); return cs; };
+        const cellFrac = (c, r) => ({ x: ox + (c + 0.5) * cw, y: oy + (r + 0.5) * ch });
+        const addGmToken = (x, y, name, color) => { state.tokens.push({ id: uid(), name: name, type: 'npc', x: x, y: y, layer: 'gm', hidden: true, color: color || null }); };
+        const placeMonsters = (room, entry, tag) => {
+            const mm = String(entry[0]).match(/^(.*?)\s*\(×(\d+)\)\s*$/);
+            const base = mm ? mm[1].trim() : entry[0];
+            const count = mm ? Math.min(8, parseInt(mm[2], 10) || 1) : 1;
+            const cells = cellsOf(room); // mélange
+            for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const tmp = cells[i]; cells[i] = cells[j]; cells[j] = tmp; }
+            for (let i = 0; i < count; i++) {
+                const nm = (tag ? tag + ' ' : '') + (count > 1 ? base + ' ' + (i + 1) : base);
+                const id = uid();
+                state.monsters.push({ id: id, name: nm, hpCur: entry[1], hpMax: entry[1], ac: entry[2], conditions: [], attacks: [] });
+                const cell = cells[i % cells.length];
+                const f = cellFrac(cell[0], cell[1]);
+                state.tokens.push({ id: uid(), ref: 'mon:' + id, name: nm, type: 'monster', x: f.x, y: f.y, layer: 'gm', hidden: true });
+            }
+        };
+        let filled = 0;
+        rooms.forEach((room, i) => {
+            const ctr = cellFrac(room.c + Math.floor(room.w / 2), room.r + Math.floor(room.h / 2));
+            const roll = Math.random();
+            if (i === 0) return;                                   // salle d'entrée : vide
+            if (i === rooms.length - 1 && encList.length) {        // dernière salle = « boss » (le plus coriace)
+                const boss = encList.slice().sort((a, b) => b[1] - a[1])[0];
+                placeMonsters(room, [boss[0].replace(/\s*\(×\d+\)\s*$/, ''), boss[1], boss[2]], '👑');
+                filled++; return;
+            }
+            if (roll < 0.42 && encList.length) { placeMonsters(room, rnd(encList)); filled++; }
+            else if (roll < 0.66) { addGmToken(ctr.x, ctr.y, '💰 ' + rnd(DUNGEON_FIND), '#C49B35'); filled++; }
+            else if (roll < 0.82) { addGmToken(ctr.x, ctr.y, '⚠️ ' + rnd(DUNGEON_TRAPS), '#c0392b'); filled++; }
+            // sinon : salle vide
+        });
+        if (filled) renderMonsters();
+        return filled;
+    }
+
     function darkState() { const m = state.map || {}; if (!m.dark) m.dark = { on: false, range: 9 }; if (!Number(m.dark.range)) m.dark.range = 9; return m.dark; }
     function toggleDark() {
         const d = darkState(); d.on = !d.on;
@@ -2259,6 +2548,7 @@
     function templatesData() { const m = state.map || {}; if (!Array.isArray(m.templates)) m.templates = []; return m.templates; }
     function clearTemplatesConfirm() { if (!confirm('Retirer tous les gabarits de sorts ?')) return; if (state.map) state.map.templates = []; save(); renderMap(); broadcastMap(true); }
     function togglePlayerAoe() { state.map.playerAoeOff = !state.map.playerAoeOff; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.playerAoeOff ? '🚫 Les joueurs ne peuvent plus poser de gabarits' : '👥 Les joueurs peuvent poser des gabarits', '#2c3e50'); }
+    function togglePlayerFx() { state.map.playerFxOff = !state.map.playerFxOff; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.playerFxOff ? '🚫 Effets d\'état plein écran coupés chez les joueurs' : '💥 Effets d\'état plein écran réactivés', '#2c3e50'); }
     function renderTemplates() {
         const view = byId('gm-map-view'); if (!view) return;
         const canvas = view.querySelector('canvas.gm-layer-templates'); if (!canvas) return;
@@ -2429,6 +2719,14 @@
     // Côté MJ : marqueur visuel + aperçu audio local. Côté joueur : boucle audio dont le volume
     // monte quand SON jeton approche du centre (session.js).
     function soundZonesData() { const m = state.map || {}; if (!Array.isArray(m.soundZones)) m.soundZones = []; return m.soundZones; }
+    // 🎒 Butin du groupe partagé (Lot 36) — vit dans state.map.partyLoot → diffusé via mapForShare.
+    function partyLootData() { const m = state.map || {}; if (!Array.isArray(m.partyLoot)) m.partyLoot = []; return m.partyLoot; }
+    function renderPartyLoot() {
+        const el = byId('gm-loot-list'); if (!el) return;
+        const loot = partyLootData();
+        if (!loot.length) { el.innerHTML = '<div class="gm-empty">Aucun objet. Ajoute du butin commun ci-dessus.</div>'; return; }
+        el.innerHTML = loot.map(it => `<div class="gm-loot-row"><span class="gm-loot-qty">×${it.qty || 1}</span><span class="gm-loot-name">${esc(it.name)}</span>${it.by ? `<span class="gm-loot-by" title="Ajouté par ${esc(it.by)}">${esc(it.by)}</span>` : ''}<button class="gm-del-x" data-act="loot-del" data-id="${esc(it.id)}" title="Retirer">✕</button></div>`).join('');
+    }
     function clearSoundZonesConfirm() { if (!confirm('Retirer toutes les zones sonores de cette carte ?')) return; stopSoundPreview(); if (state.map) state.map.soundZones = []; save(); renderMap(); broadcastMap(true); }
     function renderSoundZones() {
         const view = byId('gm-map-view'); if (!view) return;
@@ -2440,8 +2738,10 @@
             const rpx = (Number(z.r) || 0.15) * w, dpx = rpx * 2;
             const playing = sndPreview.id === z.id;
             const muted = z.id !== '__draft' && !z.url;
-            return `<div class="gm-sound-ring${playing ? ' is-playing' : ''}" style="left:${z.x * 100}%; top:${z.y * 100}%; width:${dpx}px; height:${dpx}px;"></div>`
-                + (z.id === '__draft' ? '' : `<button class="gm-sound-pin${muted ? ' is-muted' : ''}" data-sound="${z.id}" style="left:${z.x * 100}%; top:${z.y * 100}%;" title="Zone sonore${z.name ? ' — ' + esc(z.name) : ''}${muted ? ' (aucun son défini)' : ''} · clic (outil 🔊) : régler">${muted ? '🔇' : '🔊'}</button>`);
+            const icon = muted ? '🔇' : (z.oneshot ? '🔔' : '🔊');
+            const kindTip = z.oneshot ? ' (son unique à l\'entrée)' : '';
+            return `<div class="gm-sound-ring${playing ? ' is-playing' : ''}${z.oneshot ? ' is-oneshot' : ''}" style="left:${z.x * 100}%; top:${z.y * 100}%; width:${dpx}px; height:${dpx}px;"></div>`
+                + (z.id === '__draft' ? '' : `<button class="gm-sound-pin${muted ? ' is-muted' : ''}" data-sound="${z.id}" style="left:${z.x * 100}%; top:${z.y * 100}%;" title="Zone sonore${z.name ? ' — ' + esc(z.name) : ''}${kindTip}${muted ? ' (aucun son défini)' : ''} · clic (outil 🔊) : régler">${icon}</button>`);
         }).join('');
     }
     function ensureSoundPopover() {
@@ -2457,10 +2757,11 @@
         stopSoundPreview();
         if (!z.url) { if (window.showAppToast) window.showAppToast('Choisis d\'abord un son (liste ou URL).', '#c0392b'); return; }
         try {
-            const a = new Audio(z.url); a.loop = true; a.volume = Math.max(0, Math.min(1, z.vol != null ? Number(z.vol) : 0.8));
+            const a = new Audio(z.url); a.loop = !z.oneshot; a.volume = Math.max(0, Math.min(1, z.vol != null ? Number(z.vol) : 0.8));
             const pr = a.play();
             if (pr && pr.catch) pr.catch(() => { if (window.showAppToast) window.showAppToast('Lecture impossible (URL ou format).', '#c0392b'); });
             sndPreview = { id: z.id, el: a };
+            if (z.oneshot) a.addEventListener('ended', () => { if (sndPreview.id === z.id) { sndPreview = { id: null, el: null }; renderSoundZones(); } });
         } catch (_) {}
         renderSoundZones();
     }
@@ -2477,9 +2778,11 @@
             <div class="gm-tp-row" title="Choisir un son importé dans l'onglet Audio (soundboard)"><label>🎵</label><select class="gm-input" data-sp="pad">${padOpts}</select></div>
             <div class="gm-tp-row" title="Ou coller une URL audio directe (.mp3, .ogg…)"><label>🔗</label><input class="gm-input" data-sp="url" value="${esc(z.url || '')}" placeholder="https://…/ambiance.mp3"></div>
             <div class="gm-tp-row"><label>🔊 Volume</label><input type="range" data-sp="vol" min="0" max="100" step="5" value="${Math.round((z.vol != null ? z.vol : 0.8) * 100)}"><b class="gm-fly-wval" data-sp-vval>${Math.round((z.vol != null ? z.vol : 0.8) * 100)}</b></div>
-            <div class="gm-tp-row"><label>📏 Portée</label><input type="range" data-sp="r" min="5" max="50" step="1" value="${Math.round((z.r || 0.15) * 100)}"><b class="gm-fly-wval" data-sp-rval>${Math.round((z.r || 0.15) * 100)}</b></div>
+            <div class="gm-tp-row"><label data-sp-rlbl>${z.oneshot ? '📏 Déclenche' : '📏 Portée'}</label><input type="range" data-sp="r" min="5" max="50" step="1" value="${Math.round((z.r || 0.15) * 100)}"><b class="gm-fly-wval" data-sp-rval>${Math.round((z.r || 0.15) * 100)}</b></div>
+            <div class="gm-tp-row" title="Son unique : joué UNE fois quand un jeton entre dans la zone (grincement, cri, piège…) au lieu de tourner en boucle."><label>🔔</label><label class="gm-map-ctl"><input type="checkbox" data-sp="oneshot"${z.oneshot ? ' checked' : ''}> Son unique (déclenché à l'entrée)</label></div>
+            <div class="gm-tp-row${z.oneshot ? ' gm-fly-row-disabled' : ''}" data-sp-occrow title="Étouffe le son quand un mur sépare le jeton de la source (comme la ligne de vue). Décocher pour un son qui traverse les murs (tonnerre lointain…)."><label>🧱</label><label class="gm-map-ctl"><input type="checkbox" data-sp="occl"${z.occl === false ? '' : ' checked'}${z.oneshot ? ' disabled' : ''}> Étouffé par les murs</label></div>
             <div class="gm-tp-row gm-tp-actions"><button class="gm-btn" data-sp-act="preview">${sndPreview.id === z.id ? '⏹️ Stop' : '▶️ Écouter'}</button><button class="gm-btn gm-btn-danger" data-sp-act="del">🗑️ Supprimer</button></div>
-            <div class="gm-tp-hint">Chaque joueur entend cette zone d'autant plus fort que SON jeton en est proche.</div>`;
+            <div class="gm-tp-hint" data-sp-hint>${z.oneshot ? 'Joué une fois à l\'entrée d\'un jeton du joueur dans la zone.' : 'Chaque joueur entend cette zone d\'autant plus fort que SON jeton en est proche.'}</div>`;
         p.classList.remove('hidden');
         const ox = (e && e.clientX) || window.innerWidth / 2, oy = (e && e.clientY) || window.innerHeight / 2;
         p.style.left = Math.max(8, Math.min(ox + 10, window.innerWidth - p.offsetWidth - 8)) + 'px';
@@ -2490,6 +2793,17 @@
         p.querySelector('[data-sp="url"]').addEventListener('change', (ev) => { z.url = ev.target.value.trim(); commit(true); });
         p.querySelector('[data-sp="vol"]').addEventListener('input', (ev) => { z.vol = Math.max(0, Math.min(1, (parseInt(ev.target.value, 10) || 0) / 100)); const v = p.querySelector('[data-sp-vval]'); if (v) v.textContent = Math.round(z.vol * 100); if (sndPreview.id === z.id && sndPreview.el) sndPreview.el.volume = z.vol; commit(false); });
         p.querySelector('[data-sp="r"]').addEventListener('input', (ev) => { z.r = Math.max(0.05, Math.min(0.5, (parseInt(ev.target.value, 10) || 15) / 100)); const v = p.querySelector('[data-sp-rval]'); if (v) v.textContent = Math.round(z.r * 100); commit(true); });
+        p.querySelector('[data-sp="oneshot"]').addEventListener('change', (ev) => {
+            z.oneshot = ev.target.checked || undefined;
+            // MAJ des libellés dépendants + verrouillage de l'occlusion (sans effet sur un one-shot)
+            const rl = p.querySelector('[data-sp-rlbl]'); if (rl) rl.textContent = z.oneshot ? '📏 Déclenche' : '📏 Portée';
+            const hint = p.querySelector('[data-sp-hint]'); if (hint) hint.textContent = z.oneshot ? 'Joué une fois à l\'entrée d\'un jeton du joueur dans la zone.' : 'Chaque joueur entend cette zone d\'autant plus fort que SON jeton en est proche.';
+            const occRow = p.querySelector('[data-sp-occrow]'); if (occRow) occRow.classList.toggle('gm-fly-row-disabled', !!z.oneshot);
+            const occChk = p.querySelector('[data-sp="occl"]'); if (occChk) occChk.disabled = !!z.oneshot;
+            stopSoundPreview(); const pv = p.querySelector('[data-sp-act="preview"]'); if (pv) pv.textContent = '▶️ Écouter';
+            commit(true);
+        });
+        p.querySelector('[data-sp="occl"]').addEventListener('change', (ev) => { z.occl = ev.target.checked ? undefined : false; commit(false); });
         p.querySelectorAll('[data-sp-act]').forEach(b => b.addEventListener('click', () => {
             const act = b.dataset.spAct;
             if (act === 'preview') { toggleSoundPreview(z); b.textContent = sndPreview.id === z.id ? '⏹️ Stop' : '▶️ Écouter'; }
@@ -2522,6 +2836,154 @@
         if (state.combatLog.length > 120) state.combatLog.pop();
         save(); renderCombatLog();
     }
+    // ===== LECTEUR DE BLOC DE STATS (#12, Lot 37) =====
+    // Extrait nom / CA / PV / vitesse / caracs / attaques d'un bloc de stats collé (FR, tolère l'EN).
+    function parseStatBlock(txt) {
+        const t = String(txt || '').replace(/\r/g, '');
+        if (!t.trim()) return null;
+        const lines = t.split('\n').map(s => s.trim()).filter(Boolean);
+        let name = lines[0] ? lines[0].replace(/\s+/g, ' ').slice(0, 60) : 'Monstre';
+        if (/classe\s+d'?armure|points?\s+de\s+vie|armor\s+class|hit\s+points/i.test(name)) name = 'Monstre importé';
+        const res = { name, ac: null, hp: null, speed: '', abilities: null, attacks: [] };
+        const mAc = t.match(/classe\s+d'?armure\s*:?\s*(\d+)/i) || t.match(/\bCA\s*:?\s*(\d+)/) || t.match(/armor\s+class\s*:?\s*(\d+)/i);
+        if (mAc) res.ac = parseInt(mAc[1], 10);
+        const mHp = t.match(/points?\s+de\s+vie\s*:?\s*(\d+)/i) || t.match(/\bPV\s*:?\s*(\d+)/) || t.match(/hit\s+points?\s*:?\s*(\d+)/i);
+        if (mHp) res.hp = parseInt(mHp[1], 10);
+        const mSp = t.match(/vitesse\s*:?\s*([^\n]+)/i) || t.match(/speed\s*:?\s*([^\n]+)/i);
+        if (mSp) res.speed = mSp[1].trim().slice(0, 50);
+        // Caracs : les 6 premières occurrences « N (±M) »
+        const abil = []; const reAb = /(\d{1,2})\s*\(\s*([+\-−–]?\s*\d+)\s*\)/g; let m;
+        while ((m = reAb.exec(t)) && abil.length < 6) abil.push({ score: parseInt(m[1], 10), mod: m[2].replace(/[−–]/g, '-').replace(/\s+/g, '') });
+        if (abil.length === 6) res.abilities = abil;
+        // Attaques : chaque « +X au toucher » → nom (dernier « Mot. » ou « Mot : » avant) + 1re expr de dés après = dégâts
+        const flat = ' ' + t.replace(/\s*\n\s*/g, ' ');
+        const reAtk = /([+\-−]\s*\d+)\s*(?:au\s+toucher|pour\s+toucher|to\s+hit)/gi;
+        while ((m = reAtk.exec(flat)) && res.attacks.length < 8) {
+            const bonus = m[1].replace(/[−]/g, '-').replace(/\s+/g, '');
+            const before = flat.slice(Math.max(0, m.index - 160), m.index);
+            // Nom = 1 à 4 mots SANS chiffres juste avant le dernier « . » (ou « : ») précédant le bonus
+            // (exclure les chiffres empêche d'aspirer « Vitesse 12 m » ou « Points de vie 59 »).
+            const nm = before.match(/([A-ZÀ-ÖØ-Þ][A-Za-zà-ÿœŒ'’-]*(?:\s+[A-Za-zà-ÿœŒ'’-]+){0,3})\s*\.\s*[^.]*$/)
+                || before.match(/([A-ZÀ-ÖØ-Þ][A-Za-zà-ÿœŒ'’-]*(?:\s+[A-Za-zà-ÿœŒ'’-]+){0,3})\s*:\s*[^:.]*$/);
+            const after = flat.slice(m.index, m.index + 170);
+            const dm = after.match(/(\d+d\d+(?:\s*[+\-]\s*\d+)?)/i);
+            // Retire un éventuel titre de section collé devant le nom (« Actions Massue » → « Massue »)
+            let atkName = nm ? nm[1].trim() : ('Attaque ' + (res.attacks.length + 1));
+            atkName = atkName.replace(/^(actions?\s+l[ée]gendaires?|bonus\s+actions?|r[ée]actions?|actions?|attaques?)\s+/i, '').trim() || ('Attaque ' + (res.attacks.length + 1));
+            res.attacks.push({
+                name: atkName.slice(0, 36),
+                formula: '1d20' + bonus,
+                dmg: dm ? dm[1].replace(/\s+/g, '') : ''
+            });
+        }
+        // Rien d'exploitable du tout → on considère l'analyse ratée
+        if (res.ac == null && res.hp == null && !res.attacks.length && !res.abilities) return null;
+        return res;
+    }
+    // Ajoute un monstre (bloc parsé OU entrée de bestiaire) à la liste de combat.
+    function addStatblockToCombat(p) {
+        state.monsters.push({
+            id: uid(), name: p.name,
+            hpCur: p.hp != null ? p.hp : 10, hpMax: p.hp != null ? p.hp : 10,
+            ac: p.ac != null ? p.ac : 0, conditions: [],
+            attacks: (p.attacks || []).map(a => ({ name: a.dmg ? (a.name + ' (dégâts ' + a.dmg + ')') : a.name, formula: a.formula }))
+        });
+        save(); renderMonsters();
+        if (window.showAppToast) window.showAppToast('👹 « ' + p.name + ' » ajouté aux monstres', '#2c3e50');
+        clog('👹 Monstre ajouté : ' + p.name);
+    }
+    // 📋 Bibliothèque de monstres importés (idée 3) — persistée dans l'état de campagne.
+    function bestiaryData() { if (!Array.isArray(state.bestiary)) state.bestiary = []; return state.bestiary; }
+    function renderBestiary() {
+        const el = byId('gm-bestiary'); if (!el) return;
+        const list = bestiaryData();
+        if (!list.length) { el.innerHTML = ''; return; }
+        el.innerHTML = `<div class="gm-bestiary-head">📋 Bestiaire (${list.length})</div>`
+            + list.map(b => `<div class="gm-bestiary-row"><span class="gm-bestiary-name" title="CA ${b.ac != null ? b.ac : '?'} · PV ${b.hp != null ? b.hp : '?'}">👹 ${esc(b.name)} <span class="gm-party-sub">CA ${b.ac != null ? b.ac : '?'} · ${b.hp != null ? b.hp : '?'} PV</span></span><button class="gm-btn" data-act="bestiary-add" data-id="${esc(b.id)}" title="Ajouter au combat">⚔️</button><button class="gm-del-x" data-act="bestiary-del" data-id="${esc(b.id)}" title="Retirer du bestiaire">✕</button></div>`).join('');
+    }
+    function renderStatblockPreview(p) {
+        const box = byId('gm-statblock-preview'); if (!box) return;
+        if (!p) { box.innerHTML = '<div class="gm-empty">Rien d\'analysable — colle le texte complet du bloc (avec « Classe d\'armure », « Points de vie »…).</div>'; return; }
+        const ab = p.abilities ? `<div class="gm-sb-abil">${['FOR', 'DEX', 'CON', 'INT', 'SAG', 'CHA'].map((l, i) => `<span><b>${l}</b> ${p.abilities[i].score} (${esc(p.abilities[i].mod)})</span>`).join('')}</div>` : '';
+        const atk = p.attacks.length
+            ? `<div class="gm-sb-atks">${p.attacks.map(a => `<div>⚔️ ${esc(a.name)} — ${esc(a.formula)}${a.dmg ? ' · dégâts ' + esc(a.dmg) : ''}</div>`).join('')}</div>`
+            : '<div class="gm-readonly-note">Aucune attaque détectée (tu pourras en ajouter à la main).</div>';
+        box.innerHTML = `<div class="gm-sb-head">👹 ${esc(p.name)}</div>
+            <div class="gm-sb-line">🛡️ CA ${p.ac != null ? p.ac : '?'} · ❤️ PV ${p.hp != null ? p.hp : '?'}${p.speed ? ' · 🏃 ' + esc(p.speed) : ''}</div>
+            ${ab}${atk}
+            <div class="gm-row" style="margin-top:6px;"><button id="gm-statblock-add" class="gm-btn gm-btn-primary" style="flex:1;">⚔️ Ajouter au combat</button><button id="gm-statblock-save" class="gm-btn" style="flex:1;">💾 Au bestiaire</button></div>`;
+        byId('gm-statblock-add').addEventListener('click', () => {
+            addStatblockToCombat(p);
+            const z = byId('gm-statblock-zone'); if (z) z.style.display = 'none';
+            const ta = byId('gm-statblock-text'); if (ta) ta.value = '';
+            box.innerHTML = '';
+        });
+        byId('gm-statblock-save').addEventListener('click', () => {
+            bestiaryData().push({ id: uid(), name: p.name, ac: p.ac, hp: p.hp, speed: p.speed, abilities: p.abilities, attacks: p.attacks });
+            save(); renderBestiary();
+            if (window.showAppToast) window.showAppToast('📋 « ' + p.name + ' » ajouté au bestiaire', '#2c3e50');
+        });
+    }
+
+    // ===== RÉSUMÉ DE SESSION AUTO (#15, Lot 37) =====
+    // Compile le journal de combat (chronologique) + quêtes + butin du groupe en texte copiable.
+    function buildSessionSummary() {
+        const log = (state.combatLog || []).slice().reverse();
+        let out = '🧾 RÉSUMÉ DE SESSION — ' + new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + '\n';
+        out += '────────────────────\n';
+        out += log.length
+            ? log.map(e => '• ' + new Date(e.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' — ' + e.text).join('\n') + '\n'
+            : '(Journal de combat vide)\n';
+        const quests = state.quests || [];
+        if (quests.length) out += '\n📜 QUÊTES\n' + quests.map(q => (q.done ? '✅ ' : '⬜ ') + q.name).join('\n') + '\n';
+        const loot = (state.map && state.map.partyLoot) || [];
+        if (loot.length) out += '\n🎒 BUTIN DU GROUPE\n' + loot.map(it => '• ×' + (it.qty || 1) + ' ' + it.name).join('\n') + '\n';
+        return out;
+    }
+    function fallbackCopy(txt, done) {
+        try {
+            const ta = document.createElement('textarea'); ta.value = txt;
+            ta.style.cssText = 'position:fixed; left:-9999px; top:0;';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+            if (done) done();
+        } catch (e) { if (window.showAppToast) window.showAppToast('Copie impossible — utilise « → Bloc-notes ».', '#c0392b'); }
+    }
+    function showSessionSummary() {
+        const hasContent = (state.combatLog || []).length || (state.quests || []).length || ((state.map && state.map.partyLoot) || []).length;
+        if (!hasContent) { if (window.showAppToast) window.showAppToast('Rien à résumer pour le moment (journal vide).', '#c0392b'); return; }
+        let ov = byId('gm-summary-modal'); if (ov) { ov.remove(); return; }
+        const txt = buildSessionSummary();
+        ov = document.createElement('div'); ov.id = 'gm-summary-modal'; ov.className = 'gm-modal no-print';
+        ov.innerHTML = `<div class="gm-modal-box gm-sum-box">
+            <div class="gm-modal-head">🧾 Résumé de session <button class="gm-modal-x" id="gm-sum-close" title="Fermer">✕</button></div>
+            <pre id="gm-sum-text" class="gm-sum-text"></pre>
+            <div class="gm-row"><button id="gm-sum-copy" class="gm-btn gm-btn-primary" style="flex:1;">📋 Copier</button><button id="gm-sum-notes" class="gm-btn" style="flex:1;">📝 → Bloc-notes</button></div>
+            <button id="gm-sum-send" class="gm-btn" style="width:100%; margin-top:6px;">📤 Afficher aux joueurs (générique de fin)</button>
+        </div>`;
+        ov.querySelector('#gm-sum-text').textContent = txt;
+        ov.querySelector('#gm-sum-send').addEventListener('click', () => {
+            if (gmBroadcast('session-recap', { text: txt })) {
+                if (window.showAppToast) window.showAppToast('📤 Résumé affiché chez les joueurs', '#2c3e50');
+                ov.remove();
+            }
+        });
+        document.body.appendChild(ov);
+        ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+        ov.querySelector('#gm-sum-close').addEventListener('click', () => ov.remove());
+        ov.querySelector('#gm-sum-copy').addEventListener('click', () => {
+            const done = () => { if (window.showAppToast) window.showAppToast('📋 Résumé copié !', '#2c3e50'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done));
+            else fallbackCopy(txt, done);
+        });
+        ov.querySelector('#gm-sum-notes').addEventListener('click', () => {
+            state.notes = (state.notes ? state.notes + '\n\n' : '') + txt;
+            const n = byId('gm-notes'); if (n) n.value = state.notes;
+            save();
+            if (window.showAppToast) window.showAppToast('📝 Résumé ajouté au bloc-notes', '#2c3e50');
+            ov.remove();
+        });
+    }
+
     function renderCombatLog() {
         const el = byId('gm-combatlog'); if (!el) return;
         const rows = state.combatLog || [];
@@ -2899,6 +3361,7 @@
         renderGmNotes();
         renderLights();
         renderSoundZones();
+        renderAnnotations();
         if (L.fog !== false) renderFog();
         if (L.walls !== false) renderWalls();
         renderVisionPreview();
@@ -3205,7 +3668,7 @@
         view.addEventListener('pointerdown', (e) => {
             // Les UI flottantes posées SUR la carte (sélecteur de calque, barre « placer »)
             // gèrent leurs propres clics : ne pas déclencher l'outil carte dessous.
-            if (e.target.closest('#gm-layer-switch') || e.target.closest('#gm-place-bar')) return;
+            if (e.target.closest('#gm-layer-switch') || e.target.closest('#gm-place-bar') || e.target.closest('.gm-annot')) return;
             startX = e.clientX; startY = e.clientY; moved = false;
             // Clic molette (bouton du milieu) = se déplacer dans la carte, quel que soit l'outil,
             // SANS perdre l'outil en cours : on le retrouve tel quel au relâchement.
@@ -3965,7 +4428,7 @@
         // Dés
         DICE.forEach(() => {});
         document.querySelectorAll('.gm-die').forEach(b => b.addEventListener('click', () => logDice('1d' + b.dataset.die, rollFormula('1d' + b.dataset.die))));
-        byId('gm-dice-roll').addEventListener('click', () => { const f = byId('gm-dice-formula').value.trim(); if (f) { handleDiceCommand(f); byId('gm-dice-formula').value = ''; } });
+        byId('gm-dice-roll').addEventListener('click', () => { const f = byId('gm-dice-formula').value.trim(); if (f) { const sec = byId('gm-dice-secret'); handleDiceCommand(f, sec && sec.checked); byId('gm-dice-formula').value = ''; } });
         byId('gm-dice-formula').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-dice-roll').click(); } });
 
         // --- 🎯 Demander un jet : le joueur reçoit un bouton qui lance d20 + mod de SA fiche ---
@@ -4001,8 +4464,31 @@
             clog('🎯 Demande de jet : ' + label + ' → ' + who);
         });
 
-        // Générateurs (PNJ jouable · rumeur · trésor · rencontre) + actions contextuelles
-        let lastGen = null;   // { type, npc?, encounter? }
+        // Générateurs (PNJ jouable · rumeur · trésor · rencontre · boutique · donjon) + actions contextuelles
+        let lastGen = null;   // { type, npc?, encounter?, text? }
+        // ----- Boutique (#14, Lot 37) : étals par type, prix légèrement variables -----
+        const SHOPS = {
+            general: { label: '🧺 Marchand général', items: [['Corde de chanvre (15 m)', 1], ['Torches (×5)', 0.5], ['Sac à dos', 2], ['Rations (1 jour)', 0.5], ['Gourde', 0.2], ['Couverture', 0.5], ['Lanterne sourde', 5], ['Huile (flasque)', 0.1], ['Pelle', 2], ['Pitons (×10)', 0.5], ['Briquet à silex', 0.5], ['Sac de couchage', 1], ['Miroir d\'acier', 5], ['Corde de soie (15 m)', 10], ['Kit de soins', 5], ['Grappin', 2]] },
+            blacksmith: { label: '⚒️ Forgeron', items: [['Épée longue', 15], ['Épée courte', 10], ['Hache d\'armes', 10], ['Masse d\'armes', 5], ['Dague', 2], ['Bouclier', 10], ['Cotte de mailles', 75], ['Armure de cuir', 10], ['Cuir clouté', 45], ['Chemise de mailles', 50], ['Flèches (×20)', 1], ['Arc court', 25], ['Arbalète légère', 25], ['Affûtage de lame (service)', 0.2], ['Fers à cheval (jeu)', 0.5]] },
+            alchemist: { label: '⚗️ Alchimiste', items: [['Potion de soins', 50], ['Potion de soins supérieurs', 150], ['Antitoxine', 50], ['Feu grégeois (flasque)', 50], ['Eau bénite (flasque)', 25], ['Acide (fiole)', 25], ['Herbes médicinales', 5], ['Encre (flacon)', 10], ['Parfum rare', 5], ['Bombe fumigène', 30], ['Sacoche à composantes', 25], ['Poison de base (fiole)', 100]] },
+            magic: { label: '✨ Boutique de magie', items: [['Parchemin de sort (niv. 1)', 75], ['Parchemin de sort (niv. 2)', 150], ['Baguette d\'étincelles', 90], ['Amulette de protection', 200], ['Pierre de lumière', 60], ['Encre arcanique', 40], ['Cristal de focalisation', 25], ['Grimoire vierge', 50], ['Potion d\'invisibilité', 180], ['Sac sans fond (d\'occasion)', 300], ['Bâton de marche gravé de runes', 35]] },
+            tavern: { label: '🍺 Taverne', items: [['Chope de bière', 0.1], ['Pichet de vin', 0.2], ['Hydromel épicé', 0.3], ['Repas chaud', 0.3], ['Repas de fête', 2], ['Ragoût du jour', 0.2], ['Pain et fromage', 0.1], ['Chambre commune (nuit)', 0.5], ['Chambre privée (nuit)', 2], ['Ragots du coin (service)', 0.5], ['Location d\'écurie (nuit)', 0.5]] }
+        };
+        function formatPrice(po) {
+            if (po >= 20) return (Math.round(po / 5) * 5) + ' po';
+            if (po >= 1) return Math.max(1, Math.round(po)) + ' po';
+            return Math.max(1, Math.round(po * 10)) + ' pa';
+        }
+        function genShop() {
+            const typ = (byId('gm-gen-shoptype') || {}).value || 'general';
+            const def = SHOPS[typ]; if (!def) return null;
+            const pool = def.items.slice();
+            for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }
+            const n = Math.min(pool.length, 6 + Math.floor(Math.random() * 4));
+            const keeper = GEN_FIRST[Math.floor(Math.random() * GEN_FIRST.length)] + ' ' + GEN_LAST[Math.floor(Math.random() * GEN_LAST.length)];
+            const lines = pool.slice(0, n).map(it => '• ' + it[0] + ' — ' + formatPrice(it[1] * (0.85 + Math.random() * 0.4)));
+            return def.label + ', tenu par ' + keeper + '\n' + lines.join('\n');
+        }
         function renderGenActions() {
             const box = byId('gm-gen-actions'); if (!box) return;
             if (lastGen && lastGen.type === 'name') {
@@ -4011,6 +4497,9 @@
             } else if (lastGen && lastGen.type === 'encounter' && lastGen.encounter) {
                 box.style.display = 'flex';
                 box.innerHTML = `<button class="gm-gen-actions-btn" data-genact="add-enc">⚔️ Ajouter au combat</button>`;
+            } else if (lastGen && lastGen.type === 'shop' && lastGen.text) {
+                box.style.display = 'flex';
+                box.innerHTML = `<button class="gm-gen-actions-btn" data-genact="shop-notes">📝 Copier dans le bloc-notes</button>`;
             } else { box.style.display = 'none'; box.innerHTML = ''; }
         }
         function genEncounter() {
@@ -4024,12 +4513,26 @@
         document.querySelectorAll('[data-gen]').forEach(b => b.addEventListener('click', () => {
             const kind = b.dataset.gen;
             const encOpts = byId('gm-gen-enc-opts'); if (encOpts) encOpts.style.display = (kind === 'encounter') ? 'flex' : 'none';
+            const shopOpts = byId('gm-gen-shop-opts'); if (shopOpts) shopOpts.style.display = (kind === 'shop') ? 'flex' : 'none';
+            const dunOpts = byId('gm-gen-dungeon-opts'); if (dunOpts) dunOpts.style.display = (kind === 'dungeon') ? 'block' : 'none';
             const out = byId('gm-gen-out');
+            out.classList.toggle('is-multi', kind === 'shop');   // liste multi-lignes alignée à gauche
             if (kind === 'name') { lastGen = { type: 'name', npc: genNpcName() }; out.textContent = lastGen.npc; }
             else if (kind === 'encounter') {
                 const e = genEncounter();
                 lastGen = { type: 'encounter', encounter: e };
                 out.textContent = e ? ('⚔️ ' + e.name + '  —  PV ' + e.hp + ' · CA ' + e.ac) : 'Aucune rencontre pour ce filtre.';
+            } else if (kind === 'shop') {
+                const txt = genShop();
+                lastGen = { type: 'shop', text: txt };
+                out.textContent = txt || 'Type de boutique inconnu.';
+            } else if (kind === 'dungeon') {
+                const res = generateDungeonToMap();
+                lastGen = { type: 'dungeon' };
+                if (res) {
+                    out.textContent = '🏰 Donjon posé : ' + res.rooms + ' salles, ' + res.doors + ' portes' + (res.filled ? ', ' + res.filled + ' salle(s) peuplée(s) sur le calque MJ' : '') + '. Re-clique pour un autre plan, Ctrl+Z pour annuler.';
+                    if (window.showAppToast) window.showAppToast('🏰 Donjon généré — ' + res.rooms + ' salles' + (res.filled ? ', ' + res.filled + ' peuplées' : ''), '#2c3e50');
+                }
             } else {
                 const pool = kind === 'rumor' ? GEN_RUMORS : GEN_LOOT;
                 lastGen = { type: kind };
@@ -4061,6 +4564,11 @@
                 }
                 save(); renderMonsters();
                 if (window.showAppToast) window.showAppToast('⚔️ ' + count + ' monstre(s) ajouté(s) — pose-les via « Placer les combattants »', '#2c3e50');
+            } else if (b.dataset.genact === 'shop-notes' && lastGen && lastGen.text) {
+                state.notes = (state.notes ? state.notes + '\n\n' : '') + '🛒 ' + lastGen.text;
+                const n = byId('gm-notes'); if (n) n.value = state.notes;
+                save();
+                if (window.showAppToast) window.showAppToast('📝 Boutique copiée dans le bloc-notes', '#2c3e50');
             }
         });
         // Régénère la rencontre quand on change environnement / palier
@@ -4069,6 +4577,26 @@
             byId('gm-gen-out').textContent = e3 ? ('⚔️ ' + e3.name + '  —  PV ' + e3.hp + ' · CA ' + e3.ac) : 'Aucune rencontre pour ce filtre.';
             renderGenActions();
         }); });
+        // Régénère la boutique quand on change de type d'échoppe
+        const shopSel = byId('gm-gen-shoptype');
+        if (shopSel) shopSel.addEventListener('change', () => {
+            const txt = genShop(); lastGen = { type: 'shop', text: txt };
+            const out2 = byId('gm-gen-out'); out2.classList.add('is-multi');
+            out2.textContent = txt || 'Type de boutique inconnu.';
+            renderGenActions();
+        });
+        // Lecteur de bloc de stats (#12) : coller → analyser → aperçu → ajouter au combat
+        const sbToggle = byId('gm-statblock-toggle');
+        if (sbToggle) sbToggle.addEventListener('click', () => {
+            const z = byId('gm-statblock-zone'); if (!z) return;
+            z.style.display = (z.style.display === 'none') ? 'block' : 'none';
+            if (z.style.display === 'block') { const ta = byId('gm-statblock-text'); if (ta) ta.focus(); }
+        });
+        const sbParse = byId('gm-statblock-parse');
+        if (sbParse) sbParse.addEventListener('click', () => { renderStatblockPreview(parseStatBlock((byId('gm-statblock-text') || {}).value)); });
+        // Résumé de session (#15)
+        const sumBtn = byId('gm-session-summary');
+        if (sumBtn) sumBtn.addEventListener('click', showSessionSummary);
         // Boutons d'ambiance
         renderAmbianceBtns();
         byId('gm-ambiance-btns').addEventListener('click', (e) => { const b = e.target.closest('[data-ambiance]'); if (b) applyAmbiance(b.dataset.ambiance); });
@@ -4196,6 +4724,28 @@
             } catch (err) { console.warn('showimg upload:', err); if (window.showAppToast) window.showAppToast('Échec de l\'envoi de l\'image.', '#c0392b'); }
             e.target.value = '';
         });
+        // 🎭 Bannière d'annonce plein écran (Lot 36)
+        const sendBanner = () => {
+            const title = byId('gm-banner-title').value.trim(); if (!title) { if (window.showAppToast) window.showAppToast('Écris un titre pour la bannière.', '#c0392b'); return; }
+            const sub = byId('gm-banner-sub').value.trim();
+            if (gmBroadcast('banner', { text: title.slice(0, 90), sub: sub.slice(0, 120) })) {
+                byId('gm-banner-title').value = ''; byId('gm-banner-sub').value = '';
+                if (window.showAppToast) window.showAppToast('🎭 Bannière affichée aux joueurs', '#2c3e50');
+                clog('🎭 Bannière : ' + title);
+            }
+        };
+        byId('gm-banner-send').addEventListener('click', sendBanner);
+        byId('gm-banner-sub').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); sendBanner(); } });
+        byId('gm-banner-title').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-banner-sub').focus(); } });
+        // 🎒 Butin du groupe partagé (Lot 36)
+        byId('gm-loot-add').addEventListener('click', () => {
+            const name = byId('gm-loot-name').value.trim(); if (!name) return;
+            const qty = Math.max(1, parseInt(byId('gm-loot-qty').value, 10) || 1);
+            partyLootData().push({ id: uid(), name: name.slice(0, 80), qty: qty });
+            byId('gm-loot-name').value = ''; byId('gm-loot-qty').value = '1';
+            save(); renderPartyLoot(); broadcastMap(true);
+        });
+        byId('gm-loot-name').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); byId('gm-loot-add').click(); } });
         // Banque : on PRÉVISUALISE d'abord (pas d'application au change), puis « Charger » applique.
         byId('gm-map-bank').addEventListener('change', (e) => {
             const n = treeNode(e.target.value); const prev = byId('gm-map-bank-preview');
@@ -4269,7 +4819,7 @@
         byId('gm-scene-add').addEventListener('click', () => {
             const name = byId('gm-scene-name').value.trim(); if (!name) return;
             const music = byId('gm-scene-music').value.trim();
-            state.scenes.push({ id: uid(), name, bg: pendingSceneBg || null, music: music || null });
+            state.scenes.push({ id: uid(), name, bg: pendingSceneBg || null, music: music || null, playlist: music ? [{ url: music, title: name }] : [] });
             byId('gm-scene-name').value = ''; byId('gm-scene-music').value = ''; pendingSceneBg = null;
             const lbl = byId('gm-scene-img-label'); if (lbl) lbl.classList.remove('has-img');
             save(); renderScenes();
@@ -4348,6 +4898,7 @@
                 case 'npc-del': state.npcs = state.npcs.filter(n => n.id !== id); save(); renderNpcs(); break;
                 case 'quest-del': state.quests = state.quests.filter(q => q.id !== id); save(); renderQuests(); break;
                 case 'scene-apply': { const s = find(state.scenes, id); if (s) { applyScene(s); if (live.presChannel) gmBroadcast('scene', { bg: s.bg || null, name: s.name }); } break; }
+                case 'scene-playlist': openScenePlaylistEditor(id, e); break;
                 case 'scene-del': state.scenes = state.scenes.filter(x => x.id !== id); save(); renderScenes(); break;
                 case 'sfx-play': { const s = find(state.soundboard, id); if (s) { if (window.MusicPlayer && window.MusicPlayer.playSfx) window.MusicPlayer.playSfx(s.url); if (!s.local && live.presChannel) gmBroadcast('sfx', { url: s.url, name: s.name }); } break; }
                 case 'sfx-del': { const s = find(state.soundboard, id); if (s && s.local && s.url) { try { URL.revokeObjectURL(s.url); } catch (e) {} } if (s && s.path && window.SupaAuth) { try { window.SupaAuth.deleteAsset(s.path); } catch (e) {} } state.soundboard = state.soundboard.filter(x => x.id !== id); save(); renderSoundboard(); break; }
@@ -4382,6 +4933,23 @@
                     if (gmBroadcast('inspiration', { targetUserId: t.dataset.uid })) {
                         if (window.showAppToast) window.showAppToast('✨ Inspiration accordée à ' + nm, '#b8862c');
                         clog('✨ Inspiration accordée à ' + nm);
+                    }
+                    break;
+                }
+                case 'loot-del': { state.map.partyLoot = partyLootData().filter(x => x.id !== id); save(); renderPartyLoot(); broadcastMap(true); break; }
+                case 'bestiary-add': { const b = bestiaryData().find(x => x.id === id); if (b) addStatblockToCombat(b); break; }
+                case 'bestiary-del': { state.bestiary = bestiaryData().filter(x => x.id !== id); save(); renderBestiary(); break; }
+                case 'monster-reveal': {
+                    const m = find(state.monsters, id); if (!m) break;
+                    const subtitle = prompt('Sous-titre dramatique (optionnel) — ex. « Le Fléau des Montagnes » :', '');
+                    if (subtitle === null) break;
+                    const img = prompt('URL d\'un portrait/artwork (optionnel, laisse vide sinon) :', m.img || '');
+                    if (img === null) break;
+                    if (img.trim()) m.img = img.trim();
+                    if (gmBroadcast('boss-reveal', { name: m.name, subtitle: (subtitle || '').slice(0, 120), img: (img || '').trim() })) {
+                        save();
+                        if (window.showAppToast) window.showAppToast('🐉 « ' + m.name + ' » révélé en grand aux joueurs', '#7A2828');
+                        clog('🐉 Révélation cinématique : ' + m.name);
                     }
                     break;
                 }

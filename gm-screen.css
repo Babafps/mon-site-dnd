@@ -240,6 +240,40 @@ body.theme-dark .gm-init-fx b { color: #e2c25a; }
 .gm-eye { background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.95rem; padding: 2px 6px; border-radius: 6px; flex-shrink: 0; opacity: 0.85; }
 .gm-eye:hover { background: rgba(196,155,53,0.18); }
 .gm-eye.is-hidden { opacity: 1; background: rgba(122,40,40,0.12); border-color: rgba(122,40,40,0.4); }
+.gm-mon-reveal { background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.95rem; padding: 2px 6px; border-radius: 6px; flex-shrink: 0; opacity: 0.85; }
+.gm-mon-reveal:hover { background: rgba(122,40,40,0.16); border-color: rgba(122,40,40,0.4); opacity: 1; }
+.gm-loot-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+.gm-loot-row:hover { background: rgba(196,155,53,0.1); }
+.gm-loot-qty { font-weight: bold; color: var(--primary-color, #7A2828); flex: 0 0 auto; min-width: 30px; }
+.gm-loot-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-loot-by { flex: 0 0 auto; font-size: 0.72rem; opacity: 0.6; font-style: italic; }
+.gm-annot { position: absolute; transform: translate(-50%, -100%); z-index: 11; cursor: pointer; display: flex; flex-direction: column; align-items: center; }
+.gm-annot .ga-pin { font-size: 1.15rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+.gm-annot .ga-lbl { max-width: 140px; font-family: 'Lora', serif; font-size: 0.68rem; line-height: 1.1; color: #fff; background: rgba(20,14,8,0.85); border: 1px solid rgba(196,155,53,0.6); border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-annot:hover .ga-lbl { background: rgba(122,40,40,0.9); }
+/* Lot 37 — générateur multi-lignes (boutique), lecteur de bloc de stats, résumé de session */
+.gm-gen-out.is-multi { text-align: left; font-style: normal; white-space: pre-line; font-size: 0.88rem; }
+#gm-statblock-zone { margin-top: 6px; }
+#gm-statblock-zone .gm-textarea { min-height: 110px; margin-bottom: 6px; }
+#gm-statblock-preview .gm-sb-head { font-weight: bold; color: var(--primary-color, #7A2828); margin-top: 8px; }
+.gm-sb-line { font-size: 0.9rem; margin: 2px 0; }
+.gm-sb-abil { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.78rem; margin: 4px 0; color: #6a5a3e; }
+.gm-sb-atks { font-size: 0.84rem; display: flex; flex-direction: column; gap: 2px; }
+body.theme-dark .gm-sb-abil { color: #b3a488; }
+body.theme-dark #gm-statblock-preview .gm-sb-head { color: #e8b3b3; }
+#gm-bestiary { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
+.gm-bestiary-head { font-weight: bold; color: var(--primary-color, #7A2828); font-size: 0.85rem; margin-top: 4px; }
+.gm-bestiary-row { display: flex; align-items: center; gap: 6px; padding: 3px 5px; border-radius: 6px; }
+.gm-bestiary-row:hover { background: rgba(196,155,53,0.12); }
+.gm-bestiary-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
+.gm-bestiary-row .gm-btn { padding: 2px 8px; }
+.gm-sum-box { max-width: 560px; }
+.gm-sum-text { white-space: pre-wrap; font-family: 'Lora', serif; font-size: 0.85rem; line-height: 1.45; max-height: 52vh; overflow-y: auto; background: rgba(196,155,53,0.08); border-radius: 8px; padding: 10px; margin: 8px 0; }
+#gm-scene-pl-popover { width: 300px; }
+.gm-scene-pl-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.gm-scene-pl-row { gap: 8px; }
+.gm-scene-pl-num { flex: 0 0 auto; font-weight: bold; color: var(--primary-color, #7A2828); min-width: 16px; }
+.gm-scene-pl-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
 
 /* ---- Monstres ---- */
 .gm-monster { background: #fffdf9; border: 1px solid rgba(122,40,40,0.2); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
@@ -410,6 +444,7 @@ canvas.gm-layer-walls, .gm-layer-vision, .gm-layer-ruler { position: absolute; i
 .gm-sound-ring { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
     border: 2px dashed rgba(120,200,255,0.55); background: radial-gradient(circle, rgba(90,170,240,0.14) 0%, transparent 72%); }
 .gm-sound-ring.is-playing { border-color: rgba(120,220,255,0.95); animation: gm-sound-pulse 1.4s ease-in-out infinite; }
+.gm-sound-ring.is-oneshot { border-style: dotted; border-color: rgba(230,190,90,0.7); background: radial-gradient(circle, rgba(230,190,90,0.12) 0%, transparent 72%); }
 @keyframes gm-sound-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(120,200,255,0.35); } 50% { box-shadow: 0 0 22px 4px rgba(120,200,255,0.45); } }
 .gm-sound-pin { position: absolute; transform: translate(-50%, -50%); z-index: 10; width: 24px; height: 24px; padding: 0;
     border-radius: 50%; border: 2px solid rgba(120,200,255,0.9); background: rgba(14,24,38,0.92); font-size: 0.8rem; line-height: 1;

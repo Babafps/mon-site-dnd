@@ -826,6 +826,8 @@
         },
         // Joue immédiatement une URL (YouTube ou audio direct) — utilisé par les scènes MJ
         playUrl: (url, title) => playUrl(url, title),
+        // Joue une playlist d'ambiance en boucle (liste d'URL ou {url,title}) — scènes MJ (Lot 38)
+        playPlaylist: (items, title) => playPlaylist(items, title),
         // Effet sonore ponctuel (soundboard MJ → joueurs)
         playSfx: (url) => playSfx(url),
         playBuiltinSfx: (name) => playBuiltinSfx(name),
@@ -856,6 +858,32 @@
         if (isShuffle) buildShuffleOrder();
         setVisible(true, true);
         playAtIndex(queue.length - 1);
+    }
+
+    // Charge une LISTE d'URLs comme playlist d'ambiance (remplace la file) et la joue en boucle. (Lot 38)
+    // items = tableau d'URL (string) ou d'objets { url, title }.
+    function playPlaylist(items, title) {
+        if (!Array.isArray(items) || !items.length) return;
+        const tracks = items.map(it => {
+            const url = (typeof it === 'string') ? it : (it && it.url);
+            const t = (it && typeof it === 'object' && it.title) ? it.title : '';
+            if (!url) return null;
+            const ytId = extractYTId(url);
+            if (ytId) { loadYTApi(); return { id: uid(), type: 'youtube', videoId: ytId, title: t || ('YouTube – ' + ytId), badge: '▶ YouTube' }; }
+            const ext = url.split('?')[0].split('#')[0].split('.').pop().toLowerCase();
+            return { id: uid(), type: 'audio', src: url, title: t || (title || 'Ambiance'), badge: ext ? ext.toUpperCase() : '🔗 URL' };
+        }).filter(Boolean);
+        if (!tracks.length) return;
+        queue = tracks;                 // la playlist de scène REMPLACE la file courante
+        currentIndex = -1;
+        // Ambiance = boucle sur toute la playlist (le morceau enchaîne sur le suivant, puis reboucle)
+        loopMode = 1;
+        if (loopBtn) { loopBtn.textContent = '🔁'; loopBtn.title = 'Boucle — tout'; loopBtn.classList.add('active'); }
+        if (currentType === 'audio') audioEl.loop = false;
+        if (isShuffle) buildShuffleOrder();
+        renderQueue();
+        setVisible(true, true);
+        playAtIndex(0);
     }
 
     // =====================================================

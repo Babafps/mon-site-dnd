@@ -6,8 +6,26 @@
 //   • snapshot de la fiche débauncé → table session_players
 // L'état est exposé via l'évènement 'playersession:change'.
 // =====================================================
+//
+//  PLAN DU FICHIER  (une seule IIFE — repères de navigation, voir bannières « N · … » ↓)
+//     1. Config, état & petits helpers
+//     2. Snapshot de la fiche → Supabase
+//     3. Présence & canal Realtime
+//     4. Identité & envoi au MJ
+//     5. Réception d'événements du MJ (notifications joueur)
+//     6. FAB, jets partagés & combat
+//     7. Carte / plateau joueur (VTT)
+//     8. Widget fiche flottante
+//     9. Cycle de vie : teardown, kick, styles, API (join/leave), init
+//    10. TableFX — célébrations de table (nat 20 / nat 1)
+//
+// =====================================================
 (function () {
     'use strict';
+
+    // =====================================================
+    // 1 · CONFIG, ÉTAT & PETITS HELPERS
+    // =====================================================
 
     const LS_KEY = 'dnd-player-session';
     const DEBOUNCE = 800;
@@ -30,7 +48,10 @@
         } catch (e) {}
     }
 
-    // ---------- Snapshot de la fiche (lecture seule du DOM) ----------
+    // =====================================================
+    // 2 · SNAPSHOT DE LA FICHE → SUPABASE
+    //     Lecture seule du DOM, débounce, upsert vers session_players.
+    // =====================================================
     function buildSnapshot() {
         const v = id => { const el = document.getElementById(id); return el ? el.value : ''; };
         const num = id => { const n = parseInt(v(id), 10); return isNaN(n) ? null : n; };
@@ -126,7 +147,10 @@
         state.pushTimer = setTimeout(doPush, DEBOUNCE);
     }
 
-    // ---------- Présence + réception des broadcasts MJ ----------
+    // =====================================================
+    // 3 · PRÉSENCE & CANAL REALTIME
+    //     Canal session:{code} + abonnement aux broadcasts du MJ.
+    // =====================================================
     function openPresence() {
         if (!window.SupaAuth || !state.code) return;
         try {
@@ -146,6 +170,9 @@
               .on('broadcast', { event: 'concentration' }, ({ payload }) => receiveConcentration(payload))
               .on('broadcast', { event: 'inspiration' }, ({ payload }) => receiveInspiration(payload))
               .on('broadcast', { event: 'npc-card' }, ({ payload }) => receiveNpcCard(payload))
+              .on('broadcast', { event: 'boss-reveal' }, ({ payload }) => receiveBossReveal(payload))
+              .on('broadcast', { event: 'banner' }, ({ payload }) => receiveBanner(payload))
+              .on('broadcast', { event: 'session-recap' }, ({ payload }) => receiveSessionRecap(payload))
               .on('broadcast', { event: 'timer' }, ({ payload }) => receiveTimer(payload))
               .subscribe(async (status) => {
                   if (status === 'SUBSCRIBED') {
@@ -156,6 +183,10 @@
         } catch (e) { console.warn('presence:', e); }
     }
 
+    // =====================================================
+    // 4 · IDENTITÉ & ENVOI AU MJ
+    //     myUid(), sendToGm() (avec relance), échappement HTML.
+    // =====================================================
     let debugUid = null;   // uid simulé pour les tests hors session (voir debugApplyMap)
     function myUid() { return (window.SupaAuth && window.SupaAuth.currentUser && window.SupaAuth.currentUser.id) || debugUid; }
     // Envoi joueur → MJ avec filet : si Supabase répond autre chose que 'ok'
@@ -175,6 +206,11 @@
     }
     function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+    // =====================================================
+    // 5 · RÉCEPTION D'ÉVÉNEMENTS DU MJ (notifications joueur)
+    //     Scène, cadeau/murmure, image, dés, demande de jet,
+    //     concentration, inspiration, carte PNJ, minuteur.
+    // =====================================================
     // --- Scène diffusée par le MJ : change le fond + lance l'ambiance ---
     function applyIncomingScene(p) {
         if (!p) return;
@@ -313,6 +349,7 @@
         if (p.targetUserId && p.targetUserId !== 'all' && p.targetUserId !== myUid()) return;
         const cb = document.getElementById('heroic-inspiration');
         if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (window.TableFX && window.TableFX.inspire) window.TableFX.inspire();   // animation de célébration (Lot 35)
         if (window.showAppToast) window.showAppToast('✨ Le MJ t\'accorde l\'inspiration héroïque !', '#b8862c');
     }
     // --- 🎴 Carte de PNJ révélée par le MJ (portrait + nom + description) ---
@@ -333,6 +370,166 @@
         ov.querySelector('.snc-close').addEventListener('click', () => ov.classList.add('hidden'));
         ov.classList.remove('hidden');
     }
+    // --- 🐉 Révélation cinématique de boss (Lot 35) ---
+    let bossRevealStyled = false;
+    function ensureBossStyles() {
+        if (bossRevealStyled) return; bossRevealStyled = true;
+        const reduce = (function () { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+        const anim = reduce ? '' : 'animation';
+        const css = `
+        #session-boss-reveal { position: fixed; inset: 0; z-index: 100060; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; cursor: pointer;
+            background: radial-gradient(ellipse at 50% 42%, rgba(60,6,6,0.72), rgba(0,0,0,0.94) 70%); ${anim}: bossIn 0.7s ease-out both; -webkit-tap-highlight-color: transparent; }
+        #session-boss-reveal.hidden { display: none; }
+        #session-boss-reveal::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 200px 60px rgba(150,10,10,0.55); ${anim}: bossPulse 2.6s ease-in-out infinite; }
+        .sbr-img { width: min(46vw, 300px); max-height: 46vh; object-fit: contain; border-radius: 14px; border: 2px solid rgba(220,60,60,0.5); box-shadow: 0 0 60px rgba(200,30,30,0.6); ${anim}: bossImg 1s ease-out both; }
+        .sbr-noimg { font-size: clamp(3rem, 14vw, 7rem); filter: drop-shadow(0 0 30px rgba(220,40,40,0.8)); ${anim}: bossImg 1s ease-out both; }
+        .sbr-name { font-family: 'Cinzel','Lora',serif; font-weight: 700; text-align: center; color: #ffdede; font-size: clamp(2rem, 9vw, 5rem); letter-spacing: 0.06em; text-shadow: 0 0 26px rgba(220,30,30,0.9), 0 3px 10px rgba(0,0,0,0.8); padding: 0 16px; ${anim}: bossName 1.1s 0.25s ease-out both; }
+        .sbr-sub { font-family: 'Lora',serif; font-style: italic; color: #e8b3b3; font-size: clamp(0.95rem, 3.4vw, 1.5rem); text-align: center; padding: 0 24px; text-shadow: 0 2px 8px rgba(0,0,0,0.8); ${anim}: bossName 1.1s 0.55s ease-out both; }
+        .sbr-skip { position: absolute; bottom: 22px; color: rgba(255,255,255,0.55); font-family: 'Lora',serif; font-size: 0.85rem; }
+        @keyframes bossIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+        @keyframes bossPulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+        @keyframes bossImg { 0% { opacity: 0; transform: scale(1.35); filter: blur(8px) drop-shadow(0 0 30px rgba(220,40,40,0.8)); } 100% { opacity: 1; transform: scale(1); filter: blur(0) drop-shadow(0 0 30px rgba(220,40,40,0.8)); } }
+        @keyframes bossName { 0% { opacity: 0; letter-spacing: 0.4em; transform: translateY(14px); } 100% { opacity: 1; letter-spacing: 0.06em; transform: translateY(0); } }`;
+        const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    }
+    function receiveBossReveal(p) {
+        if (!p || !p.name) return;
+        ensureBossStyles();
+        let ov = document.getElementById('session-boss-reveal');
+        if (!ov) { ov = document.createElement('div'); ov.id = 'session-boss-reveal'; ov.className = 'no-print'; document.body.appendChild(ov); }
+        else { ov.classList.remove('hidden'); }
+        ov.innerHTML = (p.img ? `<img class="sbr-img" src="${escHtml(p.img)}" alt="">` : `<div class="sbr-noimg">🐉</div>`)
+            + `<div class="sbr-name">${escHtml(p.name)}</div>`
+            + (p.subtitle ? `<div class="sbr-sub">${escHtml(p.subtitle)}</div>` : '')
+            + `<div class="sbr-skip">Touche l'écran pour continuer</div>`;
+        if (window.TableFX && window.TableFX.fumble) { /* petite secousse dramatique */ document.body.classList.add('tfx-shake'); setTimeout(() => document.body.classList.remove('tfx-shake'), 600); }
+        const dismiss = () => { ov.classList.add('hidden'); clearTimeout(bossRevealTimer); };
+        ov.onclick = dismiss;
+        clearTimeout(bossRevealTimer);
+        bossRevealTimer = setTimeout(dismiss, 7000);
+    }
+    let bossRevealTimer = null;
+
+    // --- 🎭 Bannière d'annonce plein écran (titre de chapitre, transition…) ---
+    let bannerStyled = false, bannerTimer = null;
+    function ensureBannerStyles() {
+        if (bannerStyled) return; bannerStyled = true;
+        const reduce = (function () { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+        const anim = reduce ? '' : 'animation';
+        const css = `
+        #session-banner { position: fixed; inset: 0; z-index: 100055; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; cursor: pointer; text-align: center;
+            background: linear-gradient(180deg, rgba(8,8,12,0.86), rgba(8,8,12,0.94)); ${anim}: bnFade 0.6s ease-out both; }
+        #session-banner.hidden { display: none; }
+        #session-banner .bn-line { width: min(70vw, 520px); height: 1px; background: linear-gradient(90deg, transparent, rgba(196,155,53,0.9), transparent); ${anim}: bnLine 1s ease-out both; }
+        #session-banner .bn-title { font-family: 'Cinzel','Lora',serif; font-weight: 700; color: #f3e3bb; font-size: clamp(1.7rem, 7vw, 4rem); letter-spacing: 0.05em; padding: 0 18px; text-shadow: 0 2px 14px rgba(0,0,0,0.7); ${anim}: bnUp 0.9s 0.15s ease-out both; }
+        #session-banner .bn-sub { font-family: 'Lora',serif; font-style: italic; color: #d9c79a; font-size: clamp(0.95rem, 3.4vw, 1.4rem); padding: 0 24px; ${anim}: bnUp 0.9s 0.4s ease-out both; }
+        @keyframes bnFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes bnUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bnLine { from { opacity: 0; transform: scaleX(0.2); } to { opacity: 1; transform: scaleX(1); } }`;
+        const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    }
+    function receiveBanner(p) {
+        if (!p || !p.text) return;
+        ensureBannerStyles();
+        let ov = document.getElementById('session-banner');
+        if (!ov) { ov = document.createElement('div'); ov.id = 'session-banner'; ov.className = 'no-print'; document.body.appendChild(ov); }
+        else ov.classList.remove('hidden');
+        ov.innerHTML = `<div class="bn-line"></div><div class="bn-title">${escHtml(p.text)}</div>${p.sub ? `<div class="bn-sub">${escHtml(p.sub)}</div>` : ''}<div class="bn-line"></div>`;
+        const dismiss = () => { ov.classList.add('hidden'); clearTimeout(bannerTimer); };
+        ov.onclick = dismiss;
+        clearTimeout(bannerTimer);
+        bannerTimer = setTimeout(dismiss, Math.max(3500, Math.min(9000, (p.text.length + (p.sub ? p.sub.length : 0)) * 90)));
+    }
+
+    // --- 🧾 Résumé de session « générique de fin » envoyé par le MJ (Lot 37+, idée 2) ---
+    let recapStyled = false;
+    function ensureRecapStyles() {
+        if (recapStyled) return; recapStyled = true;
+        const reduce = (function () { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+        const css = `
+        #session-recap { position: fixed; inset: 0; z-index: 100058; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 6vh 5vw; overflow: hidden;
+            background: radial-gradient(ellipse at 50% 30%, rgba(30,24,14,0.96), rgba(6,5,3,0.98)); }
+        #session-recap.hidden { display: none; }
+        #session-recap .rc-title { font-family: 'Cinzel','Lora',serif; font-weight: 700; color: #f3e3bb; font-size: clamp(1.4rem, 5vw, 2.4rem); text-shadow: 0 0 18px rgba(196,155,53,0.7); margin-bottom: 12px; flex: 0 0 auto; }
+        #session-recap .rc-scroll { flex: 0 1 auto; max-height: 66vh; overflow: hidden; width: min(90vw, 620px); -webkit-mask-image: linear-gradient(180deg, transparent, #000 12%, #000 82%, transparent); mask-image: linear-gradient(180deg, transparent, #000 12%, #000 82%, transparent); }
+        #session-recap .rc-inner { font-family: 'Lora',serif; color: #e6d7b4; font-size: clamp(0.95rem, 3vw, 1.25rem); line-height: 1.7; white-space: pre-wrap; text-align: center; ${reduce ? '' : 'animation: rcRoll 26s linear forwards;'} }
+        #session-recap .rc-close { margin-top: 14px; flex: 0 0 auto; background: rgba(196,155,53,0.2); color: #f3e3bb; border: 1px solid rgba(196,155,53,0.6); border-radius: 20px; padding: 8px 18px; font-family: 'Lora',serif; cursor: pointer; }
+        @keyframes rcRoll { from { transform: translateY(55vh); } to { transform: translateY(-100%); } }`;
+        const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    }
+    function receiveSessionRecap(p) {
+        if (!p || !p.text) return;
+        ensureRecapStyles();
+        let ov = document.getElementById('session-recap');
+        if (!ov) { ov = document.createElement('div'); ov.id = 'session-recap'; ov.className = 'no-print'; document.body.appendChild(ov); }
+        else ov.classList.remove('hidden');
+        ov.innerHTML = `<div class="rc-title">🎬 Fin de séance</div><div class="rc-scroll"><div class="rc-inner">${escHtml(p.text)}</div></div><button class="rc-close">Fermer</button>`;
+        ov.querySelector('.rc-close').addEventListener('click', () => ov.classList.add('hidden'));
+    }
+
+    // --- 🤢 Effets d'état en plein écran côté joueur (Lot 35) ---
+    // Pilotés par MES propres conditions (cases de la fiche). Désactivables par le joueur
+    // (case du panneau ⚔️, localStorage) ET par le MJ (m.playerFxOff, via la carte diffusée).
+    let statusFxStyled = false;
+    function ensureStatusStyles() {
+        if (statusFxStyled) return; statusFxStyled = true;
+        const css = `
+        #session-status-fx { position: fixed; inset: 0; pointer-events: none; z-index: 9960; opacity: 0; transition: opacity 0.6s ease; }
+        #session-status-fx.on { opacity: 1; }
+        #session-status-fx.fx-poison { box-shadow: inset 0 0 150px 40px rgba(70,150,40,0.42); background: radial-gradient(ellipse at 50% 50%, rgba(90,170,50,0) 55%, rgba(60,130,30,0.18)); animation: sfxPulse 3.4s ease-in-out infinite; }
+        #session-status-fx.fx-fire { box-shadow: inset 0 0 150px 45px rgba(200,70,20,0.5); background: radial-gradient(ellipse at 50% 100%, rgba(255,120,30,0.22), rgba(0,0,0,0) 55%); animation: sfxFlicker 0.5s ease-in-out infinite; }
+        #session-status-fx.fx-fear { box-shadow: inset 0 0 170px 60px rgba(120,10,10,0.55); animation: sfxPulse 2.2s ease-in-out infinite; }
+        #session-status-fx.fx-blind { box-shadow: inset 0 0 250px 130px rgba(0,0,0,0.9); background: rgba(0,0,0,0.35); }
+        #session-status-fx.fx-stun { box-shadow: inset 0 0 160px 55px rgba(120,110,60,0.5); filter: saturate(0.6); animation: sfxPulse 1.6s ease-in-out infinite; }
+        #session-status-fx.fx-down { box-shadow: inset 0 0 230px 110px rgba(0,0,0,0.82); background: rgba(20,20,25,0.4); }
+        @keyframes sfxPulse { 0%,100% { opacity: 0.72; } 50% { opacity: 1; } }
+        @keyframes sfxFlicker { 0%,100% { opacity: 0.8; } 25% { opacity: 1; } 50% { opacity: 0.7; } 75% { opacity: 0.95; } }
+        @media (prefers-reduced-motion: reduce) { #session-status-fx { animation: none !important; } }`;
+        const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    }
+    // Lit MES conditions cochées (mêmes sources que le snapshot).
+    function myConditions() {
+        const out = [];
+        try {
+            document.querySelectorAll('#conditions-track-container input[type="checkbox"]:checked, #custom-conditions-container input[type="checkbox"]:checked').forEach(cb => {
+                const lbl = (cb.parentElement ? cb.parentElement.textContent : '').replace(/\s+/g, ' ').trim();
+                if (lbl) out.push(lbl.toLowerCase());
+            });
+        } catch (e) {}
+        return out;
+    }
+    // Condition dominante → classe d'effet (par ordre de gravité visuelle).
+    function pickStatusEffect(conds) {
+        const has = (kw) => conds.some(c => c.indexOf(kw) !== -1);
+        if (has('inconscient')) return 'fx-down';
+        if (has('pétrifi') || has('petrifi') || has('paralys')) return 'fx-stun';
+        if (has('aveugl')) return 'fx-blind';
+        if (has('feu') || has('enflamm') || has('brûl') || has('brul')) return 'fx-fire';
+        if (has('empoisonn') || has('poison') || has('intoxiqu')) return 'fx-poison';
+        if (has('effray') || has('terroris') || has('apeur') || has('épouvant') || has('epouvant')) return 'fx-fear';
+        if (has('étourdi') || has('etourdi') || has('assomm') || has('neutralis')) return 'fx-stun';
+        if (has('à terre') || has('a terre')) return 'fx-down';
+        return null;
+    }
+    function statusFxEnabled() {
+        try { if (localStorage.getItem('dnd-fx-fullscreen') === '0') return false; } catch (e) {}
+        if (mapState && mapState.map && mapState.map.playerFxOff) return false;   // MJ a coupé les effets
+        return true;
+    }
+    function updateStatusFx() {
+        const app = document.getElementById('app-screen');
+        const onSheet = app && !app.classList.contains('hidden') && !document.body.classList.contains('gm-active');
+        let ov = document.getElementById('session-status-fx');
+        const effect = (onSheet && statusFxEnabled()) ? pickStatusEffect(myConditions()) : null;
+        if (!effect) { if (ov) { ov.classList.remove('on'); } return; }
+        ensureStatusStyles();
+        if (!ov) { ov = document.createElement('div'); ov.id = 'session-status-fx'; ov.className = 'no-print'; document.body.appendChild(ov); }
+        ov.className = 'no-print ' + effect;
+        // reflow pour rejouer la transition d'opacité au changement d'effet
+        void ov.offsetWidth;
+        ov.classList.add('on');
+    }
+
     // --- ⏳ Minuteur partagé lancé par le MJ ---
     let sessTimerInt = null;
     function receiveTimer(p) {
@@ -361,7 +558,8 @@
     }
 
     // =====================================================
-    // COMBAT (joueur) : bouton flottant (FAB) + initiative
+    // 6 · FAB, JETS PARTAGÉS & COMBAT (joueur)
+    //     Bouton flottant + initiative, murmure, dé partagé, barre de tour.
     // =====================================================
     let combatState = { active: false, round: 1, turnIndex: 0, order: [] };
     let fabEl = null, fabPanel = null;
@@ -444,9 +642,12 @@
     function renderFabPanel() {
         if (!fabPanel) return;
         const shareOn = (function () { try { return localStorage.getItem('dnd-share-rolls') !== '0'; } catch (e) { return true; } })();
+        const fxOn = (function () { try { return localStorage.getItem('dnd-fx-fullscreen') !== '0'; } catch (e) { return true; } })();
         const whisperBtn = `<button id="sfp-whisper-open" class="sfp-btn sfp-btn-whisper" type="button">🤫 Murmurer au MJ</button>`
+            + `<button id="sfp-loot-open" class="sfp-btn sfp-btn-whisper" type="button">🎒 Butin du groupe</button>`
             + `<div class="sfp-manual"><input id="sfp-dice-formula" class="sfp-manual-input" placeholder="2d6+3 (dé partagé)"><button id="sfp-dice-share" class="sfp-btn sfp-btn-alt" title="Lancer devant tout le monde">🎲</button></div>`
-            + `<label class="sfp-share-toggle" title="Quand c'est coché, les jets faits sur ta fiche (caracs, compétences, attaques, dés) s'affichent chez le MJ et les autres joueurs."><input type="checkbox" id="sfp-share-rolls"${shareOn ? ' checked' : ''}> 🎲 Partager mes jets de fiche</label>`;
+            + `<label class="sfp-share-toggle" title="Quand c'est coché, les jets faits sur ta fiche (caracs, compétences, attaques, dés) s'affichent chez le MJ et les autres joueurs."><input type="checkbox" id="sfp-share-rolls"${shareOn ? ' checked' : ''}> 🎲 Partager mes jets de fiche</label>`
+            + `<label class="sfp-share-toggle" title="Un voile coloré recouvre ton écran quand ton personnage est empoisonné, aveuglé, effrayé, en feu… Décoche pour ne rien afficher."><input type="checkbox" id="sfp-status-fx"${fxOn ? ' checked' : ''}> 💥 Effets d'état plein écran</label>`;
         // Hors combat : on n'affiche le message QUE dans le panneau ouvert (plus de badge flottant).
         if (!combatState.active) {
             fabPanel.innerHTML = `<div class="sfp-head">⚔️ Session</div>${whisperBtn}<div class="sfp-empty">Pas de combat pour le moment.</div>`;
@@ -469,6 +670,8 @@
         }
         const wb = document.getElementById('sfp-whisper-open');
         if (wb) wb.addEventListener('click', renderWhisperForm);
+        const lb = document.getElementById('sfp-loot-open');
+        if (lb) lb.addEventListener('click', toggleLootPanel);
         const ds = document.getElementById('sfp-dice-share');
         if (ds) ds.addEventListener('click', sendSharedRoll);
         const df = document.getElementById('sfp-dice-formula');
@@ -479,6 +682,82 @@
         if (mb) mb.addEventListener('click', submitManualInit);
         const mi = document.getElementById('sfp-init-manual');
         if (mi) mi.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitManualInit(); } });
+    }
+
+    // 🎒 Butin du groupe partagé (Lot 36) — liste synchronisée via la carte (m.partyLoot).
+    let lootStyled = false;
+    function ensureLootStyles() {
+        if (lootStyled) return; lootStyled = true;
+        const css = `
+        #session-loot { position: fixed; z-index: 9994; right: 16px; bottom: 84px; width: min(92vw, 320px); max-height: 60vh; display: flex; flex-direction: column; overflow: hidden;
+            background: var(--sheet-bg-color, #fffdf7); color: #2a2016; border: 1px solid var(--accent-color, #C49B35); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.45); font-family: 'Lora',serif; }
+        #session-loot.hidden { display: none; }
+        .sloot-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-weight: bold; background: rgba(196,155,53,0.16); }
+        .sloot-head .sloot-x { margin-left: auto; cursor: pointer; background: none; border: none; font-size: 1rem; color: inherit; }
+        .sloot-list { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+        .sloot-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 7px; }
+        .sloot-row:hover { background: rgba(196,155,53,0.12); }
+        .sloot-qty { font-weight: bold; color: var(--primary-color, #7A2828); min-width: 30px; }
+        .sloot-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sloot-by { font-size: 0.7rem; opacity: 0.55; font-style: italic; }
+        .sloot-del { background: none; border: none; cursor: pointer; color: #a3402f; font-size: 0.95rem; }
+        .sloot-add { display: flex; gap: 5px; padding: 8px; border-top: 1px solid rgba(196,155,53,0.3); }
+        .sloot-add input { font-family: inherit; padding: 6px 8px; border: 1px solid rgba(150,120,60,0.4); border-radius: 8px; background: rgba(255,255,255,0.6); }
+        .sloot-add .sloot-nm { flex: 1 1 auto; min-width: 0; }
+        .sloot-add .sloot-q { width: 48px; }
+        .sloot-add button { background: var(--accent-color, #C49B35); color: #2a1c0a; border: none; border-radius: 8px; padding: 0 12px; font-weight: bold; cursor: pointer; }
+        .sloot-empty { padding: 14px; text-align: center; opacity: 0.6; font-style: italic; font-size: 0.9rem; }
+        body.dark-mode #session-loot, body.theme-dark #session-loot { background: #241c16; color: #e8dcc4; }`;
+        const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    }
+    function ensureLootPanel() {
+        let p = document.getElementById('session-loot');
+        if (p) return p;
+        ensureLootStyles();
+        p = document.createElement('div'); p.id = 'session-loot'; p.className = 'no-print hidden';
+        document.body.appendChild(p);
+        return p;
+    }
+    function renderLootPanel() {
+        const p = document.getElementById('session-loot');
+        if (!p || p.classList.contains('hidden')) return;
+        const loot = (mapState.map && Array.isArray(mapState.map.partyLoot)) ? mapState.map.partyLoot : [];
+        const rows = loot.length
+            ? loot.map(it => `<div class="sloot-row"><span class="sloot-qty">×${it.qty || 1}</span><span class="sloot-name">${escHtml(it.name)}</span>${it.by ? `<span class="sloot-by">${escHtml(it.by)}</span>` : ''}<button class="sloot-del" data-loot-del="${escHtml(it.id)}" title="Retirer">✕</button></div>`).join('')
+            : '<div class="sloot-empty">Le sac commun est vide.<br>Ajoute un objet ci-dessous.</div>';
+        p.innerHTML = `<div class="sloot-head">🎒 Butin du groupe<button class="sloot-x" title="Fermer">✕</button></div>
+            <div class="sloot-list">${rows}</div>
+            <div class="sloot-add"><input class="sloot-nm" placeholder="Objet…" maxlength="80"><input class="sloot-q" type="number" min="1" value="1"><button class="sloot-plus">＋</button></div>`;
+        p.querySelector('.sloot-x').addEventListener('click', () => p.classList.add('hidden'));
+        p.querySelectorAll('[data-loot-del]').forEach(b => b.addEventListener('click', () => { sendToGm('loot-del', { id: b.dataset.lootDel }); }));
+        const nm = p.querySelector('.sloot-nm'), q = p.querySelector('.sloot-q');
+        const add = () => { const name = (nm.value || '').trim(); if (!name) return; sendToGm('loot-add', { name: name.slice(0, 80), qty: Math.max(1, parseInt(q.value, 10) || 1), by: snapName() }); nm.value = ''; q.value = '1'; nm.focus(); };
+        p.querySelector('.sloot-plus').addEventListener('click', add);
+        nm.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    }
+    function toggleLootPanel() {
+        const p = ensureLootPanel();
+        if (p.classList.contains('hidden')) { p.classList.remove('hidden'); renderLootPanel(); }
+        else p.classList.add('hidden');
+    }
+    // 📌 Annotations validées par le MJ (visibles de tous) — épingles sur le board joueur.
+    let annotStyled = false;
+    function ensureAnnotStyles() {
+        if (annotStyled) return; annotStyled = true;
+        const css = `
+        .smap-annot { position: absolute; transform: translate(-50%, -100%); z-index: 8; pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+        .smap-annot .sa-pin { font-size: 1.1rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+        .smap-annot .sa-lbl { max-width: 130px; font-family: 'Lora',serif; font-size: 0.66rem; line-height: 1.1; color: #fff; background: rgba(20,14,8,0.82); border: 1px solid rgba(196,155,53,0.6); border-radius: 6px; padding: 1px 5px; margin-bottom: 2px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }`;
+        const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    }
+    function renderPlayerAnnotations() {
+        const board = playerBoard(); if (!board) return;
+        board.querySelectorAll('.smap-annot').forEach(el => el.remove());
+        const list = (mapState.map && Array.isArray(mapState.map.annotations)) ? mapState.map.annotations : [];
+        if (!list.length) return;
+        ensureAnnotStyles();
+        const html = list.map(a => `<div class="smap-annot" style="left:${a.x * 100}%; top:${a.y * 100}%;" title="${escHtml(a.text)}${a.by ? ' — ' + escHtml(a.by) : ''}"><span class="sa-lbl">${escHtml(a.text)}</span><span class="sa-pin">📌</span></div>`).join('');
+        board.insertAdjacentHTML('beforeend', html);
     }
 
     function rollInitiative() {
@@ -692,13 +971,16 @@
     }
 
     // =====================================================
-    // CARTE TACTIQUE (joueur) : vue lecture seule synchronisée
+    // 7 · CARTE / PLATEAU JOUEUR (VTT) — vue lecture seule synchronisée
+    //     Rendu carte, jetons, vision/obscurité, brouillard, zones sonores,
+    //     gabarits, dessin, déplacement mesuré de mon jeton.
     // =====================================================
     let mapState = { map: {}, tokens: [] };
     let mapPanel = null, mapToggle = null, openMapPanel = null;
     let playerDragBusy = false;      // je déplace MON jeton : ne pas reconstruire le DOM sous mon doigt
     let pendingMapRender = false;    // un état carte est arrivé pendant le drag → re-rendu au lâcher
     let playerAoe = { on: false, kind: 'circle', color: '#3498db', draft: null };  // outil gabarit de sort côté joueur
+    let playerAnnot = { on: false };  // outil annotation : clic sur la carte = proposer une note au MJ (Lot 36)
 
     // --- Bouton/élément flottant générique : glisser librement, aimanté au bord le plus proche au lâcher ---
     function makeEdgeDock(el, storeKey, defaults) {
@@ -783,7 +1065,7 @@
 
         mapPanel = document.createElement('div');
         mapPanel.id = 'session-map'; mapPanel.className = 'no-print hidden';
-        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-aoe" title="Gabarit de sort / zone d\'effet">🎯</button><button id="smap-sheet" title="Ma fiche (petit widget déplaçable)">🪪</button><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
+        mapPanel.innerHTML = '<div class="smap-head"><span>🗺️ Carte tactique</span><div class="smap-head-btns"><button id="smap-annot" title="Annoter la carte (le MJ valide)">📌</button><button id="smap-aoe" title="Gabarit de sort / zone d\'effet">🎯</button><button id="smap-sheet" title="Ma fiche (petit widget déplaçable)">🪪</button><button id="smap-full" title="Plein écran">⛶</button><button id="smap-close" title="Fermer">✕</button></div></div><div id="smap-view" class="smap-view"></div>';
         document.body.appendChild(mapPanel);
 
         const fullBtn = mapPanel.querySelector('#smap-full');
@@ -844,7 +1126,12 @@
         mapPanel.querySelector('#smap-close').addEventListener('click', () => mapPanel.classList.add('hidden'));
         mapPanel.querySelector('#smap-sheet').addEventListener('click', toggleSheetWidget);
         const aoeBtn = mapPanel.querySelector('#smap-aoe');
-        if (aoeBtn) aoeBtn.addEventListener('click', () => { playerAoe.on = !playerAoe.on; aoeBtn.classList.toggle('is-on', playerAoe.on); renderPlayerAoeBar(); });
+        if (aoeBtn) aoeBtn.addEventListener('click', () => { playerAoe.on = !playerAoe.on; aoeBtn.classList.toggle('is-on', playerAoe.on); if (playerAoe.on) { playerAnnot.on = false; const ab = mapPanel.querySelector('#smap-annot'); if (ab) ab.classList.remove('is-on'); } renderPlayerAoeBar(); });
+        const annotBtn = mapPanel.querySelector('#smap-annot');
+        if (annotBtn) annotBtn.addEventListener('click', () => {
+            playerAnnot.on = !playerAnnot.on; annotBtn.classList.toggle('is-on', playerAnnot.on);
+            if (playerAnnot.on) { playerAoe.on = false; if (aoeBtn) aoeBtn.classList.remove('is-on'); renderPlayerAoeBar(); if (window.showAppToast) window.showAppToast('📌 Clique la carte pour proposer une note au MJ', '#2c3e50'); }
+        });
         fullBtn.addEventListener('click', toggleFullscreen);
         // Le bouton carte se déplace et s'aimante aux bords (position mémorisée)
         makeEdgeDock(mapToggle, 'dnd-maptoggle-pos', { edge: 'right', offset: Math.round(window.innerHeight * 0.3) });
@@ -873,49 +1160,92 @@
     // s'en approche. On utilise des <audio> (HTMLMediaElement) : pas de contrainte CORS pour la
     // simple lecture (contrairement à Web Audio decodeAudioData), et le volume est réglable.
     const zoneAudio = {
-        els: {},            // id -> { el, url, target }
+        els: {},            // id -> { el, url, target, remove } — zones EN BOUCLE
+        oneShot: {},        // id -> { inside, last } — état des zones à déclenchement unique
+        fadeTimer: null,    // boucle de fondu (setInterval, marche même onglet caché)
         blocked: false,
-        // Position d'écoute = MON jeton le plus proche (le joueur n'entend qu'à travers son perso).
+        // Position d'écoute = MES jetons (le joueur n'entend qu'à travers son perso).
+        // Volume d'une boucle = max sur mes jetons de [rampe de distance] × [0.3 si un mur bloque].
         update() {
             const m = (mapState && mapState.map) || {};
             const zones = Array.isArray(m.soundZones) ? m.soundZones : [];
+            const walls = (m.walls || []);
             const board = playerBoard();
             const bw = board ? Math.max(1, board.clientWidth) : 1000;
             const bh = board ? Math.max(1, board.clientHeight) : bw * 9 / 16;
             const uid = myUid();
             const mine = (mapState.tokens || []).filter(t => !t.hidden && t.owner && t.owner === uid);
-            const ids = {};
-            zones.forEach(z => { if (z && z.id) ids[z.id] = 1; });
-            // Retirer les audios des zones disparues
-            Object.keys(this.els).forEach(id => { if (!ids[id]) { try { this.els[id].el.pause(); } catch (e) {} delete this.els[id]; } });
+            const loopIds = {};
+            zones.forEach(z => { if (z && z.id && z.url && !z.oneshot) loopIds[z.id] = 1; });
+            // Zones EN BOUCLE disparues (ou passées en one-shot / son retiré) → fondu de sortie
+            Object.keys(this.els).forEach(id => { if (!loopIds[id]) { this.els[id].target = 0; this.els[id].remove = true; } });
             zones.forEach(z => {
-                if (!z || !z.url) { if (z && this.els[z.id]) { try { this.els[z.id].el.pause(); } catch (e) {} delete this.els[z.id]; } return; }
+                if (!z || !z.url) return;
+                if (z.oneshot) { this.tickOneShot(z, mine, bw, bh); return; }
                 let slot = this.els[z.id];
                 if (!slot || slot.url !== z.url) {
                     if (slot) { try { slot.el.pause(); } catch (e) {} }
                     const a = new Audio(z.url); a.loop = true; a.preload = 'auto'; a.volume = 0;
                     slot = this.els[z.id] = { el: a, url: z.url, target: 0 };
                 }
+                slot.remove = false;
                 let vol = 0;
-                if (mine.length) {
-                    let best = Infinity;
-                    mine.forEach(t => { const d = Math.hypot((t.x - z.x) * bw, (t.y - z.y) * bh); if (d < best) best = d; });
+                mine.forEach(t => {
+                    const d = Math.hypot((t.x - z.x) * bw, (t.y - z.y) * bh);
                     const rPx = Math.max(1, (Number(z.r) || 0.15) * bw), inner = rPx * 0.3;
-                    if (best <= inner) vol = 1; else if (best >= rPx) vol = 0; else vol = 1 - (best - inner) / (rPx - inner);
-                    vol *= (z.vol != null ? Number(z.vol) : 0.8);
-                }
-                slot.target = Math.max(0, Math.min(1, vol));
-                slot.el.volume = slot.target;
-                if (slot.target > 0.001) {
-                    if (slot.el.paused) { const pr = slot.el.play(); if (pr && pr.catch) pr.catch(() => { zoneAudio.blocked = true; showAudioUnlock(); }); }
-                } else if (!slot.el.paused) { try { slot.el.pause(); } catch (e) {} }
+                    let v = d <= inner ? 1 : (d >= rPx ? 0 : 1 - (d - inner) / (rPx - inner));
+                    // Occlusion (idée #1) : un mur entre le jeton et la source étouffe le son.
+                    if (v > 0 && z.occl !== false && walls.length && window.VTTGeo && window.VTTGeo.moveBlocked(walls, t.x, t.y, z.x, z.y)) v *= 0.3;
+                    if (v > vol) vol = v;
+                });
+                slot.target = Math.max(0, Math.min(1, vol * (z.vol != null ? Number(z.vol) : 0.8)));
             });
+            this.ensureFadeLoop();
+        },
+        // Son à déclenchement unique (idée #3) : joué UNE fois quand un de mes jetons entre dans la zone.
+        tickOneShot(z, mine, bw, bh) {
+            const rPx = Math.max(1, (Number(z.r) || 0.15) * bw);
+            const inside = mine.some(t => Math.hypot((t.x - z.x) * bw, (t.y - z.y) * bh) <= rPx);
+            const st = this.oneShot[z.id] || { inside: false, last: 0 };
+            if (inside && !st.inside && (Date.now() - st.last) > 1500) {
+                try {
+                    const a = new Audio(z.url); a.loop = false; a.volume = Math.max(0, Math.min(1, z.vol != null ? Number(z.vol) : 0.8));
+                    const pr = a.play(); if (pr && pr.catch) pr.catch(() => { zoneAudio.blocked = true; showAudioUnlock(); });
+                } catch (e) {}
+                st.last = Date.now();
+            }
+            st.inside = inside; this.oneShot[z.id] = st;
+        },
+        // Fondu enchaîné (idée #2) : rampe chaque volume vers sa cible ; joue/coupe et purge les zones sorties.
+        ensureFadeLoop() {
+            if (this.fadeTimer) return;
+            const STEP = 0.06;
+            this.fadeTimer = setInterval(() => {
+                const ids = Object.keys(this.els);
+                if (!ids.length) { clearInterval(this.fadeTimer); this.fadeTimer = null; return; }
+                let anyBusy = false;
+                ids.forEach(id => {
+                    const s = this.els[id], tgt = s.target || 0, cur = s.el.volume;
+                    if (Math.abs(cur - tgt) > 0.005) { s.el.volume = cur < tgt ? Math.min(tgt, cur + STEP) : Math.max(tgt, cur - STEP); anyBusy = true; }
+                    else s.el.volume = tgt;
+                    if (tgt > 0.001 && s.el.paused) { const pr = s.el.play(); if (pr && pr.catch) pr.catch(() => { zoneAudio.blocked = true; showAudioUnlock(); }); }
+                    if (tgt <= 0.001 && s.el.volume <= 0.01) {
+                        if (!s.el.paused) { try { s.el.pause(); } catch (e) {} }
+                        if (s.remove) { delete this.els[id]; }
+                    } else if (tgt > 0.001) anyBusy = true;
+                });
+                if (!anyBusy && !Object.keys(this.els).length) { clearInterval(this.fadeTimer); this.fadeTimer = null; }
+            }, 60);
         },
         unlock() {
             this.blocked = false;
             Object.keys(this.els).forEach(id => { const s = this.els[id]; if ((s.target || 0) > 0.001 && s.el.paused) { const pr = s.el.play(); if (pr && pr.catch) pr.catch(() => {}); } });
         },
-        stopAll() { Object.keys(this.els).forEach(id => { try { this.els[id].el.pause(); } catch (e) {} }); this.els = {}; this.blocked = false; hideAudioUnlock(); }
+        stopAll() {
+            if (this.fadeTimer) { clearInterval(this.fadeTimer); this.fadeTimer = null; }
+            Object.keys(this.els).forEach(id => { try { this.els[id].el.pause(); } catch (e) {} });
+            this.els = {}; this.oneShot = {}; this.blocked = false; hideAudioUnlock();
+        }
     };
     function updateZoneAudio() { try { zoneAudio.update(); } catch (e) {} }
     // Bouton de déblocage (politique autoplay des navigateurs) : un geste utilisateur suffit.
@@ -948,6 +1278,9 @@
         else renderPlayerMap();
         lastMapSig = sig;
         updateZoneAudio();                                 // zones sonores : (re)calcule les volumes
+        updateStatusFx();                                  // effets d'état plein écran (le MJ peut les couper via m.playerFxOff)
+        renderLootPanel();                                 // butin de groupe : suivre les ajouts/retraits (si ouvert)
+        renderPlayerAnnotations();                         // annotations validées par le MJ
     }
     // Déplace seulement les jetons déjà présents (fluide), rafraîchit vision + portes visibles.
     function patchTokenPositions() {
@@ -1309,6 +1642,17 @@
         const boardFrac = (e) => { const b = playerBoard() || view; const r = b.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
         view.addEventListener('pointerdown', (e) => {
             if (e.target.closest('.smap-door-btn') || e.target.closest('#smap-aoe-bar')) return;
+            // Outil annotation actif : clic = proposer une note au MJ (il validera).
+            if (playerAnnot.on) {
+                const p = boardFrac(e);
+                const txt = prompt('Note à proposer au MJ (ex. « piège ici », « porte cachée ? ») :', '');
+                if (txt && txt.trim()) {
+                    sendToGm('annotation-add', { x: p.x, y: p.y, text: txt.trim().slice(0, 80), fromUid: myUid(), name: snapName() });
+                    if (window.showAppToast) window.showAppToast('📌 Note envoyée au MJ pour validation', '#2c3e50');
+                }
+                playerAnnot.on = false; const ab = document.getElementById('smap-annot'); if (ab) ab.classList.remove('is-on');
+                e.preventDefault(); return;
+            }
             // Outil gabarit actif : glisser sur la carte trace la zone d'effet (origine → taille).
             if (playerAoe.on) {
                 const p = boardFrac(e);
@@ -1364,7 +1708,7 @@
     }
 
     // =====================================================
-    // WIDGET FICHE (joueur) : mini-fiche déplaçable par-dessus la carte
+    // 8 · WIDGET FICHE FLOTTANTE — mini-fiche déplaçable par-dessus la carte
     // =====================================================
     let sheetWidget = null, sswTimer = null;
     function vId(id) { const el = document.getElementById(id); return el ? el.value : ''; }
@@ -1460,12 +1804,16 @@
         sheetWidget.querySelector('#ssw-conds').innerHTML = conds.map(c => `<span class="ssw-cond">${escHtml(c)}</span>`).join('');
     }
 
+    // =====================================================
+    // 9 · CYCLE DE VIE : teardown, kick/close, styles, API (join/leave), init
+    // =====================================================
     function teardownMapUI() {
         mapState = { map: {}, tokens: [] };
         if (mapToggle) mapToggle.style.display = 'none';
         if (mapPanel) mapPanel.classList.add('hidden');
         if (sheetWidget) { sheetWidget.classList.add('hidden'); clearInterval(sswTimer); }
         try { zoneAudio.stopAll(); } catch (e) {}          // couper les boucles d'ambiance
+        const lp = document.getElementById('session-loot'); if (lp) lp.classList.add('hidden');
     }
 
     // Retour à la VRAIE page d'accueil. L'app choisit accueil-vs-fiche UNIQUEMENT au chargement
@@ -1809,8 +2157,9 @@
             if (rest && state.sessionId) sendToGm('rest', { name: snapName(), kind: rest.id === 'btn-long-rest' ? 'long' : 'court' });
         }, true);
         // Le bouton de combat et la barre de tour suivent l'écran actif
-        document.addEventListener('screen:change', () => { updateFabVisibility(); renderTurnbar(); });
+        document.addEventListener('screen:change', () => { updateFabVisibility(); renderTurnbar(); updateStatusFx(); });
         restore();
+        setTimeout(updateStatusFx, 400);   // effet d'état plein écran si des conditions sont déjà cochées
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
@@ -1818,14 +2167,25 @@
 
     // Case « partager mes jets » du panneau ⚔️ (délégué : le panneau est reconstruit à chaque ouverture)
     document.addEventListener('change', (e) => {
-        if (e.target && e.target.id === 'sfp-share-rolls') {
+        if (!e.target) return;
+        if (e.target.id === 'sfp-share-rolls') {
             try { localStorage.setItem('dnd-share-rolls', e.target.checked ? '1' : '0'); } catch (err) {}
             if (window.showAppToast) window.showAppToast(e.target.checked ? '🎲 Tes jets de fiche sont partagés avec la table' : '🤫 Tes jets de fiche restent privés', '#2c3e50');
+        }
+        // Case « effets d'état plein écran » (Lot 35)
+        if (e.target.id === 'sfp-status-fx') {
+            try { localStorage.setItem('dnd-fx-fullscreen', e.target.checked ? '1' : '0'); } catch (err) {}
+            updateStatusFx();
+            if (window.showAppToast) window.showAppToast(e.target.checked ? '💥 Effets d\'état plein écran activés' : '🚫 Effets d\'état plein écran désactivés', '#2c3e50');
+        }
+        // Une de MES conditions a changé → rafraîchir l'effet plein écran
+        if (e.target.type === 'checkbox' && e.target.closest && e.target.closest('#conditions-track-container, #custom-conditions-container')) {
+            updateStatusFx();
         }
     });
 
     // =====================================================
-    // TableFX — célébrations de table partagées (nat 20 / nat 1).
+    // 10 · TableFX — célébrations de table partagées (nat 20 / nat 1).
     // Léger, sans lib : particules dorées + flash, ou secousse + voile rouge.
     // Respecte prefers-reduced-motion (aucune animation dans ce cas).
     // =====================================================
@@ -1841,7 +2201,10 @@
             @keyframes tfxFlash { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
             .tfx-fumble { position: fixed; inset: 0; pointer-events: none; z-index: 100049; box-shadow: inset 0 0 120px 30px rgba(160,20,20,0.55); animation: tfxFlash 1.1s ease-out forwards; }
             body.tfx-shake { animation: tfxShake 0.5s ease-in-out; }
-            @keyframes tfxShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,3px); } 40% { transform: translate(6px,-4px); } 60% { transform: translate(-5px,2px); } 80% { transform: translate(4px,-2px); } }`;
+            @keyframes tfxShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,3px); } 40% { transform: translate(6px,-4px); } 60% { transform: translate(-5px,2px); } 80% { transform: translate(4px,-2px); } }
+            .tfx-inspire { position: fixed; inset: 0; pointer-events: none; z-index: 100051; display: flex; align-items: center; justify-content: center; }
+            .tfx-inspire b { font-family: 'Cinzel','Lora',serif; font-weight: 700; text-align: center; font-size: clamp(1.5rem, 6vw, 3.1rem); color: #ffe9a8; text-shadow: 0 0 20px rgba(245,197,66,0.9), 0 2px 8px rgba(0,0,0,0.65); animation: tfxInspire 2.6s ease-out forwards; }
+            @keyframes tfxInspire { 0% { opacity:0; transform: scale(0.6) translateY(12px); } 14% { opacity:1; transform: scale(1.1) translateY(0); } 30% { transform: scale(1); } 78% { opacity:1; } 100% { opacity:0; transform: scale(1.03) translateY(-16px); } }`;
             const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
         }
         function reduced() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
@@ -1873,16 +2236,42 @@
             document.body.classList.add('tfx-shake');
             setTimeout(() => { veil.remove(); document.body.classList.remove('tfx-shake'); }, 1200);
         }
-        window.TableFX = { crit, fumble };
+        // ✨ Inspiration héroïque : bannière dorée + gerbe d'étincelles (Lot 35).
+        function inspire() {
+            ensureFxStyles();
+            if (!reduced()) {
+                const burst = document.createElement('div'); burst.className = 'tfx-burst no-print';
+                for (let i = 0; i < 22; i++) {
+                    const p = document.createElement('i'); p.className = 'tfx-p';
+                    p.style.left = (40 + Math.random() * 20) + '%';
+                    p.style.top = (40 + Math.random() * 12) + '%';
+                    p.style.background = COLS[i % COLS.length];
+                    p.style.setProperty('--dx', (Math.random() * 70 - 35) + 'vw');
+                    p.style.setProperty('--dy', (30 + Math.random() * 40) + 'vh');
+                    p.style.setProperty('--rot', Math.round(Math.random() * 900 - 450) + 'deg');
+                    p.style.setProperty('--d', (1.3 + Math.random() * 0.9) + 's');
+                    burst.appendChild(p);
+                }
+                document.body.appendChild(burst);
+                setTimeout(() => burst.remove(), 2600);
+            }
+            const banner = document.createElement('div'); banner.className = 'tfx-inspire no-print';
+            banner.innerHTML = '<b>✨ Inspiration héroïque !</b>';
+            document.body.appendChild(banner);
+            setTimeout(() => banner.remove(), 2700);
+        }
+        window.TableFX = { crit, fumble, inspire };
     })();
 
     window.PlayerSession = { join, leave, isConnected, getState, pushSnapshot, restore, detachLocal, shareRoll,
         // Crochets de TEST (preview sans Supabase) : simulent ce que le MJ diffuse.
         // Aucun effet en usage normal ; permettent de valider le rendu joueur sans session réelle.
         debugApplyMap: function (map, tokens, uid) { if (uid) debugUid = uid; if (!state.sessionId) state.sessionId = 'debug'; applyMap(map, tokens); },
+        // Cibles de volume des zones sonores EN BOUCLE (le fondu tend vers ces valeurs). Test/diagnostic.
+        debugZoneTargets: function () { const o = {}; Object.keys(zoneAudio.els).forEach(id => { o[id] = Math.round((zoneAudio.els[id].target || 0) * 1000) / 1000; }); return o; },
         debugEvent: function (event, payload) {
             if (!state.sessionId) state.sessionId = 'debug';
-            const map = { combat: applyCombat, dice: receiveDiceRoll, concentration: receiveConcentration, inspiration: receiveInspiration, 'npc-card': receiveNpcCard, timer: receiveTimer, 'show-image': receiveSharedImage, gift: receiveGift, 'roll-request': receiveRollRequest };
+            const map = { combat: applyCombat, dice: receiveDiceRoll, concentration: receiveConcentration, inspiration: receiveInspiration, 'npc-card': receiveNpcCard, 'boss-reveal': receiveBossReveal, banner: receiveBanner, 'session-recap': receiveSessionRecap, timer: receiveTimer, 'show-image': receiveSharedImage, gift: receiveGift, 'roll-request': receiveRollRequest };
             if (map[event]) map[event](payload);
         } };
 })();
