@@ -523,9 +523,17 @@
         const onSheet = app && !app.classList.contains('hidden') && !document.body.classList.contains('gm-active');
         let ov = document.getElementById('session-status-fx');
         const effect = (onSheet && statusFxEnabled()) ? pickStatusEffect(myConditions()) : null;
-        if (!effect) { if (ov) { ov.classList.remove('on'); } return; }
+        if (!effect) {
+            // ⚠️ Retrait d'un effet : les effets ANIMÉS (poison/peur/étourdi/feu) utilisent des keyframes
+            // qui pilotent l'OPACITÉ (sfxPulse/sfxFlicker) ; retirer seulement « on » ne suffit pas car
+            // l'animation continue de forcer l'opacité → le voile restait visible à l'écran (bug 14 juil.).
+            // On coupe donc l'animation, puis l'opacité de base (0) prend le relais pour le fondu de sortie.
+            if (ov) { ov.style.animation = 'none'; ov.classList.remove('on'); }
+            return;
+        }
         ensureStatusStyles();
         if (!ov) { ov = document.createElement('div'); ov.id = 'session-status-fx'; ov.className = 'no-print'; document.body.appendChild(ov); }
+        ov.style.animation = '';                 // réactive l'animation CSS propre à l'effet
         ov.className = 'no-print ' + effect;
         // reflow pour rejouer la transition d'opacité au changement d'effet
         void ov.offsetWidth;
