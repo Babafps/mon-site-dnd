@@ -219,7 +219,7 @@
     }
 
     // Portée de vision d'un jeton en PIXELS : t.vision (m) sinon portée globale.
-    // 1 case de grille = 1,5 m (5 pieds, D&D).
+    // 1 case de grille = 1,5 m (5 pieds).
     function visionRadiusPx(token, dark, gridSize) {
         const meters = Number(token && token.vision) || Number(dark && dark.range) || 9;
         const cell = Number(dark && dark.cellM) || 1.5;
@@ -241,7 +241,7 @@
             ctx.globalAlpha = 0.28; ctx.fillStyle = col;
             ctx.beginPath();
             if (t.kind === 'cone') {
-                // Cône D&D : longueur = largeur à l'extrémité → demi-angle atan(0.5)
+                // Cône (5e) : longueur = largeur à l'extrémité → demi-angle atan(0.5)
                 const a = Math.atan2(dy, dx), half = Math.atan(0.5);
                 ctx.moveTo(x1, y1);
                 ctx.arc(x1, y1, dist, a - half, a + half);

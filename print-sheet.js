@@ -1,5 +1,5 @@
 /* ============================================================
-   IMPRESSION DE LA FICHE OFFICIELLE (D&D 2024 FR)
+   IMPRESSION DE LA FICHE DE PERSONNAGE (2024 FR)
    ------------------------------------------------------------
    Dessine les 2 pages de la fiche officielle (images pré-rendues
    fiche-p1.png / fiche-p2.png) sur canvas, surimprime les valeurs

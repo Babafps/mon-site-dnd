@@ -1,4 +1,4 @@
-/* Géométrie des champs de la fiche officielle D&D 2024 FR.
+/* Géométrie des champs de la fiche de personnage 2024 FR.
    Générée depuis « Fiche vierge.pdf » (AcroForm) — coordonnées PDF 603x774, origine en bas à gauche.
    Format : [nom, type, x1, y1, x2, y2] avec type t = texte 1 ligne, m = multiligne, b = case à cocher.
    NB : la colonne unique du PDF « Temps d'incant. / Portée » a été scindée en spellNt / spellNr. */

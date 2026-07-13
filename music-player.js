@@ -1,5 +1,5 @@
 // =====================================================
-// MUSIC PLAYER MODULE — D&D Theme
+// MUSIC PLAYER MODULE — Fantasy Theme
 // Fichiers locaux + URLs directes + YouTube
 // =====================================================
 

@@ -490,12 +490,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return diceThemeColor;
         }
 
-        // --- Créations de dés personnalisées (faces peintes appliquées à l'affichage des résultats) ---
-        function loadDiceDesigns() { try { return JSON.parse(DB.get('dnd-dice-designs')) || []; } catch (e) { return []; } }
-        function persistDiceDesigns() { DB.set('dnd-dice-designs', JSON.stringify(diceDesigns)); }
-        let diceDesigns = loadDiceDesigns();
-        let activeDesignId = DB.get('dnd-dice-active-design') || null;
-        function getActiveDesign() { return diceDesigns.find(d => d.id === activeDesignId) || null; }
+        // --- Créations de dés personnalisées : FONCTIONNALITÉ RETIRÉE ---
+        // On conserve les fonctions (appelées à l'affichage des résultats) en no-op pour ne rien casser.
+        function loadDiceDesigns() { return []; }
+        function persistDiceDesigns() {}
+        let diceDesigns = [];
+        let activeDesignId = null;
+        function getActiveDesign() { return null; }   // plus de skin personnalisé → dés standards
         function faceImageFor(faces) { const d = getActiveDesign(); if (!d) return null; return d.faces['d' + faces] || d.faces.all || null; }
         function applyCustomDiceSkin(scope) {
             const d = getActiveDesign();
@@ -1241,7 +1242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(text) text.innerHTML = `${current} / ${maxRaw}` + (temp > 0 ? ` <span class="hp-bar-temp-badge">+${temp} PVT</span>` : '');
         }
 
-        // Soin / dégâts rapides (les dégâts entament d'abord les PV temporaires, règle D&D)
+        // Soin / dégâts rapides (les dégâts entament d'abord les PV temporaires, règle 5e)
         function applyHpDelta(delta) {
             const cur = document.getElementById('hp-current'); const tmp = document.getElementById('hp-temp'); const maxEl = document.getElementById('hp-max');
             if(!cur) return; const max = parseInt(maxEl?.value) || 0;
@@ -1903,7 +1904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // MODULE DE RECHERCHE GLOBALE
         // ==========================================
         // ==========================================
-        // BASE DE RÈGLES D&D 5e (en français) — recherche + fiche détaillée
+        // BASE DE RÈGLES 5e (en français) — recherche + fiche détaillée
         // ==========================================
         const DND_RULES = [
             // --- Actions en combat ---
@@ -2120,11 +2121,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.slice(0, 12).forEach(d => searchResults.appendChild(makeResultRow(d.icon || '•', d.title, d.subtitle, () => { closeSearch(); revealAndScroll(document.getElementById(d.widgetId)); })));
                 }
 
-                // 2) Règles D&D (clic → fiche détaillée dans un widget)
+                // 2) Règles du jeu (clic → fiche détaillée dans un widget)
                 const rules = DND_RULES.filter(r => r.name.toLowerCase().includes(query) || r.text.toLowerCase().includes(query));
                 if (rules.length) {
                     any = true;
-                    searchResults.appendChild(groupHeader('📖 Règles D&D'));
+                    searchResults.appendChild(groupHeader('📖 Règles du jeu'));
                     rules.slice(0, 14).forEach(r => searchResults.appendChild(makeResultRow('📖', r.name, r.cat, () => { closeSearch(); openRuleWidget(r); })));
                 }
 

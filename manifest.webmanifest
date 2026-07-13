@@ -1,6 +1,6 @@
 {
-  "name": "Compagnon D&D — Fiches & Table virtuelle",
-  "short_name": "D&D",
+  "name": "Bones & Blades — Fiches & Table virtuelle",
+  "short_name": "Bones & Blades",
   "description": "Fiche de personnage interactive et écran du Maître (cartes, combats, sessions en ligne).",
   "start_url": "./",
   "scope": "./",

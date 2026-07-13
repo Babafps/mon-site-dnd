@@ -141,7 +141,7 @@
         { name: 'Inconscient', text: 'Neutralisé, lâche ce qu\'il tient, tombe à terre. Attaques avec avantage ; coup au contact = critique.' }
     ];
 
-    // ---------- Référence rapide : mécaniques globales D&D 5e ----------
+    // ---------- Référence rapide : mécaniques globales 5e ----------
     const RULES_REF = [
         { name: 'Action : Attaquer', text: 'Une attaque au corps à corps ou à distance contre une cible. Certaines classes ont des attaques supplémentaires (Attaque supplémentaire).' },
         { name: 'Action : Foncer (Dash)', text: 'Gagne un déplacement supplémentaire égal à ta vitesse pour le tour.' },
@@ -215,7 +215,7 @@
         { name: 'Surprise & embuscade', text: 'Compare Discrétion du groupe embusqué vs Perception passive des cibles. Les surpris ne font rien au 1er tour.' }
     ];
 
-    // Règles RÉVISÉES 2024 (« 5.5 » / D&D 2024) — les principaux CHANGEMENTS par rapport à 2014.
+    // Règles RÉVISÉES 2024 (« 5.5 ») — les principaux CHANGEMENTS par rapport à 2014.
     const RULES_2024 = [
         { name: 'Test de d20 (terme unifié)', text: '« Test de d20 » regroupe désormais jets de caractéristique, attaques et sauvegardes. Tout effet qui modifie un « test de d20 » s\'applique aux trois.' },
         { name: 'Inspiration héroïque', text: 'Remplace l\'Inspiration : permet de RELANCER n\'importe quel d20 (on garde le nouveau résultat). Les Humains la regagnent à chaque repos long. Non cumulable.' },
@@ -346,7 +346,7 @@
         <div class="gm-shell">
         <div class="gm-header">
             <button id="gm-go-home" class="gm-nav-home" title="Retour à l'accueil">🏠 <span class="gm-nav-home-txt">Accueil</span></button>
-            <h2 class="gm-title">🛡️ Écran du Maître <span class="beta-badge">Bêta</span></h2>
+            <h2 class="gm-title">🛡️ Écran du Maître</h2>
             <span id="gm-campaign-title" class="gm-campaign-title"></span>
             <div class="gm-room">
                 <span id="gm-room-label" class="gm-readonly-note">Session locale</span>
@@ -739,6 +739,7 @@
                         </div>
                         <div id="gm-gen-dungeon-opts" style="display:none; margin-top:6px;">
                             <label class="gm-map-ctl" title="Remplit les salles avec des monstres (calque MJ, invisibles des joueurs), trésors et pièges."><input type="checkbox" id="gm-gen-dungeon-populate" checked> 🎲 Peupler les salles (monstres, trésors, pièges)</label>
+                            <select id="gm-gen-dungeon-source" class="gm-select" style="width:100%; margin-top:4px;" title="Où piocher les monstres des salles : la table générique, ou tes propres groupes enregistrés (bestiaire → Groupes)."><option value="generic">Monstres : table générique</option><option value="groups">Monstres : mes groupes enregistrés</option></select>
                             <select id="gm-gen-dungeon-tier" class="gm-select" style="width:100%; margin-top:4px;"><option value="1">Difficulté : Niv. 1-4</option><option value="2">Niv. 5-10</option><option value="3">Niv. 11-16</option><option value="4">Niv. 17-20</option></select>
                         </div>
                         <div class="gm-row" id="gm-gen-enc-opts" style="display:none; gap:6px; margin-top:6px;">
@@ -2289,6 +2290,9 @@
             else segs.push({ id: uid(), x1: ox + a * cw, y1: oy + b * ch, x2: ox + a * cw, y2: oy + (b + 1) * ch, door: true, open: false });
         });
         m.walls = segs;
+        // Nettoie le contenu d'un donjon PRÉCÉDENT (évite l'accumulation à chaque re-génération).
+        state.tokens = (state.tokens || []).filter(t => !t._dungeon);
+        state.monsters = (state.monsters || []).filter(mm => !mm._dungeon);
         // Habillage des salles (monstres calque MJ + trésors + pièges) — optionnel.
         let filled = 0;
         const doPopulate = (byId('gm-gen-dungeon-populate') || {}).checked;
@@ -2305,10 +2309,14 @@
         const tier = (byId('gm-gen-dungeon-tier') || {}).value || '1';
         const encList = (ENCOUNTERS.dungeon && ENCOUNTERS.dungeon[tier]) || [];
         const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
+        // Source des monstres : table générique OU mes groupes enregistrés (idée 3)
+        const source = (byId('gm-gen-dungeon-source') || {}).value || 'generic';
+        const myGroups = (source === 'groups') ? loadGroupsStore() : [];
+        const useGroups = source === 'groups' && myGroups.length > 0;
         // cellules libres d'une salle (pour étaler les jetons)
         const cellsOf = room => { const cs = []; for (let c = room.c; c < room.c + room.w; c++) for (let r = room.r; r < room.r + room.h; r++) cs.push([c, r]); return cs; };
         const cellFrac = (c, r) => ({ x: ox + (c + 0.5) * cw, y: oy + (r + 0.5) * ch });
-        const addGmToken = (x, y, name, color) => { state.tokens.push({ id: uid(), name: name, type: 'npc', x: x, y: y, layer: 'gm', hidden: true, color: color || null }); };
+        const addGmToken = (x, y, name, color) => { state.tokens.push({ id: uid(), name: name, type: 'npc', x: x, y: y, layer: 'gm', hidden: true, color: color || null, _dungeon: true }); };
         const placeMonsters = (room, entry, tag) => {
             const mm = String(entry[0]).match(/^(.*?)\s*\(×(\d+)\)\s*$/);
             const base = mm ? mm[1].trim() : entry[0];
@@ -2318,23 +2326,41 @@
             for (let i = 0; i < count; i++) {
                 const nm = (tag ? tag + ' ' : '') + (count > 1 ? base + ' ' + (i + 1) : base);
                 const id = uid();
-                state.monsters.push({ id: id, name: nm, hpCur: entry[1], hpMax: entry[1], ac: entry[2], conditions: [], attacks: [] });
+                state.monsters.push({ id: id, name: nm, hpCur: entry[1], hpMax: entry[1], ac: entry[2], conditions: [], attacks: [], _dungeon: true });
                 const cell = cells[i % cells.length];
                 const f = cellFrac(cell[0], cell[1]);
-                state.tokens.push({ id: uid(), ref: 'mon:' + id, name: nm, type: 'monster', x: f.x, y: f.y, layer: 'gm', hidden: true });
+                state.tokens.push({ id: uid(), ref: 'mon:' + id, name: nm, type: 'monster', x: f.x, y: f.y, layer: 'gm', hidden: true, _dungeon: true });
             }
+        };
+        // Place TOUS les membres d'un groupe enregistré dans une salle (idée 3).
+        const placeGroup = (room, members, tag) => {
+            const cells = cellsOf(room);
+            for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const tmp = cells[i]; cells[i] = cells[j]; cells[j] = tmp; }
+            members.forEach((mm, i) => {
+                const nm = (tag ? tag + ' ' : '') + mm.name;
+                const id = uid();
+                const hp = mm.hp != null ? mm.hp : 10;
+                state.monsters.push({ id: id, name: nm, hpCur: hp, hpMax: hp, ac: mm.ac != null ? mm.ac : 0, conditions: [], attacks: (mm.attacks || []).map(a => ({ name: a.name, formula: a.formula })), _dungeon: true });
+                const cell = cells[i % cells.length];
+                const f = cellFrac(cell[0], cell[1]);
+                state.tokens.push({ id: uid(), ref: 'mon:' + id, name: nm, type: 'monster', x: f.x, y: f.y, layer: 'gm', hidden: true, _dungeon: true });
+            });
         };
         let filled = 0;
         rooms.forEach((room, i) => {
             const ctr = cellFrac(room.c + Math.floor(room.w / 2), room.r + Math.floor(room.h / 2));
             const roll = Math.random();
             if (i === 0) return;                                   // salle d'entrée : vide
-            if (i === rooms.length - 1 && encList.length) {        // dernière salle = « boss » (le plus coriace)
-                const boss = encList.slice().sort((a, b) => b[1] - a[1])[0];
-                placeMonsters(room, [boss[0].replace(/\s*\(×\d+\)\s*$/, ''), boss[1], boss[2]], '👑');
+            if (i === rooms.length - 1 && (useGroups || encList.length)) {  // dernière salle = « boss »
+                if (useGroups) placeGroup(room, rnd(myGroups).members, '👑');
+                else { const boss = encList.slice().sort((a, b) => b[1] - a[1])[0]; placeMonsters(room, [boss[0].replace(/\s*\(×\d+\)\s*$/, ''), boss[1], boss[2]], '👑'); }
                 filled++; return;
             }
-            if (roll < 0.42 && encList.length) { placeMonsters(room, rnd(encList)); filled++; }
+            if (roll < 0.42 && (useGroups || encList.length)) {
+                if (useGroups) placeGroup(room, rnd(myGroups).members);
+                else placeMonsters(room, rnd(encList));
+                filled++;
+            }
             else if (roll < 0.66) { addGmToken(ctr.x, ctr.y, '💰 ' + rnd(DUNGEON_FIND), '#C49B35'); filled++; }
             else if (roll < 0.82) { addGmToken(ctr.x, ctr.y, '⚠️ ' + rnd(DUNGEON_TRAPS), '#c0392b'); filled++; }
             // sinon : salle vide
@@ -2880,8 +2906,9 @@
         if (res.ac == null && res.hp == null && !res.attacks.length && !res.abilities) return null;
         return res;
     }
-    // Ajoute un monstre (bloc parsé OU entrée de bestiaire) à la liste de combat.
-    function addStatblockToCombat(p) {
+    // Ajoute un monstre (bloc parsé OU entrée de bestiaire OU membre de groupe) à la liste de combat.
+    // quiet = true : pas de toast/journal par monstre (ajout en masse d'un groupe).
+    function addStatblockToCombat(p, quiet) {
         state.monsters.push({
             id: uid(), name: p.name,
             hpCur: p.hp != null ? p.hp : 10, hpMax: p.hp != null ? p.hp : 10,
@@ -2889,17 +2916,131 @@
             attacks: (p.attacks || []).map(a => ({ name: a.dmg ? (a.name + ' (dégâts ' + a.dmg + ')') : a.name, formula: a.formula }))
         });
         save(); renderMonsters();
-        if (window.showAppToast) window.showAppToast('👹 « ' + p.name + ' » ajouté aux monstres', '#2c3e50');
-        clog('👹 Monstre ajouté : ' + p.name);
+        if (!quiet) {
+            if (window.showAppToast) window.showAppToast('👹 « ' + p.name + ' » ajouté aux monstres', '#2c3e50');
+            clog('👹 Monstre ajouté : ' + p.name);
+        }
     }
     // 📋 Bibliothèque de monstres importés (idée 3) — persistée dans l'état de campagne.
-    function bestiaryData() { if (!Array.isArray(state.bestiary)) state.bestiary = []; return state.bestiary; }
+    // Bestiaire GLOBAL, partagé entre TOUTES les campagnes (localStorage hors état de campagne).
+    const BESTIARY_KEY = 'dnd-gm-bestiary';
+    const GROUPS_KEY = 'dnd-gm-encounters';
+    let bestiarySearch = '';           // filtre de recherche (idée 2)
+    let bestiarySort = 'recent';       // recent | name | hp | ac (idée 2)
+    let bestiaryTagFilter = '';        // filtre par étiquette actif ('' = toutes)
+    const LIB_TS_KEY = 'dnd-gm-lib-ts';
+    let _applyingCloudLib = false, _libCloudTimer = null;
+    function libLocalTs() { return Number(localStorage.getItem(LIB_TS_KEY)) || 0; }
+    function loadBestiaryStore() { try { return JSON.parse(localStorage.getItem(BESTIARY_KEY)) || []; } catch (e) { return []; } }
+    function saveBestiaryStore(list) { try { localStorage.setItem(BESTIARY_KEY, JSON.stringify(list)); } catch (e) { if (window.showAppToast) window.showAppToast('⚠️ Stockage plein — retire des entrées du bestiaire.', '#c0392b'); } touchLibrary(); }
+    function loadGroupsStore() { try { return JSON.parse(localStorage.getItem(GROUPS_KEY)) || []; } catch (e) { return []; } }
+    function saveGroupsStore(list) { try { localStorage.setItem(GROUPS_KEY, JSON.stringify(list)); } catch (e) { if (window.showAppToast) window.showAppToast('⚠️ Stockage plein — retire des groupes.', '#c0392b'); } touchLibrary(); }
+    // Marque une modif locale (horodatage) et pousse vers le cloud (débauncé), sauf pendant l'application d'un état cloud.
+    function touchLibrary() {
+        if (_applyingCloudLib) return;
+        try { localStorage.setItem(LIB_TS_KEY, String(Date.now())); } catch (e) {}
+        pushLibraryCloud();
+    }
+    function pushLibraryCloud() {
+        if (!(window.SupaAuth && window.SupaAuth.gmLibrarySave && window.SupaAuth.currentUser)) return;
+        clearTimeout(_libCloudTimer);
+        _libCloudTimer = setTimeout(() => { try { window.SupaAuth.gmLibrarySave(loadBestiaryStore(), loadGroupsStore(), libLocalTs()); } catch (e) {} }, 900);
+    }
+    // À l'ouverture (si connecté) : récupère la bibliothèque cloud, garde la plus RÉCENTE (dernier écrit gagne).
+    async function syncLibraryFromCloud() {
+        if (!(window.SupaAuth && window.SupaAuth.gmLibraryGet && window.SupaAuth.currentUser)) return;
+        let cloud = null; try { cloud = await window.SupaAuth.gmLibraryGet(); } catch (e) { return; }
+        if (!cloud) return;   // table injoignable (SQL pas lancé) → on reste en local
+        const localTs = libLocalTs(), cloudTs = Number(cloud.ts) || 0;
+        if (cloudTs > localTs) {
+            _applyingCloudLib = true;
+            try { localStorage.setItem(BESTIARY_KEY, JSON.stringify(cloud.bestiary || [])); localStorage.setItem(GROUPS_KEY, JSON.stringify(cloud.groups || [])); localStorage.setItem(LIB_TS_KEY, String(cloudTs)); } catch (e) {}
+            _applyingCloudLib = false;
+            renderBestiary();
+        } else if (localTs > cloudTs) {
+            pushLibraryCloud();   // le local est plus récent → on met le cloud à jour
+        }
+    }
+    function bestiaryData() {
+        // Migration douce : remonte un ancien bestiaire par-campagne vers le store global (une fois).
+        if (Array.isArray(state.bestiary) && state.bestiary.length) {
+            const glob = loadBestiaryStore(); const ids = {};
+            glob.forEach(b => { ids[b.id] = 1; });
+            state.bestiary.forEach(b => { if (!ids[b.id]) glob.push(b); });
+            saveBestiaryStore(glob);
+            state.bestiary = []; save();
+        }
+        return loadBestiaryStore();
+    }
+    // Étiquettes (idée 2) : tags libres par entrée du bestiaire, filtre par tag.
+    function bestiaryTagsOf(b) { return Array.isArray(b.tags) ? b.tags : []; }
+    function allBestiaryTags() {
+        const set = {}; bestiaryData().forEach(b => bestiaryTagsOf(b).forEach(t => { if (t) set[t] = 1; }));
+        return Object.keys(set).sort((a, b) => a.localeCompare(b, 'fr'));
+    }
+    function filteredSortedBestiary() {
+        let list = bestiaryData().slice();
+        const q = bestiarySearch.trim().toLowerCase();
+        if (q) list = list.filter(b => (b.name || '').toLowerCase().indexOf(q) !== -1 || bestiaryTagsOf(b).some(t => t.toLowerCase().indexOf(q) !== -1));
+        if (bestiaryTagFilter) list = list.filter(b => bestiaryTagsOf(b).indexOf(bestiaryTagFilter) !== -1);
+        if (bestiarySort === 'name') list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr'));
+        else if (bestiarySort === 'hp') list.sort((a, b) => (Number(b.hp) || 0) - (Number(a.hp) || 0));
+        else if (bestiarySort === 'ac') list.sort((a, b) => (Number(b.ac) || 0) - (Number(a.ac) || 0));
+        else list.reverse();   // recent : le dernier enregistré en tête
+        return list;
+    }
+    function renderBestiaryListInner() {
+        const box = byId('gm-bestiary-list'); if (!box) return;
+        const list = filteredSortedBestiary();
+        box.innerHTML = list.length
+            ? list.map(b => { const tags = bestiaryTagsOf(b); return `<div class="gm-bestiary-row"><span class="gm-bestiary-name" title="CA ${b.ac != null ? b.ac : '?'} · PV ${b.hp != null ? b.hp : '?'}">👹 ${esc(b.name)} <span class="gm-party-sub">CA ${b.ac != null ? b.ac : '?'} · ${b.hp != null ? b.hp : '?'} PV</span>${tags.length ? ' ' + tags.map(t => `<span class="gm-tag-chip">${esc(t)}</span>`).join('') : ''}</span><button class="gm-btn" data-act="bestiary-tag" data-id="${esc(b.id)}" title="Étiquettes">🏷️</button><button class="gm-btn" data-act="bestiary-add" data-id="${esc(b.id)}" title="Ajouter au combat">⚔️</button><button class="gm-del-x" data-act="bestiary-del" data-id="${esc(b.id)}" title="Retirer du bestiaire">✕</button></div>`; }).join('')
+            : '<div class="gm-empty">Aucun monstre trouvé.</div>';
+    }
+    function renderBestiaryTagChips() {
+        const box = byId('gm-bestiary-tagbar'); if (!box) return;
+        const tags = allBestiaryTags();
+        if (!tags.length) { box.innerHTML = ''; return; }
+        box.innerHTML = `<button class="gm-tag-filter${bestiaryTagFilter ? '' : ' is-on'}" data-tagf="">Tous</button>`
+            + tags.map(t => `<button class="gm-tag-filter${bestiaryTagFilter === t ? ' is-on' : ''}" data-tagf="${esc(t)}">${esc(t)}</button>`).join('');
+        box.querySelectorAll('[data-tagf]').forEach(b => b.addEventListener('click', () => { bestiaryTagFilter = b.dataset.tagf; renderBestiaryTagChips(); renderBestiaryListInner(); }));
+    }
+    function renderGroupsInner() {
+        const box = byId('gm-bestiary-groups'); if (!box) return;
+        const groups = loadGroupsStore();
+        box.innerHTML = `<div class="gm-bestiary-head" title="Rencontres pré-montées, partagées entre tes campagnes">📦 Groupes (${groups.length})</div>`
+            + `<button class="gm-btn" id="gm-group-save" style="width:100%;" title="Enregistre les monstres actuellement dans le combat comme un groupe réutilisable">💾 Enregistrer le combat comme groupe</button>`
+            + groups.map(g => `<div class="gm-bestiary-row"><span class="gm-bestiary-name" title="${esc(g.members.map(mm => mm.name).join(', '))}">📦 ${esc(g.name)} <span class="gm-party-sub">${g.members.length} créature${g.members.length > 1 ? 's' : ''}</span></span><button class="gm-btn" data-act="group-add" data-id="${esc(g.id)}" title="Ajouter tout le groupe au combat">⚔️</button><button class="gm-del-x" data-act="group-del" data-id="${esc(g.id)}" title="Supprimer le groupe">✕</button></div>`).join('');
+        const sg = byId('gm-group-save'); if (sg) sg.addEventListener('click', saveCurrentCombatAsGroup);
+    }
+    function saveCurrentCombatAsGroup() {
+        const mons = (state.monsters || []);
+        if (!mons.length) { if (window.showAppToast) window.showAppToast('Aucun monstre dans le combat à enregistrer.', '#c0392b'); return; }
+        const name = prompt('Nom du groupe (ex. « Embuscade de gobelins ») :', '');
+        if (name === null || !name.trim()) return;
+        // On retire la numérotation « … 1/2/3 » pour un membre unique répété
+        const members = mons.map(mm => ({ name: mm.name, hp: mm.hpMax != null ? mm.hpMax : mm.hpCur, ac: mm.ac, attacks: (mm.attacks || []).map(a => ({ name: a.name, formula: a.formula })) }));
+        const groups = loadGroupsStore();
+        groups.push({ id: uid(), name: name.trim().slice(0, 50), members: members });
+        saveGroupsStore(groups); renderGroupsInner();
+        if (window.showAppToast) window.showAppToast('📦 Groupe « ' + name.trim() + ' » enregistré (' + members.length + ' créatures)', '#2c3e50');
+    }
     function renderBestiary() {
         const el = byId('gm-bestiary'); if (!el) return;
         const list = bestiaryData();
-        if (!list.length) { el.innerHTML = ''; return; }
-        el.innerHTML = `<div class="gm-bestiary-head">📋 Bestiaire (${list.length})</div>`
-            + list.map(b => `<div class="gm-bestiary-row"><span class="gm-bestiary-name" title="CA ${b.ac != null ? b.ac : '?'} · PV ${b.hp != null ? b.hp : '?'}">👹 ${esc(b.name)} <span class="gm-party-sub">CA ${b.ac != null ? b.ac : '?'} · ${b.hp != null ? b.hp : '?'} PV</span></span><button class="gm-btn" data-act="bestiary-add" data-id="${esc(b.id)}" title="Ajouter au combat">⚔️</button><button class="gm-del-x" data-act="bestiary-del" data-id="${esc(b.id)}" title="Retirer du bestiaire">✕</button></div>`).join('');
+        const groups = loadGroupsStore();
+        if (!list.length && !groups.length) { el.innerHTML = ''; return; }
+        el.innerHTML = `<div class="gm-bestiary-head" title="Partagé entre toutes tes campagnes">📋 Bestiaire (${list.length})</div>`
+            + (list.length > 3 ? `<div class="gm-row gm-bestiary-tools"><input id="gm-bestiary-search" class="gm-input" placeholder="🔎 Filtrer…" value="${esc(bestiarySearch)}"><select id="gm-bestiary-sort" class="gm-select" style="flex:0 0 auto;"><option value="recent">Récents</option><option value="name">Nom A→Z</option><option value="hp">PV ↓</option><option value="ac">CA ↓</option></select></div>` : '')
+            + `<div id="gm-bestiary-tagbar" class="gm-bestiary-tagbar"></div>`
+            + `<div id="gm-bestiary-list"></div>`
+            + `<div id="gm-bestiary-groups"></div>`;
+        const se = byId('gm-bestiary-search');
+        if (se) se.addEventListener('input', () => { bestiarySearch = se.value; renderBestiaryListInner(); });
+        const so = byId('gm-bestiary-sort');
+        if (so) { so.value = bestiarySort; so.addEventListener('change', () => { bestiarySort = so.value; renderBestiaryListInner(); }); }
+        renderBestiaryTagChips();
+        renderBestiaryListInner();
+        renderGroupsInner();
     }
     function renderStatblockPreview(p) {
         const box = byId('gm-statblock-preview'); if (!box) return;
@@ -2919,9 +3060,10 @@
             box.innerHTML = '';
         });
         byId('gm-statblock-save').addEventListener('click', () => {
-            bestiaryData().push({ id: uid(), name: p.name, ac: p.ac, hp: p.hp, speed: p.speed, abilities: p.abilities, attacks: p.attacks });
-            save(); renderBestiary();
-            if (window.showAppToast) window.showAppToast('📋 « ' + p.name + ' » ajouté au bestiaire', '#2c3e50');
+            const list = bestiaryData();
+            list.push({ id: uid(), name: p.name, ac: p.ac, hp: p.hp, speed: p.speed, abilities: p.abilities, attacks: p.attacks });
+            saveBestiaryStore(list); renderBestiary();
+            if (window.showAppToast) window.showAppToast('📋 « ' + p.name + ' » ajouté au bestiaire (partagé)', '#2c3e50');
         });
     }
 
@@ -4938,7 +5080,25 @@
                 }
                 case 'loot-del': { state.map.partyLoot = partyLootData().filter(x => x.id !== id); save(); renderPartyLoot(); broadcastMap(true); break; }
                 case 'bestiary-add': { const b = bestiaryData().find(x => x.id === id); if (b) addStatblockToCombat(b); break; }
-                case 'bestiary-del': { state.bestiary = bestiaryData().filter(x => x.id !== id); save(); renderBestiary(); break; }
+                case 'bestiary-del': { saveBestiaryStore(bestiaryData().filter(x => x.id !== id)); renderBestiary(); break; }
+                case 'bestiary-tag': {
+                    const lib = bestiaryData(); const b = lib.find(x => x.id === id); if (!b) break;
+                    const cur = bestiaryTagsOf(b).join(', ');
+                    const v = prompt('Étiquettes (séparées par des virgules) — ex. « mort-vivant, boss, forêt » :', cur);
+                    if (v === null) break;
+                    b.tags = v.split(',').map(s => s.trim()).filter(Boolean).slice(0, 8);
+                    if (bestiaryTagFilter && b.tags.indexOf(bestiaryTagFilter) === -1) bestiaryTagFilter = '';
+                    saveBestiaryStore(lib); renderBestiary();
+                    break;
+                }
+                case 'group-add': {
+                    const g = loadGroupsStore().find(x => x.id === id); if (!g) break;
+                    g.members.forEach(mm => addStatblockToCombat(mm, true));
+                    if (window.showAppToast) window.showAppToast('📦 Groupe « ' + g.name + ' » ajouté (' + g.members.length + ' créatures)', '#2c3e50');
+                    clog('📦 Groupe ajouté au combat : ' + g.name + ' (' + g.members.length + ')');
+                    break;
+                }
+                case 'group-del': { saveGroupsStore(loadGroupsStore().filter(x => x.id !== id)); renderGroupsInner(); break; }
                 case 'monster-reveal': {
                     const m = find(state.monsters, id); if (!m) break;
                     const subtitle = prompt('Sous-titre dramatique (optionnel) — ex. « Le Fléau des Montagnes » :', '');
@@ -5201,6 +5361,7 @@
         try { mapHist = [JSON.stringify({ map: state.map, tokens: state.tokens })]; } catch (e) { mapHist = []; }
         loadTree();
         loadStateFromCloud(activeCampaignId);                 // rafraîchit depuis le cloud (multi-appareils)
+        syncLibraryFromCloud();                               // bestiaire + groupes : synchro cloud (multi-appareils)
         if (state.sessionId && !live.netChannel) startNetwork(); // reconnecte une session déjà ouverte
         // Première visite : petite visite guidée (skippable, revisionnable dans ⚙️ Réglages)
         if (!localStorage.getItem(TUTO_KEY)) setTimeout(() => startGmTutorial(false), 800);

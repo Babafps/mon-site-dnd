@@ -351,7 +351,6 @@ body.concentrating-mode #concentration-glow {
 }
 .home-tab:hover { background: rgba(122,40,40,0.1); color: var(--primary-color); }
 .home-tab.active { background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: var(--accent-color); border-color: var(--primary-color); box-shadow: var(--shadow-sm); }
-.home-tab .beta-badge { font-size: 0.5rem; padding: 1px 4px; }
 .home-panel { animation: fadeIn 0.3s ease; }
 .home-panel.hidden { display: none; }
 .home-archived-toggle { display: flex; align-items: center; gap: 7px; justify-content: center; margin-top: 14px; font-size: 0.82rem; color: #8a7560; cursor: pointer; }
@@ -1954,9 +1953,9 @@ body.theme-dark .auth-forgot-hint { color: #c2b094; }
         border: 1px solid #000 !important;
     }
     /* Masquer le superflu interactif restant sur papier */
-    #music-player-container, .music-show-tab, #ds-3d-spin, #btn-global-search-trigger,
-    .beta-badge, #dice-theme-panel, .qa-row, .ci-actions, .ca-actions, .item-controls,
-    #btn-toggle-music, .ds-face-row, .ds-scope-row { display: none !important; }
+    #music-player-container, .music-show-tab, #btn-global-search-trigger,
+    #dice-theme-panel, .qa-row, .ci-actions, .ca-actions, .item-controls,
+    #btn-toggle-music { display: none !important; }
 }
 
 /* ============================================================
@@ -2551,16 +2550,6 @@ body.theme-dark #journal-edit-container h3 { color: var(--accent-color) !importa
 }
 .ds-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 2px solid rgba(122,40,40,0.25); }
 .ds-header h2 { font-family: 'Cinzel', serif; color: var(--primary-color); margin: 0; font-size: 1.4rem; }
-/* Badge « Bêta » discret (créateur de dés en cours de dev) */
-.beta-badge {
-    display: inline-block; vertical-align: middle;
-    font-family: 'Cinzel', serif; font-size: 0.58rem; font-weight: bold;
-    letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
-    color: #c77f1a; background: rgba(224,138,30,0.14);
-    border: 1px solid rgba(224,138,30,0.55); border-radius: 6px;
-    padding: 2px 6px; margin-left: 6px;
-}
-body.theme-dark .beta-badge { color: #e8a94a; background: rgba(224,138,30,0.18); border-color: rgba(224,138,30,0.6); }
 .ds-body { display: grid; grid-template-columns: 215px 1fr 215px; gap: 16px; padding: 16px; overflow: auto; }
 @media (max-width: 880px) { .ds-body { grid-template-columns: 1fr; } }
 

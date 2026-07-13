@@ -391,6 +391,24 @@ window.SupaAuth = {
         const { error } = await _supabase.from('gm_campaigns')
             .delete().eq('id', String(id)).eq('gm_id', this.currentUser.id);
         if (error) console.warn('gmCampaignDelete:', error);
+    },
+
+    // ---- Bibliothèque MJ dans le cloud : bestiaire + groupes, partagés entre appareils ----
+    // Une ligne par MJ (gm_library). Renvoie { bestiary, groups, ts } ou null si injoignable/vide.
+    async gmLibraryGet() {
+        if (!this.currentUser) return null;
+        const { data, error } = await _supabase
+            .from('gm_library').select('bestiary, groups, ts')
+            .eq('gm_id', this.currentUser.id).maybeSingle();
+        if (error) { console.warn('gmLibraryGet:', error); return null; }
+        if (!data) return { bestiary: [], groups: [], ts: 0 };
+        return { bestiary: data.bestiary || [], groups: data.groups || [], ts: Number(data.ts) || 0 };
+    },
+    async gmLibrarySave(bestiary, groups, ts) {
+        if (!this.currentUser) return;
+        const row = { gm_id: this.currentUser.id, bestiary: bestiary || [], groups: groups || [], ts: Number(ts) || Date.now(), updated_at: new Date().toISOString() };
+        const { error } = await _supabase.from('gm_library').upsert(row, { onConflict: 'gm_id' });
+        if (error) console.warn('gmLibrarySave:', error);
     }
 };
 
