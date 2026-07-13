@@ -429,9 +429,17 @@ document.addEventListener('DOMContentLoaded', () => {
         function loadAvatar() { const savedAvatar = getStore('dnd-avatar', false); if(savedAvatar && avatarPreview && avatarPlaceholder && avatarHeader) { avatarPreview.src = savedAvatar; avatarPreview.classList.remove('hidden'); avatarPlaceholder.classList.add('hidden'); avatarHeader.style.backgroundImage = `url("${savedAvatar}")`; } const rc = document.getElementById('btn-recrop-avatar'); if(rc) rc.style.display = savedAvatar ? '' : 'none'; }
         // Import d'un portrait : on ouvre d'abord la modale de recadrage (zoom + déplacement),
         // puis on enregistre le carré recadré comme avatar.
-        if(avatarInput) { avatarInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) { e.target.value=''; return; } const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => openAvatarCrop(img, true); img.src = event.target.result; }; reader.readAsDataURL(file); e.target.value = ''; }); }
+        function loadImageFileToCrop(file) { if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => openAvatarCrop(img, true); img.src = event.target.result; }; reader.readAsDataURL(file); }
+        if(avatarInput) { avatarInput.addEventListener('change', (e) => { loadImageFileToCrop(e.target.files[0]); e.target.value = ''; }); }
         // Cliquer le mini-avatar de l'en-tête ouvre aussi le sélecteur de photo.
         if(avatarHeader && avatarInput) avatarHeader.addEventListener('click', () => avatarInput.click());
+        // Glisser-déposer une image directement sur le portrait (module Identité).
+        const avatarDropZone = document.querySelector('.avatar-upload-container');
+        if(avatarDropZone) {
+            ['dragenter','dragover'].forEach(ev => avatarDropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); avatarDropZone.classList.add('drag-over'); }));
+            ['dragleave','dragend'].forEach(ev => avatarDropZone.addEventListener(ev, (e) => { e.preventDefault(); avatarDropZone.classList.remove('drag-over'); }));
+            avatarDropZone.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); avatarDropZone.classList.remove('drag-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) loadImageFileToCrop(f); });
+        }
         // « Recadrer » : réajuste zoom/cadrage à partir de l'image SOURCE conservée (repli sur l'avatar rogné).
         const btnRecrop = document.getElementById('btn-recrop-avatar');
         if(btnRecrop) btnRecrop.addEventListener('click', () => { const src = getStore('dnd-avatar-src', false) || getStore('dnd-avatar', false); if(!src) return; const img = new Image(); img.onload = () => openAvatarCrop(img, false); img.src = src; });
@@ -440,13 +448,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const avatarCropModal = document.getElementById('avatar-crop-modal');
         const cropCanvas = document.getElementById('avatar-crop-canvas');
         const cropZoom = document.getElementById('avatar-crop-zoom');
-        let cropState = null;   // { img, base, scale, ox, oy }
-        function clampCrop() { if(!cropState || !cropCanvas) return; const S = cropCanvas.width; const w = cropState.img.width * cropState.base * cropState.scale, h = cropState.img.height * cropState.base * cropState.scale; const maxX = Math.max(0, (w - S) / 2), maxY = Math.max(0, (h - S) / 2); cropState.ox = Math.max(-maxX, Math.min(maxX, cropState.ox)); cropState.oy = Math.max(-maxY, Math.min(maxY, cropState.oy)); }
-        function drawCrop() { if(!cropState || !cropCanvas) return; const ctx = cropCanvas.getContext('2d'); const S = cropCanvas.width; const w = cropState.img.width * cropState.base * cropState.scale, h = cropState.img.height * cropState.base * cropState.scale; ctx.clearRect(0,0,S,S); ctx.fillStyle = '#1a1410'; ctx.fillRect(0,0,S,S); ctx.drawImage(cropState.img, (S - w) / 2 + cropState.ox, (S - h) / 2 + cropState.oy, w, h); }
-        function openAvatarCrop(img, newSource) { if(!avatarCropModal || !cropCanvas) return; const S = cropCanvas.width; const base = Math.max(S / img.width, S / img.height); cropState = { img, base, scale: 1, ox: 0, oy: 0, newSource: !!newSource }; if(cropZoom) cropZoom.value = 100; clampCrop(); drawCrop(); avatarCropModal.classList.remove('hidden'); }
+        let cropState = null;   // { img, base, scale, ox, oy, rot, newSource }
+        // Dimensions du dessin de l'image à l'écran, en tenant compte de la rotation (90/270 = axes échangés).
+        function cropEffDims() { const w = cropState.img.width * cropState.base * cropState.scale, h = cropState.img.height * cropState.base * cropState.scale; const swap = (cropState.rot % 180) !== 0; return { ew: swap ? h : w, eh: swap ? w : h, w, h }; }
+        function clampCrop() { if(!cropState || !cropCanvas) return; const S = cropCanvas.width; const d = cropEffDims(); const maxX = Math.max(0, (d.ew - S) / 2), maxY = Math.max(0, (d.eh - S) / 2); cropState.ox = Math.max(-maxX, Math.min(maxX, cropState.ox)); cropState.oy = Math.max(-maxY, Math.min(maxY, cropState.oy)); }
+        function drawCrop() { if(!cropState || !cropCanvas) return; const ctx = cropCanvas.getContext('2d'); const S = cropCanvas.width; const d = cropEffDims(); ctx.clearRect(0,0,S,S); ctx.fillStyle = '#1a1410'; ctx.fillRect(0,0,S,S); ctx.save(); ctx.translate(S/2 + cropState.ox, S/2 + cropState.oy); ctx.rotate((cropState.rot || 0) * Math.PI / 180); ctx.drawImage(cropState.img, -d.w/2, -d.h/2, d.w, d.h); ctx.restore(); }
+        function openAvatarCrop(img, newSource) { if(!avatarCropModal || !cropCanvas) return; const S = cropCanvas.width; const base = Math.max(S / img.width, S / img.height); cropState = { img, base, scale: 1, ox: 0, oy: 0, rot: 0, newSource: !!newSource }; if(cropZoom) cropZoom.value = 100; clampCrop(); drawCrop(); avatarCropModal.classList.remove('hidden'); }
         function closeAvatarCrop() { if(avatarCropModal) avatarCropModal.classList.add('hidden'); cropState = null; }
         function saveAvatarDataUrl(dataUrl) { try { setStore('dnd-avatar', dataUrl, false); loadAvatar(); } catch(err) { alert("L'image est trop lourde à enregistrer."); } }
         if(cropZoom) cropZoom.addEventListener('input', () => { if(!cropState) return; cropState.scale = (parseInt(cropZoom.value, 10) || 100) / 100; clampCrop(); drawCrop(); });
+        const btnCropRotate = document.getElementById('btn-avatar-crop-rotate');
+        if(btnCropRotate) btnCropRotate.addEventListener('click', () => { if(!cropState) return; cropState.rot = ((cropState.rot || 0) + 90) % 360; clampCrop(); drawCrop(); });
         if(cropCanvas) {
             let dragging = false, lastX = 0, lastY = 0;
             cropCanvas.addEventListener('pointerdown', (ev) => { if(!cropState) return; dragging = true; lastX = ev.clientX; lastY = ev.clientY; try { cropCanvas.setPointerCapture(ev.pointerId); } catch(e){} });
@@ -579,7 +591,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 diceBoxReady = false;
             }
         }
-        initDiceBox();
+        // Chargement PARESSEUX du plateau 3D : le moteur (module ES + WebGL + assets, lourds) n'est
+        // chargé qu'au 1er geste de l'utilisateur, à l'ouverture du tiroir de dés, ou quand le
+        // navigateur est inactif — le PREMIER AFFICHAGE de la page n'est plus ralenti par la 3D.
+        // (Si l'utilisateur lance un dé avant que la 3D soit prête, l'animation 2D prend le relais.)
+        let diceWarmupDone = false;
+        function warmupDiceBox() { if (diceWarmupDone) return; diceWarmupDone = true; initDiceBox(); }
+        ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, warmupDiceBox, { once: true, passive: true }));
+        if ('requestIdleCallback' in window) requestIdleCallback(warmupDiceBox, { timeout: 5000 }); else setTimeout(warmupDiceBox, 3000);
 
         // Accès SÉRIALISÉ à dice-box : un seul lancer 3D à la fois (sinon roll() peut ne
         // jamais se résoudre) + timeout de sécurité pour ne jamais bloquer l'interface.
@@ -782,364 +801,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         })();
 
-        // --- Atelier de peinture de dés (canvas : pinceau, gomme, pipette, pot, annuler/refaire) ---
-        (function setupDiceStudio() {
-            const modal = document.getElementById('dice-studio-modal');
-            const openBtn = document.getElementById('btn-open-dice-studio');
-            const canvas = document.getElementById('ds-canvas');
-            if (!modal || !canvas) return;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            const W = canvas.width, H = canvas.height;
-
-            const TYPES = ['all', 'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
-            const TYPE_LABEL = { all: 'Tous', d4: 'd4', d6: 'd6', d8: 'd8', d10: 'd10', d12: 'd12', d20: 'd20', d100: 'd100' };
-            const PALETTE = ['#000000', '#ffffff', '#7A2828', '#C49B35', '#c0392b', '#e08a1e', '#27ae60', '#16a3a3', '#2563c9', '#7b3fa0', '#e84393', '#8a6d4a'];
-
-            let tool = 'brush', color = '#C49B35', size = 12;
-            let studioBg = '#7A2828';
-            let studioScope = 'all';   // 'all' | 'd4' | 'd6' | … | 'd20'
-            let studioFace = 0;        // index de la face en cours (si dé spécifique)
-            let studioData = {};       // { all:url, d4:[url…], d6:[…], … }  (par-face)
-            let drawing = false, lastX = 0, lastY = 0;
-            let undoStack = [], redoStack = [];
-            let dice3D = null;
-
-            const FACE_COUNTS = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 10 };
-            const faceCountOf = (type) => FACE_COUNTS[type] || 1;
-            const firstNonNull = (arr) => Array.isArray(arr) ? (arr.find(Boolean) || null) : null;
-            function ensureSlots(type) {
-                if (type === 'all') { if (studioData.all === undefined) studioData.all = null; return; }
-                if (!Array.isArray(studioData[type])) studioData[type] = Array(faceCountOf(type)).fill(null);
-                while (studioData[type].length < faceCountOf(type)) studioData[type].push(null);
-            }
-            function curSlotGet() { if (studioScope === 'all') return studioData.all || null; ensureSlots(studioScope); return studioData[studioScope][studioFace] || null; }
-            function curSlotSet(url) { if (studioScope === 'all') { studioData.all = url; } else { ensureSlots(studioScope); studioData[studioScope][studioFace] = url; } }
-            function migrateOldFaces(faces) { // ancien format (1 image/type) → remplit toutes les faces
-                const d = { all: (faces && faces.all) || null };
-                Object.keys(FACE_COUNTS).forEach(t => { const img = (faces && (faces[t] || faces.all)) || null; d[t] = Array(faceCountOf(t)).fill(img); });
-                return d;
-            }
-
-            const colorInput = document.getElementById('ds-color');
-            const bgInput = document.getElementById('ds-bg');
-            const preview = document.getElementById('ds-preview');
-
-            const snapshot = () => { try { undoStack.push(ctx.getImageData(0, 0, W, H)); if (undoStack.length > 40) undoStack.shift(); redoStack = []; } catch (e) {} };
-            const saveCanvasToFace = () => { curSlotSet(canvas.toDataURL('image/png')); };
-            function loadFaceToCanvas() {
-                ctx.clearRect(0, 0, W, H); undoStack = []; redoStack = [];
-                const url = curSlotGet();
-                if (url) { const img = new Image(); img.onload = () => { ctx.clearRect(0, 0, W, H); ctx.drawImage(img, 0, 0, W, H); updatePreview(); }; img.src = url; }
-                else updatePreview();
-            }
-            function updatePreview() {
-                if (dice3D) {
-                    // Aperçu 3D actif : la face peinte est projetée sur le dé en temps réel
-                    preview.style.backgroundImage = 'none';
-                    preview.style.backgroundColor = '#161210';
-                    dice3D.refresh();
-                } else {
-                    const url = curSlotGet() || canvas.toDataURL();
-                    preview.style.backgroundColor = studioBg;
-                    preview.style.backgroundImage = url ? `url(${url})` : 'none';
-                }
-            }
-
-            // ---- Aperçu 3D temps réel (Three.js) : faces distinctes + clic pour sélectionner ----
-            function build3DPreview() {
-                if (typeof THREE === 'undefined') { console.warn('Three.js indisponible — aperçu 3D désactivé (aperçu plat conservé).'); return null; }
-                const cvs = document.getElementById('ds-3d-canvas'); if (!cvs) return null;
-                let renderer;
-                try { renderer = new THREE.WebGLRenderer({ canvas: cvs, alpha: true, antialias: true }); }
-                catch (e) { console.warn('WebGL indisponible — aperçu 3D désactivé.', e); return null; }
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-
-                const scene = new THREE.Scene();
-                const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100); camera.position.set(0, 0, 5);
-                scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-                const d1 = new THREE.DirectionalLight(0xffffff, 0.85); d1.position.set(3, 5, 4); scene.add(d1);
-                const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-4, -3, -2); scene.add(d2);
-                const raycaster = new THREE.Raycaster(); const ndc = new THREE.Vector2();
-
-                let mesh = null, faceCanvases = [], faceTextures = [], materials = [], triFace = [], faceNormals = [], running = false, raf = null;
-                // Rotation : libre (idle) OU focus sur une face (snap fluide vers la caméra)
-                let autoRotate = true, focused = false, dirty = false;
-                const targetQuat = new THREE.Quaternion();
-                const spinDelta = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0.25, 1, 0.12).normalize(), 0.018);
-
-                function pentaBipyramid(r, h) {
-                    const eq = []; for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; eq.push([Math.cos(a) * r, 0, Math.sin(a) * r]); }
-                    const top = [0, h, 0], bot = [0, -h, 0], P = [];
-                    for (let i = 0; i < 5; i++) { const a = eq[i], b = eq[(i + 1) % 5]; P.push(top[0], top[1], top[2], a[0], a[1], a[2], b[0], b[1], b[2]); P.push(bot[0], bot[1], bot[2], b[0], b[1], b[2], a[0], a[1], a[2]); }
-                    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); return g;
-                }
-                function makeGeometry(type) {
-                    const r = 1.4;
-                    switch (type) {
-                        case 'd4': return new THREE.TetrahedronGeometry(r * 1.3);
-                        case 'd8': return new THREE.OctahedronGeometry(r);
-                        case 'd10': case 'd100': return pentaBipyramid(1.25, 1.5);
-                        case 'd12': return new THREE.DodecahedronGeometry(r);
-                        case 'd20': return new THREE.IcosahedronGeometry(r);
-                        default: return new THREE.BoxGeometry(2, 2, 2); // d6 / all
-                    }
-                }
-                // Regroupe les triangles coplanaires = vraies faces, pose des UV planaires 0..1 par face
-                function buildFacesUV(geo) {
-                    const g = geo.index ? geo.toNonIndexed() : geo;
-                    const pos = g.attributes.position; const tri = pos.count / 3;
-                    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(pos.count * 2), 2));
-                    const uv = g.attributes.uv;
-                    const key = n => `${Math.round(n.x * 100)},${Math.round(n.y * 100)},${Math.round(n.z * 100)}`;
-                    const fmap = new Map(), tf = [], ftris = [], fnormals = [];
-                    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3(), nm = new THREE.Vector3();
-                    for (let t = 0; t < tri; t++) {
-                        a.fromBufferAttribute(pos, t * 3); b.fromBufferAttribute(pos, t * 3 + 1); c.fromBufferAttribute(pos, t * 3 + 2);
-                        ab.subVectors(b, a); ac.subVectors(c, a); nm.crossVectors(ab, ac).normalize();
-                        const k = key(nm); let id = fmap.get(k); if (id === undefined) { id = fmap.size; fmap.set(k, id); ftris[id] = []; fnormals[id] = nm.clone(); }
-                        tf[t] = id; ftris[id].push(t);
-                    }
-                    const U = new THREE.Vector3(), V = new THREE.Vector3(), N = new THREE.Vector3(), p = new THREE.Vector3();
-                    for (let f = 0; f < fmap.size; f++) {
-                        const t0 = ftris[f][0];
-                        a.fromBufferAttribute(pos, t0 * 3); b.fromBufferAttribute(pos, t0 * 3 + 1); c.fromBufferAttribute(pos, t0 * 3 + 2);
-                        ab.subVectors(b, a); ac.subVectors(c, a); N.crossVectors(ab, ac).normalize(); U.copy(ab).normalize(); V.crossVectors(N, U).normalize();
-                        let minS = Infinity, minT = Infinity, maxS = -Infinity, maxT = -Infinity; const vs = [];
-                        ftris[f].forEach(t => { for (let k = 0; k < 3; k++) { p.fromBufferAttribute(pos, t * 3 + k); const s = p.dot(U), tt = p.dot(V); vs.push([t * 3 + k, s, tt]); if (s < minS) minS = s; if (tt < minT) minT = tt; if (s > maxS) maxS = s; if (tt > maxT) maxT = tt; } });
-                        const ds = (maxS - minS) || 1, dt = (maxT - minT) || 1;
-                        vs.forEach(([vi, s, tt]) => uv.setXY(vi, (s - minS) / ds, (tt - minT) / dt));
-                    }
-                    uv.needsUpdate = true;
-                    g.clearGroups();
-                    const allMode = (studioScope === 'all');
-                    for (let t = 0; t < tri; t++) g.addGroup(t * 3, 3, allMode ? 0 : tf[t]);
-                    return { g, faceCount: fmap.size, tf, normals: fnormals };
-                }
-                function composeInto(i, url) {
-                    const fctx = faceCanvases[i].getContext('2d');
-                    fctx.clearRect(0, 0, 128, 128); fctx.fillStyle = studioBg || '#7A2828'; fctx.fillRect(0, 0, 128, 128);
-                    faceTextures[i].needsUpdate = true;
-                    if (url) { const img = new Image(); img.onload = () => { fctx.fillStyle = studioBg || '#7A2828'; fctx.fillRect(0, 0, 128, 128); fctx.drawImage(img, 0, 0, 128, 128); faceTextures[i].needsUpdate = true; }; img.src = url; }
-                }
-                function disposeMats() { materials.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }
-                function rebuild() {
-                    if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
-                    disposeMats();
-                    const built = buildFacesUV(makeGeometry(studioScope));
-                    triFace = built.tf; faceNormals = built.normals;
-                    const allMode = (studioScope === 'all');
-                    const matCount = allMode ? 1 : built.faceCount;
-                    faceCanvases = []; faceTextures = []; materials = [];
-                    for (let i = 0; i < matCount; i++) {
-                        const fc = document.createElement('canvas'); fc.width = fc.height = 128; faceCanvases.push(fc);
-                        const tx = new THREE.CanvasTexture(fc); if ('SRGBColorSpace' in THREE) tx.colorSpace = THREE.SRGBColorSpace; faceTextures.push(tx);
-                        materials.push(new THREE.MeshStandardMaterial({ map: tx, roughness: 0.5, metalness: 0.12, flatShading: true, side: THREE.DoubleSide }));
-                    }
-                    mesh = new THREE.Mesh(built.g, materials); scene.add(mesh);
-                    if (allMode) composeInto(0, studioData.all);
-                    else { ensureSlots(studioScope); for (let i = 0; i < built.faceCount; i++) composeInto(i, (studioData[studioScope] || [])[i]); }
-                    // Après reconstruction : rotation libre (le snap n'arrive qu'au choix d'une FACE)
-                    highlight(studioFace); dirty = true; focused = false; autoRotate = true;
-                }
-                // Recompose réellement la texture de la face courante (depuis le canvas live)
-                function recomposeCurrent() {
-                    if (!materials.length) return;
-                    const i = (studioScope === 'all') ? 0 : Math.min(studioFace, materials.length - 1);
-                    const fctx = faceCanvases[i] && faceCanvases[i].getContext('2d'); if (!fctx) return;
-                    fctx.clearRect(0, 0, 128, 128); fctx.fillStyle = studioBg || '#7A2828'; fctx.fillRect(0, 0, 128, 128);
-                    try { fctx.drawImage(canvas, 0, 0, 128, 128); } catch (e) {}
-                    faceTextures[i].needsUpdate = true;
-                }
-                // Coalescé : on ne fait l'upload de texture qu'1×/frame (perf & chaleur mobile)
-                function refresh() { dirty = true; }
-                function highlight(i) { materials.forEach((m, k) => m.emissive.setHex((k === i && studioScope !== 'all') ? 0x3a2f12 : 0x000000)); }
-                // Oriente en douceur la face i face à la caméra (parallèle à l'écran) et fige la rotation
-                function focusFace(i) {
-                    if (studioScope === 'all' || !faceNormals[i]) { focused = false; autoRotate = true; return; }
-                    targetQuat.setFromUnitVectors(faceNormals[i].clone().normalize(), new THREE.Vector3(0, 0, 1));
-                    focused = true; autoRotate = false;
-                }
-                function resumeSpin() { focused = false; autoRotate = true; }
-                function toggleSpin() { if (autoRotate) { if (studioScope !== 'all') focusFace(studioFace); } else { resumeSpin(); } }
-                function fitSize() { const w = cvs.clientWidth || 220, h = cvs.clientHeight || 220; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-                function loop() {
-                    if (!running) return;
-                    if (dirty) { recomposeCurrent(); dirty = false; }
-                    if (mesh) {
-                        if (focused) mesh.quaternion.slerp(targetQuat, 0.2);          // snap fluide
-                        else if (autoRotate) mesh.quaternion.multiply(spinDelta);     // rotation libre
-                    }
-                    renderer.render(scene, camera);
-                    raf = requestAnimationFrame(loop);
-                }
-                function start() { if (running) return; running = true; fitSize(); if (!mesh) rebuild(); loop(); }
-                function stop() { running = false; if (raf) cancelAnimationFrame(raf); raf = null; }
-
-                // Clic sur une face du dé 3D → la sélectionne, l'oriente face caméra et verrouille la rotation
-                cvs.addEventListener('pointerdown', (e) => {
-                    if (studioScope === 'all' || !mesh) return;
-                    const r = cvs.getBoundingClientRect();
-                    ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1; ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-                    raycaster.setFromCamera(ndc, camera);
-                    const hit = raycaster.intersectObject(mesh)[0];
-                    if (hit && triFace[hit.faceIndex] != null) { saveCanvasToFace(); studioFace = triFace[hit.faceIndex]; renderFaceTabs(); loadFaceToCanvas(); highlight(studioFace); focusFace(studioFace); }
-                });
-                window.addEventListener('resize', () => { if (running) fitSize(); });
-                return { refresh, rebuild, start, stop, highlight, focusFace, resumeSpin, toggleSpin };
-            }
-            function renderTypeTabs() {
-                const wrap = document.getElementById('ds-type-tabs'); if (!wrap) return; wrap.innerHTML = '';
-                TYPES.forEach(t => {
-                    const has = (t === 'all') ? !!studioData.all : (Array.isArray(studioData[t]) && studioData[t].some(Boolean));
-                    const b = document.createElement('button');
-                    b.className = 'ds-type-tab' + (t === studioScope ? ' active' : '') + (has ? ' has-design' : '');
-                    b.textContent = TYPE_LABEL[t];
-                    b.addEventListener('click', () => {
-                        saveCanvasToFace();
-                        studioScope = t; studioFace = 0;
-                        renderTypeTabs(); renderFaceTabs(); loadFaceToCanvas();
-                        if (dice3D) dice3D.rebuild();
-                    });
-                    wrap.appendChild(b);
-                });
-            }
-            function renderFaceTabs() {
-                const row = document.getElementById('ds-face-row'); const wrap = document.getElementById('ds-face-tabs');
-                if (!row || !wrap) return;
-                if (studioScope === 'all') { row.style.display = 'none'; wrap.innerHTML = ''; return; }
-                row.style.display = 'flex';
-                ensureSlots(studioScope); wrap.innerHTML = '';
-                const n = faceCountOf(studioScope);
-                for (let i = 0; i < n; i++) {
-                    const b = document.createElement('button');
-                    b.className = 'ds-face-tab' + (i === studioFace ? ' active' : '') + (studioData[studioScope][i] ? ' has-design' : '');
-                    b.textContent = (i + 1);
-                    b.addEventListener('click', () => { saveCanvasToFace(); studioFace = i; renderFaceTabs(); loadFaceToCanvas(); if (dice3D) { dice3D.highlight(i); dice3D.focusFace(i); } });
-                    wrap.appendChild(b);
-                }
-            }
-            function renderPalette() {
-                const wrap = document.getElementById('ds-palette'); wrap.innerHTML = '';
-                PALETTE.forEach(c => { const s = document.createElement('button'); s.className = 'ds-swatch'; s.style.background = c; s.title = c; s.addEventListener('click', () => { color = c; colorInput.value = c; setTool('brush'); }); wrap.appendChild(s); });
-            }
-            function renderGallery() {
-                const g = document.getElementById('ds-gallery'); g.innerHTML = '';
-                if (!diceDesigns.length) { g.innerHTML = '<div style="grid-column:1/-1;font-size:0.72rem;color:#999;text-align:center;padding:8px;">Aucune création pour l\'instant.</div>'; return; }
-                diceDesigns.forEach(d => {
-                    const item = document.createElement('div');
-                    item.className = 'ds-gallery-item' + (d.id === activeDesignId ? ' active' : '');
-                    item.style.backgroundColor = d.bg || '#7A2828';
-                    if (d.thumb) item.style.backgroundImage = `url(${d.thumb})`;
-                    item.title = d.name;
-                    item.innerHTML = `<button class="ds-gi-del" title="Supprimer">✕</button><div class="ds-gi-name">${d.name}</div>`;
-                    item.addEventListener('click', (e) => { if (e.target.classList.contains('ds-gi-del')) return; activeDesignId = d.id; DB.set('dnd-dice-active-design', d.id); renderGallery(); });
-                    item.querySelector('.ds-gi-del').addEventListener('click', (e) => { e.stopPropagation(); if (confirm('Supprimer « ' + d.name + ' » ?')) { diceDesigns = diceDesigns.filter(x => x.id !== d.id); if (activeDesignId === d.id) { activeDesignId = null; DB.set('dnd-dice-active-design', ''); } persistDiceDesigns(); renderGallery(); } });
-                    g.appendChild(item);
-                });
-            }
-            function setTool(t) { tool = t; document.querySelectorAll('.ds-tool').forEach(x => x.classList.toggle('active', x.dataset.tool === t)); }
-
-            const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) }; };
-            function drawTo(x, y) {
-                ctx.globalCompositeOperation = (tool === 'eraser') ? 'destination-out' : 'source-over';
-                ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
-                ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.fill();
-                ctx.globalCompositeOperation = 'source-over';
-                lastX = x; lastY = y;
-            }
-            function pickColor(x, y) { const p = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data; if (p[3] === 0) return; const hex = '#' + [p[0], p[1], p[2]].map(v => v.toString(16).padStart(2, '0')).join(''); color = hex; colorInput.value = hex; setTool('brush'); }
-            function floodFill(x, y) {
-                x = Math.floor(x); y = Math.floor(y);
-                const img = ctx.getImageData(0, 0, W, H), data = img.data;
-                const i0 = (y * W + x) * 4, tr = data[i0], tg = data[i0 + 1], tb = data[i0 + 2], ta = data[i0 + 3];
-                const tmp = document.createElement('canvas').getContext('2d'); tmp.fillStyle = color; tmp.fillRect(0, 0, 1, 1); const fc = tmp.getImageData(0, 0, 1, 1).data;
-                if (tr === fc[0] && tg === fc[1] && tb === fc[2] && ta === fc[3]) return;
-                const match = (i) => Math.abs(data[i] - tr) < 28 && Math.abs(data[i + 1] - tg) < 28 && Math.abs(data[i + 2] - tb) < 28 && Math.abs(data[i + 3] - ta) < 28;
-                const stack = [[x, y]];
-                while (stack.length) { const [cx, cy] = stack.pop(); if (cx < 0 || cy < 0 || cx >= W || cy >= H) continue; const i = (cy * W + cx) * 4; if (!match(i)) continue; data[i] = fc[0]; data[i + 1] = fc[1]; data[i + 2] = fc[2]; data[i + 3] = fc[3]; stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]); }
-                ctx.putImageData(img, 0, 0);
-            }
-
-            canvas.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
-                const { x, y } = pos(e);
-                if (tool === 'pipette') { pickColor(x, y); return; }
-                snapshot();
-                if (tool === 'fill') { floodFill(x, y); updatePreview(); return; }
-                drawing = true; lastX = x; lastY = y; drawTo(x, y);
-            });
-            canvas.addEventListener('pointermove', (e) => { if (!drawing) return; const { x, y } = pos(e); drawTo(x, y); });
-            canvas.addEventListener('pointerup', () => { if (drawing) { drawing = false; updatePreview(); } });
-
-            document.querySelectorAll('.ds-tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
-            document.querySelectorAll('.ds-size').forEach(b => b.addEventListener('click', () => { size = parseInt(b.dataset.size); document.querySelectorAll('.ds-size').forEach(x => x.classList.remove('active')); b.classList.add('active'); }));
-            colorInput.addEventListener('input', () => { color = colorInput.value; setTool('brush'); });
-            bgInput.addEventListener('input', () => { studioBg = bgInput.value; if (dice3D) dice3D.rebuild(); else updatePreview(); });
-            document.getElementById('ds-undo').addEventListener('click', () => { if (undoStack.length) { redoStack.push(ctx.getImageData(0, 0, W, H)); ctx.putImageData(undoStack.pop(), 0, 0); updatePreview(); } });
-            document.getElementById('ds-redo').addEventListener('click', () => { if (redoStack.length) { undoStack.push(ctx.getImageData(0, 0, W, H)); ctx.putImageData(redoStack.pop(), 0, 0); updatePreview(); } });
-            document.getElementById('ds-clear').addEventListener('click', () => { snapshot(); ctx.clearRect(0, 0, W, H); updatePreview(); });
-            // Dupliquer la face en cours sur TOUTES les faces (du dé courant, ou de tous les dés si portée = « Tous »)
-            document.getElementById('ds-apply-faces').addEventListener('click', () => {
-                saveCanvasToFace();
-                const url = canvas.toDataURL('image/png');
-                if (studioScope === 'all') {
-                    studioData.all = url;
-                    Object.keys(FACE_COUNTS).forEach(t => { ensureSlots(t); studioData[t] = studioData[t].map(() => url); });
-                } else {
-                    ensureSlots(studioScope); studioData[studioScope] = studioData[studioScope].map(() => url);
-                }
-                renderTypeTabs(); renderFaceTabs();
-                if (dice3D) dice3D.rebuild();
-                if (window.showAppToast) window.showAppToast('Appliqué à toutes les faces', '#8e44ad');
-            });
-            // Appliquer la face en cours à TOUS les dés (toutes leurs faces) et repasser en « Tous »
-            document.getElementById('ds-apply-all').addEventListener('click', () => {
-                saveCanvasToFace();
-                const url = curSlotGet() || canvas.toDataURL('image/png');
-                studioData.all = url;
-                Object.keys(FACE_COUNTS).forEach(t => { ensureSlots(t); studioData[t] = studioData[t].map(() => url); });
-                studioScope = 'all'; studioFace = 0;
-                renderTypeTabs(); renderFaceTabs(); loadFaceToCanvas();
-                if (dice3D) dice3D.rebuild();
-                if (window.showAppToast) window.showAppToast('Face appliquée à tous les dés', '#2980b9');
-            });
-            document.getElementById('ds-save').addEventListener('click', () => {
-                saveCanvasToFace();
-                const name = (document.getElementById('ds-name').value || '').trim() || ('Création ' + (diceDesigns.length + 1));
-                // image représentative par dé (1ʳᵉ face dessinée) pour conserver le skin 2D des résultats
-                const repFaces = { all: studioData.all || null };
-                Object.keys(FACE_COUNTS).forEach(t => { repFaces[t] = firstNonNull(studioData[t]) || studioData.all || null; });
-                const thumb = repFaces.all || repFaces.d20 || repFaces.d6 || Object.values(repFaces).find(Boolean) || canvas.toDataURL();
-                const design = { id: 'dd_' + Date.now(), name, bg: studioBg, faces: repFaces, facesFull: JSON.parse(JSON.stringify(studioData)), thumb };
-                diceDesigns.push(design); persistDiceDesigns();
-                activeDesignId = design.id; DB.set('dnd-dice-active-design', design.id);
-                document.getElementById('ds-name').value = '';
-                renderGallery();
-                if (typeof applyCustomDiceSkin === 'function') applyCustomDiceSkin();
-                if (window.showAppToast) window.showAppToast('🎲 Création enregistrée et activée', '#27ae60');
-            });
-            document.getElementById('ds-deactivate').addEventListener('click', () => { activeDesignId = null; DB.set('dnd-dice-active-design', ''); renderGallery(); });
-            { const spinBtn = document.getElementById('ds-3d-spin'); if (spinBtn) spinBtn.addEventListener('click', () => { if (dice3D) dice3D.toggleSpin(); }); }
-            document.getElementById('ds-close').addEventListener('click', () => { modal.classList.add('hidden'); if (dice3D) dice3D.stop(); });
-            modal.addEventListener('click', (e) => { if (e.target === modal) { modal.classList.add('hidden'); if (dice3D) dice3D.stop(); } });
-
-            function openStudio() {
-                const act = getActiveDesign();
-                studioData = act ? (act.facesFull ? JSON.parse(JSON.stringify(act.facesFull)) : migrateOldFaces(act.faces)) : {};
-                studioBg = act ? (act.bg || '#7A2828') : '#7A2828';
-                bgInput.value = studioBg; studioScope = 'all'; studioFace = 0;
-                renderPalette(); renderTypeTabs(); renderFaceTabs(); renderGallery();
-                loadFaceToCanvas();
-                modal.classList.remove('hidden');
-                // Le canvas 3D a une taille une fois la modale visible → on initialise ici
-                if (!dice3D) dice3D = build3DPreview();
-                if (dice3D) { dice3D.rebuild(); dice3D.start(); }
-                updatePreview();
-                const panel = document.getElementById('dice-theme-panel'); if (panel) panel.classList.add('hidden');
-            }
-            if (openBtn) openBtn.addEventListener('click', openStudio);
-        })();
+        // (L'Atelier de peinture de dés a été retiré le 13 juil. 2026 — fonctionnalité supprimée à la demande de Charlie ;
+        //  le bloc mort de ~356 lignes et le chargement CDN de Three.js ont été nettoyés lors de l'audit du 14 juil. 2026.)
 
         // --- Jet de caractéristique : affiche le résultat dans la bulle ---
         function showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2) {
@@ -1182,6 +845,23 @@ document.addEventListener('DOMContentLoaded', () => {
             showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2);
         }
 
+        // Accessibilité clavier : les libellés « à lancer » (.rollable) deviennent des boutons
+        // focusables (Tab) et activables à la touche Entrée / Espace.
+        function makeRollablesFocusable() {
+            document.querySelectorAll('.rollable:not([data-kbd])').forEach(el => {
+                el.setAttribute('data-kbd', '1');
+                if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+                if(!el.hasAttribute('role')) el.setAttribute('role', 'button');
+            });
+        }
+        document.body.addEventListener('keydown', (e) => {
+            const el = e.target.closest('.rollable');
+            if(el && (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) {
+                e.preventDefault();
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            }
+        });
+
         document.body.addEventListener('click', (e) => {
             const el = e.target.closest('.rollable');
             if(el) {
@@ -1200,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         let invCategories = getStore('dnd-inv-categories') || []; let atkCategories = getStore('dnd-atk-categories') || [];
-        function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let editInvSel = document.getElementById('edit-inv-category'); if(editInvSel) editInvSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); }
+        function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); }   // (edit-inv-category retiré : l'ancienne fenêtre d'édition du sac n'existe plus, l'édition est inline)
         const catManagerModal = document.getElementById('category-manager-modal'); let currentCatContext = null; 
         window.openCategoryManager = function(context) { currentCatContext = context; const title = document.getElementById('cat-manager-title'); if(title) title.textContent = context === 'inv' ? "Onglets : Sac à dos" : "Onglets : Attaques"; renderCategoryManagerList(); if(catManagerModal) catManagerModal.classList.remove('hidden'); }
         function renderCategoryManagerList() { const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; } categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.marginBottom = '10px'; let moveBox = document.createElement('div'); moveBox.className = 'cat-move-box'; let btnUp = document.createElement('button'); btnUp.className = 'btn-small cat-move-btn'; btnUp.textContent = '▲'; btnUp.title = 'Monter cet onglet'; btnUp.disabled = index === 0; btnUp.onclick = () => moveCategory(index, -1); let btnDown = document.createElement('button'); btnDown.className = 'btn-small cat-move-btn'; btnDown.textContent = '▼'; btnDown.title = 'Descendre cet onglet'; btnDown.disabled = index === categories.length - 1; btnDown.onclick = () => moveCategory(index, 1); moveBox.appendChild(btnUp); moveBox.appendChild(btnDown); let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid rgba(138,28,28,0.25)'; input.style.borderRadius = '4px'; input.style.background = 'rgba(255,255,255,0.5)'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(moveBox); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); }); }
@@ -1304,6 +984,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const text = document.getElementById('hp-bar-text');
             if(text) text.innerHTML = `${current} / ${maxRaw}` + (temp > 0 ? ` <span class="hp-bar-temp-badge">+${temp} PVT</span>` : '');
+            // À 0 PV : état critique = voile rouge léger + mise en avant des jets contre la mort.
+            const atZero = maxRaw > 0 && current <= 0;
+            document.body.classList.toggle('at-zero-hp', atZero);
+            const deathSection = document.querySelector('.death-saves-section');
+            if(deathSection) deathSection.classList.toggle('is-critical', atZero);
         }
 
         // Soin / dégâts rapides (les dégâts entament d'abord les PV temporaires, règle 5e)
@@ -1313,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(delta < 0) {
                 let dmg = -delta; let temp = parseInt(tmp?.value) || 0;
                 if(temp > 0 && tmp) { const absorbed = Math.min(temp, dmg); temp -= absorbed; dmg -= absorbed; tmp.value = temp; tmp.dispatchEvent(new Event('input', { bubbles: true })); }
-                if(dmg > 0) { cur.value = (parseInt(cur.value) || 0) - dmg; cur.dispatchEvent(new Event('input', { bubbles: true })); }
+                if(dmg > 0) { cur.value = Math.max(0, (parseInt(cur.value) || 0) - dmg); cur.dispatchEvent(new Event('input', { bubbles: true })); }   // plancher 0 : à 0 PV on tombe inconscient (jets contre la mort), pas de PV négatifs
             } else if(delta > 0) {
                 let nv = (parseInt(cur.value) || 0) + delta; if(max > 0) nv = Math.min(nv, max); cur.value = nv; cur.dispatchEvent(new Event('input', { bubbles: true }));
             }
@@ -1950,10 +1635,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let savedLayout = getStore('dnd-layout-mode', false) || 'classic'; if(layoutSelector) layoutSelector.value = savedLayout; applyLayout(savedLayout);
         initSkillProfSave(); initGlobalSave(); 
-        if(levelInput) { let prof = Math.floor((parseInt(levelInput.value) || 1) - 1) / 4 + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = Math.floor(prof); }
+        // Bonus de maîtrise : auto-calculé depuis le niveau UNIQUEMENT s'il n'a jamais été saisi
+        // (même logique que l'initiative ci-dessous — une valeur éditée à la main survit au rechargement ;
+        //  changer le Niveau recalcule toujours, via le listener plus haut).
+        if(levelInput && getStore('dnd-sheet-prof-bonus', false) === null) { const prof = Math.floor(((parseInt(levelInput.value) || 1) - 1) / 4) + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = prof; }
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
-        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects();
+        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects(); makeRollablesFocusable();
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', async () => {

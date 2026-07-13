@@ -1725,6 +1725,10 @@
                     if (!gmDragBusy) renderMap();
                     throttleBroadcastMap();
                 }
+                // L'avatar du joueur (image par défaut de son jeton) vient d'arriver ou de changer → re-rendu.
+                if ((!prevSnap || prevSnap.tokenImg !== s.tokenImg) && (state.tokens || []).some(t => t.owner === row.user_id && !t.img)) {
+                    if (!gmDragBusy) renderMap();
+                }
             }
             save();
             renderLivePlayers(); updatePresenceCount();
@@ -2075,11 +2079,15 @@
         if (c.monId && t.ref === 'mon:' + c.monId) return true;
         return !!(c.name && t.name && c.name.toLowerCase() === t.name.toLowerCase());
     }
+    // Image d'un joueur (avatar de fiche) reçue via son snapshot de session — sert d'image
+    // par défaut au jeton qu'il contrôle (quand le MJ n'a pas défini d'image explicite).
+    function ownerTokenImg(t) { if (!t || !t.owner) return ''; const p = findLivePlayer(t.owner); const s = p && p.snapshot; return (s && s.tokenImg) || ''; }
     function tokenHtml(t) {
         const hpMax = Number(t.hpMax) || 0, hp = Number(t.hp);
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
         const low = hpMax > 0 && ratio <= 0.33;
-        const imgStyle = t.img ? `background-image:url(${t.img});` : '';
+        const effImg = t.img || ownerTokenImg(t);   // image explicite prioritaire, sinon avatar du joueur
+        const imgStyle = effImg ? `background-image:url(${effImg});` : '';
         // Taille liée à la grille du board : un jeton « Normal » remplit sa case.
         // FORMULE IDENTIQUE côté joueur (renderPlayerMap) → même taille apparente MJ / PJ.
         const gpx = Math.max(6, gridPxFor(boardWpx));
@@ -2097,8 +2105,8 @@
         }
         const layerCls = layer === 'gm' ? ' is-mj-hidden gm-layer-gm' : (layer === 'map' ? ' gm-token-onmap' : '');
         const dim = (mapView.activeLayer && mapView.activeLayer !== layer) ? ' gm-token-dim' : '';
-        return auraHtml + `<div class="gm-token${layerCls}${dim}${t.img ? ' has-img' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" data-layer="${layer}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}${layer === 'gm' ? ' — calque MJ (invisible aux joueurs)' : (layer === 'map' ? ' — calque Carte' : '')}">`
-            + (t.img ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
+        return auraHtml + `<div class="gm-token${layerCls}${dim}${effImg ? ' has-img' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" data-layer="${layer}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}${layer === 'gm' ? ' — calque MJ (invisible aux joueurs)' : (layer === 'map' ? ' — calque Carte' : '')}">`
+            + (effImg ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
             + acBadge + badgeHtml + hpBar + `</div>`;
     }
     function applyMapTransform() {
@@ -4838,15 +4846,19 @@
             const ro = new ResizeObserver(() => { clearTimeout(roT); roT = setTimeout(() => { if (!gmDragBusy && document.body.classList.contains('gm-active')) renderMap(); }, 120); });
             ro.observe(byId('gm-map-view'));
         } catch (e) {}
-        const mapApplyUrl = () => { const u = byId('gm-map-url').value.trim(); if (!u) return; state.map.bg = u; byId('gm-map-url').value = ''; save(); renderMap(); broadcastMap(true); };
+        // Après avoir posé un nouveau fond de carte : passe en cadrage (outil 🖼️ = glisser pour
+        // repositionner, molette pour zoomer) — recadrage NON destructif (l'image entière est
+        // conservée, contrairement à un rognage carré). Le MJ peut recadrer à tout moment.
+        const promptBgFraming = () => { try { setMapTool('bg'); } catch (e) {} if (window.showAppToast) window.showAppToast('🖼️ Recadre le fond : glisse pour le déplacer, molette pour zoomer.', '#2c3e50'); };
+        const mapApplyUrl = () => { const u = byId('gm-map-url').value.trim(); if (!u) return; state.map.bg = u; byId('gm-map-url').value = ''; save(); renderMap(); broadcastMap(true); promptBgFraming(); };
         byId('gm-map-seturl').addEventListener('click', mapApplyUrl);
         byId('gm-map-url').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); mapApplyUrl(); } });
         byId('gm-map-file').addEventListener('change', async (e) => {
             const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
-            try { const res = await window.SupaAuth.uploadAsset(f, 'maps'); state.map.bg = res.url; save(); renderMap(); broadcastMap(true); }
+            try { const res = await window.SupaAuth.uploadAsset(f, 'maps'); state.map.bg = res.url; save(); renderMap(); broadcastMap(true); promptBgFraming(); }
             catch (err) {
                 console.warn(err);
-                fileToDataURL(f, (data) => { state.map.bg = data; save(); renderMap(); broadcastMap(true); });
+                fileToDataURL(f, (data) => { state.map.bg = data; save(); renderMap(); broadcastMap(true); promptBgFraming(); });
                 if (window.showAppToast) window.showAppToast('⚠️ Upload échoué — fond local (non diffusé). SQL Phase 0 lancé ?', '#c0392b');
             }
         });

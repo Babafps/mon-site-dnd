@@ -101,6 +101,8 @@
 
         return {
             name: v('char-name'),
+            // Avatar du perso → utilisé par le MJ comme image par défaut du jeton contrôlé par ce joueur.
+            tokenImg: (function () { try { const a = localStorage.getItem(state.charId + '_dnd-avatar'); return a && a !== 'undefined' ? a : null; } catch (e) { return null; } })(),
             level: num('char-level'),
             cls: v('char-class'),
             subclass: v('char-subclass'),
