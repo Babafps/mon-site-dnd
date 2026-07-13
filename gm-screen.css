@@ -333,6 +333,13 @@ body.theme-dark .gm-tag-filter { color: #d6c7a8; }
    La page, elle, ne défile pas (#gm-screen est fixe). */
 .gm-side-panel > .gm-card,
 .gm-side-panel > .gm-side-card:not(.gm-side-grow) { flex: 0 0 auto; }
+/* Dans le panneau latéral (flex colonne), les cartes doivent occuper TOUTE la largeur.
+   Sans ça, `.gm-card { align-self: start }` (utile dans la grille de la zone centrale)
+   fait que chaque carte prend sa largeur "max-content" : les cartes chargées (Monstres)
+   débordent et scrollent horizontalement, les cartes légères rétrécissent et paraissent
+   "trop courtes"/buggées. On force donc l'étirement ici. */
+.gm-side-panel > .gm-card,
+.gm-side-panel > .gm-side-card { align-self: stretch; min-width: 0; }
 
 /* ---- Lanceur de dés ---- */
 .gm-dice-quick { display: flex; gap: 5px; flex-wrap: wrap; }

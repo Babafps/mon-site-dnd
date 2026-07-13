@@ -2797,12 +2797,18 @@
         if (z.vol == null) z.vol = 0.8;
         // Sons de la table utilisables comme source (les sons « locaux » ne sont pas diffusables aux joueurs)
         const pads = (state.soundboard || []).filter(s => s.url && !s.local);
+        const localOnly = (state.soundboard || []).filter(s => s.local).length;
         const padOpts = ['<option value="">— Choisir un son de la table —</option>']
             .concat(pads.map(s => `<option value="${esc(s.url)}"${z.url === s.url ? ' selected' : ''}>🔊 ${esc(s.name || 'Son')}</option>`)).join('');
+        // Aucun son partageable mais des sons LOCAUX importés : expliquer pourquoi ils n'apparaissent pas.
+        const noShareableHint = (!pads.length && localOnly)
+            ? `<div class="gm-tp-hint" style="color:#c0392b;">⚠️ Tes ${localOnly} son(s) importé(s) sont <b>locaux</b> (non diffusés aux joueurs, donc pas dans la liste). Colle une <b>URL audio directe</b> ci-dessous, ou active le stockage Supabase pour les partager.</div>`
+            : '';
         p.innerHTML = `
             <div class="gm-tp-row"><input class="gm-input" data-sp="name" value="${esc(z.name || '')}" placeholder="Nom de l'ambiance (cascade, foule…)"></div>
             <div class="gm-tp-row" title="Choisir un son importé dans l'onglet Audio (soundboard)"><label>🎵</label><select class="gm-input" data-sp="pad">${padOpts}</select></div>
             <div class="gm-tp-row" title="Ou coller une URL audio directe (.mp3, .ogg…)"><label>🔗</label><input class="gm-input" data-sp="url" value="${esc(z.url || '')}" placeholder="https://…/ambiance.mp3"></div>
+            ${noShareableHint}
             <div class="gm-tp-row"><label>🔊 Volume</label><input type="range" data-sp="vol" min="0" max="100" step="5" value="${Math.round((z.vol != null ? z.vol : 0.8) * 100)}"><b class="gm-fly-wval" data-sp-vval>${Math.round((z.vol != null ? z.vol : 0.8) * 100)}</b></div>
             <div class="gm-tp-row"><label data-sp-rlbl>${z.oneshot ? '📏 Déclenche' : '📏 Portée'}</label><input type="range" data-sp="r" min="5" max="50" step="1" value="${Math.round((z.r || 0.15) * 100)}"><b class="gm-fly-wval" data-sp-rval>${Math.round((z.r || 0.15) * 100)}</b></div>
             <div class="gm-tp-row" title="Son unique : joué UNE fois quand un jeton entre dans la zone (grincement, cri, piège…) au lieu de tourner en boucle."><label>🔔</label><label class="gm-map-ctl"><input type="checkbox" data-sp="oneshot"${z.oneshot ? ' checked' : ''}> Son unique (déclenché à l'entrée)</label></div>

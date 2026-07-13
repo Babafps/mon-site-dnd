@@ -1260,6 +1260,20 @@
         document.body.appendChild(b);
     }
     function hideAudioUnlock() { const b = document.getElementById('smap-audio-unlock'); if (b) b.remove(); }
+    // Amorçage audio : la politique d'autoplay des navigateurs interdit toute lecture tant que le
+    // joueur n'a pas interagi avec la page. On débloque donc les sons d'ambiance dès sa 1re
+    // interaction (clic, touche, toucher) — la lecture démarre alors toute seule quand un jeton
+    // approche d'une zone, sans avoir à trouver le bouton « 🔊 Activer les sons d'ambiance ».
+    let audioPrimed = false;
+    function primeZoneAudio() {
+        if (audioPrimed) return;
+        audioPrimed = true;
+        zoneAudio.blocked = false;
+        try { zoneAudio.unlock(); } catch (e) {}
+        hideAudioUnlock();
+        ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.removeEventListener(ev, primeZoneAudio, true));
+    }
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, primeZoneAudio, true));
 
     let lastMapSig = null;
     function applyMap(map, tokens) {
