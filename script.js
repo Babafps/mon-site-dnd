@@ -9,7 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try { localStorage.setItem(key, val); } catch(e) { console.warn("Erreur sauvegarde locale."); }
             if (window.SupaAuth?.currentUser && window.SyncQueue && ACTIVE_CHAR_ID && key.startsWith(ACTIVE_CHAR_ID + '_')) {
                 const subKey = key.slice(ACTIVE_CHAR_ID.length + 1);
-                if (!key.startsWith('dnd-theme-') && !key.startsWith('dnd-custom-background')) {
+                // `dnd-avatar-src` = image source pleine résolution gardée pour le re-recadrage local
+                // uniquement → jamais synchronisée au cloud (trop lourde ; l'avatar rogné, lui, l'est).
+                if (!key.startsWith('dnd-theme-') && !key.startsWith('dnd-custom-background') && subKey !== 'dnd-avatar-src') {
                     window.SyncQueue.push(ACTIVE_CHAR_ID, subKey, val);
                 }
             }
@@ -295,14 +297,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCreateChar = document.getElementById('btn-create-char');
     if(btnCreateChar) {
         btnCreateChar.addEventListener('click', async () => {
-            const inputName = document.getElementById('new-char-name'); if(!inputName) return; const name = inputName.value.trim();
-            if(name) { 
-                let newId, newChar;
-                if(window.SupaAuth?.currentUser) { newChar = await window.SupaAuth.createCharacter(name); if(!newChar) { alert("Erreur lors de la création."); return; } newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
-                DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId);
-                DB.set('dnd-pj-wizard-pending', '1');   // fiche neuve → l'assistant de création se lance après le reload (pj-tutorial.js)
-                location.reload();
-            } else { alert("Donne un nom à ton personnage."); }
+            const inputName = document.getElementById('new-char-name');
+            // Le nom n'est plus obligatoire : à vide, on crée avec un nom par défaut
+            // (l'assistant de création, lancé juste après, permet de le renommer).
+            const name = (inputName ? inputName.value.trim() : '') || 'Nouveau personnage';
+            let newId, newChar;
+            if(window.SupaAuth?.currentUser) { newChar = await window.SupaAuth.createCharacter(name); if(!newChar) { alert("Erreur lors de la création."); return; } newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
+            DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId);
+            DB.set('dnd-pj-wizard-pending', '1');   // fiche neuve → l'assistant de création se lance après le reload (pj-tutorial.js)
+            location.reload();
         });
     }
 
@@ -315,12 +318,20 @@ document.addEventListener('DOMContentLoaded', () => {
             listDiv.innerHTML = '';
             if(charactersList.length === 0) { listDiv.innerHTML = "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>"; } else {
                 charactersList.forEach(c => {
-                    let card = document.createElement('div'); card.className = 'char-card'; let info = document.createElement('div'); info.className = 'char-info';
+                    let card = document.createElement('div'); card.className = 'char-card';
+                    // Vignette du perso : l'avatar est stocké sous `{charId}_dnd-avatar`
+                    // (chargé en localStorage pour local ET Supabase → dispo dès l'accueil).
+                    let avatarSrc = DB.get(c.id + '_dnd-avatar');
+                    let thumb = document.createElement('div'); thumb.className = 'char-card-avatar';
+                    if(avatarSrc && avatarSrc !== 'undefined') { thumb.style.backgroundImage = `url("${avatarSrc}")`; }
+                    else { thumb.classList.add('is-empty'); thumb.textContent = (c.name || '?').trim().charAt(0).toUpperCase() || '🧝'; }
+                    let info = document.createElement('div'); info.className = 'char-info';
                     info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1} ${c.class || ''})</span>`;
-                    info.onclick = async () => { DB.set('dnd-active-char', c.id); if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); } location.reload(); };
+                    const openChar = async () => { DB.set('dnd-active-char', c.id); if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); } location.reload(); };
+                    info.onclick = openChar; thumb.onclick = openChar;
                     let delBtn = document.createElement('button'); delBtn.className = 'btn-delete-char'; delBtn.innerHTML = '✖';
                     delBtn.onclick = async (e) => { e.stopPropagation(); if(confirm(`Supprimer définitivement ${c.name} ?`)) { if(window.SupaAuth?.currentUser) { await window.SupaAuth.deleteCharacter(c.id); } charactersList = charactersList.filter(char => char.id !== c.id); DB.set('dnd-character-list', JSON.stringify(charactersList)); DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); }); location.reload(); } };
-                    card.appendChild(info); card.appendChild(delBtn); listDiv.appendChild(card);
+                    card.appendChild(thumb); card.appendChild(info); card.appendChild(delBtn); listDiv.appendChild(card);
                 });
             }
         }
@@ -415,8 +426,40 @@ document.addEventListener('DOMContentLoaded', () => {
         window.appendCalc = (val) => { const disp = document.getElementById('calc-display'); if(disp) disp.value += val; }; window.clearCalc = () => { const disp = document.getElementById('calc-display'); if(disp) disp.value = ''; }; window.evalCalc = () => { const disp = document.getElementById('calc-display'); if(disp) { try { let safeVal = disp.value.replace(/[^0-9+\-*/.]/g, ''); disp.value = eval(safeVal) || ''; } catch(e) { disp.value = 'Erreur'; setTimeout(() => disp.value='', 1000); } } };
 
         const avatarInput = document.getElementById('avatar-file-input'); const avatarPreview = document.getElementById('main-avatar-preview'); const avatarHeader = document.getElementById('header-avatar'); const avatarPlaceholder = document.getElementById('avatar-placeholder');
-        function loadAvatar() { const savedAvatar = getStore('dnd-avatar', false); if(savedAvatar && avatarPreview && avatarPlaceholder && avatarHeader) { avatarPreview.src = savedAvatar; avatarPreview.classList.remove('hidden'); avatarPlaceholder.classList.add('hidden'); avatarHeader.style.backgroundImage = `url("${savedAvatar}")`; } }
-        if(avatarInput) { avatarInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 250; const scaleSize = MAX_WIDTH / img.width; canvas.width = MAX_WIDTH; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); try { setStore('dnd-avatar', canvas.toDataURL('image/jpeg', 0.8), false); loadAvatar(); } catch (err) { alert("L'image est toujours trop lourde."); } bgInput.value = ''; }; img.src = event.target.result; }; reader.readAsDataURL(file); }); }
+        function loadAvatar() { const savedAvatar = getStore('dnd-avatar', false); if(savedAvatar && avatarPreview && avatarPlaceholder && avatarHeader) { avatarPreview.src = savedAvatar; avatarPreview.classList.remove('hidden'); avatarPlaceholder.classList.add('hidden'); avatarHeader.style.backgroundImage = `url("${savedAvatar}")`; } const rc = document.getElementById('btn-recrop-avatar'); if(rc) rc.style.display = savedAvatar ? '' : 'none'; }
+        // Import d'un portrait : on ouvre d'abord la modale de recadrage (zoom + déplacement),
+        // puis on enregistre le carré recadré comme avatar.
+        if(avatarInput) { avatarInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) { e.target.value=''; return; } const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => openAvatarCrop(img, true); img.src = event.target.result; }; reader.readAsDataURL(file); e.target.value = ''; }); }
+        // Cliquer le mini-avatar de l'en-tête ouvre aussi le sélecteur de photo.
+        if(avatarHeader && avatarInput) avatarHeader.addEventListener('click', () => avatarInput.click());
+        // « Recadrer » : réajuste zoom/cadrage à partir de l'image SOURCE conservée (repli sur l'avatar rogné).
+        const btnRecrop = document.getElementById('btn-recrop-avatar');
+        if(btnRecrop) btnRecrop.addEventListener('click', () => { const src = getStore('dnd-avatar-src', false) || getStore('dnd-avatar', false); if(!src) return; const img = new Image(); img.onload = () => openAvatarCrop(img, false); img.src = src; });
+
+        // ---- Contrôleur de recadrage d'avatar ----
+        const avatarCropModal = document.getElementById('avatar-crop-modal');
+        const cropCanvas = document.getElementById('avatar-crop-canvas');
+        const cropZoom = document.getElementById('avatar-crop-zoom');
+        let cropState = null;   // { img, base, scale, ox, oy }
+        function clampCrop() { if(!cropState || !cropCanvas) return; const S = cropCanvas.width; const w = cropState.img.width * cropState.base * cropState.scale, h = cropState.img.height * cropState.base * cropState.scale; const maxX = Math.max(0, (w - S) / 2), maxY = Math.max(0, (h - S) / 2); cropState.ox = Math.max(-maxX, Math.min(maxX, cropState.ox)); cropState.oy = Math.max(-maxY, Math.min(maxY, cropState.oy)); }
+        function drawCrop() { if(!cropState || !cropCanvas) return; const ctx = cropCanvas.getContext('2d'); const S = cropCanvas.width; const w = cropState.img.width * cropState.base * cropState.scale, h = cropState.img.height * cropState.base * cropState.scale; ctx.clearRect(0,0,S,S); ctx.fillStyle = '#1a1410'; ctx.fillRect(0,0,S,S); ctx.drawImage(cropState.img, (S - w) / 2 + cropState.ox, (S - h) / 2 + cropState.oy, w, h); }
+        function openAvatarCrop(img, newSource) { if(!avatarCropModal || !cropCanvas) return; const S = cropCanvas.width; const base = Math.max(S / img.width, S / img.height); cropState = { img, base, scale: 1, ox: 0, oy: 0, newSource: !!newSource }; if(cropZoom) cropZoom.value = 100; clampCrop(); drawCrop(); avatarCropModal.classList.remove('hidden'); }
+        function closeAvatarCrop() { if(avatarCropModal) avatarCropModal.classList.add('hidden'); cropState = null; }
+        function saveAvatarDataUrl(dataUrl) { try { setStore('dnd-avatar', dataUrl, false); loadAvatar(); } catch(err) { alert("L'image est trop lourde à enregistrer."); } }
+        if(cropZoom) cropZoom.addEventListener('input', () => { if(!cropState) return; cropState.scale = (parseInt(cropZoom.value, 10) || 100) / 100; clampCrop(); drawCrop(); });
+        if(cropCanvas) {
+            let dragging = false, lastX = 0, lastY = 0;
+            cropCanvas.addEventListener('pointerdown', (ev) => { if(!cropState) return; dragging = true; lastX = ev.clientX; lastY = ev.clientY; try { cropCanvas.setPointerCapture(ev.pointerId); } catch(e){} });
+            cropCanvas.addEventListener('pointermove', (ev) => { if(!dragging || !cropState) return; const r = cropCanvas.getBoundingClientRect(); const ratio = cropCanvas.width / (r.width || cropCanvas.width); cropState.ox += (ev.clientX - lastX) * ratio; cropState.oy += (ev.clientY - lastY) * ratio; lastX = ev.clientX; lastY = ev.clientY; clampCrop(); drawCrop(); });
+            const endDrag = () => { dragging = false; };
+            cropCanvas.addEventListener('pointerup', endDrag); cropCanvas.addEventListener('pointercancel', endDrag);
+            cropCanvas.addEventListener('wheel', (ev) => { if(!cropState) return; ev.preventDefault(); const dir = ev.deltaY < 0 ? 1 : -1; let v = (parseInt(cropZoom.value, 10) || 100) + dir * 15; v = Math.max(100, Math.min(400, v)); if(cropZoom) cropZoom.value = v; cropState.scale = v / 100; clampCrop(); drawCrop(); }, { passive: false });
+        }
+        const btnCropClose = document.getElementById('btn-close-avatar-crop'); if(btnCropClose) btnCropClose.addEventListener('click', closeAvatarCrop);
+        const btnCropCancel = document.getElementById('btn-avatar-crop-cancel'); if(btnCropCancel) btnCropCancel.addEventListener('click', closeAvatarCrop);
+        // Conserve l'image source (rognée à 512px max) pour pouvoir re-recadrer plus tard sans réimporter.
+        function storeAvatarSource(img) { try { const S = 512; const sc = Math.min(1, S / Math.max(img.width, img.height)); const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.width * sc)); cv.height = Math.max(1, Math.round(img.height * sc)); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); setStore('dnd-avatar-src', cv.toDataURL('image/jpeg', 0.82), false); } catch(e) {} }
+        const btnCropConfirm = document.getElementById('btn-avatar-crop-confirm'); if(btnCropConfirm) btnCropConfirm.addEventListener('click', () => { if(!cropState || !cropCanvas) return; if(cropState.newSource) storeAvatarSource(cropState.img); try { saveAvatarDataUrl(cropCanvas.toDataURL('image/jpeg', 0.85)); } catch(err) { alert("Impossible d'enregistrer l'image."); } closeAvatarCrop(); });
         loadAvatar();
 
         const cbConcentration = document.getElementById('is-concentrating'); const concentrationGlow = document.getElementById('concentration-glow');
@@ -1160,7 +1203,8 @@ document.addEventListener('DOMContentLoaded', () => {
         function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let editInvSel = document.getElementById('edit-inv-category'); if(editInvSel) editInvSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); }
         const catManagerModal = document.getElementById('category-manager-modal'); let currentCatContext = null; 
         window.openCategoryManager = function(context) { currentCatContext = context; const title = document.getElementById('cat-manager-title'); if(title) title.textContent = context === 'inv' ? "Onglets : Sac à dos" : "Onglets : Attaques"; renderCategoryManagerList(); if(catManagerModal) catManagerModal.classList.remove('hidden'); }
-        function renderCategoryManagerList() { const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; } categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '10px'; row.style.marginBottom = '10px'; let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid rgba(138,28,28,0.25)'; input.style.borderRadius = '4px'; input.style.background = 'rgba(255,255,255,0.5)'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); }); }
+        function renderCategoryManagerList() { const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; } categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.marginBottom = '10px'; let moveBox = document.createElement('div'); moveBox.className = 'cat-move-box'; let btnUp = document.createElement('button'); btnUp.className = 'btn-small cat-move-btn'; btnUp.textContent = '▲'; btnUp.title = 'Monter cet onglet'; btnUp.disabled = index === 0; btnUp.onclick = () => moveCategory(index, -1); let btnDown = document.createElement('button'); btnDown.className = 'btn-small cat-move-btn'; btnDown.textContent = '▼'; btnDown.title = 'Descendre cet onglet'; btnDown.disabled = index === categories.length - 1; btnDown.onclick = () => moveCategory(index, 1); moveBox.appendChild(btnUp); moveBox.appendChild(btnDown); let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid rgba(138,28,28,0.25)'; input.style.borderRadius = '4px'; input.style.background = 'rgba(255,255,255,0.5)'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(moveBox); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); }); }
+        function moveCategory(index, direction) { let categories = currentCatContext === 'inv' ? invCategories : atkCategories; const target = index + direction; if (target < 0 || target >= categories.length) return; [categories[index], categories[target]] = [categories[target], categories[index]]; if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
         function saveCategoryRename(index, newName) { if (!newName) return; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(newName === oldName) return; categories[index] = newName; items.forEach(item => { if (item.category === oldName) item.category = newName; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = newName; if (activeInvTabModal === oldName) activeInvTabModal = newName; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = newName; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
         function deleteCategory(index) { let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(!confirm(`Supprimer l'onglet "${oldName}" ? Les objets à l'intérieur retourneront dans "Général".`)) return; categories.splice(index, 1); items.forEach(item => { if (item.category === oldName) item.category = 'Général'; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = 'Tout'; if (activeInvTabModal === oldName) activeInvTabModal = 'Tout'; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = 'Tout'; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
         if(document.getElementById('btn-close-cat-manager')) document.getElementById('btn-close-cat-manager').addEventListener('click', () => catManagerModal.classList.add('hidden'));
@@ -1188,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(attributesContainer) {
             skillsMap.forEach(attr => {
                 let skillsHTML = attr.skills.map(skill => `<div class="skill-row ${skill.type === 'save' ? 'saving-throw' : ''}"><button type="button" class="skill-prof-btn" id="profbtn-${skill.id}" data-stat="${attr.id}" data-skill="${skill.id}" title="Clic: maîtrise / Double-clic: expertise">○</button><input type="hidden" id="prof-${skill.id}" class="skill-prof" data-stat="${attr.id}" value="0"><span class="skill-mod" id="skill-val-${skill.id}">+0</span><label class="rollable" data-name="${skill.name}" data-target="skill-val-${skill.id}">${skill.name}</label></div>`).join('');
-                attributesContainer.innerHTML += `<div class="attribute-block"><h3 class="rollable" data-name="${attr.name}" data-target="mod-${attr.id}">${attr.name}</h3><div class="stat-main-row"><div class="stat-score-circle"><input type="number" id="stat-${attr.id}" class="stat-score stat-score-input" value="10"></div><div class="stat-mod-box" id="mod-${attr.id}">+0</div></div><div class="nested-skills-list">${skillsHTML}</div></div>`;
+                attributesContainer.innerHTML += `<div class="attribute-block"><h3 class="rollable" data-name="${attr.name}" data-target="mod-${attr.id}">${attr.name}</h3><div class="stat-main-row"><div class="stat-score-circle"><input type="number" id="stat-${attr.id}" class="stat-score stat-score-input" value="8"></div><div class="stat-mod-box" id="mod-${attr.id}">-1</div></div><div class="nested-skills-list">${skillsHTML}</div></div>`;
             });
         }
 
@@ -1200,6 +1244,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const profEl = document.getElementById('prof-bonus'); if(!profEl) return; const profBonus = parseInt(profEl.value) || 2;
             skillsMap.forEach(attr => { const statEl = document.getElementById(`stat-${attr.id}`); const modEl = document.getElementById(`mod-${attr.id}`); if(statEl && modEl) { const score = parseInt(statEl.value) || 10; const mod = getModifier(score); modEl.textContent = mod >= 0 ? `+${mod}` : mod; attr.skills.forEach(skill => { const hiddenInput = document.getElementById(`prof-${skill.id}`); const profLevel = hiddenInput ? (parseInt(hiddenInput.value) || 0) : 0; const bonus = profLevel === 2 ? profBonus * 2 : (profLevel === 1 ? profBonus : 0); const manual = parseInt(getStore('dnd-sheet-skill-bonus-' + skill.id, false)) || 0; const totalMod = mod + bonus + manual; const valEl = document.getElementById(`skill-val-${skill.id}`); if(valEl) { valEl.textContent = totalMod >= 0 ? `+${totalMod}` : totalMod; valEl.classList.toggle('manual-bonus', manual !== 0); valEl.title = manual !== 0 ? `Bonus manuel ${manual > 0 ? '+' + manual : manual} inclus — clic pour modifier` : 'Clic : bonus manuel (ex : Touche-à-tout)'; } }); } });
             updateAutoMagicStats();
+            updatePassivePerception();
+        }
+
+        // Perception passive = 10 + modificateur total de Perception (mod. Sagesse + maîtrise + bonus manuel).
+        // Auto par défaut ; devient MANUELLE dès que le joueur saisit une valeur (revient en auto si le champ est vidé).
+        function updatePassivePerception() {
+            const el = document.getElementById('passive-perception'); if(!el) return;
+            if(getStore('dnd-sheet-passive-perception-auto', false) === 'false') return; // override manuel : on n'écrase pas
+            const percSpan = document.getElementById('skill-val-perception');
+            const mod = percSpan ? (parseInt(percSpan.textContent, 10) || 0) : 0;
+            const val = 10 + mod;
+            if(String(el.value) !== String(val)) { el.value = val; setStore('dnd-sheet-passive-perception', val, false); }
+        }
+        const passivePercEl = document.getElementById('passive-perception');
+        if(passivePercEl) {
+            passivePercEl.addEventListener('input', () => {
+                if(passivePercEl.value.trim() === '') { setStore('dnd-sheet-passive-perception-auto', 'true', false); updatePassivePerception(); }
+                else setStore('dnd-sheet-passive-perception-auto', 'false', false);
+            });
+            passivePercEl.title = "Calculée automatiquement (10 + Perception). Saisis une valeur pour forcer manuellement ; vide le champ pour revenir en auto.";
         }
 
         const statDex = document.getElementById('stat-dex'); if(statDex && initInput) { statDex.addEventListener('change', () => { const dexScore = parseInt(statDex.value) || 10; initInput.value = getModifier(dexScore); setStore('dnd-sheet-initiative', initInput.value, false); }); }

@@ -79,7 +79,7 @@
                 html: `
                     <p class="pjw-note">Répartition classique : <b>15, 14, 13, 12, 10, 8</b> — place les meilleures valeurs là où ta classe brille. Le modificateur s'affiche à côté.</p>
                     <div class="pjw-stats">` +
-                    STATS.map(s => `<div class="pjw-stat"><label>${s[1]}</label><input class="pjw-in pjw-stat-in" data-wiz="stat-${s[0]}" type="number" min="1" max="30" value="10"><b class="pjw-mod" data-mod="${s[0]}">+0</b></div>`).join('') +
+                    STATS.map(s => `<div class="pjw-stat"><label>${s[1]}</label><input class="pjw-in pjw-stat-in" data-wiz="stat-${s[0]}" type="number" min="1" max="30" value="8"><b class="pjw-mod" data-mod="${s[0]}">-1</b></div>`).join('') +
                     `</div>`
             },
             {

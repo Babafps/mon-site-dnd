@@ -312,6 +312,20 @@ body.concentrating-mode #concentration-glow {
     transform: translateY(-2px) scale(1.01);
     box-shadow: var(--shadow-crimson), 0 0 0 1px rgba(196,155,53,0.2);
 }
+.char-card-avatar {
+    flex: 0 0 auto; width: 54px; height: 54px; margin: 8px 0 8px 10px;
+    border-radius: 10px; background-size: cover; background-position: center;
+    background-color: rgba(138,28,28,0.10);
+    border: 1px solid rgba(196,155,53,0.55);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35);
+    cursor: pointer; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.char-card-avatar.is-empty {
+    font-family: 'Cinzel', serif; font-weight: bold; font-size: 1.5rem;
+    color: var(--primary-color); background-color: rgba(196,155,53,0.18);
+}
+.char-card:hover .char-card-avatar { border-color: var(--accent-color); }
 .char-info {
     flex: 1; padding: 15px; cursor: pointer;
     display: flex; justify-content: space-between; align-items: center;
@@ -761,6 +775,17 @@ h1::before, h1::after {
 .avatar-label { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-direction: column; }
 #main-avatar-preview { width: 100%; height: 100%; object-fit: cover; }
 #avatar-placeholder { font-size: 0.8rem; font-weight: bold; color: #777; text-align: center; padding: 10px; font-family: 'Cinzel', serif; }
+
+/* Recadrage d'avatar (zoom + déplacement) */
+.avatar-crop-stage { position: relative; width: 250px; max-width: 78vw; aspect-ratio: 1 / 1; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 2px solid var(--accent-color); background: #1a1410; touch-action: none; }
+/* Guide circulaire : montre le cadrage rond réel des avatars (assombrit les coins hors du cercle). */
+.avatar-crop-ring { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 9999px rgba(18,14,10,0.55); border: 2px solid rgba(255,255,255,0.9); }
+#avatar-crop-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+#avatar-crop-canvas:active { cursor: grabbing; }
+.avatar-crop-controls { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+.avatar-crop-controls span { font-size: 1rem; }
+.avatar-crop-controls input[type="range"] { flex: 1; }
+.avatar-crop-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
 /* ============================================================
    ATTRIBUTES
@@ -1472,6 +1497,10 @@ body.theme-dark .auth-tab.active { color: var(--accent-color); }
 .btn-close-modal { background: none; border: 1px solid var(--soft-border); font-size: 1.2rem; font-weight: bold; color: var(--primary-color); cursor: pointer; border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; transition: var(--transition-spring); }
 .btn-close-modal:hover { transform: rotate(90deg) scale(1.1); color: var(--primary-hover); background: rgba(122,40,40,0.08); border-color: var(--primary-color); }
 .modal-list { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; border-top: 1px solid rgba(122,40,40,0.18); padding-top: 15px; }
+/* Flèches de réorganisation des onglets (gestionnaire de catégories) */
+.cat-move-box { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.cat-move-btn { padding: 0; width: 26px; height: 15px; line-height: 1; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
+.cat-move-btn:disabled { opacity: 0.3; cursor: default; }
 
 /* Global search */
 .search-result-item { display: flex; flex-direction: column; padding: 10px; border-radius: 8px; border: 1px solid rgba(196,180,135,0.4); background: rgba(255,255,255,0.8); cursor: pointer; transition: var(--transition-smooth); }
