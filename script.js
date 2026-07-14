@@ -81,26 +81,61 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. ÉCOUTEURS GLOBAUX INDÉPENDANTS
     // ==========================================
     
+    // Couleurs personnalisées : posées en inline sur <body> (donc PRIORITAIRES sur la classe de
+    // style choisie). Absentes → on laisse le STYLE (ou :root) décider. Les sélecteurs reflètent
+    // la couleur EFFECTIVE (celle du style courant) via getComputedStyle.
+    const THEME_VARS = { 'dnd-theme-primary': '--primary-color', 'dnd-theme-accent': '--accent-color', 'dnd-theme-sheet-bg': '--sheet-bg-color', 'dnd-theme-widget-bg': '--widget-bg', 'dnd-theme-concentration': '--concentration-color' };
+    function rgbToHex(c) { c = (c || '').trim(); if (c.startsWith('#')) return c.length >= 7 ? c.slice(0, 7) : null; const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map(x => parseFloat(x)); const h = n => ('0' + Math.max(0, Math.min(255, Math.round(n))).toString(16)).slice(-2); return '#' + h(p[0]) + h(p[1]) + h(p[2]); }
     function applyTheme() {
-        let primary = DB.get('dnd-theme-primary') || '#7A2828';
-        let accent = DB.get('dnd-theme-accent') || '#C49B35';
-        let sheetBg = DB.get('dnd-theme-sheet-bg') || '#FAF3E0';
-        let widgetBg = DB.get('dnd-theme-widget-bg') || '#FFFFFF';
-        let concentrationColor = DB.get('dnd-theme-concentration') || '#2980b9';
-        
-        document.documentElement.style.setProperty('--primary-color', primary);
-        document.documentElement.style.setProperty('--accent-color', accent);
-        document.documentElement.style.setProperty('--sheet-bg-color', sheetBg);
-        document.documentElement.style.setProperty('--widget-bg', widgetBg);
-        document.documentElement.style.setProperty('--concentration-color', concentrationColor);
-        
-        let cp = document.getElementById('color-primary'); if(cp) cp.value = primary;
-        let ca = document.getElementById('color-accent'); if(ca) ca.value = accent;
-        let csb = document.getElementById('color-sheet-bg'); if(csb) csb.value = sheetBg;
-        let cwb = document.getElementById('color-widget-bg'); if(cwb) cwb.value = widgetBg;
-        let cc = document.getElementById('color-concentration'); if(cc) cc.value = concentrationColor;
+        Object.entries(THEME_VARS).forEach(([key, cssVar]) => { const val = DB.get(key); if (val) document.body.style.setProperty(cssVar, val); else document.body.style.removeProperty(cssVar); });
+        const cs = getComputedStyle(document.body);
+        const put = (id, cssVar) => { const el = document.getElementById(id); const hx = rgbToHex(cs.getPropertyValue(cssVar)); if (el && hx) el.value = hx; };
+        put('color-primary', '--primary-color'); put('color-accent', '--accent-color'); put('color-sheet-bg', '--sheet-bg-color'); put('color-widget-bg', '--widget-bg'); put('color-concentration', '--concentration-color');
     }
-    applyTheme();
+
+    // --- STYLES VISUELS (thèmes complets ; voir themes.css) ---
+    const SHEET_STYLES = [
+        { id: 'classic', name: 'Parchemin', c: ['#7A2828', '#C49B35', '#FAF3E0'] },
+        { id: 'grimoire', name: 'Grimoire', c: ['#4a2f6b', '#b8a6d9', '#f4effb'] },
+        { id: 'foret', name: 'Forêt', c: ['#1f6b43', '#c9a227', '#eef6ee'] },
+        { id: 'ocean', name: 'Océan', c: ['#16697a', '#e0a95e', '#eef7f8'] },
+        { id: 'braise', name: 'Braise', c: ['#b23a1e', '#e0902b', '#fbf1ea'] },
+        { id: 'saphir', name: 'Saphir', c: ['#1e3a8a', '#d4af37', '#eef1fb'] },
+        { id: 'vin', name: 'Vin', c: ['#7b2d4a', '#c98aa5', '#fbeef3'] },
+        { id: 'desert', name: 'Désert', c: ['#a5673f', '#c9a227', '#f8f1e4'] },
+        { id: 'amethyste', name: 'Améthyste', c: ['#6b3fa0', '#cbb4e8', '#f5f0fb'] },
+        { id: 'menthe', name: 'Menthe', c: ['#2a8c7a', '#7fb8ac', '#eef8f5'] },
+        { id: 'cyber', name: 'Cyberpunk', c: ['#c4006a', '#00b8bd', '#f6eefb'] },
+        { id: 'terminal', name: 'Terminal', c: ['#1f7a3d', '#3fae2a', '#eef4ea'] },
+        { id: 'sepia', name: 'Sépia', c: ['#6b4423', '#a97e50', '#f4ead6'] },
+        { id: 'minimal', name: 'Minimal', c: ['#374151', '#6366f1', '#ffffff'] },
+        { id: 'pastel', name: 'Pastel', c: ['#c86b98', '#6cc0cf', '#fdf2f8'] },
+        { id: 'gothique', name: 'Gothique', c: ['#8b0000', '#9a9a9a', '#efeaea'] },
+        { id: 'aurore', name: 'Aurore', c: ['#4338ca', '#ec4899', '#f2f0fb'] },
+        { id: 'steampunk', name: 'Steampunk', c: ['#8a4b2b', '#b08d57', '#f5ede2'] },
+        { id: 'jade', name: 'Jade', c: ['#0f6b5c', '#d4af37', '#eef6f3'] },
+        { id: 'arctique', name: 'Arctique', c: ['#3a7ca5', '#7fb2d9', '#f0f6fb'] },
+        { id: 'automne', name: 'Automne', c: ['#b5651d', '#d99a3a', '#f9f1e6'] },
+    ];
+    const STYLE_CLASSES = SHEET_STYLES.map(s => 'sheet-style-' + s.id);
+    function currentStyleId() { return DB.get('dnd-sheet-style') || 'classic'; }
+    function applyStyle(id, fromUser) {
+        if (!SHEET_STYLES.some(s => s.id === id)) id = 'classic';
+        document.body.classList.remove(...STYLE_CLASSES);
+        document.body.classList.add('sheet-style-' + id);
+        DB.set('dnd-sheet-style', id);
+        // Choisir un style = repartir de sa palette → on efface les couleurs personnalisées.
+        if (fromUser) Object.keys(THEME_VARS).forEach(k => DB.remove(k));
+        applyTheme();
+        renderStylePicker();
+    }
+    function renderStylePicker() {
+        const grid = document.getElementById('style-picker'); if (!grid) return;
+        const cur = currentStyleId();
+        grid.innerHTML = SHEET_STYLES.map(s => `<div class="style-swatch${s.id === cur ? ' active' : ''}" data-style="${s.id}" title="${s.name}"><div class="style-swatch-preview"><span style="background:${s.c[2]}"></span><span style="background:${s.c[0]}"></span><span style="background:${s.c[1]}"></span></div><div class="style-swatch-name">${s.name}</div></div>`).join('');
+        grid.querySelectorAll('.style-swatch').forEach(sw => sw.addEventListener('click', () => applyStyle(sw.dataset.style, true)));
+    }
+    applyStyle(currentStyleId(), false);
 
     // --- Toast applicatif élégant (remplace certains alert) ---
     window.showAppToast = function(msg, bg = '#27ae60') {
@@ -122,11 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
     applyDarkMode(DB.get('dnd-theme-darkmode') === 'true');
     if(toggleDarkMode) toggleDarkMode.addEventListener('change', (e) => { DB.set('dnd-theme-darkmode', e.target.checked); applyDarkMode(e.target.checked); });
 
-    const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.documentElement.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
-    const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
-    const cShBg = document.getElementById('color-sheet-bg'); if(cShBg) cShBg.addEventListener('input', (e) => { document.documentElement.style.setProperty('--sheet-bg-color', e.target.value); DB.set('dnd-theme-sheet-bg', e.target.value); });
-    const cWdBg = document.getElementById('color-widget-bg'); if(cWdBg) cWdBg.addEventListener('input', (e) => { document.documentElement.style.setProperty('--widget-bg', e.target.value); DB.set('dnd-theme-widget-bg', e.target.value); });
-    const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
+    const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.body.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
+    const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.body.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
+    const cShBg = document.getElementById('color-sheet-bg'); if(cShBg) cShBg.addEventListener('input', (e) => { document.body.style.setProperty('--sheet-bg-color', e.target.value); DB.set('dnd-theme-sheet-bg', e.target.value); });
+    const cWdBg = document.getElementById('color-widget-bg'); if(cWdBg) cWdBg.addEventListener('input', (e) => { document.body.style.setProperty('--widget-bg', e.target.value); DB.set('dnd-theme-widget-bg', e.target.value); });
+    const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.body.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
     const btnResetTheme = document.getElementById('btn-reset-theme'); if(btnResetTheme) btnResetTheme.addEventListener('click', () => { DB.remove('dnd-theme-primary'); DB.remove('dnd-theme-accent'); DB.remove('dnd-theme-sheet-bg'); DB.remove('dnd-theme-widget-bg'); DB.remove('dnd-theme-concentration'); applyTheme(); });
 
     const btnSettingsToggle = document.getElementById('btn-settings-toggle');
