@@ -298,7 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const bgInput = document.getElementById('bg-file-input'); const CUSTOM_BG_KEY = 'dnd-custom-background-image';
-    function applySavedBackground() { const savedBg = DB.get(CUSTOM_BG_KEY); if(savedBg && savedBg !== 'undefined') { document.body.style.backgroundImage = `url("${savedBg}")`; } else { document.body.style.backgroundImage = ''; } }
+    // --custom-bg : sur mobile le fond est peint par un calque fixe (body::before, cf. style.css
+    // « fluidité tactile ») qui lit cette variable pour afficher l'image personnalisée.
+    function applySavedBackground() { const savedBg = DB.get(CUSTOM_BG_KEY); if(savedBg && savedBg !== 'undefined') { document.body.style.backgroundImage = `url("${savedBg}")`; document.body.style.setProperty('--custom-bg', `url("${savedBg}")`); } else { document.body.style.backgroundImage = ''; document.body.style.removeProperty('--custom-bg'); } }
     applySavedBackground();
     
     const btnChangeBg = document.getElementById('btn-change-bg'); if(btnChangeBg && bgInput) { btnChangeBg.addEventListener('click', () => { bgInput.click(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
@@ -541,6 +543,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isMobileView() !== document.body.classList.contains('mobile-sheet')) onMobileMediaChange();
             }, 150);
         });
+        // Balayage gauche/droite (affichage téléphone) : change de section comme la barre basse.
+        // Ignoré quand le geste démarre sur un élément interactif ou qui défile horizontalement.
+        const MOBILE_TAB_ORDER = ['perso', 'combat', 'sac', 'magie', 'notes'];
+        const SWIPE_IGNORE = 'input, textarea, select, canvas, table, [contenteditable="true"], .ql-editor, .category-tabs, .hp-bar-track, #mobile-nav, #dice-drawer, #btn-toggle-dice, .modal-overlay, #music-player-container, .avatar-crop-stage';
+        let swipeX = 0, swipeY = 0, swipeT = 0, swipeOk = false;
+        document.addEventListener('touchstart', (e) => {
+            swipeOk = false;
+            if (!document.body.classList.contains('mobile-sheet')) return;
+            if (e.touches.length !== 1) return;                       // pincer-zoomer = pas un balayage
+            if (e.target.closest && e.target.closest(SWIPE_IGNORE)) return;
+            swipeOk = true; swipeX = e.touches[0].clientX; swipeY = e.touches[0].clientY; swipeT = Date.now();
+        }, { passive: true });
+        document.addEventListener('touchend', (e) => {
+            if (!swipeOk) return; swipeOk = false;
+            if (Date.now() - swipeT > 600) return;                    // geste trop lent = défilement
+            const dx = e.changedTouches[0].clientX - swipeX;
+            const dy = e.changedTouches[0].clientY - swipeY;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const current = document.querySelector('#mobile-nav .mob-tab.active')?.dataset.msec || 'perso';
+            const next = MOBILE_TAB_ORDER.indexOf(current) + (dx < 0 ? 1 : -1);
+            if (next < 0 || next >= MOBILE_TAB_ORDER.length) return;
+            switchMobileTab(MOBILE_TAB_ORDER[next]);
+        }, { passive: true });
         function switchStrictTab(tabId) { document.querySelectorAll('.tab-btn-strict').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId)); document.querySelectorAll('#layout-tabs-container .tab-content').forEach(content => { content.classList.toggle('hidden', content.id !== tabId); content.classList.toggle('active', content.id === tabId); }); }
         document.querySelectorAll('.tab-btn-strict').forEach(btn => { btn.addEventListener('click', () => switchStrictTab(btn.dataset.tab)); });
 
@@ -1855,19 +1880,40 @@ document.addEventListener('DOMContentLoaded', () => {
         // Le total se met à jour dès qu'on édite une pièce à la main
         COIN_ORDER.forEach(t => { const el = document.getElementById('coin-' + t); if (el) el.addEventListener('input', renderCurrencyTotal); });
 
-        // ===== BARRE DE PV CLIQUABLE : fixe les PV à la proportion cliquée =====
+        // ===== BARRE DE PV CLIQUABLE & GLISSABLE : le remplissage suit le pointeur
+        // tant que le clic (ou le doigt) reste appuyé ; la valeur n'est sauvegardée
+        // qu'au relâchement (un seul event 'input' → pas de rafale d'écritures). =====
         const hpTrack = document.querySelector('.hp-bar-track');
         if (hpTrack) {
-            hpTrack.title = 'Clique pour fixer les PV à cette proportion';
-            hpTrack.addEventListener('click', (e) => {
+            hpTrack.title = 'Clique ou glisse pour fixer les PV';
+            let hpScrubbing = false; let hpLastX = 0;
+            const applyHpFromX = (clientX, commit) => {
                 const maxEl = document.getElementById('hp-max'); const curEl = document.getElementById('hp-current');
                 const max = parseInt(maxEl?.value, 10) || 0; if (!curEl || max <= 0) return;
                 const r = hpTrack.getBoundingClientRect();
-                const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
+                const ratio = Math.max(0, Math.min(1, (clientX - r.left) / (r.width || 1)));
                 curEl.value = Math.round(ratio * max);
-                curEl.dispatchEvent(new Event('input', { bubbles: true }));
-                updateHpVisuals();
+                if (commit) curEl.dispatchEvent(new Event('input', { bubbles: true }));
+                else updateHpVisuals();
+            };
+            hpTrack.addEventListener('pointerdown', (e) => {
+                if (e.button != null && e.button !== 0) return;
+                hpScrubbing = true; hpLastX = e.clientX;
+                hpTrack.classList.add('hp-scrubbing');
+                try { hpTrack.setPointerCapture(e.pointerId); } catch(_) {}
+                applyHpFromX(e.clientX, false);
             });
+            hpTrack.addEventListener('pointermove', (e) => { if (hpScrubbing) { hpLastX = e.clientX; applyHpFromX(e.clientX, false); } });
+            const endHpScrub = (e) => {
+                if (!hpScrubbing) return;
+                hpScrubbing = false;
+                hpTrack.classList.remove('hp-scrubbing');
+                try { hpTrack.releasePointerCapture(e.pointerId); } catch(_) {}
+                // pointercancel ne porte pas toujours de coordonnées → on garde la dernière position connue
+                applyHpFromX(typeof e.clientX === 'number' && e.clientX !== 0 ? e.clientX : hpLastX, true);
+            };
+            hpTrack.addEventListener('pointerup', endHpScrub);
+            hpTrack.addEventListener('pointercancel', endHpScrub);
         }
 
         function initGlobalSave() {

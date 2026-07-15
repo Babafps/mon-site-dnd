@@ -93,9 +93,10 @@ body.concentrating-mode #concentration-glow {
     animation: pulseGlow 3s infinite alternate;
     box-shadow: inset 0 0 120px 30px var(--concentration-color);
 }
+/* N'anime QUE l'opacité (animer une box-shadow plein écran repeint tout à chaque image → lag mobile) */
 @keyframes pulseGlow {
-    0% { opacity: 0.55; box-shadow: inset 0 0 70px 15px var(--concentration-color); }
-    100% { opacity: 0.85; box-shadow: inset 0 0 140px 40px var(--concentration-color), inset 0 0 20px 5px rgba(255,255,255,0.1); }
+    0% { opacity: 0.5; }
+    100% { opacity: 0.85; }
 }
 
 /* ============================================================
@@ -692,6 +693,7 @@ h1::before, h1::after {
     overflow-x: auto; padding-bottom: 5px;
     border-bottom: 1px solid rgba(122,40,40,0.18);
     scrollbar-width: thin; align-items: center;
+    overscroll-behavior-x: contain;
 }
 .cat-tab {
     background: transparent;
@@ -701,6 +703,8 @@ h1::before, h1::after {
     color: #888; padding: 4px 10px; cursor: pointer;
     transition: var(--transition-smooth); white-space: nowrap;
     position: relative; overflow: hidden;
+    /* Jamais compressé : la barre défile horizontalement au lieu de tronquer les mots */
+    flex: 0 0 auto;
 }
 .cat-tab::after {
     content: '';
@@ -807,7 +811,9 @@ h1::before, h1::after {
 @keyframes dicePop { from { opacity:0; transform:translateY(-50%) scale(0.5); } to { opacity:1; transform:translateY(-50%) scale(1); } }
 .rollable:active { transform: scale(0.96); }
 
-.mini-stat-box .section-title { font-size: 0.74rem; line-height: 1.1; white-space: normal; text-align: center; border-bottom: none; margin: 0 0 5px 0; padding: 0; }
+/* Titres des mini-modules : lettrage resserré + césure autorisée, sinon « Concentration »
+   déborde du bloc (overflow:hidden le tronquait). max-width car .rollable les passe en inline-block. */
+.mini-stat-box .section-title { font-size: 0.74rem; line-height: 1.1; letter-spacing: 0.04em; white-space: normal; max-width: 100%; overflow-wrap: anywhere; hyphens: auto; text-align: center; border-bottom: none; margin: 0 0 5px 0; padding: 0; }
 
 .prof-bonus-box {
     width: 48px; height: 48px;
@@ -2304,8 +2310,11 @@ textarea:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible,
     border: 1px solid var(--soft-border);
     overflow: hidden;
     box-shadow: inset 0 2px 6px rgba(0,0,0,0.2);
-    cursor: pointer;   /* cliquable : fixe les PV à la proportion cliquée */
+    cursor: pointer;   /* cliquable / glissable : la barre suit le pointeur tant qu'on maintient */
+    touch-action: none;
 }
+/* Pendant le glisser : le remplissage colle au doigt/à la souris (pas de transition différée) */
+.hp-bar-track.hp-scrubbing .hp-bar-fill { transition: none; }
 .hp-bar-track:hover { box-shadow: inset 0 2px 6px rgba(0,0,0,0.2), 0 0 0 2px rgba(196,155,53,0.45); }
 .hp-bar-fill {
     position: absolute; top: 0; left: 0; bottom: 0;
@@ -2316,7 +2325,7 @@ textarea:focus-visible, [tabindex]:focus-visible, [role="button"]:focus-visible,
 }
 .hp-bar-fill.hp-mid { background: linear-gradient(90deg, #d4a017, #f1c40f); box-shadow: 0 0 12px rgba(241,196,15,0.4); }
 .hp-bar-fill.hp-low { background: linear-gradient(90deg, #c0392b, #e74c3c); box-shadow: 0 0 14px rgba(231,76,60,0.5); animation: hpLowPulse 1.6s ease-in-out infinite alternate; }
-@keyframes hpLowPulse { from { opacity: 0.85; } to { opacity: 1; box-shadow: 0 0 20px rgba(231,76,60,0.65); } }
+@keyframes hpLowPulse { from { opacity: 0.82; } to { opacity: 1; } }
 .hp-bar-text {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
@@ -2365,8 +2374,32 @@ body { padding-bottom: 78px; }
     /* Boutons d'en-tête flottants plus compacts */
     #btn-go-home { left: 60px !important; font-size: 0.8rem; padding: 6px 10px; }
     #btn-global-search-trigger { padding: 6px 10px; }
-    /* Plateau de dés en plein écran mobile */
-    #dice-drawer { width: calc(100vw - 24px); max-width: 360px; padding: 20px; }
+    /* ---- Plateau de dés compact sur mobile : ancré en bas de l'écran, jamais plus
+       grand que la fenêtre (le « top » posé en JS suivait le bouton et pouvait
+       pousser un panneau de 80vh hors écran). ---- */
+    #dice-drawer {
+        top: auto !important;
+        bottom: calc(78px + env(safe-area-inset-bottom));
+        width: calc(100vw - 74px);
+        max-width: 330px;
+        max-height: min(60vh, 500px);
+        padding: 14px 12px;
+    }
+    #dice-drawer.open { right: 62px; }
+    #dice-drawer.drawer-left.open { left: 62px; }
+    #dice-drawer h3 { font-size: 1.05rem; margin-bottom: 10px; padding-bottom: 8px; }
+    .dice-theme-toggle { top: 10px; right: 12px; width: 34px; height: 34px; font-size: 1.05rem; }
+    .dice-options { gap: 6px; }
+    .radio-pill span { padding: 4px 10px; font-size: 0.78rem; }
+    .dice-buttons { gap: 6px; margin: 10px 0; }
+    .dice-buttons .btn-dice { padding: 9px 11px; font-size: 0.92rem; }
+    .dice-pool-wrapper { margin: 10px 0; padding: 8px 0; min-height: 34px; }
+    .btn-roll-main { padding: 10px 20px; font-size: 1.12rem; }
+    #dice-results { margin-top: 12px; min-height: 48px; }
+    .die-result { width: 46px; height: 46px; font-size: 1.05rem; }
+    .roll-history-list { max-height: 92px; }
+    /* Sur la fiche mobile, le plateau se pose au-dessus de la barre de navigation basse */
+    body.mobile-sheet:has(#app-screen:not(.hidden)) #dice-drawer { bottom: calc(118px + env(safe-area-inset-bottom)); }
     .rest-summary-grid { grid-template-columns: repeat(2, 1fr); }
     .rest-actions-row { grid-template-columns: 1fr; }
 }
@@ -2380,8 +2413,6 @@ body { padding-bottom: 78px; }
     .new-char-box { flex-direction: column; }
     .settings-dropdown { width: calc(100vw - 24px); }
     .info-grid { gap: 10px; }
-    /* Empile proprement les onglets de catégorie scrollables */
-    .dice-buttons .btn-dice { padding: 10px 12px; font-size: 0.95rem; }
     .modal-box { padding: 16px 12px; }
     #btn-go-home { font-size: 0; padding: 7px 9px; }   /* garde juste l'icône 🏠 */
     #btn-go-home::first-letter { font-size: 1rem; }
@@ -2911,8 +2942,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @media (max-width: 700px) {
     .mobile-layout-note { display: block; font-size: 0.72rem; color: #8a7a64; font-style: italic; margin: 4px 0 6px; }
 
-    /* Le padding bas réserve la place de la barre de navigation + l'onglet musique (uniquement sur la fiche) */
-    body.mobile-sheet:has(#app-screen:not(.hidden)) { padding: 8px 8px 182px; }
+    /* Le padding haut dégage les boutons fixes (☰ / 🏠 / 🔍) pour qu'ils ne recouvrent plus
+       le début de la fiche ; le padding bas réserve la barre de navigation + l'onglet musique. */
+    body.mobile-sheet:has(#app-screen:not(.hidden)) { padding: 64px 8px 182px; }
     body.mobile-sheet .sheet-container { padding: 14px 10px; border-radius: var(--radius-md); }
 
     /* En-tête compact : le grand titre décoratif disparaît, la grille d'infos se replie derrière « ▾ Infos » */
@@ -3026,4 +3058,34 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     /* Le lecteur de musique et son onglet se posent AU-DESSUS de la barre de navigation */
     body.mobile-sheet:has(#app-screen:not(.hidden)) #music-player-container,
     body.mobile-sheet:has(#app-screen:not(.hidden)) .music-show-tab { bottom: calc(104px + env(safe-area-inset-bottom)); }
+}
+
+/* ============================================================
+   ✦ FLUIDITÉ TACTILE — allègements de rendu (téléphones/tablettes)
+   Aucun changement de fonctionnalité : on retire seulement ce qui
+   coûte cher à dessiner sur mobile (fond fixe, flous, effets de survol).
+   ============================================================ */
+@media (hover: none) and (pointer: coarse) {
+    /* Un fond « background-attachment: fixed » force Android à repeindre tout
+       l'écran à chaque défilement. On le remplace par un calque fixe composité :
+       rendu identique, défilement fluide. (--custom-bg = image de fond perso.) */
+    body { background-image: none !important; background-attachment: scroll; }
+    body::before {
+        content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+        background-color: #1a1614;
+        background-image: var(--custom-bg, url(IMG/dndimg.png)),
+            radial-gradient(ellipse at 20% 80%, rgba(122,40,40,0.15) 0%, transparent 60%),
+            radial-gradient(ellipse at 80% 20%, rgba(196,155,53,0.08) 0%, transparent 60%);
+        background-size: cover, auto, auto;
+        background-position: center, center, center;
+    }
+    /* Les flous d'arrière-plan (backdrop-filter) sont parmi les effets les plus
+       coûteux sur GPU mobile — les fonds sont déjà quasi opaques, on les coupe. */
+    .btn-hamburger, .settings-dropdown, .home-container, #dice-drawer,
+    #quick-roll-toast, .modal-overlay, .auth-fullscreen, .status-fx-badge { backdrop-filter: none; }
+    /* Pas de souris = pas d'effets de survol : évite les « sauts » et repeints au toucher */
+    .dynamic-box:hover, .full-width-notes:hover, .mini-stat-box:hover,
+    .btn-dice:hover, .btn-hp-quick:hover, .rollable:hover,
+    .cat-tab:hover, .spell-slot-row:hover, .prof-bonus-box:hover { transform: none; }
+    .rollable:hover::after { content: none; }
 }
