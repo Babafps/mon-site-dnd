@@ -81,61 +81,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. ÉCOUTEURS GLOBAUX INDÉPENDANTS
     // ==========================================
     
-    // Couleurs personnalisées : posées en inline sur <body> (donc PRIORITAIRES sur la classe de
-    // style choisie). Absentes → on laisse le STYLE (ou :root) décider. Les sélecteurs reflètent
-    // la couleur EFFECTIVE (celle du style courant) via getComputedStyle.
-    const THEME_VARS = { 'dnd-theme-primary': '--primary-color', 'dnd-theme-accent': '--accent-color', 'dnd-theme-sheet-bg': '--sheet-bg-color', 'dnd-theme-widget-bg': '--widget-bg', 'dnd-theme-concentration': '--concentration-color' };
-    function rgbToHex(c) { c = (c || '').trim(); if (c.startsWith('#')) return c.length >= 7 ? c.slice(0, 7) : null; const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map(x => parseFloat(x)); const h = n => ('0' + Math.max(0, Math.min(255, Math.round(n))).toString(16)).slice(-2); return '#' + h(p[0]) + h(p[1]) + h(p[2]); }
     function applyTheme() {
-        Object.entries(THEME_VARS).forEach(([key, cssVar]) => { const val = DB.get(key); if (val) document.body.style.setProperty(cssVar, val); else document.body.style.removeProperty(cssVar); });
-        const cs = getComputedStyle(document.body);
-        const put = (id, cssVar) => { const el = document.getElementById(id); const hx = rgbToHex(cs.getPropertyValue(cssVar)); if (el && hx) el.value = hx; };
-        put('color-primary', '--primary-color'); put('color-accent', '--accent-color'); put('color-sheet-bg', '--sheet-bg-color'); put('color-widget-bg', '--widget-bg'); put('color-concentration', '--concentration-color');
+        let primary = DB.get('dnd-theme-primary') || '#7A2828';
+        let accent = DB.get('dnd-theme-accent') || '#C49B35';
+        let sheetBg = DB.get('dnd-theme-sheet-bg') || '#FAF3E0';
+        let widgetBg = DB.get('dnd-theme-widget-bg') || '#FFFFFF';
+        let concentrationColor = DB.get('dnd-theme-concentration') || '#2980b9';
+        
+        document.documentElement.style.setProperty('--primary-color', primary);
+        document.documentElement.style.setProperty('--accent-color', accent);
+        document.documentElement.style.setProperty('--sheet-bg-color', sheetBg);
+        document.documentElement.style.setProperty('--widget-bg', widgetBg);
+        document.documentElement.style.setProperty('--concentration-color', concentrationColor);
+        
+        let cp = document.getElementById('color-primary'); if(cp) cp.value = primary;
+        let ca = document.getElementById('color-accent'); if(ca) ca.value = accent;
+        let csb = document.getElementById('color-sheet-bg'); if(csb) csb.value = sheetBg;
+        let cwb = document.getElementById('color-widget-bg'); if(cwb) cwb.value = widgetBg;
+        let cc = document.getElementById('color-concentration'); if(cc) cc.value = concentrationColor;
     }
-
-    // --- STYLES VISUELS (thèmes complets ; voir themes.css) ---
-    const SHEET_STYLES = [
-        { id: 'classic', name: 'Parchemin', c: ['#7A2828', '#C49B35', '#FAF3E0'] },
-        { id: 'grimoire', name: 'Grimoire', c: ['#4a2f6b', '#b8a6d9', '#f4effb'] },
-        { id: 'foret', name: 'Forêt', c: ['#1f6b43', '#c9a227', '#eef6ee'] },
-        { id: 'ocean', name: 'Océan', c: ['#16697a', '#e0a95e', '#eef7f8'] },
-        { id: 'braise', name: 'Braise', c: ['#b23a1e', '#e0902b', '#fbf1ea'] },
-        { id: 'saphir', name: 'Saphir', c: ['#1e3a8a', '#d4af37', '#eef1fb'] },
-        { id: 'vin', name: 'Vin', c: ['#7b2d4a', '#c98aa5', '#fbeef3'] },
-        { id: 'desert', name: 'Désert', c: ['#a5673f', '#c9a227', '#f8f1e4'] },
-        { id: 'amethyste', name: 'Améthyste', c: ['#6b3fa0', '#cbb4e8', '#f5f0fb'] },
-        { id: 'menthe', name: 'Menthe', c: ['#2a8c7a', '#7fb8ac', '#eef8f5'] },
-        { id: 'cyber', name: 'Cyberpunk', c: ['#c4006a', '#00b8bd', '#f6eefb'] },
-        { id: 'terminal', name: 'Terminal', c: ['#1f7a3d', '#3fae2a', '#eef4ea'] },
-        { id: 'sepia', name: 'Sépia', c: ['#6b4423', '#a97e50', '#f4ead6'] },
-        { id: 'minimal', name: 'Minimal', c: ['#374151', '#6366f1', '#ffffff'] },
-        { id: 'pastel', name: 'Pastel', c: ['#c86b98', '#6cc0cf', '#fdf2f8'] },
-        { id: 'gothique', name: 'Gothique', c: ['#8b0000', '#9a9a9a', '#efeaea'] },
-        { id: 'aurore', name: 'Aurore', c: ['#4338ca', '#ec4899', '#f2f0fb'] },
-        { id: 'steampunk', name: 'Steampunk', c: ['#8a4b2b', '#b08d57', '#f5ede2'] },
-        { id: 'jade', name: 'Jade', c: ['#0f6b5c', '#d4af37', '#eef6f3'] },
-        { id: 'arctique', name: 'Arctique', c: ['#3a7ca5', '#7fb2d9', '#f0f6fb'] },
-        { id: 'automne', name: 'Automne', c: ['#b5651d', '#d99a3a', '#f9f1e6'] },
-    ];
-    const STYLE_CLASSES = SHEET_STYLES.map(s => 'sheet-style-' + s.id);
-    function currentStyleId() { return DB.get('dnd-sheet-style') || 'classic'; }
-    function applyStyle(id, fromUser) {
-        if (!SHEET_STYLES.some(s => s.id === id)) id = 'classic';
-        document.body.classList.remove(...STYLE_CLASSES);
-        document.body.classList.add('sheet-style-' + id);
-        DB.set('dnd-sheet-style', id);
-        // Choisir un style = repartir de sa palette → on efface les couleurs personnalisées.
-        if (fromUser) Object.keys(THEME_VARS).forEach(k => DB.remove(k));
-        applyTheme();
-        renderStylePicker();
-    }
-    function renderStylePicker() {
-        const grid = document.getElementById('style-picker'); if (!grid) return;
-        const cur = currentStyleId();
-        grid.innerHTML = SHEET_STYLES.map(s => `<div class="style-swatch${s.id === cur ? ' active' : ''}" data-style="${s.id}" title="${s.name}"><div class="style-swatch-preview"><span style="background:${s.c[2]}"></span><span style="background:${s.c[0]}"></span><span style="background:${s.c[1]}"></span></div><div class="style-swatch-name">${s.name}</div></div>`).join('');
-        grid.querySelectorAll('.style-swatch').forEach(sw => sw.addEventListener('click', () => applyStyle(sw.dataset.style, true)));
-    }
-    applyStyle(currentStyleId(), false);
+    applyTheme();
 
     // --- Toast applicatif élégant (remplace certains alert) ---
     window.showAppToast = function(msg, bg = '#27ae60') {
@@ -157,11 +122,11 @@ document.addEventListener('DOMContentLoaded', () => {
     applyDarkMode(DB.get('dnd-theme-darkmode') === 'true');
     if(toggleDarkMode) toggleDarkMode.addEventListener('change', (e) => { DB.set('dnd-theme-darkmode', e.target.checked); applyDarkMode(e.target.checked); });
 
-    const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.body.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
-    const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.body.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
-    const cShBg = document.getElementById('color-sheet-bg'); if(cShBg) cShBg.addEventListener('input', (e) => { document.body.style.setProperty('--sheet-bg-color', e.target.value); DB.set('dnd-theme-sheet-bg', e.target.value); });
-    const cWdBg = document.getElementById('color-widget-bg'); if(cWdBg) cWdBg.addEventListener('input', (e) => { document.body.style.setProperty('--widget-bg', e.target.value); DB.set('dnd-theme-widget-bg', e.target.value); });
-    const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.body.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
+    const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.documentElement.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
+    const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
+    const cShBg = document.getElementById('color-sheet-bg'); if(cShBg) cShBg.addEventListener('input', (e) => { document.documentElement.style.setProperty('--sheet-bg-color', e.target.value); DB.set('dnd-theme-sheet-bg', e.target.value); });
+    const cWdBg = document.getElementById('color-widget-bg'); if(cWdBg) cWdBg.addEventListener('input', (e) => { document.documentElement.style.setProperty('--widget-bg', e.target.value); DB.set('dnd-theme-widget-bg', e.target.value); });
+    const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
     const btnResetTheme = document.getElementById('btn-reset-theme'); if(btnResetTheme) btnResetTheme.addEventListener('click', () => { DB.remove('dnd-theme-primary'); DB.remove('dnd-theme-accent'); DB.remove('dnd-theme-sheet-bg'); DB.remove('dnd-theme-widget-bg'); DB.remove('dnd-theme-concentration'); applyTheme(); });
 
     const btnSettingsToggle = document.getElementById('btn-settings-toggle');
@@ -379,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('.btn-close-modal').forEach(btn => { btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); });
 
-        const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic-stats', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-macros', 'widget-initiative', 'widget-notes', 'widget-calculator'];
+        const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic-stats', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-macros', 'widget-notes', 'widget-calculator'];
         
         function safeStoreAllWidgets() { const storage = document.getElementById('widget-storage'); ALL_WIDGETS.forEach(wId => { const w = document.getElementById(wId); if(w && w.parentNode !== storage) { storage.appendChild(w); } }); }
 
@@ -393,8 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const layoutSelector = document.getElementById('layout-selector'); const layoutTabsContainer = document.getElementById('layout-tabs-container'); const layoutClassicContainer = document.getElementById('layout-classic-container'); const layoutCustomContainer = document.getElementById('layout-custom-container'); const btnEditCustom = document.getElementById('btn-edit-custom'); let isEditMode = false;
         
-        const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-initiative', 'widget-companion'], 'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
-        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-initiative', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
+        const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-companion'], 'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
+        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
 
         function applyWidgetSizes() { ALL_WIDGETS.forEach(wId => { const el = document.getElementById(wId); if(el) { el.classList.remove('widget-full', 'widget-half', 'widget-third'); if(['widget-inspiration', 'widget-concentration', 'widget-proficiency'].includes(wId)) { el.classList.add('widget-third'); } else { el.classList.add('widget-full'); } } }); }
 
@@ -458,7 +423,68 @@ document.addEventListener('DOMContentLoaded', () => {
         function switchStrictTab(tabId) { document.querySelectorAll('.tab-btn-strict').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId)); document.querySelectorAll('#layout-tabs-container .tab-content').forEach(content => { content.classList.toggle('hidden', content.id !== tabId); content.classList.toggle('active', content.id === tabId); }); }
         document.querySelectorAll('.tab-btn-strict').forEach(btn => { btn.addEventListener('click', () => switchStrictTab(btn.dataset.tab)); });
 
-        window.appendCalc = (val) => { const disp = document.getElementById('calc-display'); if(disp) disp.value += val; }; window.clearCalc = () => { const disp = document.getElementById('calc-display'); if(disp) disp.value = ''; }; window.evalCalc = () => { const disp = document.getElementById('calc-display'); if(disp) { try { let safeVal = disp.value.replace(/[^0-9+\-*/.]/g, ''); disp.value = eval(safeVal) || ''; } catch(e) { disp.value = 'Erreur'; setTimeout(() => disp.value='', 1000); } } };
+        // ===== LANCEUR D'EXPRESSION DE DÉS (remplace l'ancienne calculatrice) =====
+        // Comprend « 2d6+3 », « 8d6 », « 1d20+5 », « 4d6-1 », « 1d8+2d6+3 »…
+        function rollExpression(raw) {
+            const clean = String(raw || '').toLowerCase().replace(/\s+/g, '');
+            if (!clean) return { error: 'Entre une expression (ex : 2d6+3).' };
+            if (!/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(clean)) return { error: 'Expression invalide (ex : 2d6+3).' };
+            const parts = clean.match(/[+-]?(?:\d*d\d+|\d+)/g) || [];
+            let total = 0; const bits = [];
+            for (const part of parts) {
+                const sign = part.startsWith('-') ? -1 : 1;
+                const body = part.replace(/^[+-]/, '');
+                if (body.includes('d')) {
+                    const [nRaw, fRaw] = body.split('d');
+                    const n = Math.min(parseInt(nRaw || '1', 10) || 1, 100);      // garde-fou : 100 dés max
+                    const faces = parseInt(fRaw, 10);
+                    if (!faces || faces < 2 || faces > 1000) return { error: 'Dé invalide : d' + fRaw };
+                    const rolls = Array.from({ length: n }, () => Math.floor(Math.random() * faces) + 1);
+                    total += sign * rolls.reduce((a, b) => a + b, 0);
+                    bits.push((sign < 0 ? '−' : '') + n + 'd' + faces + ' [' + rolls.join(', ') + ']');
+                } else {
+                    const v = parseInt(body, 10) || 0;
+                    total += sign * v;
+                    bits.push((sign < 0 ? '−' : '+') + v);
+                }
+            }
+            return { total, detail: bits.join(' ') };
+        }
+        function runExpression(expr) {
+            const out = document.getElementById('expr-result'); if (!out) return;
+            const res = rollExpression(expr);
+            if (res.error) { out.innerHTML = `<span class="expr-err">⚠️ ${res.error}</span>`; return; }
+            out.innerHTML = `<span class="expr-total">${res.total}</span><span class="expr-detail">${res.detail}</span>`;
+            // Partagé avec la table si connecté à une session
+            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll('🎲 ' + expr, res.total, res.detail, null);
+            pushRollHistory('🎲 ' + expr, res.total, res.detail, null);
+        }
+        const exprInput = document.getElementById('expr-input');
+        const btnExprRoll = document.getElementById('btn-expr-roll');
+        if (btnExprRoll && exprInput) btnExprRoll.addEventListener('click', () => runExpression(exprInput.value));
+        if (exprInput) exprInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runExpression(exprInput.value); } });
+        document.querySelectorAll('.expr-chip').forEach(chip => chip.addEventListener('click', () => { if (exprInput) exprInput.value = chip.dataset.expr; runExpression(chip.dataset.expr); }));
+
+        // ===== HISTORIQUE DES JETS =====
+        function pushRollHistory(name, total, detail, nat) {
+            let hist = getStore('dnd-roll-history') || [];
+            hist.unshift({ name, total, detail, nat, ts: Date.now() });
+            if (hist.length > 40) hist = hist.slice(0, 40);
+            setStore('dnd-roll-history', hist);
+            renderRollHistory();
+        }
+        function renderRollHistory() {
+            const list = document.getElementById('roll-history-list'); if (!list) return;
+            const hist = getStore('dnd-roll-history') || [];
+            if (!hist.length) { list.innerHTML = `<div class="roll-history-empty">Aucun jet pour l'instant.</div>`; return; }
+            list.innerHTML = hist.map(h => {
+                const cls = h.nat === 20 ? ' is-crit' : (h.nat === 1 ? ' is-fumble' : '');
+                const t = new Date(h.ts); const hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+                return `<div class="roll-history-item${cls}"><span class="rh-name">${h.name}<span class="rh-detail"> — ${h.detail || ''}</span></span><span class="rh-total">${h.total}</span><span class="rh-detail">${hh}</span></div>`;
+            }).join('');
+        }
+        const btnClearHist = document.getElementById('btn-clear-roll-history');
+        if (btnClearHist) btnClearHist.addEventListener('click', () => { setStore('dnd-roll-history', []); renderRollHistory(); });
 
         const avatarInput = document.getElementById('avatar-file-input'); const avatarPreview = document.getElementById('main-avatar-preview'); const avatarHeader = document.getElementById('header-avatar'); const avatarPlaceholder = document.getElementById('avatar-placeholder');
         function loadAvatar() { const savedAvatar = getStore('dnd-avatar', false); if(savedAvatar && avatarPreview && avatarPlaceholder && avatarHeader) { avatarPreview.src = savedAvatar; avatarPreview.classList.remove('hidden'); avatarPlaceholder.classList.add('hidden'); avatarHeader.style.backgroundImage = `url("${savedAvatar}")`; } const rc = document.getElementById('btn-recrop-avatar'); if(rc) rc.style.display = savedAvatar ? '' : 'none'; }
@@ -466,8 +492,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // puis on enregistre le carré recadré comme avatar.
         function loadImageFileToCrop(file) { if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => openAvatarCrop(img, true); img.src = event.target.result; }; reader.readAsDataURL(file); }
         if(avatarInput) { avatarInput.addEventListener('change', (e) => { loadImageFileToCrop(e.target.files[0]); e.target.value = ''; }); }
-        // Cliquer le mini-avatar de l'en-tête ouvre aussi le sélecteur de photo.
-        if(avatarHeader && avatarInput) avatarHeader.addEventListener('click', () => avatarInput.click());
+
+        // --- Portrait en PLEIN ÉCRAN : cliquer un avatar l'agrandit (bouton 📸 Changer pour la photo) ---
+        function openPortraitFullscreen() {
+            const src = getStore('dnd-avatar', false); if(!src) return false;
+            const fs = document.getElementById('portrait-fullscreen'), img = document.getElementById('portrait-fs-img');
+            if(!fs || !img) return false;
+            img.src = src; fs.classList.remove('hidden');
+            return true;
+        }
+        function closePortraitFullscreen() { const fs = document.getElementById('portrait-fullscreen'); if(fs) fs.classList.add('hidden'); }
+        // Mini-avatar de l'en-tête → plein écran (ou sélecteur de photo s'il n'y a pas encore d'avatar).
+        if(avatarHeader) avatarHeader.addEventListener('click', () => { if(!openPortraitFullscreen() && avatarInput) avatarInput.click(); });
+        // Portrait du module Identité : le label ouvre le sélecteur → on l'intercepte si un avatar existe.
+        if(avatarPreview) avatarPreview.addEventListener('click', (e) => { if(getStore('dnd-avatar', false)) { e.preventDefault(); e.stopPropagation(); openPortraitFullscreen(); } });
+        const btnChangeAvatar = document.getElementById('btn-change-avatar');
+        if(btnChangeAvatar && avatarInput) btnChangeAvatar.addEventListener('click', () => avatarInput.click());
+        const portraitFs = document.getElementById('portrait-fullscreen');
+        if(portraitFs) portraitFs.addEventListener('click', closePortraitFullscreen);   // clic n'importe où = fermer
+        const portraitFsClose = document.getElementById('portrait-fs-close');
+        if(portraitFsClose) portraitFsClose.addEventListener('click', (e) => { e.stopPropagation(); closePortraitFullscreen(); });
         // Glisser-déposer une image directement sur le portrait (module Identité).
         const avatarDropZone = document.querySelector('.avatar-upload-container');
         if(avatarDropZone) {
@@ -853,6 +897,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const advTxt = advMode === 'adv' ? ' (avantage)' : (advMode === 'dis' ? ' (désavantage)' : '');
             if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
             if (window.TableFX) { if (finalRoll === 20) window.TableFX.crit(); else if (finalRoll === 1) window.TableFX.fumble(); }
+            pushRollHistory(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
         }
 
         // Lance 1 ou 2 d20 réels en 3D (via dice-box) et renvoie les valeurs obtenues
@@ -1086,88 +1131,57 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-confirm-short-rest')) document.getElementById('btn-confirm-short-rest').addEventListener('click', () => { recoverAbilitiesByRest('short'); recoverSpellSlotsByRest('short'); restModal.classList.add('hidden'); });
         if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
 
-        let initiativeTracker = getStore('dnd-initiative-tracker') || []; let activeInitIndex = getStore('dnd-initiative-active', false) || -1;
-        let initiativeRound = parseInt(getStore('dnd-initiative-round', false)) || 1;
-
-        window.updateInitHP = (i, change) => {
-            let hp = parseInt(initiativeTracker[i].hp) || 0;
-            hp += change;
-            initiativeTracker[i].hp = hp;
-            setStore('dnd-initiative-tracker', initiativeTracker);
-            renderInitiativeTracker();
-        };
-
-        window.setInitHP = (i, val) => {
-            initiativeTracker[i].hp = val;
-            setStore('dnd-initiative-tracker', initiativeTracker);
-            renderInitiativeTracker();
-        };
-
-        function renderInitiativeTracker() { 
-            const list = document.getElementById('init-tracker-list'); 
-            if(!list) return; 
-            list.innerHTML = ''; 
-            if(initiativeTracker.length === 0) list.innerHTML = `<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun combattant.</span>`; 
-            initiativeTracker.forEach((c, i) => { 
-                let activeClass = i === activeInitIndex ? 'active-turn' : ''; 
-                list.innerHTML += `<div class="init-item ${activeClass}">
-                    <span class="init-score">${c.score}</span>
-                    <span style="flex:1; font-weight:bold;">${c.name}</span>
-                    <span style="display:flex; align-items:center; gap:5px; margin-right:10px;">
-                        ❤️ 
-                        <button class="btn-small" style="padding:2px 6px;" onclick="updateInitHP(${i}, -1)">-</button>
-                        <input type="number" value="${c.hp}" onchange="setInitHP(${i}, this.value)" style="width:50px; text-align:center; font-weight:bold; background:rgba(255,255,255,0.5); border:1px solid #ccc; border-radius:4px;">
-                        <button class="btn-small" style="padding:2px 6px;" onclick="updateInitHP(${i}, 1)">+</button>
-                    </span>
-                    <span class="init-del no-print" onclick="deleteInit(${i})">X</span>
-                </div>`; 
-            }); 
-            
-            const roundVal = document.getElementById('init-round-val');
-            if(roundVal) roundVal.textContent = initiativeRound;
+        // ===== COMPAGNONS / FAMILIERS (plusieurs par personnage) =====
+        // Modèle : dnd-companions = [{ id, name, ac, hp, notes }]
+        let companions = getStore('dnd-companions');
+        if (!Array.isArray(companions)) {
+            // Migration depuis l'ancien compagnon UNIQUE (champs comp-name / comp-ac / comp-hp / comp-notes)
+            const oldName = getStore('dnd-sheet-comp-name', false);
+            const oldAc = getStore('dnd-sheet-comp-ac', false);
+            const oldHp = getStore('dnd-sheet-comp-hp', false);
+            const oldNotes = getStore('dnd-sheet-comp-notes', false);
+            companions = (oldName || oldAc || oldHp || oldNotes)
+                ? [{ id: 'c' + Date.now(), name: oldName || '', ac: oldAc || '', hp: oldHp || '', notes: oldNotes || '' }]
+                : [];
+            setStore('dnd-companions', companions);
         }
-
-        document.body.addEventListener('click', (e) => { 
-            if(e.target.id === 'btn-init-add') { 
-                const name = document.getElementById('init-add-name').value.trim(); 
-                const score = parseInt(document.getElementById('init-add-score').value) || 0; 
-                const hpInput = document.getElementById('init-add-hp');
-                const hp = hpInput && hpInput.value.trim() !== '' ? hpInput.value.trim() : 0; 
-                
-                if(name) { 
-                    initiativeTracker.push({name, score, hp}); 
-                    initiativeTracker.sort((a,b) => b.score - a.score); 
-                    setStore('dnd-initiative-tracker', initiativeTracker); 
-                    renderInitiativeTracker(); 
-                    document.getElementById('init-add-name').value=''; 
-                    document.getElementById('init-add-score').value=''; 
-                    if(hpInput) hpInput.value=''; 
-                } 
-            } 
-            if(e.target.id === 'btn-init-next') { 
-                if(initiativeTracker.length === 0) return;
-                activeInitIndex++;
-                if(activeInitIndex >= initiativeTracker.length) {
-                    activeInitIndex = 0;
-                    initiativeRound++; 
-                    setStore('dnd-initiative-round', initiativeRound, false);
-                }
-                setStore('dnd-initiative-active', activeInitIndex, false);
-                renderInitiativeTracker();
-            } 
-            if(e.target.id === 'btn-init-clear') { 
-                if(confirm("Vider le tracker ?")) {
-                    initiativeTracker = [];
-                    activeInitIndex = -1;
-                    initiativeRound = 1; 
-                    setStore('dnd-initiative-tracker', initiativeTracker);
-                    setStore('dnd-initiative-active', activeInitIndex, false);
-                    setStore('dnd-initiative-round', initiativeRound, false);
-                    renderInitiativeTracker();
-                }
-            } 
+        function saveCompanions() { setStore('dnd-companions', companions); }
+        function renderCompanions() {
+            const list = document.getElementById('companions-list'); if (!list) return;
+            if (!companions.length) { list.innerHTML = `<div class="compact-empty">Aucun compagnon — clique sur ➕ Ajouter.</div>`; return; }
+            list.innerHTML = companions.map((c, i) => `<div class="companion-card" data-ci="${i}">
+                <div class="companion-head">
+                    <input type="text" data-cf="name" value="${(c.name || '').replace(/"/g, '&quot;')}" placeholder="Nom du compagnon...">
+                    <div class="companion-stat"><label>CA</label><input type="number" data-cf="ac" value="${c.ac || ''}"></div>
+                    <div class="companion-stat"><label>PV</label><input type="number" data-cf="hp" value="${c.hp || ''}"></div>
+                    <button class="companion-del" title="Supprimer ce compagnon">🗑</button>
+                </div>
+                <textarea data-cf="notes" class="auto-expand" placeholder="Attaques, capacités, notes de suivi...">${c.notes || ''}</textarea>
+            </div>`).join('');
+            list.querySelectorAll('.auto-expand').forEach(t => adjustHeight(t));
+        }
+        const companionsList = document.getElementById('companions-list');
+        if (companionsList) {
+            companionsList.addEventListener('input', (e) => {
+                const card = e.target.closest('.companion-card'); if (!card) return;
+                const field = e.target.dataset.cf; if (!field) return;
+                companions[parseInt(card.dataset.ci)][field] = e.target.value;
+                saveCompanions();
+                if (e.target.classList.contains('auto-expand')) adjustHeight(e.target);
+            });
+            companionsList.addEventListener('click', (e) => {
+                if (!e.target.closest('.companion-del')) return;
+                const card = e.target.closest('.companion-card');
+                const i = parseInt(card.dataset.ci);
+                if (confirm(`Supprimer « ${companions[i].name || 'ce compagnon'} » ?`)) { companions.splice(i, 1); saveCompanions(); renderCompanions(); }
+            });
+        }
+        const btnAddCompanion = document.getElementById('btn-add-companion');
+        if (btnAddCompanion) btnAddCompanion.addEventListener('click', () => {
+            companions.push({ id: 'c' + Date.now(), name: '', ac: '', hp: '', notes: '' });
+            saveCompanions(); renderCompanions();
+            const last = document.querySelector('#companions-list .companion-card:last-child input[data-cf="name"]'); if (last) last.focus();
         });
-        window.deleteInit = (i) => { initiativeTracker.splice(i, 1); if(activeInitIndex >= initiativeTracker.length) activeInitIndex = 0; if(initiativeTracker.length === 0) activeInitIndex = -1; setStore('dnd-initiative-tracker', initiativeTracker); setStore('dnd-initiative-active', activeInitIndex, false); renderInitiativeTracker(); };
 
         let spells = getStore('dnd-spells') || [];
         // --- Composantes de sort (V/S/M) : cases à cocher + matériaux ---
@@ -1382,20 +1396,25 @@ document.addEventListener('DOMContentLoaded', () => {
             filtered.forEach(atk => {
                 const originalIndex = attacks.indexOf(atk);
                 const attuneHtml = atk.reqAttune ? `<label class="atk-attune ${atk.isAttuned ? 'on' : ''}" title="Objet lié ?"><input type="checkbox" ${atk.isAttuned ? 'checked' : ''} onchange="toggleAttune(${originalIndex})">Lié</label>` : '';
-                list.innerHTML += `<div class="ca-row atk-row" data-i="${originalIndex}"><div class="ca-head"><span class="ca-name">⚔️ ${atk.name}</span>${attuneHtml}<span class="atk-stat" title="Bonus / DD">🎯 ${atk.bonus || '—'}</span><span class="atk-stat" title="Dégâts">💥 ${atk.dmg || '—'}</span><div class="ca-actions"><button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>${atk.notes ? `<div class="atk-notes">📝 ${atk.notes}</div>` : ''}</div>`;
+                // Munitions (optionnelles) : − = tirer, + = récupérer. Rouge quand il n'en reste plus.
+                const hasAmmo = atk.ammo !== undefined && atk.ammo !== null && atk.ammo !== '';
+                const ammoHtml = hasAmmo ? `<span class="atk-ammo${(parseInt(atk.ammo, 10) || 0) <= 0 ? ' is-empty' : ''}" title="Munitions restantes">🏹 <button class="ammo-minus" title="Tirer (−1)">−</button><b>${atk.ammo}${atk.ammoMax ? '/' + atk.ammoMax : ''}</b><button class="ammo-plus" title="Récupérer (+1)">+</button></span>` : '';
+                list.innerHTML += `<div class="ca-row atk-row" data-i="${originalIndex}"><div class="ca-head"><span class="ca-name">⚔️ ${atk.name}</span>${attuneHtml}<span class="atk-stat" title="Bonus / DD">🎯 ${atk.bonus || '—'}</span><span class="atk-stat" title="Dégâts">💥 ${atk.dmg || '—'}</span>${ammoHtml}<div class="ca-actions"><button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>${atk.notes ? `<div class="atk-notes">📝 ${atk.notes}</div>` : ''}</div>`;
             });
         }
         const atkListContainer = document.getElementById('attacks-list');
         if(atkListContainer) atkListContainer.addEventListener('click', (e) => {
             const row = e.target.closest('.ca-row'); if(!row) return; const index = parseInt(row.dataset.i);
+            if(e.target.closest('.ammo-minus')) { const a = attacks[index]; const n = parseInt(a.ammo, 10) || 0; if(n > 0) { a.ammo = n - 1; setStore('dnd-attacks', attacks); renderAttacks(); } else if(window.showAppToast) window.showAppToast('🏹 Plus de munitions !', '#c0392b'); return; }
+            if(e.target.closest('.ammo-plus')) { const a = attacks[index]; const n = parseInt(a.ammo, 10) || 0; const max = parseInt(a.ammoMax, 10) || 0; a.ammo = max > 0 ? Math.min(n + 1, max) : n + 1; setStore('dnd-attacks', attacks); renderAttacks(); return; }
             if(e.target.closest('.ci-up')) { if(window.moveAttackUp) window.moveAttackUp(index); return; }
             if(e.target.closest('.ci-down')) { if(window.moveAttackDown) window.moveAttackDown(index); return; }
             if(e.target.closest('.ci-edit')) { if(window.editAttack) window.editAttack(index); return; }
             if(e.target.closest('.ci-del')) { if(window.deleteAttack) window.deleteAttack(index); return; }
         });
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-attack-modal') { editingAttackIndex = -1; atkModal.classList.remove('hidden'); document.querySelectorAll('#attack-form-modal input[type="text"]').forEach(i => i.value = ''); document.getElementById('new-atk-req-attune').checked = false; }});
-        if(document.getElementById('btn-save-atk')) { document.getElementById('btn-save-atk').addEventListener('click', () => { const atk = { name: document.getElementById('new-atk-name').value, bonus: document.getElementById('new-atk-bonus').value, dmg: document.getElementById('new-atk-dmg').value, category: document.getElementById('new-atk-category').value.trim() || 'Général', notes: document.getElementById('new-atk-notes').value, reqAttune: document.getElementById('new-atk-req-attune').checked, isAttuned: false }; if(atk.name) { if(editingAttackIndex >= 0) { atk.isAttuned = attacks[editingAttackIndex].isAttuned; attacks[editingAttackIndex] = atk; } else { attacks.push(atk); } setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden'); } }); }
-        window.toggleAttune = (index) => { attacks[index].isAttuned = !attacks[index].isAttuned; setStore('dnd-attacks', attacks); }; window.deleteAttack = (index) => { if(confirm("Supprimer ?")) { attacks.splice(index, 1); setStore('dnd-attacks', attacks); renderAttacks(); }}; window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.editAttack = (index) => { const data = attacks[index]; document.getElementById('new-atk-name').value = data.name; document.getElementById('new-atk-bonus').value = data.bonus; document.getElementById('new-atk-dmg').value = data.dmg; document.getElementById('new-atk-category').value = data.category || 'Général'; document.getElementById('new-atk-notes').value = data.notes; document.getElementById('new-atk-req-attune').checked = data.reqAttune; editingAttackIndex = index; atkModal.classList.remove('hidden'); };
+        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-attack-modal') { editingAttackIndex = -1; atkModal.classList.remove('hidden'); document.querySelectorAll('#attack-form-modal input[type="text"], #attack-form-modal input[type="number"]').forEach(i => i.value = ''); document.getElementById('new-atk-req-attune').checked = false; }});
+        if(document.getElementById('btn-save-atk')) { document.getElementById('btn-save-atk').addEventListener('click', () => { const ammoRaw = document.getElementById('new-atk-ammo').value.trim(); const ammoMaxRaw = document.getElementById('new-atk-ammo-max').value.trim(); const atk = { name: document.getElementById('new-atk-name').value, bonus: document.getElementById('new-atk-bonus').value, dmg: document.getElementById('new-atk-dmg').value, category: document.getElementById('new-atk-category').value.trim() || 'Général', notes: document.getElementById('new-atk-notes').value, reqAttune: document.getElementById('new-atk-req-attune').checked, isAttuned: false, ammo: ammoRaw === '' ? null : (parseInt(ammoRaw, 10) || 0), ammoMax: ammoMaxRaw === '' ? null : (parseInt(ammoMaxRaw, 10) || 0) }; if(atk.name) { if(editingAttackIndex >= 0) { atk.isAttuned = attacks[editingAttackIndex].isAttuned; attacks[editingAttackIndex] = atk; } else { attacks.push(atk); } setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden'); } }); }
+        window.toggleAttune = (index) => { attacks[index].isAttuned = !attacks[index].isAttuned; setStore('dnd-attacks', attacks); }; window.deleteAttack = (index) => { if(confirm("Supprimer ?")) { attacks.splice(index, 1); setStore('dnd-attacks', attacks); renderAttacks(); }}; window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.editAttack = (index) => { const data = attacks[index]; document.getElementById('new-atk-name').value = data.name; document.getElementById('new-atk-bonus').value = data.bonus; document.getElementById('new-atk-dmg').value = data.dmg; document.getElementById('new-atk-category').value = data.category || 'Général'; document.getElementById('new-atk-notes').value = data.notes; document.getElementById('new-atk-req-attune').checked = data.reqAttune; document.getElementById('new-atk-ammo').value = (data.ammo === null || data.ammo === undefined) ? '' : data.ammo; document.getElementById('new-atk-ammo-max').value = (data.ammoMax === null || data.ammoMax === undefined) ? '' : data.ammoMax; editingAttackIndex = index; atkModal.classList.remove('hidden'); };
 
         let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let activeInvTabModal = 'Tout';
         const invAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
@@ -1640,7 +1659,72 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-add-macro')) { document.getElementById('btn-add-macro').addEventListener('click', () => { const name = document.getElementById('macro-name').value.trim(); const formula = document.getElementById('macro-formula').value.trim(); if(name && formula) { macros.push({ name, formula }); setStore('dnd-macros', macros); renderMacros(); document.getElementById('macro-name').value = ''; document.getElementById('macro-formula').value = ''; } }); }
         window.deleteMacro = (index) => { macros.splice(index, 1); setStore('dnd-macros', macros); renderMacros(); };
 
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-pay-currency') { const amount = parseFloat(document.getElementById('pay-amount-val').value) || 0; const type = document.getElementById('pay-amount-type').value; if(amount <= 0) return; const coinInput = document.getElementById('coin-' + type); if(coinInput) { let current = parseFloat(coinInput.value) || 0; coinInput.value = Math.max(0, current - amount); setStore('dnd-sheet-coin-' + type, coinInput.value, false); document.getElementById('pay-amount-val').value = ''; } } });
+        // ===== BOURSE : valeurs en cuivre, conversion optimale, payer / ajouter =====
+        // 1 pa = 10 pc | 1 pe = 50 pc | 1 po = 100 pc | 1 pp = 1000 pc
+        const COIN_VALUE = { pc: 1, pa: 10, pe: 50, po: 100, pp: 1000 };
+        const COIN_ORDER = ['pp', 'po', 'pe', 'pa', 'pc'];   // du plus fort au plus faible
+        function getCoin(t) { const el = document.getElementById('coin-' + t); return el ? (parseInt(el.value, 10) || 0) : 0; }
+        function setCoin(t, v) { const el = document.getElementById('coin-' + t); if (el) { el.value = v; setStore('dnd-sheet-coin-' + t, String(v), false); } }
+        function purseTotalCopper() { return COIN_ORDER.reduce((sum, t) => sum + getCoin(t) * COIN_VALUE[t], 0); }
+        // Répartition en un MINIMUM de pièces (glouton — optimal pour ce système de monnaies).
+        function distributeCopper(copper) {
+            const out = {};
+            COIN_ORDER.forEach(t => { out[t] = Math.floor(copper / COIN_VALUE[t]); copper -= out[t] * COIN_VALUE[t]; });
+            return out;
+        }
+        function applyDistribution(d) { COIN_ORDER.forEach(t => setCoin(t, d[t] || 0)); renderCurrencyTotal(); }
+        function renderCurrencyTotal() {
+            const el = document.getElementById('currency-total-val'); if (!el) return;
+            const c = purseTotalCopper();
+            const po = Math.floor(c / 100), rest = c % 100;
+            el.textContent = rest === 0 ? `${po} po` : `${po} po ${Math.floor(rest / 10)} pa ${rest % 10} pc`;
+        }
+        const btnOptimize = document.getElementById('btn-optimize-currency');
+        if (btnOptimize) btnOptimize.addEventListener('click', () => {
+            const total = purseTotalCopper();
+            if (total <= 0) { if (window.showAppToast) window.showAppToast('Ta bourse est vide.', '#c0392b'); return; }
+            applyDistribution(distributeCopper(total));
+            if (window.showAppToast) window.showAppToast('⚖️ Bourse convertie au minimum de pièces.', '#27ae60');
+        });
+        document.body.addEventListener('click', (e) => {
+            if (e.target.id !== 'btn-pay-currency') return;
+            const amountEl = document.getElementById('pay-amount-val');
+            const amount = parseFloat(amountEl.value) || 0;
+            const type = document.getElementById('pay-amount-type').value;
+            const mode = (document.getElementById('pay-mode') || {}).value || 'pay';
+            if (amount <= 0) return;
+            const copper = Math.round(amount * COIN_VALUE[type]);
+            if (mode === 'add') {
+                // Ajout : on ajoute les pièces du type choisi (pas de conversion forcée).
+                setCoin(type, getCoin(type) + Math.round(amount));
+                renderCurrencyTotal();
+                if (window.showAppToast) window.showAppToast(`➕ ${Math.round(amount)} ${type.toUpperCase()} ajoutée(s).`, '#27ae60');
+            } else {
+                // Paiement INTELLIGENT : on paie sur le total et on rend la monnaie de façon optimale.
+                const total = purseTotalCopper();
+                if (copper > total) { if (window.showAppToast) window.showAppToast('💸 Pas assez d\'argent dans ta bourse.', '#c0392b'); return; }
+                applyDistribution(distributeCopper(total - copper));
+                if (window.showAppToast) window.showAppToast(`➖ ${amount} ${type.toUpperCase()} payée(s) — monnaie rendue.`, '#2c3e50');
+            }
+            amountEl.value = '';
+        });
+        // Le total se met à jour dès qu'on édite une pièce à la main
+        COIN_ORDER.forEach(t => { const el = document.getElementById('coin-' + t); if (el) el.addEventListener('input', renderCurrencyTotal); });
+
+        // ===== BARRE DE PV CLIQUABLE : fixe les PV à la proportion cliquée =====
+        const hpTrack = document.querySelector('.hp-bar-track');
+        if (hpTrack) {
+            hpTrack.title = 'Clique pour fixer les PV à cette proportion';
+            hpTrack.addEventListener('click', (e) => {
+                const maxEl = document.getElementById('hp-max'); const curEl = document.getElementById('hp-current');
+                const max = parseInt(maxEl?.value, 10) || 0; if (!curEl || max <= 0) return;
+                const r = hpTrack.getBoundingClientRect();
+                const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
+                curEl.value = Math.round(ratio * max);
+                curEl.dispatchEvent(new Event('input', { bubbles: true }));
+                updateHpVisuals();
+            });
+        }
 
         function initGlobalSave() {
             const allSimpleInputs = document.querySelectorAll('#app-screen input:not(.slot-total-input):not(#avatar-file-input):not(#bg-file-input):not(#btn-import-json):not(.color-picker):not([type="radio"]):not([type="file"]):not(#pay-amount-val):not(#calc-display):not(#new-trait-pinned):not(#global-search-input), #app-screen textarea:not(#new-trait-desc), #app-screen select:not(#hd-size):not(#layout-selector):not(#pay-amount-type):not(#traits-sort-select):not(#new-trait-type):not(#inv-category):not(#edit-inv-category):not(#new-atk-category)');
@@ -1676,7 +1760,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if(levelInput && getStore('dnd-sheet-prof-bonus', false) === null) { const prof = Math.floor(((parseInt(levelInput.value) || 1) - 1) / 4) + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = prof; }
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
-        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderInitiativeTracker(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects(); makeRollablesFocusable();
+        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
+
+        // ===== RACCOURCIS CLAVIER (#22) =====
+        // Ignorés dès qu'on saisit du texte (champ, zone de texte, éditeur riche).
+        function isTyping(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)); }
+        function quickD20(advMode) { const initEl = document.getElementById('initiative'); performAbilityRoll('Jet rapide', 0, advMode); }
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            const appScreen = document.getElementById('app-screen');
+            if (!appScreen || appScreen.classList.contains('hidden') || document.body.classList.contains('gm-active')) return;
+            // Échap : ferme le portrait plein écran / la fenêtre ouverte la plus haute
+            if (e.key === 'Escape') {
+                const fs = document.getElementById('portrait-fullscreen');
+                if (fs && !fs.classList.contains('hidden')) { closePortraitFullscreen(); return; }
+                const open = [...document.querySelectorAll('.modal-overlay:not(.hidden)')].pop();
+                if (open) open.classList.add('hidden');
+                return;
+            }
+            if (isTyping(e.target)) return;
+            const k = e.key.toLowerCase();
+            if (k === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); document.getElementById('shortcuts-modal')?.classList.remove('hidden'); return; }
+            const map = {
+                d: () => document.getElementById('btn-toggle-dice')?.click(),
+                r: () => quickD20('normal'),
+                a: () => quickD20('adv'),
+                e: () => quickD20('dis'),
+                g: () => document.getElementById('btn-open-grimoire')?.click(),
+                c: () => document.getElementById('btn-short-rest')?.click(),
+                l: () => document.getElementById('btn-long-rest')?.click(),
+                f: () => document.getElementById('btn-global-search-trigger')?.click(),
+            };
+            if (map[k]) { e.preventDefault(); map[k](); }
+        });
+        document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => document.getElementById('shortcuts-modal')?.classList.add('hidden'));
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', async () => {
@@ -1829,7 +1946,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     { kw: ['bourse', 'argent', 'piece', 'pièce', 'or', 'monnaie', 'po'], title: 'Bourse', widgetId: 'widget-currency', icon: '💰' },
                     { kw: ['inventaire', 'sac', 'poids', 'objet'], title: 'Sac à dos', widgetId: 'widget-inventory', icon: '🎒' },
                     { kw: ['magie', 'emplacement', 'incantation', 'dd'], title: 'Caractéristiques magiques', widgetId: 'widget-magic-stats', icon: '✨' },
-                    { kw: ['initiative', 'tracker'], title: "Tracker d'initiative", widgetId: 'widget-initiative', icon: '⚔️' },
+                    { kw: ['compagnon', 'familier', 'animal', 'monture'], title: 'Compagnons / Familiers', widgetId: 'widget-companion', icon: '🐾' },
                     { kw: ['note', 'journal'], title: 'Notes & Journal', widgetId: 'widget-notes', icon: '📝' },
                     { kw: ['pv', 'vie', 'sante', 'santé', 'soin', 'mort'], title: 'Points de vie', widgetId: 'widget-hp', icon: '❤️' },
                     { kw: ['competence', 'compétence', 'sauvegarde', 'caracteristique', 'caractéristique', 'stat', 'force', 'dexterite', 'dextérité'], title: 'Caractéristiques & compétences', widgetId: 'widget-stats', icon: '🎯' },

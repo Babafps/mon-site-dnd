@@ -95,7 +95,10 @@
             currency: { pc: v('coin-pc'), pa: v('coin-pa'), pe: v('coin-pe'), po: v('coin-po'), pp: v('coin-pp') },
             traits: (jstore('dnd-traits') || []).map(t => ({ name: t.name, type: t.type, desc: String(t.desc || '').replace(/<[^>]+>/g, '').slice(0, 240) })),
             hitDice: { spent: v('hd-spent'), max: v('hd-max'), size: (document.getElementById('hd-size') || {}).value || '' },
-            companion: { name: v('comp-name'), ac: v('comp-ac'), hp: v('comp-hp'), notes: v('comp-notes') },
+            // Compagnons : plusieurs possibles. `companion` (le 1er) reste envoyé pour l'affichage MJ existant.
+            companions: (jstore('dnd-companions') || []).map(c => ({ name: c.name, ac: c.ac, hp: c.hp, notes: c.notes })),
+            companion: (jstore('dnd-companions') || [])[0] || { name: '', ac: '', hp: '', notes: '' },
+            defenses: { resist: v('dmg-resist'), immune: v('dmg-immune'), vulnerable: v('dmg-vulnerable') },
             notes: { quick: v('quick-note'), quests: v('quest-log'), npcs: v('npc-log') }
         };
 
