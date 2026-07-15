@@ -2120,7 +2120,11 @@ body.theme-dark .auth-forgot-hint { color: #c2b094; }
     .input-group label { font-size: 0.6rem !important; }
     .header-main-row { gap: 10px !important; }
     .avatar-mini { width: 45px !important; height: 45px !important; }
-    #layout-classic-container, #layout-tabs-container, #layout-custom-container { display: block !important; }
+    #layout-classic-container, #layout-tabs-container, #layout-custom-container, #layout-mobile-container { display: block !important; }
+    /* Ctrl+P direct depuis un téléphone : toutes les sections mobiles s'impriment, la barre de nav jamais */
+    .mob-section { display: flex !important; flex-wrap: wrap !important; }
+    #mobile-nav { display: none !important; }
+    .info-grid { display: flex !important; }
     #layout-tabs-container .tab-content { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
     #layout-tabs-container .tab-content.hidden { display: grid !important; }
     .classic-grid { display: grid !important; grid-template-columns: 0.95fr 1.3fr 0.95fr !important; gap: 8px !important; align-items: start !important; }
@@ -2890,3 +2894,83 @@ body.theme-dark .hp-quick-amount { background: rgba(255,255,255,0.06) !important
 body.theme-dark .spell-comp-label { color: #b6a484; }
 body.theme-dark .spell-comp-check { color: var(--accent-color); }
 body.theme-dark .spell-comp-check small { color: #9a8a70; }
+
+/* ============================================================
+   ✦ AFFICHAGE TÉLÉPHONE (fiche PJ, ≤700px) — une section à la
+   fois + barre de navigation basse avec bandeau vital (PV/CA).
+   Sur grand écran, tout ceci est inerte (display:none).
+   ============================================================ */
+#mobile-nav, #mob-header-toggle, .mobile-layout-note { display: none; }
+.mob-section { display: none; }
+.mob-section.active { display: flex; flex-wrap: wrap; gap: 12px; align-content: flex-start; }
+
+@media (max-width: 700px) {
+    .mobile-layout-note { display: block; font-size: 0.72rem; color: #8a7a64; font-style: italic; margin: 4px 0 6px; }
+
+    /* Le padding bas réserve la place de la barre de navigation + l'onglet musique (uniquement sur la fiche) */
+    body.mobile-sheet:has(#app-screen:not(.hidden)) { padding: 8px 8px 182px; }
+    body.mobile-sheet .sheet-container { padding: 14px 10px; border-radius: var(--radius-md); }
+
+    /* En-tête compact : le grand titre décoratif disparaît, la grille d'infos se replie derrière « ▾ Infos » */
+    body.mobile-sheet .sheet-header h1 { display: none; }
+    body.mobile-sheet .sheet-header { margin-bottom: 6px; padding-bottom: 10px; }
+    body.mobile-sheet #mob-header-toggle {
+        display: inline-flex; align-items: center; justify-content: center;
+        flex-shrink: 0; padding: 8px 10px; font-size: 0.78rem; white-space: nowrap;
+    }
+    body.mobile-sheet .header-main-row { max-width: none; }
+    body.mobile-sheet .info-grid { display: none; }
+    body.mobile-sheet .sheet-header.mob-open .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+
+    /* Les 3 mini-modules (Maîtrise / Inspiration / Concentration) tiennent sur une seule ligne */
+    body.mobile-sheet .mob-section .widget-third { width: calc(33.333% - 8px); min-width: 0; }
+
+    /* ---- Barre de navigation basse (cuir sombre, comme le lecteur de musique) ---- */
+    body.mobile-sheet #mobile-nav {
+        display: flex; flex-direction: column;
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000;
+        background: linear-gradient(135deg, #140808 0%, #2c1a10 55%, #1a1614 100%);
+        border-top: 2px solid var(--accent-color);
+        box-shadow: 0 -4px 24px rgba(0,0,0,0.55);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    #mob-vitals {
+        display: flex; align-items: center; gap: 12px; width: 100%;
+        background: rgba(0,0,0,0.28); border: none; border-bottom: 1px solid rgba(196,155,53,0.25);
+        padding: 8px 14px; cursor: pointer;
+        font-family: 'Lora', serif; color: #f5e6c8; font-size: 0.84rem;
+    }
+    .mob-vitals-hp { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+    .mob-vitals-track {
+        flex: 1; height: 13px; border-radius: 7px; overflow: hidden;
+        background: rgba(255,255,255,0.12); border: 1px solid rgba(196,155,53,0.3);
+    }
+    #mob-vitals-fill {
+        display: block; height: 100%; width: 0; border-radius: 7px;
+        background: linear-gradient(90deg, #27ae60, #2ecc71);
+        transition: width 0.25s ease, background 0.25s ease;
+    }
+    #mob-vitals-fill.hp-mid { background: linear-gradient(90deg, #d4a017, #f1c40f); }
+    #mob-vitals-fill.hp-low { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+    #mob-vitals-text { font-weight: bold; white-space: nowrap; }
+    .mob-vitals-ca { white-space: nowrap; font-weight: bold; color: var(--accent-color); }
+    .mobile-nav-tabs { display: flex; }
+    .mob-tab {
+        flex: 1; min-height: 56px; border: none; background: transparent; cursor: pointer;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+        color: #b7a488; padding: 7px 2px 8px; position: relative;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .mob-tab-ic { font-size: 1.35rem; line-height: 1; }
+    .mob-tab-lb { font-family: 'Cinzel', serif; font-size: 0.6rem; font-weight: bold; letter-spacing: 0.04em; }
+    .mob-tab.active { color: var(--accent-color); }
+    .mob-tab.active::before {
+        content: ''; position: absolute; top: 0; left: 22%; right: 22%; height: 3px;
+        border-radius: 0 0 3px 3px; background: var(--accent-color);
+    }
+    .mob-tab:active .mob-tab-ic { transform: scale(0.88); }
+
+    /* Le lecteur de musique et son onglet se posent AU-DESSUS de la barre de navigation */
+    body.mobile-sheet:has(#app-screen:not(.hidden)) #music-player-container,
+    body.mobile-sheet:has(#app-screen:not(.hidden)) .music-show-tab { bottom: 104px; }
+}

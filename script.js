@@ -374,6 +374,64 @@ document.addEventListener('DOMContentLoaded', () => {
         const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-companion'], 'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
         const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
 
+        // ===== AFFICHAGE TÉLÉPHONE (≤700px) : une section à la fois + barre de navigation basse =====
+        const MOBILE_LAYOUT = {
+            'mob-sec-perso':  ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-traits', 'widget-training', 'widget-appearance'],
+            'mob-sec-combat': ['widget-hp', 'widget-combat', 'widget-rests', 'widget-attacks', 'widget-macros', 'widget-calculator'],
+            'mob-sec-sac':    ['widget-inventory', 'widget-currency', 'widget-companion'],
+            'mob-sec-magie':  ['widget-magic-stats', 'widget-prepared-spells', 'widget-spells', 'widget-abilities'],
+            'mob-sec-notes':  ['widget-quests', 'widget-notes']
+        };
+        // Modules repliés au premier affichage mobile (désature l'écran ; l'utilisateur peut les rouvrir)
+        const MOBILE_START_COLLAPSED = ['widget-training', 'widget-appearance', 'widget-macros', 'widget-calculator'];
+        const mobileMedia = window.matchMedia('(max-width: 700px)');
+        function isMobileView() { return mobileMedia.matches; }
+        let mobileCollapsedOnce = false;
+
+        function switchMobileTab(sec) {
+            if (!MOBILE_LAYOUT['mob-sec-' + sec]) sec = 'perso';
+            setStore('dnd-mobile-tab', sec, false);
+            document.querySelectorAll('#layout-mobile-container .mob-section').forEach(s => s.classList.toggle('active', s.dataset.msec === sec));
+            document.querySelectorAll('#mobile-nav .mob-tab').forEach(b => b.classList.toggle('active', b.dataset.msec === sec));
+            window.scrollTo({ top: 0 });
+        }
+        window.__switchMobileTab = switchMobileTab;
+
+        function updateMobileVitals() {
+            const fill = document.getElementById('mob-vitals-fill'); if (!fill) return;
+            const current = parseInt(document.getElementById('hp-current')?.value) || 0;
+            const maxRaw = parseInt(document.getElementById('hp-max')?.value) || 0;
+            const temp = parseInt(document.getElementById('hp-temp')?.value) || 0;
+            const ratio = maxRaw > 0 ? Math.max(0, Math.min(1, current / maxRaw)) : 0;
+            fill.style.width = (ratio * 100) + '%';
+            fill.classList.remove('hp-mid', 'hp-low');
+            if (maxRaw > 0 && ratio <= 0.25) fill.classList.add('hp-low');
+            else if (maxRaw > 0 && ratio <= 0.5) fill.classList.add('hp-mid');
+            const text = document.getElementById('mob-vitals-text');
+            if (text) text.textContent = maxRaw > 0 ? `${current}/${maxRaw}${temp > 0 ? ' +' + temp : ''}` : '– / –';
+            const ca = document.getElementById('mob-vitals-ca-val');
+            if (ca) ca.textContent = document.getElementById('armor-class')?.value || '–';
+        }
+
+        function renderMobileSheet() {
+            const container = document.getElementById('layout-mobile-container'); if (!container) return;
+            container.classList.remove('hidden');
+            for (const [secId, widgetList] of Object.entries(MOBILE_LAYOUT)) {
+                const secEl = document.getElementById(secId); if (!secEl) continue;
+                widgetList.forEach(wId => { const w = document.getElementById(wId); if (w) secEl.appendChild(w); });
+            }
+            if (!mobileCollapsedOnce) {
+                mobileCollapsedOnce = true;
+                MOBILE_START_COLLAPSED.forEach(wId => {
+                    const w = document.getElementById(wId); if (!w) return;
+                    const content = w.querySelector('.collapsible-content'); const icon = w.querySelector('.collapse-icon');
+                    if (content && !content.classList.contains('collapsed')) { content.classList.add('collapsed'); if (icon) icon.textContent = '▶'; }
+                });
+            }
+            switchMobileTab(getStore('dnd-mobile-tab', false) || 'perso');
+            updateMobileVitals();
+        }
+
         function applyWidgetSizes() { ALL_WIDGETS.forEach(wId => { const el = document.getElementById(wId); if(el) { el.classList.remove('widget-full', 'widget-half', 'widget-third'); if(['widget-inspiration', 'widget-concentration', 'widget-proficiency'].includes(wId)) { el.classList.add('widget-third'); } else { el.classList.add('widget-full'); } } }); }
 
         let customProfiles = []; try { customProfiles = JSON.parse(DB.get('dnd-global-profiles')) || []; } catch(e) { customProfiles = []; }
@@ -421,11 +479,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if(btnEditCustom) btnEditCustom.addEventListener('click', () => { isEditMode = !isEditMode; const manager = document.getElementById('custom-layout-manager'); if(manager) manager.classList.toggle('hidden', !isEditMode); if(isEditMode) { renderManager(); btnEditCustom.textContent = "✅ Terminer Édition"; } else { btnEditCustom.textContent = "⚙️ Modifier Disposition"; } });
         updateLayoutSelectorOptions(); 
 
-        function applyLayout(mode) {
+        function applyLayout(mode, opts) {
             setStore('dnd-layout-mode', mode, false); isEditMode = false; const profileActions = document.getElementById('profile-actions'); if(profileActions) { if(mode.startsWith('prof_')) profileActions.classList.remove('hidden'); else profileActions.classList.add('hidden'); }
             if(document.getElementById('custom-layout-manager')) document.getElementById('custom-layout-manager').classList.add('hidden'); if(btnEditCustom) btnEditCustom.textContent = "⚙️ Modifier Disposition";
             if(layoutTabsContainer) layoutTabsContainer.classList.add('hidden'); if(layoutClassicContainer) layoutClassicContainer.classList.add('hidden'); if(layoutCustomContainer) layoutCustomContainer.classList.add('hidden');
             safeStoreAllWidgets(); applyWidgetSizes();
+
+            // Téléphone : l'affichage mobile dédié remplace les modes bureau (le mode choisi reste mémorisé pour le grand écran)
+            const mobile = isMobileView() && !(opts && opts.forceDesktop);
+            document.body.classList.toggle('mobile-sheet', mobile);
+            if (mobile) { renderMobileSheet(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); return; }
+            const mobContainer = document.getElementById('layout-mobile-container'); if (mobContainer) mobContainer.classList.add('hidden');
 
             if (mode === 'tabs' && layoutTabsContainer) { layoutTabsContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_TABS_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } } switchStrictTab('tab-strict-gen');
             } else if (mode === 'classic' && layoutClassicContainer) { layoutClassicContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_CLASSIC_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } }
@@ -433,6 +497,29 @@ document.addEventListener('DOMContentLoaded', () => {
             if(settingsDropdown) settingsDropdown.classList.add('hidden');
         }
         if(layoutSelector) layoutSelector.addEventListener('change', (e) => applyLayout(e.target.value));
+
+        // Câblage de l'affichage téléphone : onglets bas, bandeau vital, chevron d'en-tête, bascule au redimensionnement
+        document.querySelectorAll('#mobile-nav .mob-tab').forEach(btn => btn.addEventListener('click', () => switchMobileTab(btn.dataset.msec)));
+        const mobVitalsBtn = document.getElementById('mob-vitals');
+        if (mobVitalsBtn) mobVitalsBtn.addEventListener('click', () => switchMobileTab('combat'));
+        const mobHeaderToggle = document.getElementById('mob-header-toggle');
+        if (mobHeaderToggle) mobHeaderToggle.addEventListener('click', () => {
+            const header = document.querySelector('.sheet-header'); if (!header) return;
+            const open = header.classList.toggle('mob-open');
+            mobHeaderToggle.textContent = open ? '▴ Infos' : '▾ Infos';
+        });
+        document.getElementById('armor-class')?.addEventListener('input', updateMobileVitals);
+        const onMobileMediaChange = () => applyLayout(getStore('dnd-layout-mode', false) || 'classic');
+        if (mobileMedia.addEventListener) mobileMedia.addEventListener('change', onMobileMediaChange);
+        else if (mobileMedia.addListener) mobileMedia.addListener(onMobileMediaChange);
+        // Filet : certains environnements (WebViews, émulation) ne délivrent pas l'event 'change' de matchMedia
+        let mobileResizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(mobileResizeTimer);
+            mobileResizeTimer = setTimeout(() => {
+                if (isMobileView() !== document.body.classList.contains('mobile-sheet')) onMobileMediaChange();
+            }, 150);
+        });
         function switchStrictTab(tabId) { document.querySelectorAll('.tab-btn-strict').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId)); document.querySelectorAll('#layout-tabs-container .tab-content').forEach(content => { content.classList.toggle('hidden', content.id !== tabId); content.classList.toggle('active', content.id === tabId); }); }
         document.querySelectorAll('.tab-btn-strict').forEach(btn => { btn.addEventListener('click', () => switchStrictTab(btn.dataset.tab)); });
 
@@ -1084,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.toggle('at-zero-hp', atZero);
             const deathSection = document.querySelector('.death-saves-section');
             if(deathSection) deathSection.classList.toggle('is-critical', atZero);
+            updateMobileVitals();
         }
 
         // Soin / dégâts rapides (les dégâts entament d'abord les PV temporaires, règle 5e)
@@ -1866,7 +1954,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.PrintSheet) {
                 try { const ok = await window.PrintSheet.print(); if (ok) return; } catch (e) { console.warn('Impression fiche officielle KO, repli :', e); }
             }
-            applyLayout('classic'); window.print();
+            applyLayout('classic', { forceDesktop: true }); window.print();
+            if (isMobileView()) applyLayout(getStore('dnd-layout-mode', false) || 'classic');
         });
 
         // ==========================================
@@ -2048,6 +2137,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Révèle un élément (onglet masqué) puis le met en évidence.
             function revealAndScroll(el) {
                 if (!el) return;
+                const mobSec = el.closest('.mob-section');
+                if (mobSec && !mobSec.classList.contains('active') && window.__switchMobileTab) window.__switchMobileTab(mobSec.dataset.msec);
                 const tabContent = el.closest('.tab-content');
                 if (tabContent && tabContent.classList.contains('hidden')) {
                     const tabBtn = document.querySelector(`[data-tab="${tabContent.id}"]`);

@@ -76,6 +76,7 @@
             <option value="tabs">📑 Mode Onglets</option>
             <option value="custom">🧩 Mode Personnalisé (Brouillon)</option>
         </select>
+        <div class="mobile-layout-note">📱 Sur téléphone, la fiche passe automatiquement en affichage mobile (navigation en bas d'écran). Le mode choisi ici s'applique sur grand écran.</div>
         <div id="profile-actions" class="hidden" style="display:flex; gap:5px; margin-top:8px;">
             <button id="btn-rename-profile" class="btn-small" style="flex:1; background:#e67e22;">✏️ Renommer</button>
             <button id="btn-delete-profile" class="btn-small" style="flex:1; background:#e74c3c;">❌ Supprimer</button>
@@ -196,6 +197,7 @@
                 <div class="header-main-row">
                     <div id="header-avatar" class="avatar-mini" title="Modifie l'image de ton avatar"></div>
                     <div class="input-group character-name-group"><input type="text" id="char-name" placeholder="Nom du Personnage"><label>Nom du Personnage</label></div>
+                    <button id="mob-header-toggle" class="btn-icon no-print" type="button" title="Afficher / masquer les infos du personnage">▾ Infos</button>
                 </div>
                 <div class="info-grid">
                     <div class="input-group"><input type="number" id="char-level" value="1" min="1" max="20"><label>Niveau</label></div>
@@ -253,6 +255,15 @@
             <div class="classic-grid"><div id="custom-col-1" class="sheet-col col-flex-row"></div><div id="custom-col-2" class="sheet-col"></div><div id="custom-col-3" class="sheet-col"></div></div>
         </div>
 
+        <!-- Affichage téléphone (≤700px) : une section à la fois, pilotée par la barre de navigation basse #mobile-nav -->
+        <div id="layout-mobile-container" class="layout-wrapper hidden">
+            <div id="mob-sec-perso" class="mob-section" data-msec="perso"></div>
+            <div id="mob-sec-combat" class="mob-section" data-msec="combat"></div>
+            <div id="mob-sec-sac" class="mob-section" data-msec="sac"></div>
+            <div id="mob-sec-magie" class="mob-section" data-msec="magie"></div>
+            <div id="mob-sec-notes" class="mob-section" data-msec="notes"></div>
+        </div>
+
         <div id="widget-storage" style="display: none;">
             <div id="widget-inspiration" class="draggable-widget widget-third"><div class="dynamic-box mini-stat-box" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;"><label class="section-title">Inspiration</label><input type="checkbox" id="heroic-inspiration" style="transform:scale(1.5); margin-top:5px; cursor:pointer;"></div></div>
             <div id="widget-concentration" class="draggable-widget widget-third"><div class="dynamic-box mini-stat-box" style="text-align:center; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center;"><label class="section-title rollable" data-name="Jet de Concentration" data-target="skill-val-save-con" title="Cliquer pour lancer">Concentration</label><div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:5px;"><label class="toggle-label" style="color:var(--text-color); cursor:pointer;"><input type="checkbox" id="is-concentrating"> Active</label></div></div></div>
@@ -299,6 +310,24 @@
             <div id="widget-appearance" class="draggable-widget widget-full"><div class="dynamic-box appearance-box"><div class="section-title-row collapsible-header"><label class="section-title">Identité</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="avatar-upload-container"><label for="avatar-file-input" class="avatar-label"><img id="main-avatar-preview" src="" alt="Avatar" class="hidden"><span id="avatar-placeholder">📸 Portrait</span></label><input type="file" id="avatar-file-input" accept="image/*" class="hidden"></div><div class="avatar-actions no-print" style="text-align:center; display:flex; gap:6px; justify-content:center;"><button id="btn-change-avatar" class="btn-small" title="Choisir une autre photo">📸 Changer</button><button id="btn-recrop-avatar" class="btn-small" style="display:none;" title="Réajuster le zoom et le cadrage du portrait sans réimporter le fichier">✏️ Recadrer</button></div><div class="appearance-header" style="display: flex; gap: 15px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;"><label>Alignement :</label><input type="text" id="char-alignment" style="flex: 1; min-width: 150px;"><label>Langues :</label><input type="text" id="char-languages" placeholder="Commun, Elfique..." style="flex: 2; min-width: 200px;"></div><label style="font-weight:bold; color:#555; display:block; margin-bottom:4px;">Apparence :</label><textarea id="char-appearance" class="auto-expand" placeholder="Décris l'apparence physique..."></textarea><label style="font-weight:bold; color:#555; display:block; margin:10px 0 4px;">Histoire &amp; personnalité :</label><textarea id="char-backstory" class="auto-expand" placeholder="Histoire du personnage, traits de personnalité, idéaux, liens, défauts..."></textarea></div></div></div>
         </div>
     </div>
+
+    <!-- Barre de navigation basse (affichage téléphone) : bandeau vital + 5 sections -->
+    <nav id="mobile-nav" class="no-print" aria-label="Navigation de la fiche">
+        <button id="mob-vitals" type="button" title="Aller au combat">
+            <span class="mob-vitals-hp">❤️
+                <span class="mob-vitals-track"><span id="mob-vitals-fill"></span></span>
+                <span id="mob-vitals-text">– / –</span>
+            </span>
+            <span class="mob-vitals-ca">🛡️ <b id="mob-vitals-ca-val">–</b></span>
+        </button>
+        <div class="mobile-nav-tabs">
+            <button class="mob-tab" type="button" data-msec="perso"><span class="mob-tab-ic">🧝</span><span class="mob-tab-lb">Perso</span></button>
+            <button class="mob-tab" type="button" data-msec="combat"><span class="mob-tab-ic">⚔️</span><span class="mob-tab-lb">Combat</span></button>
+            <button class="mob-tab" type="button" data-msec="sac"><span class="mob-tab-ic">🎒</span><span class="mob-tab-lb">Sac</span></button>
+            <button class="mob-tab" type="button" data-msec="magie"><span class="mob-tab-ic">✨</span><span class="mob-tab-lb">Magie</span></button>
+            <button class="mob-tab" type="button" data-msec="notes"><span class="mob-tab-ic">📜</span><span class="mob-tab-lb">Notes</span></button>
+        </div>
+    </nav>
 </div>
 
 <div id="grimoire-modal" class="modal-overlay hidden no-print"><div class="scroll-container"><div class="scroll-top" id="btn-close-grimoire">▲ Refermer le grimoire ▲</div><div class="grimoire-book"><div class="scroll-paper"><h2 class="grimoire-title">Le Grimoire des Sortilèges</h2><div style="text-align:center; margin-bottom: 20px;"><button id="btn-open-spell-add" class="btn">➕ Inscrire un nouveau sort</button></div><div id="grimoire-content"></div></div><div class="grimoire-flip gf2"><div class="gf-shade"></div></div><div class="grimoire-flip gf1"><div class="gf-shade"></div></div><div class="grimoire-cover"><div class="gc-front"><div class="gc-border"><span class="gc-orn">✦ ✦ ✦</span><h3 class="gc-title">Grimoire</h3><div class="gc-sub">des Sortilèges</div><div class="gc-clasp"></div><span class="gc-orn">✦ ✦ ✦</span></div></div><div class="gc-back"></div><div class="gc-shade"></div></div></div><div class="scroll-bottom"></div></div></div>
