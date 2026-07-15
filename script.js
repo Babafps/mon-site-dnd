@@ -136,6 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', (e) => { if (!settingsDropdown.classList.contains('hidden') && !e.target.closest('.settings-container')) { settingsDropdown.classList.add('hidden'); } });
     }
 
+    // Bouton ⌨️ du menu ☰ : ouvre l'éditeur de raccourcis du bon côté (MJ ou joueur).
+    // ⚠️ Câblé ICI, au niveau global : l'écran MJ s'ouvre depuis l'accueil (sans personnage actif),
+    // donc un câblage dans la branche « fiche » laisserait le bouton mort côté MJ.
+    document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
+        if (settingsDropdown) settingsDropdown.classList.add('hidden');
+        if (document.body.classList.contains('gm-active') && window.GMScreen && window.GMScreen.openShortcuts) { window.GMScreen.openShortcuts(); return; }
+        if (window.__openPlayerShortcuts) { window.__openPlayerShortcuts(); return; }
+        if (window.showAppToast) window.showAppToast('Ouvre une fiche ou l\'écran du MJ pour régler les raccourcis.', '#7a6050');
+    });
+
     // ==========================================
     // SESSION DE JEU (côté joueur) — UI du menu ☰
     // ==========================================
@@ -226,7 +236,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const safe = rawName.replace(/[^\w\-]+/g, '_');
                 const exportData = { version: "char-1.0", meta: meta, data: data };
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-                const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "fiche_" + safe + ".json"); document.body.appendChild(a); a.click(); a.remove();
+                // Nom de fichier lisible : « Fiche de <nom du perso>.json » (on ne retire que les
+                // caractères interdits par les systèmes de fichiers, pour garder accents et espaces).
+                const fileName = 'Fiche de ' + rawName.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ') + '.json';
+                const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", fileName); document.body.appendChild(a); a.click(); a.remove();
             } catch (err) { alert("Erreur lors de l'export : " + err.message); }
             finally { btnExportChar.disabled = false; btnExportChar.textContent = old; }
         });
@@ -1332,7 +1345,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if(document.getElementById('btn-add-spell')) { document.getElementById('btn-add-spell').addEventListener('click', () => { const comp = readSpellCompForm(); const sp = { name: document.getElementById('new-spell-name').value, level: document.getElementById('new-spell-level').value || 0, time: document.getElementById('new-spell-time').value, range: document.getElementById('new-spell-range').value, duration: document.getElementById('new-spell-duration').value, comp: comp, res: spellResString(comp), desc: quillNewSpell.root.innerHTML, notes: document.getElementById('new-spell-notes').value, pinned: document.getElementById('new-spell-pinned').checked, prepared: editingSpellIndex >= 0 ? spells[editingSpellIndex].prepared : false }; if(sp.name) { if(editingSpellIndex >= 0) { spells[editingSpellIndex] = sp; } else { spells.push(sp); } setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); spellModal.classList.add('hidden'); } }); }
         window.togglePin = (index) => { spells[index].pinned = !spells[index].pinned; setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }; window.deleteSpell = (index) => { if(confirm("Oublier ce sort ?")) { spells.splice(index, 1); setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); }}; window.moveSpellUp = (index) => { let prevIndex = -1; for(let i = index - 1; i >= 0; i--) { if(spells[i].pinned) { prevIndex = i; break; } } if(prevIndex !== -1) { [spells[prevIndex], spells[index]] = [spells[index], spells[prevIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.moveSpellDown = (index) => { let nextIndex = -1; for(let i = index + 1; i < spells.length; i++) { if(spells[i].pinned) { nextIndex = i; break; } } if(nextIndex !== -1) { [spells[nextIndex], spells[index]] = [spells[index], spells[nextIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.editSpell = (index) => { const data = spells[index]; document.getElementById('new-spell-name').value = data.name; document.getElementById('new-spell-level').value = data.level; document.getElementById('new-spell-time').value = data.time; document.getElementById('new-spell-range').value = data.range; document.getElementById('new-spell-duration').value = data.duration || ''; fillSpellCompForm(data.comp || parseSpellRes(data.res)); quillNewSpell.root.innerHTML = data.desc; document.getElementById('new-spell-notes').value = data.notes; document.getElementById('new-spell-pinned').checked = data.pinned; editingSpellIndex = index; document.getElementById('spell-modal-title').textContent = "Modifier le Sort"; spellModal.classList.remove('hidden'); };
-        const grimoireModal = document.getElementById('grimoire-modal'); document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-grimoire') { renderGrimoire(); grimoireModal.classList.remove('hidden', 'closing'); grimoireModal.classList.add('opening'); } }); if(document.getElementById('btn-close-grimoire')) document.getElementById('btn-close-grimoire').addEventListener('click', () => { grimoireModal.classList.remove('opening'); grimoireModal.classList.add('closing'); setTimeout(() => { grimoireModal.classList.add('hidden'); }, 750); });
+        const grimoireModal = document.getElementById('grimoire-modal'); document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-grimoire') { renderGrimoire(); grimoireModal.classList.remove('hidden', 'closing'); grimoireModal.classList.add('opening'); } }); if(document.getElementById('btn-close-grimoire')) document.getElementById('btn-close-grimoire').addEventListener('click', () => { if(grimoireModal.classList.contains('closing')) return; grimoireModal.classList.remove('opening'); grimoireModal.classList.add('closing'); setTimeout(() => { grimoireModal.classList.add('hidden'); grimoireModal.classList.remove('closing'); }, 1000); });
 
         let journal = getStore('dnd-journal') || []; const journalPage = document.getElementById('book-page-content');
         // Animation « page qui tourne » rejouée à chaque changement de contenu du livre
@@ -1374,6 +1387,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.deleteJournalEntry = (index) => { if(confirm("Déchirer cette page définitivement ?")) { journal.splice(index, 1); setStore('dnd-journal', journal); renderJournalTOC(); } };
         if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; window.showAppToast("📕 Chapitre enregistré dans le journal", '#27ae60'); } }); }
         function clearBookFlames() { const bc = document.getElementById('book-container'); const f = bc && bc.querySelector('.book-flames'); if(f) f.remove(); }
+
         function igniteBook() {
             const bc = document.getElementById('book-container'); if(!bc) return;
             clearBookFlames();
@@ -1384,8 +1398,19 @@ document.addEventListener('DOMContentLoaded', () => {
             bc.appendChild(flames);
         }
         document.body.addEventListener('click', (e) => {
-            if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); clearBookFlames(); modal.classList.remove('hidden', 'book-burning'); modal.classList.add('book-opening'); renderJournalTOC(); }
-            if(e.target.id === 'btn-lighter-close') { const modal = document.getElementById('journal-modal'); modal.classList.remove('book-opening'); igniteBook(); modal.classList.add('book-burning'); setTimeout(() => { modal.classList.add('hidden'); clearBookFlames(); }, 1800); }
+            if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); clearBookFlames(); modal.classList.remove('hidden', 'book-burning', 'book-closing'); modal.classList.add('book-opening'); renderJournalTOC(); }
+            // Fermeture en DEUX temps : la couverture se rabat (0,62 s), PUIS le livre refermé s'embrase.
+            if(e.target.id === 'btn-lighter-close') {
+                const modal = document.getElementById('journal-modal');
+                if(modal.classList.contains('book-closing') || modal.classList.contains('book-burning')) return;   // anti double-clic
+                modal.classList.remove('book-opening');
+                modal.classList.add('book-closing');
+                setTimeout(() => {                       // 780 ms = durée de bookCoverClose
+                    igniteBook();
+                    modal.classList.add('book-burning');
+                    setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('book-closing', 'book-burning'); clearBookFlames(); }, 1600);
+                }, 800);
+            }
         });
 
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
@@ -1831,14 +1856,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.showAppToast) window.showAppToast('⌨️ Raccourci enregistré : ' + keyLabel(k), '#27ae60');
         }, true);
         function openShortcutsModal() { scCaptureId = null; renderShortcutsEditor(); document.getElementById('shortcuts-modal')?.classList.remove('hidden'); }
+        window.__openPlayerShortcuts = openShortcutsModal;   // exposé : le bouton ☰ est câblé au niveau global (voir plus haut)
         document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => { scCaptureId = null; document.getElementById('shortcuts-modal')?.classList.add('hidden'); });
         document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => { DB.remove('dnd-shortcuts-player'); renderShortcutsEditor(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
-        // Bouton du menu ☰ : ouvre l'éditeur du bon côté (MJ ou joueur)
-        document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
-            document.getElementById('settings-dropdown')?.classList.add('hidden');
-            if (document.body.classList.contains('gm-active') && window.GMScreen && window.GMScreen.openShortcuts) window.GMScreen.openShortcuts();
-            else openShortcutsModal();
-        });
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', async () => {
@@ -2093,62 +2113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             window.closeGlobalSearch = closeSearch;
         }
 
-        // ==========================================
-        // GESTIONNAIRE DE RACCOURCIS CLAVIER
-        // ==========================================
-        const DEFAULT_SHORTCUTS = [
-            { id: 'open-search',  label: 'Recherche Globale',    key: 'k', action: () => { document.getElementById('btn-global-search-trigger')?.click(); } },
-            { id: 'roll-adv',     label: 'Mode Avantage',        key: 'a', action: () => { const r = document.querySelector('input[name="roll-mode"][value="adv"]'); if(r){r.checked=true;} } },
-            { id: 'roll-dis',     label: 'Mode Désavantage',     key: 'd', action: () => { const r = document.querySelector('input[name="roll-mode"][value="dis"]'); if(r){r.checked=true;} } },
-            { id: 'roll-normal',  label: 'Mode Normal',          key: 'n', action: () => { const r = document.querySelector('input[name="roll-mode"][value="normal"]'); if(r){r.checked=true;} } },
-            { id: 'open-dice',    label: 'Ouvrir plateau de dés', key: 'r', action: () => { const dd = document.getElementById('dice-drawer'); if(dd) dd.classList.toggle('open'); } },
-            { id: 'open-music',   label: 'Ouvrir le lecteur musical', key: 'm', action: () => { window.MusicPlayer?.toggle(); } },
-            { id: 'roll-init',    label: 'Lancer Initiative',    key: 'i', action: () => { const el = document.querySelector('[data-name="Initiative"]'); if(el) el.click(); } },
-            { id: 'short-rest',   label: 'Repos Court',          key: 's', action: () => { document.getElementById('btn-short-rest')?.click(); } },
-            { id: 'long-rest',    label: 'Repos Long',           key: 'l', action: () => { document.getElementById('btn-long-rest')?.click(); } },
-            { id: 'go-home',      label: 'Retour Accueil',       key: 'h', action: () => { document.getElementById('btn-go-home')?.click(); } },
-        ];
-
-        let savedShortcutKeys = {};
-        try { savedShortcutKeys = JSON.parse(DB.get('dnd-shortcuts') || '{}'); } catch(e) {}
-        const shortcuts = DEFAULT_SHORTCUTS.map(s => ({ ...s, key: savedShortcutKeys[s.id] ?? s.key }));
-
-        function renderShortcutsConfig() {
-            const container = document.getElementById('shortcuts-config-list');
-            if(!container) return;
-            container.innerHTML = '';
-            shortcuts.forEach((sc, i) => {
-                const row = document.createElement('div');
-                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.78rem;';
-                row.innerHTML = `<span style="color:#555; flex:1;">${sc.label}</span>
-                    <button class="shortcut-key-btn" data-i="${i}" title="Cliquer pour changer" style="font-family:monospace; font-weight:bold; background:var(--primary-color); color:white; border:none; border-radius:4px; padding:3px 8px; cursor:pointer; min-width:28px; font-size:0.85rem;">${sc.key ? sc.key.toUpperCase() : '—'}</button>`;
-                container.appendChild(row);
-            });
-            container.querySelectorAll('.shortcut-key-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const i = parseInt(btn.dataset.i);
-                    btn.textContent = '⏳';
-                    btn.style.background = '#e67e22';
-                    const handler = (e) => {
-                        e.preventDefault(); e.stopPropagation();
-                        let key = e.key.toLowerCase(); if(key === 'escape') key = '';
-                        shortcuts[i].key = key; savedShortcutKeys[shortcuts[i].id] = key;
-                        DB.set('dnd-shortcuts', JSON.stringify(savedShortcutKeys));
-                        renderShortcutsConfig(); window.removeEventListener('keydown', handler, true);
-                    };
-                    window.addEventListener('keydown', handler, true);
-                });
-            });
-        }
-        renderShortcutsConfig();
-
-        window.addEventListener('keydown', (e) => {
-            const tag = document.activeElement?.tagName;
-            if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable || document.activeElement?.classList.contains('ql-editor')) return;
-            if(e.ctrlKey || e.metaKey || e.altKey) return;
-            const key = e.key.toLowerCase();
-            const sc = shortcuts.find(s => s.key && s.key === key);
-            if(sc) { e.preventDefault(); sc.action(); }
-        });
+        // (L'ancien gestionnaire de raccourcis + son affichage dans le menu ☰ ont été supprimés
+        //  le 14 juil. 2026 : il faisait doublon avec l'éditeur unique — voir PLAYER_SC_ACTIONS.)
     }
 });

@@ -354,7 +354,6 @@
                 <span id="gm-presence-count" class="gm-presence-count" style="display:none;">👥 0</span>
                 <button id="gm-room-btn" class="gm-btn gm-btn-primary">➕ Créer une session</button>
             </div>
-            <button id="gm-shortcuts-btn" class="gm-btn gm-icon-btn" title="Raccourcis clavier (?)">⌨️</button>
             <button id="gm-hints-toggle" class="gm-btn gm-icon-btn" title="Masquer les aides ⓘ">💡</button>
             <button id="gm-sidebar-toggle" class="gm-btn gm-icon-btn" title="Afficher / masquer le panneau latéral">📜</button>
             <button id="gm-close" class="gm-btn gm-close" title="Fermer">✕</button>
@@ -586,8 +585,6 @@
                                 <label class="gm-map-ctl"><input type="checkbox" id="gm-map-showgrid" checked> Afficher</label>
                                 <span class="gm-readonly-note" style="flex:1; text-align:right;">Jetons, dessin, brouillard, zoom : barre d'outils à gauche.</span>
                             </div>
-                            <div class="gm-set-h">⌨️ Raccourcis clavier</div>
-                            <div id="gm-set-shortcuts" class="gm-set-shortcuts"></div>
                             <div class="gm-row" style="margin-top:6px;">
                                 <button id="gm-tuto-replay" class="gm-btn" title="Relancer la visite guidée de l'écran MJ">🎓 Revoir le tutoriel</button>
                                 <span class="gm-readonly-note" style="flex:1; text-align:right;">Touche <kbd>?</kbd> : aide raccourcis en grand.</span>
@@ -784,7 +781,6 @@
             }));
             const undoBtn = ov.querySelector('#gm-undo'); if (undoBtn) undoBtn.addEventListener('click', (e) => { e.stopPropagation(); undoMap(); });
             const redoBtn = ov.querySelector('#gm-redo'); if (redoBtn) redoBtn.addEventListener('click', (e) => { e.stopPropagation(); redoMap(); });
-            const scBtn = ov.querySelector('#gm-shortcuts-btn'); if (scBtn) scBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleShortcutsHelp(); });
         } catch (e) { console.warn('gm layout Roll20:', e); }
     }
 
@@ -3217,16 +3213,10 @@
     // ⚠️ hasOwnProperty (et non `saved[t] || def`) : une touche VOLONTAIREMENT libérée est stockée
     // à '' — avec `||` elle serait retombée sur sa valeur par défaut et aurait recréé le conflit.
     function gmShortcutMap() { let saved = {}; try { saved = JSON.parse(localStorage.getItem('dnd-gm-shortcuts') || '{}'); } catch (e) {} const m = {}; GM_TOOL_ACTIONS.forEach(a => { const has = Object.prototype.hasOwnProperty.call(saved, a.tool); m[a.tool] = String(has ? saved[a.tool] : a.def).toLowerCase(); }); return m; }
-    function saveGmShortcutMap(m) { try { localStorage.setItem('dnd-gm-shortcuts', JSON.stringify(m)); } catch (e) {} refreshGmShortcutViews(); }
+    function saveGmShortcutMap(m) { try { localStorage.setItem('dnd-gm-shortcuts', JSON.stringify(m)); } catch (e) {} }
     // TOOL_KEYS reconstruit à la volée depuis la table personnalisable : { touche: [outil, toast] }
     function toolKeys() { const m = gmShortcutMap(), out = {}; GM_TOOL_ACTIONS.forEach(a => { if (m[a.tool]) out[m[a.tool]] = [a.tool, a.toast]; }); return out; }
-    function gmShortcutRows() { const m = gmShortcutMap(); return GM_TOOL_ACTIONS.filter(a => m[a.tool]).map(a => [m[a.tool].toUpperCase(), a.label]).concat(GM_FIXED_SC); }
-    function refreshGmShortcutViews() {
-        window.__gmShortcuts = gmShortcutRows();
-        const h = byId('gm-set-shortcuts');
-        if (h) h.innerHTML = window.__gmShortcuts.map(s => `<span class="gm-set-sc"><kbd>${esc(s[0])}</kbd> ${esc(s[1])}</span>`).join('');
-    }
-    // ----- Raccourcis clavier : voir ET modifier (bouton ⌨️ / menu ☰ / touche ?) -----
+    // ----- Raccourcis clavier : SEULE interface = l'éditeur (menu ☰ « ⌨️ Raccourcis clavier » ou touche ?) -----
     let gmScCaptureTool = null;   // outil dont on capture la nouvelle touche
     function renderGmShortcutsBody() {
         const box = byId('gm-sc-grid'); if (!box) return;
@@ -3252,7 +3242,7 @@
         const close = () => { ov.remove(); gmScCaptureTool = null; };
         ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
         const x = byId('gm-sc-close'); if (x) x.addEventListener('click', close);
-        const rst = byId('gm-sc-reset'); if (rst) rst.addEventListener('click', () => { try { localStorage.removeItem('dnd-gm-shortcuts'); } catch (e) {} refreshGmShortcutViews(); renderGmShortcutsBody(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
+        const rst = byId('gm-sc-reset'); if (rst) rst.addEventListener('click', () => { try { localStorage.removeItem('dnd-gm-shortcuts'); } catch (e) {} renderGmShortcutsBody(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
     }
     // Capture de la nouvelle touche (phase de capture → passe avant le handler d'outils)
     document.addEventListener('keydown', (e) => {
@@ -4850,7 +4840,6 @@
         byId('gm-snap-create').addEventListener('click', createSnap);
 
         // Raccourcis clavier des outils carte (hors saisie) + Ctrl+Z = annuler sur la carte
-        refreshGmShortcutViews();
         const tutoBtn = byId('gm-tuto-replay');
         if (tutoBtn) tutoBtn.addEventListener('click', () => startGmTutorial(true));
         document.addEventListener('keydown', (e) => {
@@ -5334,7 +5323,7 @@
             { sel: '.gm-leftbar [data-tgroup="walls"]', icon: '🧱', title: 'Murs, portes & obscurité', text: 'Trace des murs invisibles pour les joueurs : ils bloquent leurs jetons ET leur vision dans le noir. Les portes s\'ouvrent d\'un clic. Active l\'obscurité 🌑 pour limiter leur vision autour de leur jeton.' },
             { sel: '.gm-leftbar [data-tgroup="tokens"]', icon: '🧝', title: 'Les jetons', text: 'Pose des jetons à l\'avance, assigne-les à tes joueurs (ils pourront les déplacer), et range-les par calques façon Roll20 : Carte, MJ (invisible aux joueurs) ou PJ.' },
             { sel: '#gm-sidebar-toggle', icon: '📜', title: 'Le panneau latéral', text: 'Table des joueurs, lanceur de dés, audio & musique, préparation de séance, journal, et le compendium (règles + conditions 5e cherchables).' },
-            { sel: '#gm-shortcuts-btn', icon: '⌨️', title: 'Besoin d\'aide ?', text: 'La touche ? (ou ce bouton) affiche tous les raccourcis clavier. Tu peux revoir ce tutoriel depuis ⚙️ Réglages. Bonne partie ! 🎲' }
+            { sel: '#btn-settings-toggle', icon: '⌨️', title: 'Besoin d\'aide ?', text: 'La touche ? (ou le menu ☰ → « Raccourcis clavier ») affiche tous les raccourcis — et te permet de les modifier. Tu peux revoir ce tutoriel depuis ⚙️ Réglages. Bonne partie ! 🎲' }
         ];
     }
     function onTutoKey(e) {

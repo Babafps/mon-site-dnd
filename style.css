@@ -37,6 +37,22 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ============================================================
+   CENTRAGE OPTIQUE
+   `letter-spacing` ajoute son espace APRÈS la dernière lettre : un texte centré
+   paraît donc décalé vers la GAUCHE (de la valeur de l'espacement). On compense en
+   retirant cet espace de fin sur les éléments centrés qui utilisent un espacement.
+   ============================================================ */
+.home-title, .grimoire-title, .gc-title, .gc-sub, .gc-orn,
+.bc-title, .bc-sub, .bc-orn, .toc-title, .modal-header h2,
+.section-title.is-centered, .spell-stat-col label, .input-group label,
+.combat-box label, .health-col label, .coin-box label,
+#dice-drawer h3, .dice-theme-title, .home-tab, .attribute-block h3 {
+    text-indent: 0.06em;              /* compense visuellement l'espace de fin */
+}
+.gc-orn, .bc-orn { margin-right: -0.45em; }        /* espacement large (0.45em) : compensation plus forte */
+.header-deco, .sheet-deco { margin-right: -8px; }  /* letter-spacing: 8px */
+
 body {
     background-color: #1a1614;
     background-image:
@@ -258,14 +274,29 @@ body.concentrating-mode #concentration-glow {
 
 .home-title {
     font-family: 'Cinzel', serif;
-    font-size: 2.8rem;
+    font-size: 3.1rem;
     color: var(--primary-color);
-    margin-bottom: 28px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid var(--primary-color);
-    text-shadow: 1px 2px 4px rgba(0,0,0,0.12);
-    letter-spacing: 0.04em;
+    margin-bottom: 30px;
+    padding-bottom: 16px;
+    border-bottom: none;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.16);
+    letter-spacing: 0.07em;
     position: relative;
+}
+/* Filet orné sous le titre d'accueil : trait dégradé + losange doré centré */
+.home-title::after {
+    content: '';
+    position: absolute; left: 12%; right: 12%; bottom: 6px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary-color) 22%, var(--accent-color) 50%, var(--primary-color) 78%, transparent);
+}
+.home-title::before {
+    content: '◆';
+    position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%);
+    font-size: 0.72rem; color: var(--accent-color);
+    text-shadow: 0 0 8px rgba(196,155,53,0.6);
+    /* Sans ça, le losange hérite du letter-spacing du titre : l'espace ajouté APRÈS le
+       caractère le décale visiblement à gauche du centre. */
+    letter-spacing: normal; text-indent: 0;
 }
 .home-title::after {
     content: '⚔️';
@@ -388,7 +419,18 @@ body.theme-dark .home-archived-toggle { color: #b6a484; }
     border: 1.5px solid rgba(122,40,40,0.4);
     border-radius: var(--radius-lg);
     padding: 30px;
-    box-shadow: var(--shadow-lg), 0 0 80px rgba(0,0,0,0.35);
+    /* Parchemin : ombre profonde + double liseré doré interne (effet reliure) */
+    box-shadow: var(--shadow-lg), 0 0 80px rgba(0,0,0,0.35),
+                inset 0 0 0 1px rgba(196,155,53,0.35), inset 0 0 0 5px rgba(122,40,40,0.06);
+    /* Grain de papier (idée 5) : fibres générées en CSS, aucune image chargée.
+       Trois trames fines à angles différents = irrégularité crédible du parchemin. */
+    background-image:
+        repeating-linear-gradient(37deg, rgba(140,105,55,0.030) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(-52deg, rgba(140,105,55,0.024) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(8deg, rgba(120,90,45,0.018) 0 1px, transparent 1px 6px),
+        radial-gradient(ellipse at 18% 12%, rgba(255,255,255,0.30), transparent 45%),
+        radial-gradient(ellipse at 82% 88%, rgba(120,85,40,0.10), transparent 50%),
+        linear-gradient(172deg, var(--sheet-bg-color) 0%, rgba(238,225,192,1) 100%);
     position: relative;
     overflow: hidden;
 }
@@ -425,14 +467,24 @@ textarea.auto-expand { overflow: hidden; resize: none; min-height: 50px; width: 
 .btn {
     background: linear-gradient(180deg, var(--primary-hover) 0%, var(--primary-color) 100%);
     color: var(--accent-color);
-    border: 1px solid rgba(196,155,53,0.4);
-    border-radius: 7px; padding: 10px 16px;
+    border: 1px solid rgba(196,155,53,0.45);
+    border-radius: 8px; padding: 10px 18px;
     font-weight: bold; cursor: pointer;
     transition: var(--transition-smooth);
     font-family: 'Cinzel', serif;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.12);
+    letter-spacing: 0.05em;
+    /* Relief : ombre + reflet haut + ombre interne basse (bouton bombé) */
+    box-shadow: 0 3px 9px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -2px 4px rgba(0,0,0,0.18);
     position: relative; overflow: hidden;
 }
+/* Éclat qui balaie le bouton au survol */
+.btn::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.22) 50%, transparent 65%);
+    transform: translateX(-120%); transition: transform 0.55s ease;
+}
+.btn:hover::after { transform: translateX(120%); }
+.btn:active { transform: translateY(1px); box-shadow: 0 1px 4px rgba(0,0,0,0.28), inset 0 2px 5px rgba(0,0,0,0.25); }
 .btn::after {
     content: '';
     position: absolute;
@@ -677,12 +729,19 @@ h1::before, h1::after {
 .dynamic-box, .full-width-notes, .mini-stat-box {
     background: linear-gradient(158deg, rgba(255,253,244,0.97) 0%, rgba(250,244,228,0.95) 100%);
     border: 1px solid var(--soft-border);
-    box-shadow: var(--shadow-sm), var(--inner-highlight);
+    /* Relief : ombre portée douce + liseré interne clair + fine ligne dorée en pied */
+    box-shadow: var(--shadow-sm), var(--inner-highlight), inset 0 -1px 0 rgba(196,155,53,0.16);
     border-radius: var(--radius-md);
-    padding: 16px;
+    padding: 17px 18px;
     transition: box-shadow 0.28s ease, border-color 0.28s ease, transform 0.22s ease;
     position: relative;
     overflow: hidden;
+}
+/* Survol : le module se soulève légèrement et son liseré doré s'allume */
+.dynamic-box:hover, .full-width-notes:hover, .mini-stat-box:hover {
+    transform: translateY(-2px);
+    border-color: rgba(196,155,53,0.5);
+    box-shadow: var(--shadow-md), var(--inner-highlight), inset 0 -1px 0 rgba(196,155,53,0.32);
 }
 .dynamic-box::after {
     content: '';
@@ -711,12 +770,19 @@ h1::before, h1::after {
 }
 .mini-stat-box { padding: 10px; }
 
+/* Titre de module : plus affirmé (petites capitales espacées) + filet dégradé qui
+   s'estompe vers la droite, et un liseré doré en tête de section pour le relief. */
 .section-title {
-    font-weight: bold; font-family: 'Cinzel', serif; font-size: 1.1rem;
-    border-bottom: 1px solid rgba(122,40,40,0.18);
-    display: block; margin-bottom: 12px; padding-bottom: 7px;
+    font-weight: bold; font-family: 'Cinzel', serif; font-size: 1.02rem;
+    text-transform: uppercase; letter-spacing: 0.11em;
+    display: block; margin-bottom: 13px; padding-bottom: 8px;
     color: var(--primary-color);
-    letter-spacing: 0.04em;
+    border-bottom: none;
+    position: relative;
+}
+.section-title::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent-color) 0%, rgba(122,40,40,0.35) 22%, rgba(122,40,40,0.04) 70%, transparent 100%);
 }
 .section-title-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -1642,30 +1708,73 @@ body.theme-dark .search-group-head { color: var(--accent-color); border-color: r
 .gc-clasp { width: 46px; height: 14px; border-radius: 7px; background: linear-gradient(180deg, #e9c85a, #a87e1c); box-shadow: 0 2px 5px rgba(0,0,0,0.6); margin-top: 4px; }
 .gc-back { transform: rotateY(180deg); background: linear-gradient(175deg, #f6ecd4, #e6d6b0); border: 1px solid #d4c496; box-shadow: inset 0 0 40px rgba(120,90,40,0.28); }
 .grimoire-flip { z-index: 6; background: linear-gradient(175deg, #fbf4e2 0%, #efe1bf 100%); border: 1px solid #dcc9a0; box-shadow: 3px 4px 16px rgba(0,0,0,0.25); }
+/* Voile d'ombrage porté par la couverture et les pages : c'est LUI qui donne le relief.
+   Il s'assombrit quand l'élément est à plat et s'efface quand il a fini de tourner. */
+.gc-shade, .gf-shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0) 78%); }
+/* Tranche du livre (épaisseur visible au niveau de la reliure) */
+.grimoire-book::before { content: ''; position: absolute; left: -6px; top: 6px; bottom: 6px; width: 10px; border-radius: 4px 0 0 4px;
+    background: linear-gradient(90deg, #2c0a0a, #4a1212); box-shadow: inset -2px 0 6px rgba(0,0,0,0.6); z-index: 5; }
 /* État au repos (sécurité hors animation) : livre déjà ouvert */
 #grimoire-modal .grimoire-cover { transform: rotateY(-178deg); }
 #grimoire-modal .grimoire-flip { transform: rotateY(-178deg); opacity: 0; }
-/* Ouverture : le livre se pose, la couverture s'ouvre, les pages tournent, le contenu apparaît */
-.opening .grimoire-book { animation: gbook-in 0.45s cubic-bezier(0.2,0.8,0.3,1.1) both; }
-.opening .grimoire-cover { animation: gcover-open 1.05s cubic-bezier(0.55,0.06,0.28,1) 0.18s both; }
-.opening .gf1 { animation: gpage-flip 0.72s cubic-bezier(0.5,0.05,0.3,1) 0.66s both; }
-.opening .gf2 { animation: gpage-flip 0.82s cubic-bezier(0.5,0.05,0.3,1) 0.92s both; }
-.opening .scroll-paper > * { animation: gcontent-in 0.5s ease-out 0.95s both; }
-/* Fermeture : les pages reviennent puis la couverture se referme */
-.closing .grimoire-cover { animation: gcover-close 0.55s cubic-bezier(0.6,0,0.4,1) 0.1s both; }
-.closing .gf1 { animation: gpage-unflip 0.38s ease-in both; }
-.closing .gf2 { animation: gpage-unflip 0.3s ease-in both; }
-.closing .scroll-paper > * { animation: gcontent-out 0.22s ease-in both; }
-@keyframes gbook-in { from { opacity: 0; transform: translateY(28px) scale(0.9) rotateX(16deg); } to { opacity: 1; transform: none; } }
-@keyframes gcover-open { 0% { transform: rotateY(0); } 100% { transform: rotateY(-178deg); } }
-@keyframes gcover-close { 0% { transform: rotateY(-178deg); } 100% { transform: rotateY(0); } }
-@keyframes gpage-flip { 0% { transform: rotateY(0); opacity: 1; } 92% { opacity: 1; } 100% { transform: rotateY(-178deg); opacity: 0; } }
-@keyframes gpage-unflip { 0% { transform: rotateY(-178deg); opacity: 0; } 8% { opacity: 1; } 100% { transform: rotateY(0); opacity: 1; } }
+/* OUVERTURE : le livre se pose, la couverture bascule (lente au départ, elle "tombe" après
+   le point d'équilibre), les pages tournent en décalé, puis le contenu apparaît. */
+.opening .grimoire-book { animation: gbook-in 0.72s cubic-bezier(0.18,0.86,0.24,1.04) both; }
+.opening .grimoire-cover { animation: gcover-open 1.3s cubic-bezier(0.58,0.02,0.22,1) 0.4s both; }
+.opening .gc-shade { animation: gshade-open 1.3s ease-out 0.4s both; }
+.opening .gf1 { animation: gpage-flip 0.86s cubic-bezier(0.5,0.02,0.28,1) 1.05s both; }
+.opening .gf1 .gf-shade { animation: gshade-open 0.86s ease-out 1.05s both; }
+.opening .gf2 { animation: gpage-flip 0.94s cubic-bezier(0.5,0.02,0.28,1) 1.32s both; }
+.opening .gf2 .gf-shade { animation: gshade-open 0.94s ease-out 1.32s both; }
+.opening .scroll-paper > * { animation: gcontent-in 0.55s ease-out 1.75s both; }
+/* FERMETURE : les pages reviennent, puis la couverture se rabat et le livre s'éloigne */
+.closing .grimoire-cover { animation: gcover-close 0.6s cubic-bezier(0.45,0,0.35,1) 0.14s both; }
+.closing .gc-shade { animation: gshade-close 0.6s ease-in 0.14s both; }
+.closing .gf1 { animation: gpage-unflip 0.34s ease-in both; }
+.closing .gf2 { animation: gpage-unflip 0.28s ease-in both; }
+.closing .scroll-paper > * { animation: gcontent-out 0.2s ease-in both; }
+.closing .grimoire-book { animation: gbook-out 0.32s ease-in 0.62s both; }
+@keyframes gbook-in {
+    0%   { opacity: 0; transform: perspective(1800px) translateY(46px) translateZ(-220px) rotateX(20deg); }
+    62%  { opacity: 1; transform: perspective(1800px) translateY(-6px) translateZ(0) rotateX(-2deg); }
+    82%  { transform: perspective(1800px) translateY(2px) rotateX(0.6deg); }
+    100% { opacity: 1; transform: perspective(1800px) translateY(0) rotateX(0deg); }
+}
+@keyframes gbook-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: perspective(1800px) translateY(24px) translateZ(-140px) rotateX(12deg); } }
+/* Couverture rigide : elle se soulève, monte lentement jusqu'à l'aplomb, bascule, puis rebondit */
+@keyframes gcover-open {
+    0%   { transform: rotateY(0) translateZ(0); }
+    16%  { transform: rotateY(-12deg) translateZ(9px); }
+    58%  { transform: rotateY(-102deg) translateZ(9px); }
+    85%  { transform: rotateY(-170deg) translateZ(2px); }
+    94%  { transform: rotateY(-180deg) translateZ(0); }
+    100% { transform: rotateY(-178deg) translateZ(0); }
+}
+@keyframes gcover-close {
+    0%   { transform: rotateY(-178deg); }
+    20%  { transform: rotateY(-170deg) translateZ(3px); }
+    60%  { transform: rotateY(-74deg) translateZ(9px); }
+    92%  { transform: rotateY(-4deg) translateZ(0); }
+    100% { transform: rotateY(0); }
+}
+@keyframes gshade-open { 0% { opacity: 0.95; } 58% { opacity: 0.62; } 100% { opacity: 0; } }
+@keyframes gshade-close { 0% { opacity: 0; } 55% { opacity: 0.5; } 100% { opacity: 0.95; } }
+/* Page de papier : plus SOUPLE que la couverture — elle se cintre puis s'aplatit */
+@keyframes gpage-flip {
+    0%   { transform: rotateY(0) skewY(0deg); opacity: 1; }
+    45%  { transform: rotateY(-84deg) skewY(-2.5deg); opacity: 1; }
+    92%  { transform: rotateY(-170deg) skewY(1deg); opacity: 1; }
+    100% { transform: rotateY(-178deg) skewY(0deg); opacity: 0; }
+}
+@keyframes gpage-unflip { 0% { transform: rotateY(-178deg); opacity: 0; } 8% { opacity: 1; } 55% { transform: rotateY(-86deg) skewY(2deg); } 100% { transform: rotateY(0) skewY(0deg); opacity: 1; } }
 @keyframes gcontent-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes gcontent-out { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-    .opening .grimoire-book, .opening .grimoire-cover, .opening .grimoire-flip, .opening .scroll-paper > *,
-    .closing .grimoire-cover, .closing .grimoire-flip, .closing .scroll-paper > * { animation: none !important; }
+    .opening .grimoire-book, .opening .grimoire-cover, .opening .grimoire-flip, .opening .scroll-paper > *, .opening .gc-shade, .opening .gf-shade,
+    .closing .grimoire-book, .closing .grimoire-cover, .closing .grimoire-flip, .closing .scroll-paper > *, .closing .gc-shade,
+    .book-opening .book-container, .book-opening .book-cover, .book-opening .book-page, .book-closing .book-cover,
+    .book-opening .bc-shade, .book-closing .bc-shade { animation: none !important; }
 }
 
 /* ============================================================
@@ -1699,8 +1808,97 @@ body.theme-dark .search-group-head { color: var(--accent-color); border-color: r
 .bookmark-return:hover { top: 0; background: linear-gradient(180deg, #b03a3a, var(--primary-hover)); }
 #btn-lighter-close { position: fixed; top: 20px; right: 30px; font-size: 3.5rem; background: none; border: none; cursor: pointer; transition: var(--transition-smooth); z-index: 9999; }
 #btn-lighter-close:hover { transform: scale(1.2); filter: drop-shadow(0 0 18px rgba(230,126,34,0.9)); }
-.book-opening .book-container { animation: bookOpenAnim 0.8s cubic-bezier(0.2,0.8,0.2,1) forwards; }
-@keyframes bookOpenAnim { 0% { transform: scale(0) rotateY(-90deg); opacity: 0; } 100% { transform: scale(1) rotateY(0deg); opacity: 1; } }
+/* ---------- Couverture du journal (ouverture / fermeture réalistes) ----------
+   La couverture pivote sur sa RELIURE (transform-origin sur l'arête gauche) dans une
+   scène en perspective. Un voile (.bc-shade) s'assombrit pendant la rotation : c'est
+   ce dégradé qui donne la sensation de volume et de vrai papier qui tourne. */
+.book-cover {
+    position: absolute; inset: 10px; z-index: 6;
+    transform-origin: left center; transform-style: preserve-3d;
+    border-radius: 2px 15px 15px 2px;
+    transform: rotateY(0deg);
+}
+.bc-face { position: absolute; inset: 0; backface-visibility: hidden; border-radius: inherit; }
+.bc-front {
+    background: linear-gradient(135deg, #8a1c1c 0%, #6d1414 55%, #591010 100%);
+    border: 1px solid #3e0b0b;
+    box-shadow: inset -10px 0 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+.bc-back { transform: rotateY(180deg); background: linear-gradient(135deg, #5e1111, #4a0d0d); border: 1px solid #3e0b0b; box-shadow: inset 10px 0 24px rgba(0,0,0,0.4); }
+.bc-border { width: 100%; height: 100%; border: 2px solid rgba(196,155,53,0.55); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; position: relative; }
+.bc-orn { color: rgba(196,155,53,0.75); letter-spacing: 6px; font-size: 0.9rem; }
+.bc-title { font-family: 'Cinzel', serif; font-size: 2.6rem; color: var(--accent-color); text-shadow: 0 2px 6px rgba(0,0,0,0.6); margin: 0; }
+.bc-sub { font-family: 'Cinzel', serif; font-size: 1rem; color: rgba(196,155,53,0.8); letter-spacing: 3px; }
+.bc-clasp { position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 26px; height: 46px; border-radius: 4px; background: linear-gradient(180deg, #d9b44a, #9a7a2c); box-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+/* Voile d'ombrage : opaque quand la couverture est à plat, transparent une fois ouverte */
+.bc-shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.12) 45%, rgba(0,0,0,0) 100%); opacity: 0; }
+/* État au repos (hors animation) : le journal est ouvert, couverture rabattue à gauche */
+#journal-modal .book-cover { transform: rotateY(-176deg); }
+#journal-modal .book-cover .bc-shade { opacity: 0; }
+#journal-modal { perspective: 2400px; perspective-origin: 30% 50%; }
+
+/* Épaisseur du livre : tranche visible à la reliure + ombre projetée au sol */
+.book-container::before {
+    content: ''; position: absolute; left: -9px; top: 8px; bottom: 8px; width: 12px;
+    border-radius: 5px 0 0 5px; z-index: 0;
+    background: repeating-linear-gradient(180deg, #4a0d0d 0 2px, #611313 2px 4px);
+    box-shadow: inset -3px 0 7px rgba(0,0,0,0.7);
+}
+.book-container::after {   /* ombre portée : s'élargit quand le livre s'ouvre */
+    content: ''; position: absolute; left: 6%; right: 6%; bottom: -26px; height: 26px; z-index: -1;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.55), transparent 72%);
+    filter: blur(7px);
+}
+/* Creux de reliure sur la page (le papier s'enfonce près du dos) */
+.book-page::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 46px; pointer-events: none; z-index: 2;
+    background: linear-gradient(90deg, rgba(90,60,30,0.30) 0%, rgba(90,60,30,0.10) 45%, transparent 100%);
+}
+
+/* OUVERTURE — on ouvre VRAIMENT le livre :
+   1) il arrive fermé et se pose (rebond amorti, la caméra recule un peu)
+   2) la couverture est SOULEVÉE (elle décolle en Z), bascule lentement puis « tombe »
+      de l'autre côté après le point d'équilibre — comme une vraie couverture rigide
+   3) une page intérieure suit avec un léger retard (le papier est plus souple)
+   4) le contenu se révèle une fois le livre à plat */
+.book-opening .book-container { animation: bookSettle 0.72s cubic-bezier(0.18,0.86,0.24,1.04) both; }
+.book-opening .book-cover { animation: bookCoverOpen 1.25s cubic-bezier(0.58,0.02,0.22,1) 0.42s both; }
+.book-opening .book-cover .bc-shade { animation: bookShadeOpen 1.25s ease-out 0.42s both; }
+.book-opening .book-page { animation: bookPageReveal 0.6s ease-out 1.35s both; }
+@keyframes bookSettle {
+    0%   { opacity: 0; transform: perspective(2400px) translateY(52px) translateZ(-260px) rotateX(22deg); }
+    62%  { opacity: 1; transform: perspective(2400px) translateY(-7px) translateZ(0) rotateX(-2.5deg); }
+    82%  { transform: perspective(2400px) translateY(2px) rotateX(0.8deg); }
+    100% { opacity: 1; transform: perspective(2400px) translateY(0) rotateX(0deg); }
+}
+@keyframes bookCoverOpen {
+    0%   { transform: rotateY(0deg) translateZ(0); }
+    18%  { transform: rotateY(-14deg) translateZ(8px); }    /* la couverture se soulève d'abord */
+    58%  { transform: rotateY(-104deg) translateZ(8px); }   /* montée lente jusqu'à la verticale */
+    84%  { transform: rotateY(-168deg) translateZ(2px); }   /* elle bascule et retombe vite */
+    93%  { transform: rotateY(-179deg) translateZ(0); }     /* petit rebond du carton */
+    100% { transform: rotateY(-176deg) translateZ(0); }
+}
+@keyframes bookShadeOpen { 0% { opacity: 0.95; } 58% { opacity: 0.62; } 100% { opacity: 0; } }
+@keyframes bookPageReveal { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+
+/* FERMETURE : la couverture se relève, franchit l'aplomb et retombe à plat (clac), puis ça brûle */
+.book-closing .book-cover { animation: bookCoverClose 0.78s cubic-bezier(0.4,0.02,0.28,1) both; }
+.book-closing .book-cover .bc-shade { animation: bookShadeClose 0.78s ease-in both; }
+.book-closing .book-page { animation: bookPageHide 0.3s ease-in both; }
+@keyframes bookCoverClose {
+    0%   { transform: rotateY(-176deg); }
+    22%  { transform: rotateY(-168deg) translateZ(3px); }
+    62%  { transform: rotateY(-72deg) translateZ(8px); }
+    92%  { transform: rotateY(-3deg) translateZ(0); }
+    100% { transform: rotateY(0deg); }
+}
+@keyframes bookShadeClose { 0% { opacity: 0; } 55% { opacity: 0.5; } 100% { opacity: 0.95; } }
+@keyframes bookPageHide { from { opacity: 1; } to { opacity: 0.2; } }
+
+.book-burning .book-cover { transform: rotateY(0deg); }   /* il brûle refermé */
+.book-burning .book-cover .bc-shade { opacity: 0.95; }
 .book-burning .book-container { animation: burnBook 1.5s forwards; pointer-events: none; }
 @keyframes burnBook { 0% { filter: sepia(0); transform: scale(1); opacity: 1; } 30% { filter: sepia(1) hue-rotate(-50deg) saturate(5); transform: scale(0.95); opacity: 1; } 70% { filter: sepia(1) hue-rotate(-50deg) saturate(10) brightness(0.3); transform: scale(0.8) translateY(-20px); opacity: 0.5; box-shadow: 0 0 120px 40px #e67e22; } 100% { filter: sepia(1) hue-rotate(-50deg) saturate(10) brightness(0); transform: scale(0.5) translateY(-100px); opacity: 0; box-shadow: none; } }
 
