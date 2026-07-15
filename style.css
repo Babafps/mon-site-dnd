@@ -2900,7 +2900,11 @@ body.theme-dark .spell-comp-check small { color: #9a8a70; }
    fois + barre de navigation basse avec bandeau vital (PV/CA).
    Sur grand écran, tout ceci est inerte (display:none).
    ============================================================ */
-#mobile-nav, #mob-header-toggle, .mobile-layout-note { display: none; }
+/* Chrome Android « gonfle » les polices des pages (text-autosizing) et casse les
+   mises en page serrées → on le désactive : le zoom pincé reste disponible. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+#mobile-nav, #mob-header-toggle, .mobile-layout-note, .stat-expand { display: none; }
 .mob-section { display: none; }
 .mob-section.active { display: flex; flex-wrap: wrap; gap: 12px; align-content: flex-start; }
 
@@ -2916,7 +2920,7 @@ body.theme-dark .spell-comp-check small { color: #9a8a70; }
     body.mobile-sheet .sheet-header { margin-bottom: 6px; padding-bottom: 10px; }
     body.mobile-sheet #mob-header-toggle {
         display: inline-flex; align-items: center; justify-content: center;
-        flex-shrink: 0; padding: 8px 10px; font-size: 0.78rem; white-space: nowrap;
+        flex-shrink: 0; padding: 8px 10px; font-size: 13px; white-space: nowrap;
     }
     body.mobile-sheet .header-main-row { max-width: none; }
     body.mobile-sheet .info-grid { display: none; }
@@ -2925,7 +2929,55 @@ body.theme-dark .spell-comp-check small { color: #9a8a70; }
     /* Les 3 mini-modules (Maîtrise / Inspiration / Concentration) tiennent sur une seule ligne */
     body.mobile-sheet .mob-section .widget-third { width: calc(33.333% - 8px); min-width: 0; }
 
-    /* ---- Barre de navigation basse (cuir sombre, comme le lecteur de musique) ---- */
+    /* ============ CARACTÉRISTIQUES : grille 3×2 de cartes compactes ============
+       Le nom (rollable) lance toujours le d20 ; « ▾ Compétences » déplie le bloc
+       en pleine largeur (sauvegardes + compétences), un seul ouvert à la fois. */
+    body.mobile-sheet #attributes-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    body.mobile-sheet .attribute-block { padding: 9px 4px 6px; margin-bottom: 0; }
+    body.mobile-sheet .attribute-block h3 { font-size: 12px; letter-spacing: 0.02em; margin-bottom: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    body.mobile-sheet .stat-main-row { flex-direction: column; gap: 5px; margin-bottom: 6px; }
+    body.mobile-sheet .stat-score-circle { width: 38px; height: 38px; border-width: 1.5px; }
+    body.mobile-sheet .stat-score-input { font-size: 1rem; width: 32px; }
+    body.mobile-sheet .stat-mod-box { font-size: 1.15rem; width: auto; min-width: 54px; padding: 3px 10px; border-radius: 10px; }
+    body.mobile-sheet .attribute-block .nested-skills-list { display: none; }
+    body.mobile-sheet .stat-expand {
+        display: block; width: 100%; margin-top: 2px;
+        background: rgba(122,40,40,0.07); border: 1px solid var(--soft-border); border-radius: 7px;
+        color: var(--primary-color); font-size: 11px; font-weight: bold; font-family: 'Lora', serif;
+        padding: 5px 2px; cursor: pointer; white-space: nowrap; overflow: hidden;
+    }
+    body.mobile-sheet .attribute-block.mob-open { grid-column: 1 / -1; }
+    body.mobile-sheet .attribute-block.mob-open .nested-skills-list { display: flex; }
+    body.mobile-sheet .attribute-block.mob-open .stat-expand { background: rgba(196,155,53,0.16); }
+    body.theme-dark.mobile-sheet .stat-expand { background: rgba(196,155,53,0.08); color: var(--accent-color); }
+
+    /* ============ LISTES (capacités, sac, attaques…) : lisibles avant tout ============
+       Les noms peuvent s'écrire sur 2 lignes (fini l'ellipsis à une lettre), les
+       boutons d'action passent sous la ligne si la place manque, et les flèches
+       de réorganisation ▲▼ (usage bureau) disparaissent pour désaturer. */
+    body.mobile-sheet .item-controls button { padding: 4px 9px; font-size: 12px; }
+    body.mobile-sheet .ci-actions button, body.mobile-sheet .ca-actions button { font-size: 13px; }
+    body.mobile-sheet .item-controls button[title="Monter"],
+    body.mobile-sheet .item-controls button[title="Descendre"],
+    body.mobile-sheet .ci-up, body.mobile-sheet .ci-down { display: none; }
+    /* Capacités & Dons */
+    body.mobile-sheet .trait-row-head { flex-wrap: wrap; row-gap: 4px; }
+    body.mobile-sheet .trait-row .trait-name { white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 55%; line-height: 1.3; }
+    body.mobile-sheet .trait-meta { font-size: 10px; }
+    body.mobile-sheet .trait-row .item-controls { margin-left: auto; }
+    /* Attaques : nom sur sa ligne, stats + actions en dessous */
+    body.mobile-sheet .ca-head { flex-wrap: wrap; row-gap: 5px; }
+    body.mobile-sheet .ca-name { flex: 1 1 100%; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
+    body.mobile-sheet .ca-actions { margin-left: auto; }
+    /* Sac à dos : nom lisible, quantité/poids/actions se répartissent */
+    body.mobile-sheet .ci-row { flex-wrap: wrap; row-gap: 5px; }
+    body.mobile-sheet .ci-name { white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 calc(100% - 44px); line-height: 1.3; }
+    body.mobile-sheet .ci-actions { margin-left: auto; }
+    /* Capacités limitées / emplacements : libellé au-dessus des cases (la grid 85px/1fr tronquait les noms longs) */
+    body.mobile-sheet .spell-slot-row { grid-template-columns: 1fr; gap: 4px; }
+
+    /* ---- Barre de navigation basse (cuir sombre, comme le lecteur de musique) ----
+       Tailles en px : insensibles au réglage de taille de police du téléphone. */
     body.mobile-sheet #mobile-nav {
         display: flex; flex-direction: column;
         position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000;
@@ -2938,7 +2990,7 @@ body.theme-dark .spell-comp-check small { color: #9a8a70; }
         display: flex; align-items: center; gap: 12px; width: 100%;
         background: rgba(0,0,0,0.28); border: none; border-bottom: 1px solid rgba(196,155,53,0.25);
         padding: 8px 14px; cursor: pointer;
-        font-family: 'Lora', serif; color: #f5e6c8; font-size: 0.84rem;
+        font-family: 'Lora', serif; color: #f5e6c8; font-size: 14px; line-height: 1;
     }
     .mob-vitals-hp { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
     .mob-vitals-track {
@@ -2960,9 +3012,10 @@ body.theme-dark .spell-comp-check small { color: #9a8a70; }
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
         color: #b7a488; padding: 7px 2px 8px; position: relative;
         -webkit-tap-highlight-color: transparent;
+        font: inherit; appearance: none; -webkit-appearance: none; border-radius: 0;
     }
-    .mob-tab-ic { font-size: 1.35rem; line-height: 1; }
-    .mob-tab-lb { font-family: 'Cinzel', serif; font-size: 0.6rem; font-weight: bold; letter-spacing: 0.04em; }
+    .mob-tab-ic { font-size: 22px; line-height: 1; }
+    .mob-tab-lb { font-family: 'Cinzel', serif; font-size: 10px; font-weight: bold; letter-spacing: 0.04em; line-height: 1; }
     .mob-tab.active { color: var(--accent-color); }
     .mob-tab.active::before {
         content: ''; position: absolute; top: 0; left: 22%; right: 22%; height: 3px;
@@ -2972,5 +3025,5 @@ body.theme-dark .spell-comp-check small { color: #9a8a70; }
 
     /* Le lecteur de musique et son onglet se posent AU-DESSUS de la barre de navigation */
     body.mobile-sheet:has(#app-screen:not(.hidden)) #music-player-container,
-    body.mobile-sheet:has(#app-screen:not(.hidden)) .music-show-tab { bottom: 104px; }
+    body.mobile-sheet:has(#app-screen:not(.hidden)) .music-show-tab { bottom: calc(104px + env(safe-area-inset-bottom)); }
 }

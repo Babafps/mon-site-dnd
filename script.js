@@ -509,7 +509,28 @@ document.addEventListener('DOMContentLoaded', () => {
             mobHeaderToggle.textContent = open ? '▴ Infos' : '▾ Infos';
         });
         document.getElementById('armor-class')?.addEventListener('input', updateMobileVitals);
-        const onMobileMediaChange = () => applyLayout(getStore('dnd-layout-mode', false) || 'classic');
+        // Accordéon des caractéristiques (mobile) : « ▾ Compétences » déplie le bloc en pleine largeur, un seul ouvert à la fois
+        document.body.addEventListener('click', (e) => {
+            const btn = e.target.closest('.stat-expand'); if (!btn) return;
+            const block = btn.closest('.attribute-block'); if (!block) return;
+            const wasOpen = block.classList.contains('mob-open');
+            document.querySelectorAll('.attribute-block.mob-open').forEach(b => {
+                b.classList.remove('mob-open');
+                const bb = b.querySelector('.stat-expand'); if (bb) bb.textContent = '▾ Compétences';
+            });
+            if (!wasOpen) {
+                block.classList.add('mob-open');
+                btn.textContent = '▴ Replier';
+                block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+        const onMobileMediaChange = () => {
+            applyLayout(getStore('dnd-layout-mode', false) || 'classic');
+            // Resynchronise le lecteur de musique avec la préférence de l'écran courant (mobile = caché par défaut)
+            const musicPref = isMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') ?? 'true');
+            if (window.MusicPlayer) window.MusicPlayer.setVisible(musicPref === 'true', false);
+            const musicToggle = document.getElementById('toggle-music-player'); if (musicToggle) musicToggle.checked = musicPref === 'true';
+        };
         if (mobileMedia.addEventListener) mobileMedia.addEventListener('change', onMobileMediaChange);
         else if (mobileMedia.addListener) mobileMedia.addListener(onMobileMediaChange);
         // Filet : certains environnements (WebViews, émulation) ne délivrent pas l'event 'change' de matchMedia
@@ -665,10 +686,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const toggleMusicPlayer = document.getElementById('toggle-music-player');
         if(toggleMusicPlayer) {
-            let showMusic = DB.get('dnd-show-music-player'); if(showMusic === null) showMusic = 'true';
+            // Téléphone (≤700px) : préférence séparée, lecteur caché par défaut (activable via ☰)
+            const musicMobileView = () => window.matchMedia('(max-width: 700px)').matches;
+            let showMusic = musicMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') ?? 'true');
             toggleMusicPlayer.checked = showMusic === 'true';
             if(window.MusicPlayer) window.MusicPlayer.setVisible(toggleMusicPlayer.checked, false);
-            toggleMusicPlayer.addEventListener('change', (e) => { if(window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, true); else DB.set('dnd-show-music-player', e.target.checked); });
+            toggleMusicPlayer.addEventListener('change', (e) => {
+                if (musicMobileView()) {
+                    DB.set('dnd-show-music-player-mobile', e.target.checked ? 'true' : 'false');
+                    if(window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, false);
+                } else if(window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, true);
+                else DB.set('dnd-show-music-player', e.target.checked);
+            });
         }
 
         const btnToggleDice = document.getElementById('btn-toggle-dice'); const diceDrawer = document.getElementById('dice-drawer'); const toggleFloatingDice = document.getElementById('toggle-floating-dice');
@@ -1094,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(attributesContainer) {
             skillsMap.forEach(attr => {
                 let skillsHTML = attr.skills.map(skill => `<div class="skill-row ${skill.type === 'save' ? 'saving-throw' : ''}"><button type="button" class="skill-prof-btn" id="profbtn-${skill.id}" data-stat="${attr.id}" data-skill="${skill.id}" title="Clic: maîtrise / Double-clic: expertise">○</button><input type="hidden" id="prof-${skill.id}" class="skill-prof" data-stat="${attr.id}" value="0"><span class="skill-mod" id="skill-val-${skill.id}">+0</span><label class="rollable" data-name="${skill.name}" data-target="skill-val-${skill.id}">${skill.name}</label></div>`).join('');
-                attributesContainer.innerHTML += `<div class="attribute-block"><h3 class="rollable" data-name="${attr.name}" data-target="mod-${attr.id}">${attr.name}</h3><div class="stat-main-row"><div class="stat-score-circle"><input type="number" id="stat-${attr.id}" class="stat-score stat-score-input" value="8"></div><div class="stat-mod-box" id="mod-${attr.id}">-1</div></div><div class="nested-skills-list">${skillsHTML}</div></div>`;
+                attributesContainer.innerHTML += `<div class="attribute-block"><h3 class="rollable" data-name="${attr.name}" data-target="mod-${attr.id}">${attr.name}</h3><div class="stat-main-row"><div class="stat-score-circle"><input type="number" id="stat-${attr.id}" class="stat-score stat-score-input" value="8"></div><div class="stat-mod-box" id="mod-${attr.id}">-1</div></div><button class="stat-expand no-print" type="button" title="Voir sauvegardes et compétences">▾ Compétences</button><div class="nested-skills-list">${skillsHTML}</div></div>`;
             });
         }
 
