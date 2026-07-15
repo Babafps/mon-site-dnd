@@ -544,6 +544,12 @@ body.theme-dark .gm-modal-head { color: #e2c25a; }
 .gm-sc-row { display: flex; align-items: center; gap: 8px; font-family: 'Lora', serif; font-size: 0.86rem; }
 .gm-sc-row kbd { flex: 0 0 auto; min-width: 30px; text-align: center; font-family: 'Consolas', monospace; font-size: 0.76rem; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(122,40,40,0.35); background: rgba(196,155,53,0.16); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
 @media (max-width: 520px) { .gm-sc-grid { grid-template-columns: 1fr; } }
+/* Touche d'outil cliquable (modifiable) */
+.gm-sc-key { flex: 0 0 auto; min-width: 30px; text-align: center; cursor: pointer; font-family: 'Consolas', monospace; font-size: 0.76rem; font-weight: bold; padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(122,40,40,0.35); background: rgba(196,155,53,0.16); color: inherit; box-shadow: 0 1px 0 rgba(0,0,0,0.25); transition: all .15s; }
+.gm-sc-key:hover { border-color: var(--accent-color, #C49B35); background: rgba(196,155,53,0.34); transform: translateY(-1px); }
+.gm-sc-key.is-capturing { background: var(--accent-color, #C49B35); color: #2a1a0e; animation: gmScPulse 1s ease-in-out infinite; }
+@keyframes gmScPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.gm-sc-row.is-fixed { opacity: 0.68; }
 
 /* ---- Panneau des calques (flottant sur la carte) ---- */
 .gm-layers-panel {

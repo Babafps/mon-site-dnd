@@ -955,14 +955,6 @@ body.theme-dark .death-saves-section.is-critical label { color: #ff8a7a; }
 /* ============================================================
    LANCEUR D'EXPRESSION DE DÉS (remplace l'ancienne calculatrice)
    ============================================================ */
-.expr-quick { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
-.expr-chip {
-    background: rgba(122,40,40,0.08); border: 1px solid var(--soft-border);
-    color: var(--primary-color); border-radius: 999px; padding: 4px 11px;
-    cursor: pointer; font-size: 0.78rem; font-weight: bold; font-family: 'Cinzel', serif;
-    transition: var(--transition-smooth);
-}
-.expr-chip:hover { background: var(--primary-color); color: var(--accent-color); transform: translateY(-1px); }
 .expr-result {
     min-height: 34px; border-radius: 10px; padding: 8px 12px; text-align: center;
     background: rgba(0,0,0,0.05); border: 1px dashed var(--soft-border);
@@ -1042,6 +1034,20 @@ body.theme-dark .atk-ammo button { background: rgba(255,255,255,0.08); color: va
 .shortcut-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; background: rgba(0,0,0,0.04); }
 .shortcut-row kbd { flex-shrink: 0; min-width: 48px; text-align: center; background: linear-gradient(160deg, #fff, #eee); border: 1px solid var(--soft-border); border-bottom-width: 2px; border-radius: 5px; padding: 3px 7px; font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.8rem; color: var(--primary-color); }
 .shortcut-row span { font-size: 0.84rem; color: var(--text-color); }
+/* Touche cliquable (éditable) */
+.sc-key {
+    flex-shrink: 0; min-width: 48px; text-align: center; cursor: pointer;
+    background: linear-gradient(160deg, #fff, #eee); border: 1px solid var(--soft-border);
+    border-bottom-width: 2px; border-radius: 5px; padding: 3px 7px;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.8rem; color: var(--primary-color);
+    transition: var(--transition-smooth);
+}
+.sc-key:hover { border-color: var(--accent-color); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.sc-key.is-capturing { background: var(--accent-color); color: #2a1a0e; border-color: var(--primary-color); animation: scPulse 1s ease-in-out infinite; }
+@keyframes scPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+.shortcut-row.is-fixed { opacity: 0.7; }
+body.theme-dark .sc-key { background: linear-gradient(160deg, #3a2f24, #2c231b); color: var(--accent-color); }
+body.theme-dark .sc-key.is-capturing { background: var(--accent-color); color: #2a1a0e; }
 body.theme-dark .shortcut-row { background: rgba(255,255,255,0.05); }
 body.theme-dark .shortcut-row kbd { background: linear-gradient(160deg, #3a2f24, #2c231b); color: var(--accent-color); }
 body.theme-dark .defense-field input,

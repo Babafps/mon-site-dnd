@@ -463,7 +463,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnExprRoll = document.getElementById('btn-expr-roll');
         if (btnExprRoll && exprInput) btnExprRoll.addEventListener('click', () => runExpression(exprInput.value));
         if (exprInput) exprInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runExpression(exprInput.value); } });
-        document.querySelectorAll('.expr-chip').forEach(chip => chip.addEventListener('click', () => { if (exprInput) exprInput.value = chip.dataset.expr; runExpression(chip.dataset.expr); }));
 
         // ===== HISTORIQUE DES JETS =====
         function pushRollHistory(name, total, detail, nat) {
@@ -770,11 +769,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
             sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
         }
-        // Diffuse un lancer du lanceur de dés à la table + célèbre un d20 naturel seul
+        // Diffuse un lancer du PLATEAU DE DÉS à la table + célèbre un d20 naturel seul.
+        // Point de passage UNIQUE des deux chemins (3D et repli 2D) → aussi le hook de l'historique.
         function sharePoolRoll(poolSnapshot, poolTotal, scores) {
             const nat = (poolSnapshot.length === 1 && poolSnapshot[0] === 20) ? scores[0] : null;
-            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(poolSnapshot.map(f => 'd' + f).join(' + '), poolTotal, scores.join(' + '), nat);
+            const label = poolSnapshot.map(f => 'd' + f).join(' + ');
+            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, poolTotal, scores.join(' + '), nat);
             if (window.TableFX && nat) { if (nat === 20) window.TableFX.crit(); else if (nat === 1) window.TableFX.fumble(); }
+            pushRollHistory('🎲 ' + label, poolTotal, scores.join(' + '), nat);
         }
 
         // --- Repli : animation 2D (culbute CSS + chiffres qui défilent) ---
@@ -1762,10 +1764,27 @@ document.addEventListener('DOMContentLoaded', () => {
         
         updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
 
-        // ===== RACCOURCIS CLAVIER (#22) =====
+        // ===== RACCOURCIS CLAVIER (#22) — personnalisables =====
         // Ignorés dès qu'on saisit du texte (champ, zone de texte, éditeur riche).
         function isTyping(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)); }
-        function quickD20(advMode) { const initEl = document.getElementById('initiative'); performAbilityRoll('Jet rapide', 0, advMode); }
+        function quickD20(advMode) { performAbilityRoll('Jet rapide', 0, advMode); }
+        // Actions disponibles + touche par défaut. La touche peut être changée par le joueur
+        // (stockée dans `dnd-shortcuts-player`, préférence GLOBALE non liée au personnage).
+        const PLAYER_SC_ACTIONS = [
+            { id: 'dice', def: 'd', label: 'Ouvrir / fermer le plateau de dés', run: () => document.getElementById('btn-toggle-dice')?.click() },
+            { id: 'roll', def: 'r', label: 'Lancer un d20', run: () => quickD20('normal') },
+            { id: 'adv', def: 'a', label: 'Lancer un d20 avec avantage', run: () => quickD20('adv') },
+            { id: 'dis', def: 'e', label: 'Lancer un d20 avec désavantage', run: () => quickD20('dis') },
+            { id: 'grimoire', def: 'g', label: 'Ouvrir le grimoire', run: () => document.getElementById('btn-open-grimoire')?.click() },
+            { id: 'restShort', def: 'c', label: 'Repos court', run: () => document.getElementById('btn-short-rest')?.click() },
+            { id: 'restLong', def: 'l', label: 'Repos long', run: () => document.getElementById('btn-long-rest')?.click() },
+            { id: 'search', def: 'f', label: 'Recherche globale', run: () => document.getElementById('btn-global-search-trigger')?.click() },
+            { id: 'help', def: '?', label: 'Afficher cette aide', run: () => openShortcutsModal() },
+        ];
+        // ⚠️ hasOwnProperty (et non `saved[id] || def`) : une touche VOLONTAIREMENT libérée est stockée
+        // à '' — avec `||` elle serait retombée sur sa valeur par défaut et aurait recréé le conflit.
+        function playerShortcutMap() { let saved = {}; try { saved = JSON.parse(DB.get('dnd-shortcuts-player') || '{}'); } catch (e) {} const m = {}; PLAYER_SC_ACTIONS.forEach(a => { const has = Object.prototype.hasOwnProperty.call(saved, a.id); m[a.id] = String(has ? saved[a.id] : a.def).toLowerCase(); }); return m; }
+        function savePlayerShortcutMap(m) { DB.set('dnd-shortcuts-player', JSON.stringify(m)); }
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             const appScreen = document.getElementById('app-screen');
@@ -1778,22 +1797,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (open) open.classList.add('hidden');
                 return;
             }
-            if (isTyping(e.target)) return;
+            if (isTyping(e.target) || scCaptureId) return;   // pendant une capture de touche : on n'exécute rien
             const k = e.key.toLowerCase();
-            if (k === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); document.getElementById('shortcuts-modal')?.classList.remove('hidden'); return; }
-            const map = {
-                d: () => document.getElementById('btn-toggle-dice')?.click(),
-                r: () => quickD20('normal'),
-                a: () => quickD20('adv'),
-                e: () => quickD20('dis'),
-                g: () => document.getElementById('btn-open-grimoire')?.click(),
-                c: () => document.getElementById('btn-short-rest')?.click(),
-                l: () => document.getElementById('btn-long-rest')?.click(),
-                f: () => document.getElementById('btn-global-search-trigger')?.click(),
-            };
-            if (map[k]) { e.preventDefault(); map[k](); }
+            const map = playerShortcutMap();
+            const action = PLAYER_SC_ACTIONS.find(a => map[a.id] && map[a.id] === k);
+            if (action) { e.preventDefault(); action.run(); }
         });
-        document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => document.getElementById('shortcuts-modal')?.classList.add('hidden'));
+
+        // --- Éditeur de raccourcis (voir & modifier) ---
+        let scCaptureId = null;   // id de l'action dont on capture la nouvelle touche
+        function keyLabel(k) { return !k ? '—' : (k === '?' ? '?' : k.toUpperCase()); }
+        function renderShortcutsEditor() {
+            const host = document.getElementById('shortcuts-list'); if (!host) return;
+            const map = playerShortcutMap();
+            host.innerHTML = PLAYER_SC_ACTIONS.map(a => `<div class="shortcut-row"><button class="sc-key${scCaptureId === a.id ? ' is-capturing' : ''}" data-sc="${a.id}" title="Cliquer puis appuyer sur la nouvelle touche">${scCaptureId === a.id ? '…' : keyLabel(map[a.id])}</button><span>${a.label}</span></div>`).join('')
+                + `<div class="shortcut-row is-fixed"><kbd>Échap</kbd><span>Fermer la fenêtre ouverte</span></div>`;
+            host.querySelectorAll('.sc-key').forEach(b => b.addEventListener('click', () => { scCaptureId = b.dataset.sc; renderShortcutsEditor(); }));
+        }
+        // Capture de la nouvelle touche (en phase de capture pour passer avant le handler global)
+        document.addEventListener('keydown', (e) => {
+            if (!scCaptureId) return;
+            e.preventDefault(); e.stopPropagation();
+            if (e.key === 'Escape') { scCaptureId = null; renderShortcutsEditor(); return; }
+            const k = e.key.toLowerCase();
+            if (k.length !== 1) return;                       // une seule touche (lettre, chiffre, ?)
+            const map = playerShortcutMap();
+            const clash = PLAYER_SC_ACTIONS.find(a => a.id !== scCaptureId && map[a.id] === k);
+            if (clash) map[clash.id] = '';                     // la touche est libérée de l'autre action
+            map[scCaptureId] = k;
+            savePlayerShortcutMap(map);
+            scCaptureId = null;
+            renderShortcutsEditor();
+            if (window.showAppToast) window.showAppToast('⌨️ Raccourci enregistré : ' + keyLabel(k), '#27ae60');
+        }, true);
+        function openShortcutsModal() { scCaptureId = null; renderShortcutsEditor(); document.getElementById('shortcuts-modal')?.classList.remove('hidden'); }
+        document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => { scCaptureId = null; document.getElementById('shortcuts-modal')?.classList.add('hidden'); });
+        document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => { DB.remove('dnd-shortcuts-player'); renderShortcutsEditor(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
+        // Bouton du menu ☰ : ouvre l'éditeur du bon côté (MJ ou joueur)
+        document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
+            document.getElementById('settings-dropdown')?.classList.add('hidden');
+            if (document.body.classList.contains('gm-active') && window.GMScreen && window.GMScreen.openShortcuts) window.GMScreen.openShortcuts();
+            else openShortcutsModal();
+        });
         
         let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', async () => {

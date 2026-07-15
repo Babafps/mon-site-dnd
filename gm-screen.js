@@ -1496,9 +1496,13 @@
         // Traits & dons
         const tr = f.traits || [];
         const trHtml = tr.length ? `<div class="gm-sheet-list">${tr.map(t => `<div class="gm-sheet-row"><b>${esc(t.name || '—')}</b>${t.desc ? `<small>${esc(String(t.desc).replace(/<[^>]+>/g, '').slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
-        // Compagnon
-        const cp = f.companion || {};
-        const cpHtml = (cp.name || cp.notes) ? `<div class="gm-sheet-row"><b>${esc(cp.name || 'Compagnon')}</b><span>CA ${esc(cp.ac || '—')} · PV ${esc(cp.hp || '—')}</span>${cp.notes ? `<small>${esc(cp.notes)}</small>` : ''}</div>` : '';
+        // Compagnons (plusieurs possibles ; repli sur l'ancien champ unique)
+        const cps = Array.isArray(f.companions) && f.companions.length ? f.companions : (f.companion && (f.companion.name || f.companion.notes) ? [f.companion] : []);
+        const cpHtml = cps.length ? `<div class="gm-sheet-list">${cps.map(c => `<div class="gm-sheet-row"><b>${esc(c.name || 'Compagnon')}</b><span>CA ${esc(c.ac || '—')} · PV ${esc(c.hp || '—')}</span>${c.notes ? `<small>${esc(String(c.notes).slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
+        // Défenses (résistances / immunités / vulnérabilités) — envoyées par la fiche joueur
+        const df = f.defenses || {};
+        const dfRows = [['🛡️ Résistances', df.resist], ['✨ Immunités', df.immune], ['💥 Vulnérabilités', df.vulnerable]].filter(r => r[1] && String(r[1]).trim());
+        const dfHtml = dfRows.length ? `<div class="gm-sheet-list">${dfRows.map(r => `<div class="gm-sheet-row"><b>${r[0]}</b><span>${esc(r[1])}</span></div>`).join('')}</div>` : '';
         // Identité & notes
         const id = f.identity || {}, nt = f.notes || {};
         const idRows = [['Historique', id.background], ['Alignement', id.alignment], ['Langues', id.languages], ['Taille', id.size], ['XP', id.xp]].filter(r => r[1]);
@@ -1533,8 +1537,9 @@
             ${sec('🔋 Capacités limitées', limHtml)}
             ${sec('🎒 Inventaire', invHtml)}
             ${sec('💰 Bourse', curHtml)}
+            ${sec('🛡️ Défenses', dfHtml)}
             ${sec('📜 Capacités & Dons', trHtml)}
-            ${sec('🐾 Compagnon', cpHtml)}
+            ${sec('🐾 Compagnons', cpHtml)}
             ${sec('👤 Identité', idHtml)}
             ${notesHtml ? sec('📝 Notes', notesHtml) : ''}`;
     }
@@ -3189,22 +3194,81 @@
         if (u) u.disabled = mapHist.length < 2;
         if (r) r.disabled = !mapRedo.length;
     }
-    // ----- Aide : liste des raccourcis clavier (bouton ⌨️ / touche ?) -----
+    // Outils raccourcis : touche PAR DÉFAUT + libellé. La touche est personnalisable
+    // (stockée dans `dnd-gm-shortcuts`, préférence globale du MJ) → voir openShortcuts().
+    const GM_TOOL_ACTIONS = [
+        { tool: 'select', def: 's', toast: '🖱️ Souris', label: 'Souris / sélection' },
+        { tool: 'pan', def: 'h', toast: '✋ Déplacer la vue', label: 'Déplacer la vue (main)' },
+        { tool: 'objmove', def: 'v', toast: '✥ Déplacer un élément', label: 'Déplacer un élément posé' },
+        { tool: 'wall', def: 'm', toast: '🧱 Mur', label: 'Tracer un mur' },
+        { tool: 'door', def: 'p', toast: '🚪 Porte', label: 'Tracer une porte' },
+        { tool: 'draw', def: 'd', toast: '✏️ Dessin', label: 'Dessiner' },
+        { tool: 'light', def: 'l', toast: '💡 Lumière', label: 'Poser une lumière' },
+        { tool: 'ruler', def: 'r', toast: '📏 Règle', label: 'Mesurer (règle)' },
+        { tool: 'reveal', def: 'f', toast: '🔦 Révéler (brouillard)', label: 'Révéler le brouillard' },
+        { tool: 'placetoken', def: 'j', toast: '📍 Poser un jeton', label: 'Poser un jeton' },
+        { tool: 'aoe', def: 'a', toast: '🎯 Gabarit', label: 'Gabarit de sort' },
+    ];
+    const GM_FIXED_SC = [
+        ['Échap', 'Revenir à la souris'], ['Ctrl + Z', 'Annuler'], ['Ctrl + Y', 'Rétablir'],
+        ['Molette', 'Zoom sous le curseur'], ['Clic molette', 'Déplacer la vue'], ['Ctrl + V', 'Coller une image sur la carte'],
+        ['Maj + glisser', 'Tracé droit (0° / 45° / 90°)'], ['Double-clic', 'Signal 📍 aux joueurs'], ['?', 'Afficher cette aide']
+    ];
+    // ⚠️ hasOwnProperty (et non `saved[t] || def`) : une touche VOLONTAIREMENT libérée est stockée
+    // à '' — avec `||` elle serait retombée sur sa valeur par défaut et aurait recréé le conflit.
+    function gmShortcutMap() { let saved = {}; try { saved = JSON.parse(localStorage.getItem('dnd-gm-shortcuts') || '{}'); } catch (e) {} const m = {}; GM_TOOL_ACTIONS.forEach(a => { const has = Object.prototype.hasOwnProperty.call(saved, a.tool); m[a.tool] = String(has ? saved[a.tool] : a.def).toLowerCase(); }); return m; }
+    function saveGmShortcutMap(m) { try { localStorage.setItem('dnd-gm-shortcuts', JSON.stringify(m)); } catch (e) {} refreshGmShortcutViews(); }
+    // TOOL_KEYS reconstruit à la volée depuis la table personnalisable : { touche: [outil, toast] }
+    function toolKeys() { const m = gmShortcutMap(), out = {}; GM_TOOL_ACTIONS.forEach(a => { if (m[a.tool]) out[m[a.tool]] = [a.tool, a.toast]; }); return out; }
+    function gmShortcutRows() { const m = gmShortcutMap(); return GM_TOOL_ACTIONS.filter(a => m[a.tool]).map(a => [m[a.tool].toUpperCase(), a.label]).concat(GM_FIXED_SC); }
+    function refreshGmShortcutViews() {
+        window.__gmShortcuts = gmShortcutRows();
+        const h = byId('gm-set-shortcuts');
+        if (h) h.innerHTML = window.__gmShortcuts.map(s => `<span class="gm-set-sc"><kbd>${esc(s[0])}</kbd> ${esc(s[1])}</span>`).join('');
+    }
+    // ----- Raccourcis clavier : voir ET modifier (bouton ⌨️ / menu ☰ / touche ?) -----
+    let gmScCaptureTool = null;   // outil dont on capture la nouvelle touche
+    function renderGmShortcutsBody() {
+        const box = byId('gm-sc-grid'); if (!box) return;
+        const m = gmShortcutMap();
+        const editable = GM_TOOL_ACTIONS.map(a => `<div class="gm-sc-row"><button class="gm-sc-key${gmScCaptureTool === a.tool ? ' is-capturing' : ''}" data-sctool="${a.tool}" title="Cliquer puis appuyer sur la nouvelle touche">${gmScCaptureTool === a.tool ? '…' : (m[a.tool] ? m[a.tool].toUpperCase() : '—')}</button><span>${esc(a.label)}</span></div>`).join('');
+        const fixed = GM_FIXED_SC.map(s => `<div class="gm-sc-row is-fixed"><kbd>${esc(s[0])}</kbd><span>${esc(s[1])}</span></div>`).join('');
+        box.innerHTML = editable + fixed;
+        box.querySelectorAll('.gm-sc-key').forEach(b => b.addEventListener('click', () => { gmScCaptureTool = b.dataset.sctool; renderGmShortcutsBody(); }));
+    }
     function toggleShortcutsHelp() {
         let ov = byId('gm-shortcuts-modal');
-        if (ov) { ov.remove(); return; }
+        if (ov) { ov.remove(); gmScCaptureTool = null; return; }
         ov = document.createElement('div'); ov.id = 'gm-shortcuts-modal'; ov.className = 'gm-modal no-print';
-        const rows = (window.__gmShortcuts || []).map(s => `<div class="gm-sc-row"><kbd>${esc(s[0])}</kbd><span>${esc(s[1])}</span></div>`).join('');
         ov.innerHTML = `<div class="gm-modal-box gm-sc-box">
             <div class="gm-modal-head">⌨️ Raccourcis clavier <button class="gm-modal-x" id="gm-sc-close" title="Fermer">✕</button></div>
-            <div class="gm-sc-grid">${rows}</div>
+            <div class="gm-readonly-note" style="margin-bottom:6px;">Clique sur une touche pour la <b>changer</b>, puis appuie sur la nouvelle.</div>
+            <div class="gm-sc-grid" id="gm-sc-grid"></div>
+            <button class="gm-btn" id="gm-sc-reset" style="width:100%; margin-top:8px;">↩️ Réinitialiser les raccourcis</button>
             <div class="gm-readonly-note" style="margin-top:8px;">Les raccourcis d'outil ne fonctionnent pas quand tu écris dans un champ.</div>
         </div>`;
         document.body.appendChild(ov);
-        const close = () => ov.remove();
+        gmScCaptureTool = null; renderGmShortcutsBody();
+        const close = () => { ov.remove(); gmScCaptureTool = null; };
         ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
         const x = byId('gm-sc-close'); if (x) x.addEventListener('click', close);
+        const rst = byId('gm-sc-reset'); if (rst) rst.addEventListener('click', () => { try { localStorage.removeItem('dnd-gm-shortcuts'); } catch (e) {} refreshGmShortcutViews(); renderGmShortcutsBody(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
     }
+    // Capture de la nouvelle touche (phase de capture → passe avant le handler d'outils)
+    document.addEventListener('keydown', (e) => {
+        if (!gmScCaptureTool) return;
+        e.preventDefault(); e.stopPropagation();
+        if (e.key === 'Escape') { gmScCaptureTool = null; renderGmShortcutsBody(); return; }
+        const k = e.key.toLowerCase();
+        if (k.length !== 1) return;
+        const m = gmShortcutMap();
+        Object.keys(m).forEach(t => { if (t !== gmScCaptureTool && m[t] === k) m[t] = ''; });   // libère la touche
+        m[gmScCaptureTool] = k;
+        gmScCaptureTool = null;
+        saveGmShortcutMap(m);
+        renderGmShortcutsBody();
+        if (window.showAppToast) window.showAppToast('⌨️ Raccourci enregistré : ' + k.toUpperCase(), '#27ae60');
+    }, true);
     // ----- Coller une image (Ctrl+V) : fond de la carte si vide, sinon nouveau jeton -----
     function setupMapPaste() {
         document.addEventListener('paste', (e) => {
@@ -3659,6 +3723,17 @@
     function startPlaceCombatants() {
         const q = [];
         (live.players || []).forEach(p => { const s = p.snapshot || {}; const ref = 'pj:' + p.user_id; if (!state.tokens.find(t => t.ref === ref)) q.push({ name: s.name || p.character_name || 'PJ', type: 'pj', ref, owner: p.user_id, img: (s && s.tokenImg) || null }); });
+        // Compagnons / familiers des joueurs (envoyés dans leur fiche) : posables comme jetons,
+        // appartenant à leur maître (il peut donc les déplacer lui-même).
+        (live.players || []).forEach(p => {
+            const cps = ((p.snapshot || {}).full || {}).companions || [];
+            cps.forEach((c, i) => {
+                if (!c || !(c.name || '').trim()) return;
+                const ref = 'comp:' + p.user_id + ':' + i;
+                if (state.tokens.find(t => t.ref === ref)) return;
+                q.push({ name: c.name, type: 'pj', ref, owner: p.user_id, ac: c.ac || '', hp: parseInt(c.hp, 10) || null, isCompanion: true });
+            });
+        });
         (state.monsters || []).forEach(m => { const ref = 'mon:' + m.id; if (!state.tokens.find(t => t.ref === ref)) q.push({ name: m.name, type: 'monster', ref, owner: null }); });
         if (!q.length) { if (window.showAppToast) window.showAppToast('Tous les combattants sont déjà sur la carte.', '#7a6050'); return; }
         placeQueue = q; placeSelIdx = 0;
@@ -3671,7 +3746,10 @@
         const idx = Math.min(placeSelIdx, placeQueue.length - 1);
         const c = placeQueue[idx];
         const spot = spreadFreeSpot(x, y);
-        state.tokens.push({ id: uid(), ref: c.ref, name: c.name, type: c.type, owner: c.owner || null, img: c.img || null, x: spot.x, y: spot.y });
+        const tok = { id: uid(), ref: c.ref, name: c.name, type: c.type, owner: c.owner || null, img: c.img || null, x: spot.x, y: spot.y };
+        // Compagnon : on reprend sa CA / ses PV de la fiche du joueur + un badge 🐾 pour le distinguer du PJ
+        if (c.isCompanion) { if (c.ac) tok.ac = c.ac; if (c.hp) { tok.hp = c.hp; tok.hpMax = c.hp; } tok.size = 0.75; }
+        state.tokens.push(tok);
         placeQueue.splice(idx, 1);
         if (placeSelIdx >= placeQueue.length) placeSelIdx = Math.max(0, placeQueue.length - 1);
         save(); renderMap(); broadcastMap(true);
@@ -4772,19 +4850,7 @@
         byId('gm-snap-create').addEventListener('click', createSnap);
 
         // Raccourcis clavier des outils carte (hors saisie) + Ctrl+Z = annuler sur la carte
-        const TOOL_KEYS = { s: ['select', '🖱️ Souris'], h: ['pan', '✋ Déplacer la vue'], v: ['objmove', '✥ Déplacer un élément'], m: ['wall', '🧱 Mur'], p: ['door', '🚪 Porte'], d: ['draw', '✏️ Dessin'], l: ['light', '💡 Lumière'], r: ['ruler', '📏 Règle'], f: ['reveal', '🔦 Révéler (brouillard)'], j: ['placetoken', '📍 Poser un jeton'], a: ['aoe', '🎯 Gabarit'] };
-        // Table des raccourcis affichée dans l'aide (⌨️) — libellés lisibles.
-        window.__gmShortcuts = [
-            ['S', 'Souris / sélection'], ['H', 'Déplacer la vue (main)'], ['V', 'Déplacer un élément posé'],
-            ['M', 'Tracer un mur'], ['P', 'Tracer une porte'], ['D', 'Dessiner'], ['L', 'Poser une lumière'],
-            ['R', 'Mesurer (règle)'], ['F', 'Révéler le brouillard'], ['J', 'Poser un jeton'], ['A', 'Gabarit de sort'],
-            ['Échap', 'Revenir à la souris'], ['Ctrl + Z', 'Annuler'], ['Ctrl + Y', 'Rétablir'],
-            ['Molette', 'Zoom sous le curseur'], ['Clic molette', 'Déplacer la vue'], ['Ctrl + V', 'Coller une image sur la carte'],
-            ['Maj + glisser', 'Tracé droit (0° / 45° / 90°)'], ['Double-clic', 'Signal 📍 aux joueurs'], ['?', 'Afficher cette aide']
-        ];
-        // Même table, en compact, dans le panneau ⚙️ Réglages (demande MJ Lot 24)
-        const scHost = byId('gm-set-shortcuts');
-        if (scHost) scHost.innerHTML = window.__gmShortcuts.map(s => `<span class="gm-set-sc"><kbd>${esc(s[0])}</kbd> ${esc(s[1])}</span>`).join('');
+        refreshGmShortcutViews();
         const tutoBtn = byId('gm-tuto-replay');
         if (tutoBtn) tutoBtn.addEventListener('click', () => startGmTutorial(true));
         document.addEventListener('keydown', (e) => {
@@ -4798,7 +4864,8 @@
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             if (e.key === 'Escape') { if (placeQueue.length) removePlaceBar(); rulerDraft = null; losA = null; losB = null; if (mapTool !== 'select') { mapTool = 'select'; syncToolbar(); renderMap(); } closeToolFlyout(); return; }
             if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); toggleShortcutsHelp(); return; }
-            const def = TOOL_KEYS[k];
+            if (gmScCaptureTool) return;                       // capture d'une nouvelle touche en cours
+            const def = toolKeys()[k];
             if (def) {
                 e.preventDefault();
                 if (mapTool !== def[0]) { mapTool = def[0]; if (def[0] === 'reveal') fogState().on = true; syncToolbar(); renderMap(); }
@@ -5431,5 +5498,5 @@
         }, 60);
     });
 
-    window.GMScreen = { open, close };
+    window.GMScreen = { open, close, openShortcuts: () => { const ov = byId('gm-shortcuts-modal'); if (ov) ov.remove(); toggleShortcutsHelp(); } };
 })();
