@@ -197,25 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     })();
 
-    const btnExportJson = document.getElementById('btn-export-json');
-    if (btnExportJson) {
-        btnExportJson.addEventListener('click', async () => {
-            btnExportJson.disabled = true; btnExportJson.textContent = '⏳ Export en cours…';
-            try {
-                let exportData;
-                if (window.SupaAuth?.currentUser) {
-                    const chars = await window.SupaAuth.loadCharacters(); exportData = { version: "4.0", characters: [] };
-                    for (const c of chars) { const data = await window.SupaAuth.loadCharacterData(c.id); exportData.characters.push({ meta: c, data: data }); }
-                } else {
-                    exportData = { version: "3.0", charactersList: charactersList, activeCharId: ACTIVE_CHAR_ID, allData: {} };
-                    DB.keys().forEach(k => { exportData.allData[k] = DB.get(k); });
-                }
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-                const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "sauvegarde_dnd.json"); document.body.appendChild(a); a.click(); a.remove();
-            } catch(err) { alert("Erreur lors de l'export : " + err.message); } finally { btnExportJson.disabled = false; btnExportJson.textContent = '📥 Exporter la sauvegarde'; }
-        });
-    }
-
     // Partage d'UNE fiche (la fiche active) → fichier .json importable
     const btnExportChar = document.getElementById('btn-export-char');
     if (btnExportChar) {
