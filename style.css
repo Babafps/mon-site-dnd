@@ -299,12 +299,33 @@ body.concentrating-mode #concentration-glow {
        caractère le décale visiblement à gauche du centre. */
     letter-spacing: normal; text-indent: 0;
 }
-.home-title::after {
-    content: '⚔️';
+
+/* ============================================================
+   LOGO « Bones & Blades »
+   Emblème PNG transparent (IMG/logo-*.png). Une seule source par taille
+   d'affichage : 192 pour les petits usages, 256 pour l'emblème d'accueil.
+   ============================================================ */
+.brand-logo {
     display: block;
-    font-size: 1.5rem;
-    margin-top: 4px;
-    opacity: 0.7;
+    width: clamp(104px, 24vw, 156px);
+    height: auto;
+    margin: 0 auto 2px;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45));
+}
+.auth-logo img {
+    display: block;
+    width: 92px; height: 92px;
+    margin: 0 auto;
+    filter: drop-shadow(0 3px 9px rgba(0,0,0,0.4));
+}
+/* Fiche : emblème CENTRÉ au-dessus du titre (et non collé à sa gauche — le h1 porte
+   déjà un ⚜ de chaque côté, un logo inline cassait la symétrie). Volontairement plus
+   petit qu'à l'accueil : c'est la fiche du personnage, pas une page de marque. */
+.sheet-header .sheet-logo {
+    display: block;
+    width: 64px; height: 64px;
+    margin: 0 auto 4px;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.32));
 }
 
 .home-container h2 {
@@ -2948,7 +2969,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     body.mobile-sheet .sheet-container { padding: 14px 10px; border-radius: var(--radius-md); }
 
     /* En-tête compact : le grand titre décoratif disparaît, la grille d'infos se replie derrière « ▾ Infos » */
-    body.mobile-sheet .sheet-header h1 { display: none; }
+    /* .sheet-logo n'est plus DANS le h1 → il faut le masquer explicitement ici. */
+    body.mobile-sheet .sheet-header h1,
+    body.mobile-sheet .sheet-header .sheet-logo { display: none; }
     body.mobile-sheet .sheet-header { margin-bottom: 6px; padding-bottom: 10px; }
     body.mobile-sheet #mob-header-toggle {
         display: inline-flex; align-items: center; justify-content: center;

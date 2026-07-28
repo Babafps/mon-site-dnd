@@ -7,7 +7,14 @@
     <!-- PWA : installable sur mobile / bureau (manifest + service worker « réseau d'abord ») -->
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#7A2828">
-    <link rel="apple-touch-icon" href="IMG/dndimg.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="IMG/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="IMG/logo-192.png">
+    <link rel="apple-touch-icon" href="IMG/logo-192.png">
+    <!-- Écran de démarrage : Android le compose seul depuis le manifest (name +
+         background_color + icône 512 « maskable »). Ces 3 balises font l'équivalent sur iOS. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bones &amp; Blades">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="music-player.css">
@@ -22,7 +29,7 @@
 
 <div id="loading-screen" class="auth-fullscreen">
     <div class="auth-card" style="text-align:center;">
-        <div class="auth-logo">⚔️</div>
+        <div class="auth-logo"><img src="IMG/logo-192.png" alt="Bones &amp; Blades" width="192" height="192"></div>
         <h2 style="font-family:'Cinzel',serif; color:var(--primary-color); margin-bottom:20px;">Chargement…</h2>
         <div class="auth-spinner"></div>
     </div>
@@ -30,7 +37,7 @@
 
 <div id="login-screen" class="auth-fullscreen hidden">
     <div class="auth-card">
-        <div class="auth-logo">⚔️</div>
+        <div class="auth-logo"><img src="IMG/logo-192.png" alt="Bones &amp; Blades" width="192" height="192"></div>
         <h1 class="auth-title">Bones &amp; Blades</h1>
         <p class="auth-subtitle">Connecte-toi pour accéder à tes personnages</p>
         <div id="auth-message" class="auth-message hidden"></div>
@@ -131,6 +138,7 @@
 
 <div id="home-screen" class="screen-view">
     <div class="home-container">
+        <img class="brand-logo" src="IMG/logo-256.png" alt="Bones &amp; Blades" width="256" height="256">
         <h1 class="home-title">Bones &amp; Blades</h1>
         <div class="home-tabs">
             <button class="home-tab active" data-htab="player">🧝 Joueur</button>
@@ -191,6 +199,7 @@
 
     <div class="sheet-container">
         <header class="sheet-header">
+            <img class="sheet-logo no-print" src="IMG/logo-192.png" alt="" width="192" height="192">
             <h1>Bones &amp; Blades</h1>
             <div class="header-info">
                 <div class="header-main-row">

@@ -58,6 +58,8 @@ body.gm-active #session-combat-badge { display: none !important; }
     flex-shrink: 0;
 }
 .gm-title { font-family: 'Cinzel', serif; font-size: 1.3rem; font-weight: bold; color: var(--primary-color, #7A2828); letter-spacing: 0.03em; margin: 0; }
+/* Emblème Bones & Blades dans l'en-tête MJ (remplace l'ancien 🛡️ du titre). */
+.gm-brand-logo { width: 34px; height: 34px; flex-shrink: 0; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.35)); }
 .gm-campaign-title { font-family: 'Cinzel', serif; font-style: italic; color: #8a6320; font-size: 0.95rem; }
 .gm-room { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 0.85rem; }
 .gm-room-code {
@@ -417,6 +419,16 @@ body.theme-dark .gm-tag-filter { color: #d6c7a8; }
     background-color: #171410; background-size: contain; background-position: center; background-repeat: no-repeat;
     box-shadow: 0 0 0 1px rgba(196,155,53,0.25);
 }
+/* Filigrane Bones & Blades au centre du plateau. ::before est libre (::after = grille).
+   Pseudo-élément = premier « enfant » : les jetons, dessins et brouillard peignent
+   par-dessus sans z-index. Volontairement très discret pour ne pas gêner le jeu. */
+.gm-board::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: url(IMG/logo-256.png);
+    background-repeat: no-repeat; background-position: center;
+    background-size: min(34%, 240px);
+    opacity: 0.07;
+}
 .gm-board.show-grid::after {
     content: ''; position: absolute; pointer-events: none;
     /* La grille déborde LARGEMENT du board (multiple exact de la case → reste alignée)
@@ -585,6 +597,9 @@ body.theme-dark .gm-layers-foot { color: #b6a074; border-top-color: rgba(196,155
     background-size: cover; background-position: center; transition: left 0.09s linear, top 0.09s linear;
 }
 .gm-token.has-img { border-color: #f3e8cf; }
+/* Dos de jeton « emblème » (joueur sans avatar) : contenu ENTIER sur le disque coloré,
+   pas rogné par le cercle → on écrase le background-size:cover du jeton de base. */
+.gm-token.is-logo { background-size: 70%; background-repeat: no-repeat; border-color: #f3e8cf; }
 /* Ombre elliptique « posée au sol » sous chaque jeton (Lot 24) */
 .gm-token::after { content: ''; position: absolute; left: 8%; right: 8%; bottom: -16%; height: 24%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(0,0,0,0.42), rgba(0,0,0,0) 68%); z-index: -1; pointer-events: none; }
 .gm-token.dragging { cursor: grabbing; z-index: 5; transform: translate(-50%, -50%) scale(1.12); transition: none; }

@@ -1372,7 +1372,10 @@
         const gpx = playerGridPx(bw);
         const tokensHtml = (mapState.tokens || []).filter(t => !t.hidden).map(t => {
             const mine = !locked && t.owner && t.owner === uid;
-            const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;` : '';
+            // Jeton de JOUEUR sans image → emblème du site au dos (miroir exact du MJ, cf. tokenHtml).
+            const logoBack = !t.img && !!t.owner;
+            const img = t.img ? `background-image:url(${t.img}); background-size:cover; background-position:center;`
+                : (logoBack ? `background-image:url(IMG/logo-192.png); background-size:70%; background-repeat:no-repeat; background-position:center;` : '');
             // FORMULE IDENTIQUE au MJ (tokenHtml) → même taille apparente des jetons.
             const sz = Math.max(12, Math.round(Math.max(6, gpx) * (Number(t.size) || 1) * 0.78));   // MÊME facteur que le MJ (0.78 case, Lot 25)
             const onMap = t.layer === 'map';
@@ -1388,7 +1391,7 @@
                 const hpv = Number(t.hp), ratio = Math.max(0, Math.min(1, (isNaN(hpv) ? Number(t.hpMax) : hpv) / Number(t.hpMax)));
                 hpBar = `<i class="smap-hpbar"><b class="${ratio <= 0.33 ? 'is-low' : ''}" style="width:${Math.round(ratio * 100)}%"></b></i>`;
             }
-            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}${onMap ? ' smap-token-onmap' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}${hpBar}</div>`;
+            return aura + `<div class="smap-token${mine ? ' smap-token-mine' : ''}${t.img ? ' smap-token-img' : ''}${logoBack ? ' smap-token-logo' : ''}${onMap ? ' smap-token-onmap' : ''}" data-token="${t.id}" data-owner="${t.owner || ''}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${t.color || (t.type === 'monster' ? '#7A2828' : '#2980b9')}; ${img}" title="${escHtml(t.name)}">${t.img || logoBack ? '' : `<span>${escHtml((t.name || '?').slice(0, 2))}</span>`}${badges}${hpBar}</div>`;
         }).join('');
         // Portes : jamais les secrètes, et seulement celles RÉELLEMENT en vue quand
         // l'obscurité ou le brouillard sont actifs (le joueur ne devine plus les portes cachées).
@@ -1958,6 +1961,8 @@
         .smap-view { position:relative; width:100%; aspect-ratio:16/9; background:#11100e; border-radius:8px; overflow:hidden; }
         /* BOARD : plateau à ratio fixe, même espace de coordonnées que chez le MJ */
         .smap-board { position:absolute; background-color:#171410; background-size:contain; background-position:center; background-repeat:no-repeat; box-shadow:0 0 0 1px rgba(196,155,53,0.2); }
+        /* Filigrane Bones & Blades — miroir exact de .gm-board::before (::after = grille) */
+        .smap-board::before { content:''; position:absolute; inset:0; pointer-events:none; background-image:url(IMG/logo-256.png); background-repeat:no-repeat; background-position:center; background-size:min(34%,240px); opacity:0.07; }
         .smap-board.show-grid::after { content:''; position:absolute; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,0.13) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.13) 1px,transparent 1px); background-size:var(--gm-grid,48px) var(--gm-grid,48px); }
         .smap-templates, .smap-weather, .smap-hazards { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
         .smap-tint { position:absolute; inset:0; pointer-events:none; transition:background 0.6s ease; border-radius:8px; z-index:2; }
@@ -1983,6 +1988,7 @@
         .smap-token-mine { cursor:grab; box-shadow:0 0 0 2px #fff, 0 0 10px var(--accent-color,#C49B35); }
         .smap-token-mine:active { cursor:grabbing; }
         .smap-token-img { background-size:cover; background-position:center; border-color:#f3e8cf; }
+        .smap-token-logo { border-color:#f3e8cf; }
         .smap-fog { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-draw { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }
         .smap-dark { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; border-radius:8px; }

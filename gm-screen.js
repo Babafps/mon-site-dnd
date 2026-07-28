@@ -346,7 +346,8 @@
         <div class="gm-shell">
         <div class="gm-header">
             <button id="gm-go-home" class="gm-nav-home" title="Retour à l'accueil">🏠 <span class="gm-nav-home-txt">Accueil</span></button>
-            <h2 class="gm-title">🛡️ Écran du Maître</h2>
+            <img class="gm-brand-logo" src="IMG/logo-192.png" alt="" width="192" height="192">
+            <h2 class="gm-title">Écran du Maître</h2>
             <span id="gm-campaign-title" class="gm-campaign-title"></span>
             <div class="gm-room">
                 <span id="gm-room-label" class="gm-readonly-note">Session locale</span>
@@ -2088,7 +2089,11 @@
         const ratio = hpMax > 0 ? Math.max(0, Math.min(1, (isNaN(hp) ? hpMax : hp) / hpMax)) : 0;
         const low = hpMax > 0 && ratio <= 0.33;
         const effImg = t.img || ownerTokenImg(t);   // image explicite prioritaire, sinon avatar du joueur
-        const imgStyle = effImg ? `background-image:url(${effImg});` : '';
+        // Jeton de JOUEUR sans aucune image (t.owner présent) → emblème du site au dos,
+        // plus lisible que deux initiales. Les monstres (sans owner) gardent leur libellé.
+        const logoBack = !effImg && !!t.owner;
+        const bgImg = effImg || (logoBack ? 'IMG/logo-192.png' : '');
+        const imgStyle = bgImg ? `background-image:url(${bgImg});` : '';
         // Taille liée à la grille du board : un jeton « Normal » remplit sa case.
         // FORMULE IDENTIQUE côté joueur (renderPlayerMap) → même taille apparente MJ / PJ.
         const gpx = Math.max(6, gridPxFor(boardWpx));
@@ -2106,8 +2111,8 @@
         }
         const layerCls = layer === 'gm' ? ' is-mj-hidden gm-layer-gm' : (layer === 'map' ? ' gm-token-onmap' : '');
         const dim = (mapView.activeLayer && mapView.activeLayer !== layer) ? ' gm-token-dim' : '';
-        return auraHtml + `<div class="gm-token${layerCls}${dim}${effImg ? ' has-img' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" data-layer="${layer}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}${layer === 'gm' ? ' — calque MJ (invisible aux joueurs)' : (layer === 'map' ? ' — calque Carte' : '')}">`
-            + (effImg ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
+        return auraHtml + `<div class="gm-token${layerCls}${dim}${effImg ? ' has-img' : ''}${logoBack ? ' is-logo' : ''}${isTokenActiveTurn(t) ? ' is-turn' : ''}" data-token="${t.id}" data-layer="${layer}" style="left:${t.x * 100}%; top:${t.y * 100}%; width:${sz}px; height:${sz}px; --tok:${tokenColor(t)}; ${imgStyle}" title="${esc(t.name)}${layer === 'gm' ? ' — calque MJ (invisible aux joueurs)' : (layer === 'map' ? ' — calque Carte' : '')}">`
+            + (effImg || logoBack ? '' : `<span class="gm-token-label">${esc((t.name || '?').slice(0, 2))}</span>`)
             + acBadge + badgeHtml + hpBar + `</div>`;
     }
     function applyMapTransform() {
