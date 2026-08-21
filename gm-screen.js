@@ -6,6 +6,11 @@
 (function () {
     'use strict';
 
+    // ---------- Accès à l'interface MJ ----------
+    // Mis à false : l'onglet « Maître du Jeu » est masqué et la route #gm/<id> reste inerte.
+    // AUCUN code MJ n'a été supprimé — repasser cette constante à true réactive tout.
+    const GM_ACCESS_ENABLED = false;
+
     // ---------- Données statiques ----------
     const CONDITIONS = [
         { key: 'pois', icon: '🧪', label: 'Empoisonné' }, { key: 'prone', icon: '⏬', label: 'À terre' },
@@ -1045,7 +1050,6 @@
         });
     }
     // ----- Actions extraites (partagées entre la barre d'outils et les réglages) -----
-    function addTokenPrompt() { const n = prompt('Nom du jeton :'); if (!n || !n.trim()) return; state.tokens.push({ id: uid(), name: n.trim(), type: 'npc', x: 0.5, y: 0.5 }); save(); renderMap(); broadcastMap(true); }
     function clearTokensConfirm() { if (!confirm('Retirer tous les jetons ?')) return; state.tokens = []; save(); renderMap(); broadcastMap(true); }
     function toggleTokensLock() { state.map.tokensLocked = !state.map.tokensLocked; save(); renderMap(); broadcastMap(true); if (window.showAppToast) window.showAppToast(state.map.tokensLocked ? '🔒 Jetons verrouillés (MJ seul)' : '🔓 Jetons libres (chaque joueur bouge le sien)', '#2c3e50'); }
     function toggleSnap() { state.map.snap = !state.map.snap; save(); renderMap(); if (window.showAppToast) window.showAppToast(state.map.snap ? '🧲 Aimantage grille activé' : '🧲 Aimantage désactivé', '#2c3e50'); }
@@ -1495,7 +1499,7 @@
         const trHtml = tr.length ? `<div class="gm-sheet-list">${tr.map(t => `<div class="gm-sheet-row"><b>${esc(t.name || '—')}</b>${t.desc ? `<small>${esc(String(t.desc).replace(/<[^>]+>/g, '').slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
         // Compagnons (plusieurs possibles ; repli sur l'ancien champ unique)
         const cps = Array.isArray(f.companions) && f.companions.length ? f.companions : (f.companion && (f.companion.name || f.companion.notes) ? [f.companion] : []);
-        const cpHtml = cps.length ? `<div class="gm-sheet-list">${cps.map(c => `<div class="gm-sheet-row"><b>${esc(c.name || 'Compagnon')}</b><span>CA ${esc(c.ac || '—')} · PV ${esc(c.hp || '—')}</span>${c.notes ? `<small>${esc(String(c.notes).slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
+        const cpHtml = cps.length ? `<div class="gm-sheet-list">${cps.map(c => `<div class="gm-sheet-row"><b>${esc(c.name || 'Compagnon')}</b><span>CA ${esc(c.ac || '—')} · PV ${esc(c.hp || '—')}${c.hpMax ? '/' + esc(c.hpMax) : ''}</span>${c.notes ? `<small>${esc(String(c.notes).slice(0, 220))}</small>` : ''}</div>`).join('')}</div>` : '';
         // Défenses (résistances / immunités / vulnérabilités) — envoyées par la fiche joueur
         const df = f.defenses || {};
         const dfRows = [['🛡️ Résistances', df.resist], ['✨ Immunités', df.immune], ['💥 Vulnérabilités', df.vulnerable]].filter(r => r[1] && String(r[1]).trim());
@@ -5300,6 +5304,8 @@
         });
     }
     function wireHome() {
+        // Accès MJ désactivé : on masque l'onglet. Le panneau reste dans le DOM, simplement inutilisé.
+        if (!GM_ACCESS_ENABLED) { const bar = document.querySelector(".home-tabs"); if (bar) bar.classList.add("hidden"); }
         document.querySelectorAll('.home-tab').forEach(tab => tab.addEventListener('click', () => {
             document.querySelectorAll('.home-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
             const isGm = tab.dataset.htab === 'gm';
@@ -5414,6 +5420,8 @@
     }
 
     function open(campaignId) {
+        // Verrou unique : couvre l'onglet d'accueil, la route #gm/<id> et window.GMScreen.open().
+        if (!GM_ACCESS_ENABLED) return;
         if (campaignId && campaignId !== activeCampaignId) { GmCloud.flushNow(); stopNetwork(); } // change de campagne → pousse l'état en attente, coupe l'ancien flux
         if (campaignId) { activeCampaignId = campaignId; state = load(); }
         else if (!activeCampaignId) { const c = createCampaign('Partie rapide'); activeCampaignId = c.id; state = load(); }

@@ -68,15 +68,38 @@ window.SupaAuth = {
         });
     },
 
+    // `archived` et `sort_order` sont ajoutées par SUPABASE.sql. Elles sont OPTIONNELLES :
+    // si la migration n'a pas été appliquée, la requête échoue et on retombe sur la
+    // sélection de base — l'archivage et l'ordre restent alors locaux au navigateur.
+    charMetaColumns: false,
+
     async loadCharacters() {
         if (!this.currentUser) return [];
-        const { data, error } = await _supabase
+        const query = (cols) => _supabase
             .from('characters')
-            .select('id, name, level, class')
+            .select(cols)
             .eq('user_id', this.currentUser.id)
             .order('created_at', { ascending: true });
-        if (error) { console.warn('loadCharacters:', error); return []; }
-        return data || [];
+
+        let res = await query('id, name, level, class, archived, sort_order');
+        if (res.error) {
+            this.charMetaColumns = false;
+            res = await query('id, name, level, class');
+        } else {
+            this.charMetaColumns = true;
+        }
+        if (res.error) { console.warn('loadCharacters:', res.error); return []; }
+        return res.data || [];
+    },
+
+    // Pousse archivage / ordre vers le cloud. Sans la migration SQL, ne fait rien
+    // (les préférences restent alors purement locales).
+    async saveCharacterMeta(charId, fields) {
+        if (!this.currentUser || !this.charMetaColumns || !charId) return;
+        const { error } = await _supabase.from('characters')
+            .update(fields)
+            .eq('id', charId).eq('user_id', this.currentUser.id);
+        if (error) console.warn('saveCharacterMeta:', error);
     },
 
     async createCharacter(name) {
@@ -726,5 +749,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         location.reload();
     });
 
+
+    // --- Afficher / masquer les mots de passe ---
+    // Appliqué à tous les champs `type="password"` de la page : chaque champ reçoit un
+    // œil cliquable. Générique, donc tout futur champ en bénéficie sans modification.
+    document.querySelectorAll('input[type="password"]').forEach(input => {
+        if (input.parentElement && input.parentElement.classList.contains('pw-wrap')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'pw-wrap';
+        input.parentNode.insertBefore(wrap, input);
+        wrap.appendChild(input);
+
+        const eye = document.createElement('button');
+        eye.type = 'button';                 // sans ça, le bouton soumettrait le formulaire
+        eye.className = 'pw-eye';
+        eye.textContent = '👁';
+        eye.title = 'Afficher le mot de passe';
+        eye.setAttribute('aria-label', 'Afficher le mot de passe');
+        eye.setAttribute('aria-pressed', 'false');
+        eye.addEventListener('click', () => {
+            const shown = input.type === 'text';
+            input.type = shown ? 'password' : 'text';
+            eye.textContent = shown ? '👁' : '🙈';
+            const label = shown ? 'Afficher le mot de passe' : 'Masquer le mot de passe';
+            eye.title = label;
+            eye.setAttribute('aria-label', label);
+            eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+            input.focus();
+        });
+        wrap.appendChild(eye);
+    });
     window.addEventListener('beforeunload', () => { SyncQueue.flush(); });
 });

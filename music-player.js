@@ -164,11 +164,12 @@
         // Déplacement horizontal du dock + restauration de la position
         setupDock();
         // Préférence d'affichage du module (activé / désactivé via le menu).
-        // Sur téléphone (≤700px), préférence séparée (dnd-show-music-player-mobile), cachée par défaut.
+        // Sur téléphone (≤700px), préférence séparée (dnd-show-music-player-mobile).
         try {
             const mobileView = window.matchMedia('(max-width: 700px)').matches;
             const prefShow = localStorage.getItem(mobileView ? 'dnd-show-music-player-mobile' : 'dnd-show-music-player');
-            if (prefShow === 'false' || (prefShow === null && mobileView)) setVisible(false);
+            // Désactivé par défaut : seul un « true » explicite affiche le lecteur.
+            if (prefShow !== 'true') setVisible(false);
         } catch (e) {}
 
         // Volume initial

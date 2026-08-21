@@ -77,6 +77,13 @@
 
         // ----- Fiche COMPLÈTE (pour la vue MJ : tout le personnage) -----
         const jstore = (key) => { try { const raw = localStorage.getItem(state.charId + '_' + key); return raw && raw !== 'undefined' ? JSON.parse(raw) : null; } catch (e) { return null; } };
+        // Notes rapides, quêtes et PNJ sont désormais des listes de fiches (titre + corps).
+        // On les aplatit en un seul texte pour rester compatible avec l'affichage MJ existant.
+        const flattenNotes = (key) => (jstore(key) || [])
+            .map(n => (n.done ? '✔ ' : '') + (n.title ? n.title + ' : ' : '') + (n.body || ''))
+            .filter(s => s.trim())
+            .join('\n\n');
+        const quickNotesFlat = () => flattenNotes('dnd-quick-notes');
         const skills = [];
         document.querySelectorAll('#attributes-list .skill-row').forEach(row => {
             const lbl = row.querySelector('label'); const md = row.querySelector('.skill-mod'); const pf = row.querySelector('.skill-prof');
@@ -96,10 +103,11 @@
             traits: (jstore('dnd-traits') || []).map(t => ({ name: t.name, type: t.type, desc: String(t.desc || '').replace(/<[^>]+>/g, '').slice(0, 240) })),
             hitDice: { spent: v('hd-spent'), max: v('hd-max'), size: (document.getElementById('hd-size') || {}).value || '' },
             // Compagnons : plusieurs possibles. `companion` (le 1er) reste envoyé pour l'affichage MJ existant.
-            companions: (jstore('dnd-companions') || []).map(c => ({ name: c.name, ac: c.ac, hp: c.hp, notes: c.notes })),
+            companions: (jstore('dnd-companions') || []).map(c => ({ name: c.name, type: c.type, ac: c.ac, hp: c.hp, hpMax: c.hpMax, notes: c.notes })),
             companion: (jstore('dnd-companions') || [])[0] || { name: '', ac: '', hp: '', notes: '' },
             defenses: { resist: v('dmg-resist'), immune: v('dmg-immune'), vulnerable: v('dmg-vulnerable') },
-            notes: { quick: v('quick-note'), quests: v('quest-log'), npcs: v('npc-log') }
+            // Notes rapides : plusieurs désormais → on les aplatit pour l'affichage MJ existant.
+            notes: { quick: quickNotesFlat(), quests: flattenNotes('dnd-quests'), npcs: flattenNotes('dnd-npcs') }
         };
 
         return {

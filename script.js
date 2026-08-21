@@ -81,24 +81,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. ÉCOUTEURS GLOBAUX INDÉPENDANTS
     // ==========================================
     
+    // Couleurs personnalisées : posées en inline sur <body>. On n'écrit QUE ce que
+    // l'utilisateur a réellement modifié — les autres variables restent celles de :root.
+    const THEME_COLORS = [
+        ['dnd-theme-primary',       '--primary-color',       '#7A2828', 'color-primary'],
+        ['dnd-theme-accent',        '--accent-color',        '#C49B35', 'color-accent'],
+        ['dnd-theme-sheet-bg',      '--sheet-bg-color',      '#FAF3E0', 'color-sheet-bg'],
+        ['dnd-theme-widget-bg',     '--widget-bg',           '#FFFFFF', 'color-widget-bg'],
+        ['dnd-theme-concentration', '--concentration-color', '#2980b9', 'color-concentration']
+    ];
+
     function applyTheme() {
-        let primary = DB.get('dnd-theme-primary') || '#7A2828';
-        let accent = DB.get('dnd-theme-accent') || '#C49B35';
-        let sheetBg = DB.get('dnd-theme-sheet-bg') || '#FAF3E0';
-        let widgetBg = DB.get('dnd-theme-widget-bg') || '#FFFFFF';
-        let concentrationColor = DB.get('dnd-theme-concentration') || '#2980b9';
-        
-        document.documentElement.style.setProperty('--primary-color', primary);
-        document.documentElement.style.setProperty('--accent-color', accent);
-        document.documentElement.style.setProperty('--sheet-bg-color', sheetBg);
-        document.documentElement.style.setProperty('--widget-bg', widgetBg);
-        document.documentElement.style.setProperty('--concentration-color', concentrationColor);
-        
-        let cp = document.getElementById('color-primary'); if(cp) cp.value = primary;
-        let ca = document.getElementById('color-accent'); if(ca) ca.value = accent;
-        let csb = document.getElementById('color-sheet-bg'); if(csb) csb.value = sheetBg;
-        let cwb = document.getElementById('color-widget-bg'); if(cwb) cwb.value = widgetBg;
-        let cc = document.getElementById('color-concentration'); if(cc) cc.value = concentrationColor;
+        const computed = getComputedStyle(document.body);
+        THEME_COLORS.forEach(function(entry) {
+            const key = entry[0], cssVar = entry[1], fallback = entry[2], inputId = entry[3];
+            const saved = DB.get(key);
+            if (saved) document.body.style.setProperty(cssVar, saved);
+            else document.body.style.removeProperty(cssVar);
+
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            if (saved) { input.value = saved; return; }
+            // Pas de couleur perso : la pastille reflète la couleur du style actif.
+            const fromStyle = computed.getPropertyValue(cssVar).trim();
+            input.value = /^#[0-9a-f]{6}$/i.test(fromStyle) ? fromStyle : fallback;
+        });
     }
     applyTheme();
 
@@ -122,11 +129,56 @@ document.addEventListener('DOMContentLoaded', () => {
     applyDarkMode(DB.get('dnd-theme-darkmode') === 'true');
     if(toggleDarkMode) toggleDarkMode.addEventListener('change', (e) => { DB.set('dnd-theme-darkmode', e.target.checked); applyDarkMode(e.target.checked); });
 
-    const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.documentElement.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
-    const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
-    const cShBg = document.getElementById('color-sheet-bg'); if(cShBg) cShBg.addEventListener('input', (e) => { document.documentElement.style.setProperty('--sheet-bg-color', e.target.value); DB.set('dnd-theme-sheet-bg', e.target.value); });
-    const cWdBg = document.getElementById('color-widget-bg'); if(cWdBg) cWdBg.addEventListener('input', (e) => { document.documentElement.style.setProperty('--widget-bg', e.target.value); DB.set('dnd-theme-widget-bg', e.target.value); });
-    const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.documentElement.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
+    // --- Préférences d'affichage des modules (menu ☰) ---
+    // Câblées ICI, hors des branches accueil / fiche, pour être utilisables depuis les
+    // DEUX écrans. Les boutons ciblés n'existent que sur la fiche : chaque application
+    // est donc protégée, et la préférence est enregistrée dans tous les cas.
+    const applyPrefTo = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !on); };
+
+    const toggleSearchBtn = document.getElementById('toggle-search-btn');
+    if (toggleSearchBtn) {
+        const shown = (DB.get('dnd-show-search-btn') || 'true') === 'true';
+        toggleSearchBtn.checked = shown;
+        applyPrefTo('btn-global-search-trigger', shown);
+        toggleSearchBtn.addEventListener('change', (e) => {
+            DB.set('dnd-show-search-btn', e.target.checked);
+            applyPrefTo('btn-global-search-trigger', e.target.checked);
+        });
+    }
+
+    const toggleFloatingDice = document.getElementById('toggle-floating-dice');
+    if (toggleFloatingDice) {
+        const shown = (DB.get('dnd-show-floating-dice') || 'true') === 'true';
+        toggleFloatingDice.checked = shown;
+        applyPrefTo('btn-toggle-dice', shown);
+        toggleFloatingDice.addEventListener('change', (e) => {
+            DB.set('dnd-show-floating-dice', e.target.checked);
+            applyPrefTo('btn-toggle-dice', e.target.checked);
+            const drawer = document.getElementById('dice-drawer');
+            if (!e.target.checked && drawer) drawer.classList.remove('open');
+        });
+    }
+
+    const toggleMusicPlayer = document.getElementById('toggle-music-player');
+    if (toggleMusicPlayer) {
+        // Téléphone (≤700px) : préférence séparée de celle du bureau.
+        const musicMobileView = () => window.matchMedia('(max-width: 700px)').matches;
+        const musicKey = () => musicMobileView() ? 'dnd-show-music-player-mobile' : 'dnd-show-music-player';
+        const shown = (DB.get(musicKey()) || 'false') === 'true';   // masqué par défaut
+        toggleMusicPlayer.checked = shown;
+        if (window.MusicPlayer) window.MusicPlayer.setVisible(shown, false);
+        toggleMusicPlayer.addEventListener('change', (e) => {
+            DB.set(musicKey(), e.target.checked ? 'true' : 'false');
+            if (window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, false);
+        });
+    }
+
+
+    const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.body.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
+    const cAcc = document.getElementById('color-accent'); if(cAcc) cAcc.addEventListener('input', (e) => { document.body.style.setProperty('--accent-color', e.target.value); DB.set('dnd-theme-accent', e.target.value); });
+    const cShBg = document.getElementById('color-sheet-bg'); if(cShBg) cShBg.addEventListener('input', (e) => { document.body.style.setProperty('--sheet-bg-color', e.target.value); DB.set('dnd-theme-sheet-bg', e.target.value); });
+    const cWdBg = document.getElementById('color-widget-bg'); if(cWdBg) cWdBg.addEventListener('input', (e) => { document.body.style.setProperty('--widget-bg', e.target.value); DB.set('dnd-theme-widget-bg', e.target.value); });
+    const cConc = document.getElementById('color-concentration'); if(cConc) cConc.addEventListener('input', (e) => { document.body.style.setProperty('--concentration-color', e.target.value); DB.set('dnd-theme-concentration', e.target.value); });
     const btnResetTheme = document.getElementById('btn-reset-theme'); if(btnResetTheme) btnResetTheme.addEventListener('click', () => { DB.remove('dnd-theme-primary'); DB.remove('dnd-theme-accent'); DB.remove('dnd-theme-sheet-bg'); DB.remove('dnd-theme-widget-bg'); DB.remove('dnd-theme-concentration'); applyTheme(); });
 
     const btnSettingsToggle = document.getElementById('btn-settings-toggle');
@@ -309,28 +361,235 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if(!ACTIVE_CHAR_ID) { 
         if(homeScreen) homeScreen.classList.remove('hidden'); if(appScreen) appScreen.classList.add('hidden'); 
-        const listDiv = document.getElementById('character-list'); 
-        if(listDiv) {
-            listDiv.innerHTML = '';
-            if(charactersList.length === 0) { listDiv.innerHTML = "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>"; } else {
-                charactersList.forEach(c => {
-                    let card = document.createElement('div'); card.className = 'char-card';
-                    // Vignette du perso : l'avatar est stocké sous `{charId}_dnd-avatar`
-                    // (chargé en localStorage pour local ET Supabase → dispo dès l'accueil).
-                    let avatarSrc = DB.get(c.id + '_dnd-avatar');
-                    let thumb = document.createElement('div'); thumb.className = 'char-card-avatar';
-                    if(avatarSrc && avatarSrc !== 'undefined') { thumb.style.backgroundImage = `url("${avatarSrc}")`; }
-                    else { thumb.classList.add('is-empty'); thumb.textContent = (c.name || '?').trim().charAt(0).toUpperCase() || '🧝'; }
-                    let info = document.createElement('div'); info.className = 'char-info';
-                    info.innerHTML = `<strong>${c.name}</strong> <span style="font-size:0.8rem; color:#888;">(Niv.${c.level || 1} ${c.class || ''})</span>`;
-                    const openChar = async () => { DB.set('dnd-active-char', c.id); if(window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); } location.reload(); };
-                    info.onclick = openChar; thumb.onclick = openChar;
-                    let delBtn = document.createElement('button'); delBtn.className = 'btn-delete-char'; delBtn.innerHTML = '✖';
-                    delBtn.onclick = async (e) => { e.stopPropagation(); if(confirm(`Supprimer définitivement ${c.name} ?`)) { if(window.SupaAuth?.currentUser) { await window.SupaAuth.deleteCharacter(c.id); } charactersList = charactersList.filter(char => char.id !== c.id); DB.set('dnd-character-list', JSON.stringify(charactersList)); DB.keys().forEach(k => { if(k.startsWith(c.id + '_')) DB.remove(k); }); location.reload(); } };
-                    card.appendChild(thumb); card.appendChild(info); card.appendChild(delBtn); listDiv.appendChild(card);
-                });
-            }
+        // ===== ACCUEIL : liste des personnages (archivage, duplication, tri) =====
+        // NOTE : l'archivage et l'ordre personnalisé sont stockés LOCALEMENT (dnd-char-meta).
+        // La table Supabase `characters` n'expose que id/name/level/class — pas de colonne
+        // dédiée — donc ces préférences ne suivent pas d'un appareil à l'autre.
+        const CHAR_META_KEY = 'dnd-char-meta';
+        const CHAR_SORT_KEY = 'dnd-char-sort';
+        let charMeta = (() => { try { const o = JSON.parse(DB.get(CHAR_META_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } })();
+        function saveCharMeta() { DB.set(CHAR_META_KEY, JSON.stringify(charMeta)); }
+        function metaOf(id) { if (!charMeta[id]) charMeta[id] = {}; return charMeta[id]; }
+        // Échappement local : escAb() n'existe que dans la branche « fiche » de ce fichier.
+        const escChar = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        // Un seul menu ouvert à la fois ; un clic ailleurs ou Échap le referme.
+        function closeCharMenus() {
+            document.querySelectorAll('.char-card.is-menu-open').forEach(c => c.classList.remove('is-menu-open'));
+            document.querySelectorAll('.char-menu.is-open').forEach(m => {
+                m.classList.remove('is-open');
+                const b = m.querySelector('.char-menu-btn'); if (b) b.setAttribute('aria-expanded', 'false');
+            });
         }
+        document.addEventListener('click', closeCharMenus);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCharMenus(); });
+        // Pousse archivage / ordre vers Supabase quand les colonnes existent (voir SUPABASE.sql).
+        // Sans la migration, l'appel est ignoré et tout reste local — aucun échec visible.
+        function syncCharMetaCloud(id) {
+            if (!window.SupaAuth || !window.SupaAuth.saveCharacterMeta) return;
+            const m = metaOf(id);
+            window.SupaAuth.saveCharacterMeta(id, { archived: !!m.archived, sort_order: m.order == null ? null : m.order });
+        }
+        // Reprend l'archivage / l'ordre venus du cloud, quand la migration a été appliquée.
+        function hydrateCharMetaFromCloud(list) {
+            if (!window.SupaAuth || !window.SupaAuth.charMetaColumns) return;
+            list.forEach(c => {
+                if (c.archived != null) metaOf(c.id).archived = !!c.archived;
+                if (c.sort_order != null) metaOf(c.id).order = c.sort_order;
+            });
+            saveCharMeta();
+        }
+
+        function showArchivedChars() { const c = document.getElementById('char-show-archived'); return !!(c && c.checked); }
+
+        function sortedCharacters(mode) {
+            const arr = charactersList.slice();
+            const byName = (a, b) => (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
+            if (mode === 'name') arr.sort(byName);
+            else if (mode === 'level') arr.sort((a, b) => (b.level || 1) - (a.level || 1) || byName(a, b));
+            else if (mode === 'recent') arr.sort((a, b) => (metaOf(b.id).lastOpened || 0) - (metaOf(a.id).lastOpened || 0));
+            else if (mode === 'custom') arr.sort((a, b) => {
+                const oa = metaOf(a.id).order, ob = metaOf(b.id).order;
+                return (oa == null ? 1e9 : oa) - (ob == null ? 1e9 : ob);
+            });
+            // 'created' (défaut) : on garde l'ordre naturel de dnd-character-list
+            return arr;
+        }
+
+        // Fige l'ordre affiché comme ordre personnalisé, pour que les flèches partent du visuel courant.
+        function seedCustomOrder(list) { list.forEach((c, i) => { metaOf(c.id).order = i; }); saveCharMeta(); }
+
+        function moveCharacter(id, dir) {
+            const mode = DB.get(CHAR_SORT_KEY) || 'created';
+            const visible = sortedCharacters(mode).filter(c => showArchivedChars() || !metaOf(c.id).archived);
+            const i = visible.findIndex(c => c.id === id);
+            const j = i + dir;
+            if (i < 0 || j < 0 || j >= visible.length) return;
+            seedCustomOrder(visible);                                 // fige l'ordre courant…
+            const a = metaOf(visible[i].id), b = metaOf(visible[j].id);
+            const tmp = a.order; a.order = b.order; b.order = tmp;     // …puis échange les deux voisins
+            syncCharMetaCloud(visible[i].id); syncCharMetaCloud(visible[j].id);
+            saveCharMeta();
+            // Réordonner à la main bascule forcément en mode « personnalisé »
+            const sel = document.getElementById('char-sort-select');
+            if (sel && sel.value !== 'custom') { sel.value = 'custom'; }
+            DB.set(CHAR_SORT_KEY, 'custom');
+            renderCharacterList();
+        }
+
+        async function duplicateCharacter(src) {
+            const newName = (src.name || 'Personnage') + ' (copie)';
+            let newId;
+            if (window.SupaAuth?.currentUser) {
+                const created = await window.SupaAuth.createCharacter(newName);
+                if (!created) { alert('Erreur lors de la duplication.'); return; }
+                newId = created.id;
+                const data = await window.SupaAuth.loadCharacterData(src.id);
+                const entries = Object.entries(data).map(([key, value]) => ({ key, value }));
+                // Le nom stocké dans la fiche doit suivre la copie, pas rester celui de l'original.
+                const iName = entries.findIndex(e => e.key === 'dnd-sheet-char-name');
+                if (iName >= 0) entries[iName].value = newName;
+                else entries.push({ key: 'dnd-sheet-char-name', value: newName });
+                try { await window.SupaAuth.saveKeys(newId, entries); } catch (e) { console.warn('duplicateCharacter:', e); }
+                entries.forEach(({ key, value }) => DB.set(newId + '_' + key, value));
+                try { await window.SupaAuth.updateCharacterMeta(newId, { level: src.level || 1, class: src.class || '' }); } catch (e) {}
+            } else {
+                newId = 'char_' + Date.now();
+                DB.keys().forEach(k => {
+                    if (!k.startsWith(src.id + '_')) return;
+                    DB.set(newId + '_' + k.slice(src.id.length + 1), DB.get(k));
+                });
+                DB.set(newId + '_dnd-sheet-char-name', newName);
+            }
+            charactersList.push({ id: newId, name: newName, level: src.level || 1, class: src.class || '' });
+            DB.set('dnd-character-list', JSON.stringify(charactersList));
+            if (metaOf(src.id).archived) metaOf(newId).archived = true;   // la copie d'un archivé reste archivée
+            saveCharMeta();
+            renderCharacterList();
+            if (window.showAppToast) window.showAppToast('📄 « ' + newName + ' » créé');
+        }
+
+        function renderCharacterList() {
+            const listDiv = document.getElementById('character-list');
+            if (!listDiv) return;
+            const mode = DB.get(CHAR_SORT_KEY) || 'created';
+            const sel = document.getElementById('char-sort-select'); if (sel) sel.value = mode;
+
+            const all = sortedCharacters(mode);
+            const archivedCount = all.filter(c => metaOf(c.id).archived).length;
+            const visible = all.filter(c => showArchivedChars() || !metaOf(c.id).archived);
+
+            // La case « afficher les archivés » ne sert à rien tant qu'aucun perso ne l'est.
+            const wrap = document.getElementById('char-show-archived-wrap');
+            if (wrap) wrap.classList.toggle('hidden', archivedCount === 0);
+            const cnt = document.getElementById('char-archived-count');
+            if (cnt) cnt.textContent = archivedCount ? ' (' + archivedCount + ')' : '';
+
+            listDiv.innerHTML = '';
+            if (!visible.length) {
+                listDiv.innerHTML = charactersList.length
+                    ? "<p style='text-align:center; font-style:italic;'>Tous tes personnages sont archivés.</p>"
+                    : "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>";
+                return;
+            }
+            visible.forEach((c, idx) => {
+                const archived = !!metaOf(c.id).archived;
+                const card = document.createElement('div');
+                card.className = 'char-card' + (archived ? ' is-archived' : '');
+                // Vignette du perso : l'avatar est stocké sous `{charId}_dnd-avatar`
+                // (chargé en localStorage pour local ET Supabase → dispo dès l'accueil).
+                const avatarSrc = DB.get(c.id + '_dnd-avatar');
+                const thumb = document.createElement('div'); thumb.className = 'char-card-avatar';
+                if (avatarSrc && avatarSrc !== 'undefined') { thumb.style.backgroundImage = `url("${avatarSrc}")`; }
+                else { thumb.classList.add('is-empty'); thumb.textContent = (c.name || '?').trim().charAt(0).toUpperCase() || '🧝'; }
+
+                const info = document.createElement('div'); info.className = 'char-info';
+                info.innerHTML = `<span class="char-name">${escChar(c.name)}</span>`
+                    + `<span class="char-sub">Niveau ${c.level || 1}${c.class ? ' · ' + escChar(c.class) : ''}${archived ? ' · archivé' : ''}</span>`;
+
+                const openChar = async () => {
+                    metaOf(c.id).lastOpened = Date.now(); saveCharMeta();
+                    DB.set('dnd-active-char', c.id);
+                    if (window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); }
+                    location.reload();
+                };
+                // La carte entière ouvre le personnage : ouvrir = 1 clic.
+                card.onclick = openChar;
+
+                const actions = document.createElement('div'); actions.className = 'char-actions';
+
+                // Les flèches n'apparaissent qu'en mode « Ordre personnalisé » : ailleurs
+                // elles n'auraient aucun sens, et elles encombraient la carte pour rien.
+                if (mode === 'custom') {
+                    const arrow = (label, title, dir, disabled) => {
+                        const b = document.createElement('button');
+                        b.type = 'button'; b.className = 'char-act char-act-move';
+                        b.innerHTML = label; b.title = title; b.disabled = disabled;
+                        b.onclick = (e) => { e.stopPropagation(); moveCharacter(c.id, dir); };
+                        return b;
+                    };
+                    actions.appendChild(arrow('▲', 'Monter', -1, idx === 0));
+                    actions.appendChild(arrow('▼', 'Descendre', 1, idx === visible.length - 1));
+                }
+
+                // Tout le reste tient derrière un seul bouton « ⋯ » : la carte reste lisible,
+                // et chaque action se fait en 2 clics.
+                const menuWrap = document.createElement('div'); menuWrap.className = 'char-menu';
+                const menuBtn = document.createElement('button');
+                menuBtn.type = 'button'; menuBtn.className = 'char-act char-menu-btn';
+                menuBtn.innerHTML = '⋯'; menuBtn.title = 'Actions'; menuBtn.setAttribute('aria-haspopup', 'true'); menuBtn.setAttribute('aria-expanded', 'false');
+                const menu = document.createElement('div'); menu.className = 'char-menu-pop';
+
+                const addItem = (label, fn, cls) => {
+                    const b = document.createElement('button');
+                    b.type = 'button'; b.className = 'char-menu-item' + (cls ? ' ' + cls : '');
+                    b.textContent = label;
+                    b.onclick = (e) => { e.stopPropagation(); closeCharMenus(); fn(); };
+                    menu.appendChild(b);
+                };
+                addItem('📄  Dupliquer', () => duplicateCharacter(c));
+                addItem(archived ? '📂  Désarchiver' : '🗄️  Archiver', () => {
+                    metaOf(c.id).archived = !archived; saveCharMeta(); syncCharMetaCloud(c.id); renderCharacterList();
+                });
+                addItem('🗑  Supprimer', async () => {
+                    if (!confirm(`Supprimer définitivement ${c.name} ?\nCette action est irréversible.`)) return;
+                    if (window.SupaAuth?.currentUser) { await window.SupaAuth.deleteCharacter(c.id); }
+                    charactersList = charactersList.filter(char => char.id !== c.id);
+                    DB.set('dnd-character-list', JSON.stringify(charactersList));
+                    DB.keys().forEach(k => { if (k.startsWith(c.id + '_')) DB.remove(k); });
+                    delete charMeta[c.id]; saveCharMeta();
+                    renderCharacterList();
+                }, 'is-danger');
+
+                menuBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const wasOpen = menuWrap.classList.contains('is-open');
+                    closeCharMenus();
+                    if (!wasOpen) { menuWrap.classList.add('is-open'); card.classList.add('is-menu-open'); menuBtn.setAttribute('aria-expanded', 'true'); }
+                };
+                menuWrap.appendChild(menuBtn); menuWrap.appendChild(menu);
+                actions.appendChild(menuWrap);
+
+                card.appendChild(thumb); card.appendChild(info); card.appendChild(actions);
+                listDiv.appendChild(card);
+            });
+        }
+
+        const charSortSelect = document.getElementById('char-sort-select');
+        if (charSortSelect) charSortSelect.addEventListener('change', (e) => { DB.set(CHAR_SORT_KEY, e.target.value); renderCharacterList(); });
+        const charShowArchived = document.getElementById('char-show-archived');
+        if (charShowArchived) charShowArchived.addEventListener('change', renderCharacterList);
+        renderCharacterList();
+        // auth.js appelle ce hook après avoir chargé la liste des persos depuis le cloud.
+        // Il y était invoqué mais n'était défini nulle part : la liste ne se rafraîchissait
+        // donc jamais après connexion (il fallait recharger la page à la main).
+        window.renderHomeScreen = () => {
+            try {
+                const raw = DB.get('dnd-character-list');
+                const parsed = (raw && raw !== 'undefined') ? JSON.parse(raw) : [];
+                if (Array.isArray(parsed)) { charactersList = parsed; hydrateCharMetaFromCloud(parsed); }
+            } catch (e) {}
+            renderCharacterList();
+        };
     } else { 
         let quillNewJournal = new Quill('#new-journal-content', { theme: 'snow' });
         let quillNewSpell = new Quill('#new-spell-desc', { theme: 'snow' });
@@ -510,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const onMobileMediaChange = () => {
             applyLayout(getStore('dnd-layout-mode', false) || 'classic');
             // Resynchronise le lecteur de musique avec la préférence de l'écran courant (mobile = caché par défaut)
-            const musicPref = isMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') ?? 'true');
+            const musicPref = isMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') || 'false');
             if (window.MusicPlayer) window.MusicPlayer.setVisible(musicPref === 'true', false);
             const musicToggle = document.getElementById('toggle-music-player'); if (musicToggle) musicToggle.checked = musicPref === 'true';
         };
@@ -683,33 +942,9 @@ document.addEventListener('DOMContentLoaded', () => {
         function updateConcentrationUI() { if(!cbConcentration || !concentrationGlow || !avatarHeader) return; if(cbConcentration.checked) { document.body.classList.add('concentrating-mode'); concentrationGlow.classList.remove('hidden'); avatarHeader.classList.add('concentrating'); } else { document.body.classList.remove('concentrating-mode'); concentrationGlow.classList.add('hidden'); avatarHeader.classList.remove('concentrating'); } }
         if(cbConcentration) { cbConcentration.checked = getStore('dnd-is-concentrating', false) === 'true'; updateConcentrationUI(); cbConcentration.addEventListener('change', () => { setStore('dnd-is-concentrating', cbConcentration.checked, false); updateConcentrationUI(); }); }
 
-        const btnGlobalSearchTrigger = document.getElementById('btn-global-search-trigger');
-        const toggleSearchBtn = document.getElementById('toggle-search-btn');
-        if(toggleSearchBtn && btnGlobalSearchTrigger) {
-            let showSearch = DB.get('dnd-show-search-btn'); if(showSearch === null) showSearch = 'true'; toggleSearchBtn.checked = showSearch === 'true'; btnGlobalSearchTrigger.classList.toggle('hidden', !toggleSearchBtn.checked);
-            toggleSearchBtn.addEventListener('change', (e) => { DB.set('dnd-show-search-btn', e.target.checked); btnGlobalSearchTrigger.classList.toggle('hidden', !e.target.checked); });
-        }
 
-        const toggleMusicPlayer = document.getElementById('toggle-music-player');
-        if(toggleMusicPlayer) {
-            // Téléphone (≤700px) : préférence séparée, lecteur caché par défaut (activable via ☰)
-            const musicMobileView = () => window.matchMedia('(max-width: 700px)').matches;
-            let showMusic = musicMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') ?? 'true');
-            toggleMusicPlayer.checked = showMusic === 'true';
-            if(window.MusicPlayer) window.MusicPlayer.setVisible(toggleMusicPlayer.checked, false);
-            toggleMusicPlayer.addEventListener('change', (e) => {
-                if (musicMobileView()) {
-                    DB.set('dnd-show-music-player-mobile', e.target.checked ? 'true' : 'false');
-                    if(window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, false);
-                } else if(window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, true);
-                else DB.set('dnd-show-music-player', e.target.checked);
-            });
-        }
-
-        const btnToggleDice = document.getElementById('btn-toggle-dice'); const diceDrawer = document.getElementById('dice-drawer'); const toggleFloatingDice = document.getElementById('toggle-floating-dice');
-        if(toggleFloatingDice && btnToggleDice && diceDrawer) {
-            let showFloatingDice = DB.get('dnd-show-floating-dice'); if(showFloatingDice === null) showFloatingDice = 'true'; toggleFloatingDice.checked = showFloatingDice === 'true'; btnToggleDice.classList.toggle('hidden', !toggleFloatingDice.checked);
-            toggleFloatingDice.addEventListener('change', (e) => { DB.set('dnd-show-floating-dice', e.target.checked); btnToggleDice.classList.toggle('hidden', !e.target.checked); if(!e.target.checked && diceDrawer.classList.contains('open')) diceDrawer.classList.remove('open'); });
+        const btnToggleDice = document.getElementById('btn-toggle-dice'); const diceDrawer = document.getElementById('dice-drawer');
+        if(btnToggleDice && diceDrawer) {
             // Glisser-déposer du bouton : pointer events → fonctionne à la souris ET au tactile (mobile/tablette).
             let isDraggingDiceBtn = false; let startY = 0, startX = 0, clickStartX = 0, clickStartY = 0; let startTop = 0, startLeft = 0;
             btnToggleDice.style.touchAction = 'none';
@@ -756,22 +991,6 @@ document.addEventListener('DOMContentLoaded', () => {
         function currentDiceThemeColor() {
             if (diceThemeRandom) return DICE_THEMES[Math.floor(Math.random() * DICE_THEMES.length)].color;
             return diceThemeColor;
-        }
-
-        // --- Créations de dés personnalisées : FONCTIONNALITÉ RETIRÉE ---
-        // On conserve les fonctions (appelées à l'affichage des résultats) en no-op pour ne rien casser.
-        function loadDiceDesigns() { return []; }
-        function persistDiceDesigns() {}
-        let diceDesigns = [];
-        let activeDesignId = null;
-        function getActiveDesign() { return null; }   // plus de skin personnalisé → dés standards
-        function faceImageFor(faces) { const d = getActiveDesign(); if (!d) return null; return d.faces['d' + faces] || d.faces.all || null; }
-        function applyCustomDiceSkin(scope) {
-            const d = getActiveDesign();
-            (scope || document).querySelectorAll('.die-result[data-faces]').forEach(el => {
-                const img = faceImageFor(parseInt(el.getAttribute('data-faces')));
-                if (img) { el.classList.add('has-skin'); el.style.backgroundImage = `url(${img})`; if (d && d.bg) el.style.backgroundColor = d.bg; }
-            });
         }
 
         async function initDiceBox() {
@@ -900,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (index < poolSnapshot.length - 1) resultsHTML += `<div class="die-math">+</div>`;
             });
 
-            if (resultsBox) { resultsBox.innerHTML = resultsHTML; applyCustomDiceSkin(resultsBox); }
+            if (resultsBox) { resultsBox.innerHTML = resultsHTML; }
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
             sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
         }
@@ -962,7 +1181,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     tile.innerHTML = `<span>d${faces}</span><div class="die-main-score">${finalScore}</div>${extraHTML}`;
                 }
             });
-            applyCustomDiceSkin(resultsBox);
 
             if (totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
             sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
@@ -1114,8 +1332,97 @@ document.addEventListener('DOMContentLoaded', () => {
         const autoExpandTextareas = document.querySelectorAll('.auto-expand');
         function adjustHeight(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight) + 'px'; } window.adjustHeight = adjustHeight;
         autoExpandTextareas.forEach(textarea => { textarea.addEventListener('input', () => adjustHeight(textarea)); setTimeout(() => adjustHeight(textarea), 100); });
-        const btnClearNote = document.getElementById('btn-clear-note'); const quickNoteInput = document.getElementById('quick-note');
-        if(btnClearNote && quickNoteInput) { btnClearNote.addEventListener('click', () => { if(confirm('Effacer la note rapide ?')) { quickNoteInput.value = ''; setStore('dnd-sheet-quick-note', '', false); adjustHeight(quickNoteInput); } }); }
+        // ===== LISTES DE FICHES (notes rapides, quêtes, PNJ) =====
+        // Trois modules partagent la même forme : une liste de { id, title, body } que l'on
+        // ajoute, renomme, remplit et supprime. Une seule fabrique les sert tous les trois.
+        // Les champs n'ont pas d'id : initGlobalSave() ignore les éléments non identifiés,
+        // ce qui évite un double stockage avec les clés dnd-sheet-*.
+        function makeNoteList(opt) {
+            let items = getStore(opt.storeKey);
+            if (!Array.isArray(items)) {
+                // Migration depuis l'ancienne zone de texte unique.
+                const legacy = opt.legacyKey ? getStore(opt.legacyKey, false) : null;
+                items = (legacy && legacy.trim())
+                    ? [{ id: 'n' + Date.now(), title: opt.legacyTitle || 'Note', body: legacy }]
+                    : [];
+                setStore(opt.storeKey, items);
+            }
+            items.forEach(it => { if (opt.withDone && it.done == null) it.done = false; });
+
+            let saveTimer = null;
+            const save = () => { clearTimeout(saveTimer); setStore(opt.storeKey, items); };
+            // Frappe au clavier : écriture différée, sinon chaque caractère déclenche une synchro cloud.
+            const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => setStore(opt.storeKey, items), 400); };
+            window.addEventListener('beforeunload', () => { if (saveTimer) save(); });
+
+            function render() {
+                const list = document.getElementById(opt.listId); if (!list) return;
+                if (!items.length) { list.innerHTML = `<div class="compact-empty">${opt.emptyText}</div>`; return; }
+                list.innerHTML = items.map((n, i) => `<div class="qnote-card${n.done ? ' is-done' : ''}" data-ni="${i}">
+                    <div class="qnote-head">
+                        ${opt.withDone ? `<input type="checkbox" class="qnote-done" data-nf="done"${n.done ? ' checked' : ''} title="Marquer comme terminée">` : ''}
+                        <input type="text" data-nf="title" value="${escAb(n.title)}" placeholder="${opt.titlePlaceholder}">
+                        <button type="button" class="qnote-del no-print" title="Supprimer">🗑</button>
+                    </div>
+                    <textarea data-nf="body" class="auto-expand" placeholder="${opt.bodyPlaceholder}">${escAb(n.body)}</textarea>
+                </div>`).join('');
+                list.querySelectorAll('.auto-expand').forEach(t => adjustHeight(t));
+            }
+
+            const list = document.getElementById(opt.listId);
+            if (list) {
+                list.addEventListener('input', (e) => {
+                    const card = e.target.closest('.qnote-card'); if (!card) return;
+                    const field = e.target.dataset.nf; if (!field || field === 'done') return;
+                    items[parseInt(card.dataset.ni, 10)][field] = e.target.value;
+                    saveSoon();
+                    if (e.target.classList.contains('auto-expand')) adjustHeight(e.target);
+                });
+                // Sortie de champ (et cases à cocher) : on écrit tout de suite.
+                list.addEventListener('change', (e) => {
+                    const card = e.target.closest('.qnote-card');
+                    if (card && e.target.dataset.nf === 'done') {
+                        items[parseInt(card.dataset.ni, 10)].done = e.target.checked;
+                        card.classList.toggle('is-done', e.target.checked);
+                    }
+                    save();
+                });
+                list.addEventListener('click', (e) => {
+                    if (!e.target.closest('.qnote-del')) return;
+                    const i = parseInt(e.target.closest('.qnote-card').dataset.ni, 10);
+                    if (confirm(`Supprimer « ${items[i].title || opt.deleteFallback} » ?`)) { items.splice(i, 1); save(); render(); }
+                });
+            }
+            const addBtn = document.getElementById(opt.addBtnId);
+            if (addBtn) addBtn.addEventListener('click', () => {
+                const entry = { id: 'n' + Date.now(), title: '', body: '' };
+                if (opt.withDone) entry.done = false;
+                items.push(entry); save(); render();
+                const last = document.querySelector('#' + opt.listId + ' .qnote-card:last-child input[data-nf="title"]');
+                if (last) last.focus();
+            });
+            render();
+            return { render, all: () => items };
+        }
+
+        makeNoteList({
+            listId: 'quick-notes-list', addBtnId: 'btn-add-quick-note',
+            storeKey: 'dnd-quick-notes', legacyKey: 'dnd-sheet-quick-note', legacyTitle: 'Note',
+            titlePlaceholder: 'Titre de la note…', bodyPlaceholder: 'Saisis tes notes ici…',
+            emptyText: 'Aucune note — clique sur ➕ Ajouter.', deleteFallback: 'cette note'
+        });
+        makeNoteList({
+            listId: 'quests-list', addBtnId: 'btn-add-quest', withDone: true,
+            storeKey: 'dnd-quests', legacyKey: 'dnd-sheet-quest-log', legacyTitle: 'Quêtes en cours',
+            titlePlaceholder: 'Nom de la quête…', bodyPlaceholder: 'Objectifs, commanditaire, récompense…',
+            emptyText: 'Aucune quête — clique sur ➕ Ajouter.', deleteFallback: 'cette quête'
+        });
+        makeNoteList({
+            listId: 'npcs-list', addBtnId: 'btn-add-npc',
+            storeKey: 'dnd-npcs', legacyKey: 'dnd-sheet-npc-log', legacyTitle: 'Registre des PNJ',
+            titlePlaceholder: 'Nom du PNJ…', bodyPlaceholder: 'Lieu, attitude, ce qu\'il sait…',
+            emptyText: 'Aucun PNJ — clique sur ➕ Ajouter.', deleteFallback: 'ce PNJ'
+        });
 
         const levelInput = document.getElementById('char-level'); const profInput = document.getElementById('prof-bonus'); const initInput = document.getElementById('initiative');
         function syncCharMeta() { const lvl = parseInt(document.getElementById('char-level').value) || 1; const cls = document.getElementById('char-class').value || ''; const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID); if(idx !== -1) { charactersList[idx].level = lvl; charactersList[idx].class = cls; DB.set('dnd-character-list', JSON.stringify(charactersList)); } }
@@ -1270,10 +1577,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
 
         // ===== COMPAGNONS / FAMILIERS (plusieurs par personnage) =====
-        // Modèle : dnd-companions = [{ id, name, ac, hp, notes }]
+        // Modèle : dnd-companions = [{ id, name, type, ac, hp, hpMax, hpTemp, speed, init,
+        //                              stats:{for,dex,con,int,sag,cha}, attacks:[{id,name,bonus,dmg}],
+        //                              notes, collapsed }]
+        // Les champs n'ont pas d'id : initGlobalSave() ignore les éléments non identifiés,
+        // ce qui évite un double stockage avec les clés dnd-sheet-*.
+        const COMP_TYPES = [
+            { key: 'familier',   icon: '🦉', label: 'Familier' },
+            { key: 'bete',       icon: '🐺', label: 'Compagnon animal' },
+            { key: 'monture',    icon: '🐎', label: 'Monture' },
+            { key: 'invocation', icon: '✨', label: 'Invocation' },
+            { key: 'allie',      icon: '🛡️', label: 'Allié' }
+        ];
+        const COMP_STATS = [['for', 'FOR'], ['dex', 'DEX'], ['con', 'CON'], ['int', 'INT'], ['sag', 'SAG'], ['cha', 'CHA']];
+        const compMod = (v) => Math.floor(((parseInt(v, 10) || 10) - 10) / 2);
+        const compModTxt = (v) => { const m = compMod(v); return (m >= 0 ? '+' : '') + m; };
+        const compIcon = (t) => (COMP_TYPES.find(x => x.key === t) || COMP_TYPES[0]).icon;
+
         let companions = getStore('dnd-companions');
         if (!Array.isArray(companions)) {
-            // Migration depuis l'ancien compagnon UNIQUE (champs comp-name / comp-ac / comp-hp / comp-notes)
+            // Migration depuis l'ancien compagnon UNIQUE (comp-name / comp-ac / comp-hp / comp-notes)
             const oldName = getStore('dnd-sheet-comp-name', false);
             const oldAc = getStore('dnd-sheet-comp-ac', false);
             const oldHp = getStore('dnd-sheet-comp-hp', false);
@@ -1283,40 +1606,252 @@ document.addEventListener('DOMContentLoaded', () => {
                 : [];
             setStore('dnd-companions', companions);
         }
-        function saveCompanions() { setStore('dnd-companions', companions); }
+        // Complète les fiches créées avant l'ajout des caracs / attaques / PV max.
+        function normalizeCompanion(c) {
+            if (!c.type) c.type = 'familier';
+            if (c.hpMax == null || c.hpMax === '') c.hpMax = c.hp || '';
+            if (c.hpTemp == null) c.hpTemp = '';
+            if (c.speed == null) c.speed = '';
+            if (c.init == null) c.init = '';
+            if (!c.stats || typeof c.stats !== 'object') c.stats = {};
+            COMP_STATS.forEach(([k]) => { if (c.stats[k] == null || c.stats[k] === '') c.stats[k] = 10; });
+            if (!Array.isArray(c.attacks)) c.attacks = [];
+            if (c.collapsed == null) c.collapsed = false;
+            return c;
+        }
+        // On ne réécrit que si la normalisation a réellement enrichi une fiche,
+        // pour éviter une écriture (et une synchro cloud) inutile à chaque chargement.
+        const compBeforeNorm = JSON.stringify(companions);
+        companions.forEach(normalizeCompanion);
+        if (JSON.stringify(companions) !== compBeforeNorm) setStore('dnd-companions', companions);
+
+        function saveCompanions() { clearTimeout(compSaveTimer); setStore('dnd-companions', companions); }
+        // Saisie au clavier : on diffère l'écriture (et donc la synchro cloud) pour ne pas
+        // déclencher un envoi à chaque caractère tapé — c'est ce qui rendait la frappe saccadée.
+        let compSaveTimer = null;
+        function saveCompanionsSoon() {
+            clearTimeout(compSaveTimer);
+            compSaveTimer = setTimeout(() => setStore('dnd-companions', companions), 400);
+        }
+        window.addEventListener('beforeunload', () => { if (compSaveTimer) saveCompanions(); });
+
+        // Met à jour les badges et la barre de PV SANS re-rendre la carte : un re-rendu
+        // pendant la frappe détruisait le champ actif et faisait perdre le focus.
+        function refreshCompanionHeader(card, c) {
+            const hp = parseInt(c.hp, 10) || 0, hpMax = parseInt(c.hpMax, 10) || 0;
+            const temp = parseInt(c.hpTemp, 10) || 0;
+            const hpBadge = card.querySelector('.comp-badge-hp');
+            if (hpBadge) hpBadge.textContent = '❤️ ' + hp + (hpMax ? '/' + hpMax : '') + (temp ? ' (+' + temp + ')' : '');
+            const acBadge = card.querySelector('.comp-badge-ac');
+            if (acBadge) acBadge.textContent = '🛡️ ' + (String(c.ac == null ? '' : c.ac).trim() || '—');
+            const bar = card.querySelector('.comp-hpbar');
+            if (bar) bar.classList.toggle('hidden', !hpMax);
+            const fill = card.querySelector('.comp-hpbar-fill');
+            if (fill && hpMax) {
+                fill.style.width = Math.max(0, Math.min(100, Math.round(hp / hpMax * 100))) + '%';
+                fill.classList.toggle('is-low', hp <= hpMax * 0.25);
+            }
+        }
+
+        // --- PV : les dégâts entament d'abord les PV temporaires (règle D&D) ---
+        function applyCompanionHp(c, delta) {
+            let hp = parseInt(c.hp, 10) || 0;
+            const max = parseInt(c.hpMax, 10) || 0;
+            if (delta < 0) {
+                let dmg = -delta;
+                let temp = parseInt(c.hpTemp, 10) || 0;
+                const absorbed = Math.min(temp, dmg);
+                temp -= absorbed; dmg -= absorbed;
+                c.hpTemp = temp > 0 ? temp : '';
+                hp = Math.max(0, hp - dmg);
+            } else {
+                hp += delta;
+                if (max) hp = Math.min(hp, max);
+            }
+            c.hp = hp;
+        }
+
+        // --- Jets liés au compagnon (réutilisent le lanceur de dés de la fiche) ---
+        function companionRoll(c, label, mod, advMode) {
+            performAbilityRoll((c.name || 'Compagnon') + ' — ' + label, mod, advMode || 'normal');
+        }
+        function companionDamageRoll(c, atk) {
+            const res = rollExpression(atk.dmg);
+            if (res.error) { if (window.showAppToast) window.showAppToast('⚠️ ' + res.error, '#c0392b'); return; }
+            const label = (c.name || 'Compagnon') + ' — ' + (atk.name || 'attaque') + ' (dégâts)';
+            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, res.total, res.detail, null);
+            pushRollHistory(label, res.total, res.detail, null);
+            if (window.showAppToast) window.showAppToast('💥 ' + res.total + ' dégâts');
+        }
+
         function renderCompanions() {
             const list = document.getElementById('companions-list'); if (!list) return;
             if (!companions.length) { list.innerHTML = `<div class="compact-empty">Aucun compagnon — clique sur ➕ Ajouter.</div>`; return; }
-            list.innerHTML = companions.map((c, i) => `<div class="companion-card" data-ci="${i}">
-                <div class="companion-head">
-                    <input type="text" data-cf="name" value="${(c.name || '').replace(/"/g, '&quot;')}" placeholder="Nom du compagnon...">
-                    <div class="companion-stat"><label>CA</label><input type="number" data-cf="ac" value="${c.ac || ''}"></div>
-                    <div class="companion-stat"><label>PV</label><input type="number" data-cf="hp" value="${c.hp || ''}"></div>
-                    <button class="companion-del" title="Supprimer ce compagnon">🗑</button>
-                </div>
-                <textarea data-cf="notes" class="auto-expand" placeholder="Attaques, capacités, notes de suivi...">${c.notes || ''}</textarea>
-            </div>`).join('');
+            list.innerHTML = companions.map((c, i) => {
+                const hp = parseInt(c.hp, 10) || 0, hpMax = parseInt(c.hpMax, 10) || 0;
+                const pct = hpMax ? Math.max(0, Math.min(100, Math.round(hp / hpMax * 100))) : 0;
+                const low = hpMax && hp <= hpMax * 0.25;
+                const temp = parseInt(c.hpTemp, 10) || 0;
+
+                const statsHtml = COMP_STATS.map(([k, lbl]) => `
+                    <div class="comp-stat">
+                        <label>${lbl}</label>
+                        <input type="number" data-cs="${k}" value="${escAb(c.stats[k])}" min="1" max="30">
+                        <button type="button" class="comp-mod" data-croll="${k}" title="Lancer un jet de ${lbl} pour ce compagnon">${compModTxt(c.stats[k])}</button>
+                    </div>`).join('');
+
+                const attacksHtml = c.attacks.length
+                    ? c.attacks.map((a, ai) => `
+                        <div class="comp-atk" data-ai="${ai}">
+                            <input type="text" data-af="name" value="${escAb(a.name)}" placeholder="Morsure…">
+                            <input type="text" data-af="bonus" value="${escAb(a.bonus)}" placeholder="+4" title="Bonus au toucher">
+                            <input type="text" data-af="dmg" value="${escAb(a.dmg)}" placeholder="1d6+2" title="Dégâts (ex : 1d6+2)">
+                            <button type="button" class="comp-atk-roll" data-aact="hit" title="Jet d'attaque">🎯</button>
+                            <button type="button" class="comp-atk-roll" data-aact="dmg" title="Jet de dégâts">💥</button>
+                            <button type="button" class="comp-atk-del" data-aact="del" title="Supprimer cette attaque">🗑</button>
+                        </div>`).join('')
+                    : `<div class="comp-atk-empty">Aucune attaque enregistrée.</div>`;
+
+                return `<div class="companion-card${c.collapsed ? ' is-collapsed' : ''}" data-ci="${i}">
+                    <div class="companion-head">
+                        <button type="button" class="comp-fold no-print" data-cact="fold" title="${c.collapsed ? 'Déplier' : 'Replier'}">${c.collapsed ? '▶' : '▼'}</button>
+                        <select data-cf="type" class="comp-type" title="Type de compagnon">
+                            ${COMP_TYPES.map(t => `<option value="${t.key}"${c.type === t.key ? ' selected' : ''}>${t.icon} ${t.label}</option>`).join('')}
+                        </select>
+                        <input type="text" data-cf="name" value="${escAb(c.name)}" placeholder="Nom du compagnon…">
+                        <span class="comp-badge comp-badge-hp" title="Points de vie">❤️ ${hp}${hpMax ? '/' + hpMax : ''}${temp ? ' (+' + temp + ')' : ''}</span>
+                        <span class="comp-badge comp-badge-ac" title="Classe d'armure">🛡️ ${escAb(c.ac) || '—'}</span>
+                        <div class="comp-head-actions no-print">
+                            <button type="button" class="comp-act" data-cact="up" title="Monter"${i === 0 ? ' disabled' : ''}>▲</button>
+                            <button type="button" class="comp-act" data-cact="down" title="Descendre"${i === companions.length - 1 ? ' disabled' : ''}>▼</button>
+                            <button type="button" class="comp-act" data-cact="dup" title="Dupliquer ce compagnon">⧉</button>
+                            <button type="button" class="comp-act companion-del" data-cact="del" title="Supprimer ce compagnon">🗑</button>
+                        </div>
+                    </div>
+                    <div class="companion-body">
+                        <div class="comp-vitals">
+                            <div class="comp-stat"><label>CA</label><input type="number" data-cf="ac" value="${escAb(c.ac)}"></div>
+                            <div class="comp-stat"><label>PV</label><input type="number" data-cf="hp" value="${escAb(c.hp)}"></div>
+                            <div class="comp-stat"><label>PV max</label><input type="number" data-cf="hpMax" value="${escAb(c.hpMax)}"></div>
+                            <div class="comp-stat"><label>PV temp</label><input type="number" data-cf="hpTemp" value="${escAb(c.hpTemp)}"></div>
+                            <div class="comp-stat"><label>Vitesse</label><input type="text" data-cf="speed" value="${escAb(c.speed)}" placeholder="9 m"></div>
+                            <div class="comp-stat"><label>Init.</label><button type="button" class="comp-mod" data-croll="init" title="Lancer l'initiative">${compModTxt(c.stats.dex)}</button></div>
+                        </div>
+                        <div class="comp-hpbar no-print${hpMax ? '' : ' hidden'}"><div class="comp-hpbar-fill${low ? ' is-low' : ''}" style="width:${pct}%"></div></div>
+                        <div class="comp-hp-controls no-print">
+                            <input type="number" class="comp-hp-amount" data-camount="1" value="1" min="1" title="Montant à appliquer">
+                            <button type="button" class="comp-hp-btn is-dmg" data-cact="dmg">− Dégâts</button>
+                            <button type="button" class="comp-hp-btn is-heal" data-cact="heal">+ Soins</button>
+                        </div>
+                        <div class="comp-stats-grid">${statsHtml}</div>
+                        <div class="comp-section-label">⚔️ Attaques</div>
+                        <div class="comp-atk-list">${attacksHtml}</div>
+                        <button type="button" class="comp-add-atk no-print" data-cact="addatk">➕ Ajouter une attaque</button>
+                        <textarea data-cf="notes" class="auto-expand" placeholder="Capacités, traits, notes de suivi…">${escAb(c.notes)}</textarea>
+                    </div>
+                </div>`;
+            }).join('');
             list.querySelectorAll('.auto-expand').forEach(t => adjustHeight(t));
         }
+
         const companionsList = document.getElementById('companions-list');
         if (companionsList) {
+            // --- Saisie (texte, nombres, select) ---
             companionsList.addEventListener('input', (e) => {
                 const card = e.target.closest('.companion-card'); if (!card) return;
-                const field = e.target.dataset.cf; if (!field) return;
-                companions[parseInt(card.dataset.ci)][field] = e.target.value;
-                saveCompanions();
-                if (e.target.classList.contains('auto-expand')) adjustHeight(e.target);
+                const c = companions[parseInt(card.dataset.ci, 10)]; if (!c) return;
+                const t = e.target;
+                if (t.dataset.cf) {
+                    c[t.dataset.cf] = t.value;
+                    saveCompanionsSoon();
+                    if (t.classList.contains('auto-expand')) adjustHeight(t);
+                    // Badges et barre de PV mis à jour en place, sans re-rendre la carte.
+                    if (['ac', 'hp', 'hpMax', 'hpTemp'].indexOf(t.dataset.cf) >= 0) refreshCompanionHeader(card, c);
+                } else if (t.dataset.cs) {
+                    c.stats[t.dataset.cs] = t.value;
+                    saveCompanionsSoon();
+                    const btn = t.parentElement.querySelector('.comp-mod');
+                    if (btn) btn.textContent = compModTxt(t.value);
+                } else if (t.dataset.af) {
+                    const atk = c.attacks[parseInt(t.closest('.comp-atk').dataset.ai, 10)];
+                    if (atk) { atk[t.dataset.af] = t.value; saveCompanionsSoon(); }
+                }
             });
+            // `change` sert à deux choses : le <select> de type, et surtout la sortie de
+            // champ — on force alors l'écriture différée, pour ne jamais perdre une saisie.
+            companionsList.addEventListener('change', (e) => {
+                if (e.target.classList.contains('comp-type')) {
+                    const card = e.target.closest('.companion-card');
+                    const c = card && companions[parseInt(card.dataset.ci, 10)];
+                    if (c) c.type = e.target.value;
+                }
+                saveCompanions();
+            });
+            // --- Boutons ---
             companionsList.addEventListener('click', (e) => {
-                if (!e.target.closest('.companion-del')) return;
-                const card = e.target.closest('.companion-card');
-                const i = parseInt(card.dataset.ci);
-                if (confirm(`Supprimer « ${companions[i].name || 'ce compagnon'} » ?`)) { companions.splice(i, 1); saveCompanions(); renderCompanions(); }
+                const btn = e.target.closest('button'); if (!btn) return;
+                const card = e.target.closest('.companion-card'); if (!card) return;
+                const i = parseInt(card.dataset.ci, 10);
+                const c = companions[i]; if (!c) return;
+
+                // Jets de caracs / initiative
+                if (btn.dataset.croll) {
+                    const k = btn.dataset.croll;
+                    if (k === 'init') companionRoll(c, 'Initiative', compMod(c.stats.dex));
+                    else companionRoll(c, (COMP_STATS.find(s => s[0] === k) || [, k])[1], compMod(c.stats[k]));
+                    return;
+                }
+                // Actions sur une attaque
+                const atkRow = e.target.closest('.comp-atk');
+                if (atkRow && btn.dataset.aact) {
+                    const ai = parseInt(atkRow.dataset.ai, 10);
+                    const atk = c.attacks[ai]; if (!atk) return;
+                    if (btn.dataset.aact === 'hit') companionRoll(c, (atk.name || 'Attaque'), parseInt(atk.bonus, 10) || 0);
+                    else if (btn.dataset.aact === 'dmg') companionDamageRoll(c, atk);
+                    else if (btn.dataset.aact === 'del') { c.attacks.splice(ai, 1); saveCompanions(); renderCompanions(); }
+                    return;
+                }
+                switch (btn.dataset.cact) {
+                    case 'fold':
+                        c.collapsed = !c.collapsed; saveCompanions(); renderCompanions(); break;
+                    case 'up':
+                        if (i > 0) { companions.splice(i - 1, 0, companions.splice(i, 1)[0]); saveCompanions(); renderCompanions(); } break;
+                    case 'down':
+                        if (i < companions.length - 1) { companions.splice(i + 1, 0, companions.splice(i, 1)[0]); saveCompanions(); renderCompanions(); } break;
+                    case 'dup': {
+                        const copy = JSON.parse(JSON.stringify(c));
+                        copy.id = 'c' + Date.now();
+                        copy.name = (c.name || 'Compagnon') + ' (copie)';
+                        copy.attacks.forEach((a, n) => { a.id = 'a' + Date.now() + n; });
+                        companions.splice(i + 1, 0, copy); saveCompanions(); renderCompanions();
+                        break;
+                    }
+                    case 'del':
+                        if (confirm(`Supprimer « ${c.name || 'ce compagnon'} » ?`)) { companions.splice(i, 1); saveCompanions(); renderCompanions(); }
+                        break;
+                    case 'addatk':
+                        c.attacks.push({ id: 'a' + Date.now(), name: '', bonus: '', dmg: '' });
+                        saveCompanions(); renderCompanions();
+                        break;
+                    case 'dmg':
+                    case 'heal': {
+                        const amountEl = card.querySelector('.comp-hp-amount');
+                        const amount = Math.abs(parseInt(amountEl && amountEl.value, 10) || 0);
+                        if (!amount) return;
+                        applyCompanionHp(c, btn.dataset.cact === 'dmg' ? -amount : amount);
+                        saveCompanions(); renderCompanions();
+                        // On restitue le montant saisi : pratique pour réappliquer le même coup.
+                        const again = document.querySelectorAll('#companions-list .companion-card')[i];
+                        const field = again && again.querySelector('.comp-hp-amount');
+                        if (field) field.value = amount;
+                        break;
+                    }
+                }
             });
         }
         const btnAddCompanion = document.getElementById('btn-add-companion');
         if (btnAddCompanion) btnAddCompanion.addEventListener('click', () => {
-            companions.push({ id: 'c' + Date.now(), name: '', ac: '', hp: '', notes: '' });
+            companions.push(normalizeCompanion({ id: 'c' + Date.now(), name: '', ac: '', hp: '', notes: '' }));
             saveCompanions(); renderCompanions();
             const last = document.querySelector('#companions-list .companion-card:last-child input[data-cf="name"]'); if (last) last.focus();
         });
@@ -1566,7 +2101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.getElementById('btn-save-atk')) { document.getElementById('btn-save-atk').addEventListener('click', () => { const ammoRaw = document.getElementById('new-atk-ammo').value.trim(); const ammoMaxRaw = document.getElementById('new-atk-ammo-max').value.trim(); const atk = { name: document.getElementById('new-atk-name').value, bonus: document.getElementById('new-atk-bonus').value, dmg: document.getElementById('new-atk-dmg').value, category: document.getElementById('new-atk-category').value.trim() || 'Général', notes: document.getElementById('new-atk-notes').value, reqAttune: document.getElementById('new-atk-req-attune').checked, isAttuned: false, ammo: ammoRaw === '' ? null : (parseInt(ammoRaw, 10) || 0), ammoMax: ammoMaxRaw === '' ? null : (parseInt(ammoMaxRaw, 10) || 0) }; if(atk.name) { if(editingAttackIndex >= 0) { atk.isAttuned = attacks[editingAttackIndex].isAttuned; attacks[editingAttackIndex] = atk; } else { attacks.push(atk); } setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden'); } }); }
         window.toggleAttune = (index) => { attacks[index].isAttuned = !attacks[index].isAttuned; setStore('dnd-attacks', attacks); }; window.deleteAttack = (index) => { if(confirm("Supprimer ?")) { attacks.splice(index, 1); setStore('dnd-attacks', attacks); renderAttacks(); }}; window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.editAttack = (index) => { const data = attacks[index]; document.getElementById('new-atk-name').value = data.name; document.getElementById('new-atk-bonus').value = data.bonus; document.getElementById('new-atk-dmg').value = data.dmg; document.getElementById('new-atk-category').value = data.category || 'Général'; document.getElementById('new-atk-notes').value = data.notes; document.getElementById('new-atk-req-attune').checked = data.reqAttune; document.getElementById('new-atk-ammo').value = (data.ammo === null || data.ammo === undefined) ? '' : data.ammo; document.getElementById('new-atk-ammo-max').value = (data.ammoMax === null || data.ammoMax === undefined) ? '' : data.ammoMax; editingAttackIndex = index; atkModal.classList.remove('hidden'); };
 
-        let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let activeInvTabModal = 'Tout';
+        let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let invSearch = ''; let invSortMode = getStore('dnd-inv-sort', false) || 'manual'; let activeInvTabModal = 'Tout';
         const invAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
 
         function renderInventory() {
@@ -1576,12 +2111,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let totalWeight = 0; inventory.forEach(item => { let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); });
 
-            const entries = inventory.map((item, index) => ({ item, index })).filter(({ item }) => activeInvTabPinned === 'Tout' || (item.category || 'Général') === activeInvTabPinned);
-            entries.sort((a, b) => (b.item.pinned ? 1 : 0) - (a.item.pinned ? 1 : 0)); // favoris en tête
+            // Recherche + tri : on part des objets de l'onglet courant, on filtre sur le nom,
+            // puis on trie. Les favoris et les objets équipés restent groupés en tête.
+            const needle = invSearch.trim().toLowerCase();
+            let entries = inventory.map((item, index) => ({ item, index }))
+                .filter(({ item }) => activeInvTabPinned === 'Tout' || (item.category || 'Général') === activeInvTabPinned)
+                .filter(({ item }) => !needle || String(item.name || '').toLowerCase().includes(needle));
+
+            const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+            if (invSortMode === 'name') entries.sort((a, b) => String(a.item.name || '').localeCompare(String(b.item.name || ''), 'fr', { sensitivity: 'base' }));
+            else if (invSortMode === 'weight') entries.sort((a, b) => num(b.item.weight) - num(a.item.weight));
+            else if (invSortMode === 'qty') entries.sort((a, b) => (parseInt(b.item.qty, 10) || 1) - (parseInt(a.item.qty, 10) || 1));
+            // Favoris d'abord, puis équipés — tri stable, donc l'ordre choisi ci-dessus est conservé.
+            entries.sort((a, b) => (b.item.equipped ? 1 : 0) - (a.item.equipped ? 1 : 0));
+            entries.sort((a, b) => (b.item.pinned ? 1 : 0) - (a.item.pinned ? 1 : 0));
 
             listEl.innerHTML = '';
             if(entries.length === 0) {
-                listEl.innerHTML = `<div class="compact-empty">${inventory.length === 0 ? 'Sac vide — ajoute un objet ci-dessus.' : 'Aucun objet dans cet onglet.'}</div>`;
+                listEl.innerHTML = `<div class="compact-empty">${inventory.length === 0 ? 'Sac vide — ajoute un objet ci-dessus.' : (needle ? 'Aucun objet ne correspond à « ' + escAb(invSearch) + ' ».' : 'Aucun objet dans cet onglet.')}</div>`;
             } else {
                 entries.forEach(({ item, index }) => {
                     if(editingInvIndex === index) {
@@ -1590,7 +2137,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     const weightTxt = (item.weight !== undefined && item.weight !== null && item.weight !== '-' && String(item.weight).trim() !== '') ? item.weight : '—';
-                    listEl.innerHTML += `<div class="ci-row${item.pinned ? ' is-pinned' : ''}" data-i="${index}"><button class="ci-pin" title="${item.pinned ? 'Retirer des favoris' : 'Mettre en favori'}">${item.pinned ? '📌' : '☆'}</button><span class="ci-name" title="${invAttr(item.name)}">${item.name}</span><div class="ci-qty"><button class="ci-step" data-act="dec" title="-1">−</button><span class="ci-qval">${parseInt(item.qty) || 1}</span><button class="ci-step" data-act="inc" title="+1">＋</button></div><span class="ci-weight">${weightTxt}</span><div class="ci-actions"><button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>`;
+                    const eq = !!item.equipped;
+                    listEl.innerHTML += `<div class="ci-row${item.pinned ? ' is-pinned' : ''}${eq ? ' is-equipped' : ''}" data-i="${index}"><button class="ci-pin" title="${item.pinned ? 'Retirer des favoris' : 'Mettre en favori'}">${item.pinned ? '📌' : '☆'}</button><button class="ci-equip${eq ? ' is-on' : ''}" title="${eq ? 'Déséquiper' : 'Équiper'}">⚔️</button><span class="ci-name" title="${invAttr(item.name)}">${item.name}</span><div class="ci-qty"><button class="ci-step" data-act="dec" title="-1">−</button><span class="ci-qval">${parseInt(item.qty) || 1}</span><button class="ci-step" data-act="inc" title="+1">＋</button></div><span class="ci-weight">${weightTxt}</span><div class="ci-actions">${invSortMode === 'manual' ? `<button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button>` : ''}<button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>`;
                 });
             }
             const weightDisplay = document.getElementById('inv-total-weight');
@@ -1645,12 +2193,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(e.target.closest('.ci-e-save')) { inventory[index] = { name: (rowEl.querySelector('.ci-e-name').value || '').trim() || 'Objet', qty: parseInt(rowEl.querySelector('.ci-e-qty').value) || 1, weight: (rowEl.querySelector('.ci-e-weight').value || '').trim() || '-', category: (rowEl.querySelector('.ci-e-cat').value || '').trim() || 'Général', pinned: inventory[index].pinned }; editingInvIndex = -1; setStore('dnd-inventory', inventory); updateCategorySelects(); renderInventory(); return; }
                 if(e.target.closest('.ci-up')) { moveInvInView(index, -1); return; }
                 if(e.target.closest('.ci-down')) { moveInvInView(index, 1); return; }
+                if(e.target.closest('.ci-equip')) { inventory[index].equipped = !inventory[index].equipped; setStore('dnd-inventory', inventory); renderInventory(); return; }
                 if(e.target.closest('.ci-pin')) { inventory[index].pinned = !inventory[index].pinned; setStore('dnd-inventory', inventory); renderInventory(); return; }
                 if(e.target.closest('.ci-step')) { const act = e.target.closest('.ci-step').dataset.act; let q = parseInt(inventory[index].qty) || 1; q = act === 'inc' ? q + 1 : Math.max(1, q - 1); inventory[index].qty = q; setStore('dnd-inventory', inventory); renderInventory(); return; }
                 if(e.target.closest('.ci-edit')) { editingInvIndex = index; renderInventory(); return; }
                 if(e.target.closest('.ci-del')) { if(confirm(`Jeter « ${inventory[index].name} » ?`)) { inventory.splice(index, 1); setStore('dnd-inventory', inventory); renderInventory(); } return; }
             });
             invListContainer.addEventListener('keydown', (e) => { if(e.key === 'Enter' && e.target.closest('.ci-edit-form')) { e.preventDefault(); const saveBtn = e.target.closest('.ci-edit-form').querySelector('.ci-e-save'); if(saveBtn) saveBtn.click(); } });
+        }
+        // Recherche & tri du sac à dos
+        const invSearchEl = document.getElementById('inv-search');
+        if (invSearchEl) invSearchEl.addEventListener('input', (e) => { invSearch = e.target.value; renderInventory(); invSearchEl.focus(); });
+        const invSortEl = document.getElementById('inv-sort');
+        if (invSortEl) {
+            invSortEl.value = invSortMode;
+            invSortEl.addEventListener('change', (e) => { invSortMode = e.target.value; setStore('dnd-inv-sort', invSortMode, false); renderInventory(); });
         }
 
         function renderTraits() { 
@@ -1829,12 +2386,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const po = Math.floor(c / 100), rest = c % 100;
             el.textContent = rest === 0 ? `${po} po` : `${po} po ${Math.floor(rest / 10)} pa ${rest % 10} pc`;
         }
+        // Conversion vers une pièce choisie : on met le maximum dans la coupure visée,
+        // et le reliquat descend dans les coupures inférieures — rien n'est perdu.
+        function distributeToTarget(copper, target) {
+            const out = {}; COIN_ORDER.forEach(t => { out[t] = 0; });
+            out[target] = Math.floor(copper / COIN_VALUE[target]);
+            let rest = copper - out[target] * COIN_VALUE[target];
+            COIN_ORDER.slice(COIN_ORDER.indexOf(target) + 1).forEach(t => {
+                out[t] = Math.floor(rest / COIN_VALUE[t]); rest -= out[t] * COIN_VALUE[t];
+            });
+            return out;
+        }
+        const COIN_LABEL = { pp: 'platine', po: 'or', pe: 'électrum', pa: 'argent', pc: 'cuivre' };
         const btnOptimize = document.getElementById('btn-optimize-currency');
         if (btnOptimize) btnOptimize.addEventListener('click', () => {
             const total = purseTotalCopper();
             if (total <= 0) { if (window.showAppToast) window.showAppToast('Ta bourse est vide.', '#c0392b'); return; }
-            applyDistribution(distributeCopper(total));
-            if (window.showAppToast) window.showAppToast('⚖️ Bourse convertie au minimum de pièces.', '#27ae60');
+            const target = (document.getElementById('convert-target') || {}).value || 'auto';
+            if (target === 'auto') {
+                applyDistribution(distributeCopper(total));
+                if (window.showAppToast) window.showAppToast('⚖️ Bourse convertie au minimum de pièces.', '#27ae60');
+            } else {
+                const d = distributeToTarget(total, target);
+                applyDistribution(d);
+                const reste = COIN_ORDER.slice(COIN_ORDER.indexOf(target) + 1).some(t => d[t] > 0);
+                if (window.showAppToast) window.showAppToast(
+                    `⚖️ ${d[target]} pièce(s) de ${COIN_LABEL[target]}` + (reste ? ' + le reliquat en petite monnaie.' : '.'), '#27ae60');
+            }
         });
         document.body.addEventListener('click', (e) => {
             if (e.target.id !== 'btn-pay-currency') return;
