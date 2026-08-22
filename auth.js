@@ -24,13 +24,13 @@ function genSessionCode() {
 // Tous les écrans plein page sont des .screen-view ; on bascule
 // .hidden. `gm-active` sur <body> permet d'adapter le menu ☰.
 // =====================================================
-const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'gm-screen'];
+const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen'];
 window.navTo = function (id) {
     APP_SCREENS.forEach(s => {
         const el = document.getElementById(s);
         if (el) el.classList.toggle('hidden', s !== id);
     });
-    document.body.classList.toggle('gm-active', id === 'gm-screen');
+    document.body.classList.toggle('rules-active', id === 'rules-screen');
     try { document.dispatchEvent(new CustomEvent('screen:change', { detail: { id } })); } catch (e) {}
 };
 

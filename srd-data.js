@@ -144,9 +144,85 @@
         });
     }
 
+
+    // ---------- Rendu d'une entrée, formaté par catégorie ----------
+    // Vit ici (et non dans script.js) pour être disponible sur les trois écrans :
+    // accueil, page Règles et fiche de personnage.
+    const esc = (s) => String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const P = (arr) => (arr || []).map(t => `<p>${esc(t)}</p>`).join('');
+    const KV = (label, val) => val ? `<p><b>${label} :</b> ${esc(val)}</p>` : '';
+    const NAMED = (list, title) => (list && list.length)
+        ? (title ? `<h4 class="rw-h">${title}</h4>` : '') + list.map(x =>
+            `<p><b>${esc(x.name)}.</b> ${esc(Array.isArray(x.text) ? x.text.join(' ') : x.text)}</p>`).join('')
+        : '';
+
+    function renderEntry(cat, e) {
+        if (!e) return '<p>Entrée introuvable.</p>';
+        if (cat === 'spells') {
+            return KV('Temps d’incantation', e.casting_time) + KV('Portée', e.range)
+                 + KV('Composantes', e.components) + KV('Durée', e.duration)
+                 + '<hr class="rw-sep">' + P(e.desc)
+                 + (e.higher_levels ? `<p><b>À plus haut niveau.</b> ${esc(e.higher_levels)}</p>` : '');
+        }
+        if (cat === 'monsters') {
+            const ab = e.abilities || {};
+            const m = (v) => { const x = Math.floor((v - 10) / 2); return `${v} (${x >= 0 ? '+' : ''}${x})`; };
+            const stats = ['str', 'dex', 'con', 'int', 'wis', 'cha'].map((k, i) =>
+                `<span class="rw-ab"><b>${['FOR','DEX','CON','INT','SAG','CHA'][i]}</b>${m(ab[k] || 10)}</span>`).join('');
+            return KV('Classe d’armure', e.ac + (e.ac_desc ? ` (${e.ac_desc})` : ''))
+                 + KV('Points de vie', `${e.hp} (${e.hp_roll})`) + KV('Vitesse', e.speed)
+                 + `<div class="rw-abs">${stats}</div>`
+                 + KV('Jets de sauvegarde', e.saves) + KV('Compétences', e.skills)
+                 + KV('Vulnérabilités', e.vulnerabilities) + KV('Résistances', e.resistances)
+                 + KV('Immunités', e.immunities) + KV('Immunités (états)', e.condition_immunities)
+                 + KV('Sens', e.senses) + KV('Langues', e.languages)
+                 + KV('Facteur de puissance', `${e.cr_display} (${e.xp} PX)`)
+                 + NAMED(e.traits, '') + NAMED(e.actions, 'Actions')
+                 + NAMED(e.reactions, 'Réactions')
+                 + (e.legendary_intro ? `<h4 class="rw-h">Actions légendaires</h4><p>${esc(e.legendary_intro)}</p>` : '')
+                 + NAMED(e.legendary_actions, e.legendary_intro ? '' : 'Actions légendaires');
+        }
+        if (cat === 'magic-items') {
+            return KV('Type', e.type) + KV('Rareté', e.rarity)
+                 + (e.attunement ? `<p><b>Harmonisation requise</b>${e.attunement_note ? ' ' + esc(e.attunement_note) : ''}</p>` : '')
+                 + '<hr class="rw-sep">' + P(e.desc);
+        }
+        if (cat === 'equipment') {
+            return KV('Prix', e.cost) + (e.weight_kg != null ? KV('Poids', e.weight_kg + ' kg') : '')
+                 + (e.damage ? KV('Dégâts', `${e.damage.dice} ${e.damage.type}`) : '')
+                 + (e.versatile_damage ? KV('Polyvalente', e.versatile_damage) : '')
+                 + (e.armor_class ? KV('CA', e.armor_class.base + (e.armor_class.dex_bonus ? ' + mod. Dex' : '')) : '')
+                 + (e.str_minimum ? KV('Force minimale', e.str_minimum) : '')
+                 + (e.stealth_disadvantage ? '<p><b>Désavantage en Discrétion</b></p>' : '')
+                 + (e.range_m ? KV('Portée', `${e.range_m.normal} m${e.range_m.long ? ' / ' + e.range_m.long + ' m' : ''}`) : '')
+                 + (e.properties ? KV('Propriétés', e.properties.join(', ')) : '')
+                 + P(e.desc);
+        }
+        if (cat === 'races' || cat === 'classes') {
+            const subs = e.subraces || e.subclasses || [];
+            return P(e.desc)
+                 + NAMED(e.traits, (e.traits || []).length ? 'Traits' : '')
+                 + NAMED(e.features, (e.features || []).length ? 'Aptitudes' : '')
+                 + (subs.length ? `<h4 class="rw-h">${cat === 'races' ? 'Sous-races' : 'Sous-classes'}</h4>`
+                     + subs.map(s => `<p><a href="#" class="rw-link" data-cat="${cat}" data-id="${esc(s.id)}">${esc(s.name)}</a></p>`).join('') : '');
+        }
+        if (cat === 'rules') {
+            return P(e.content)
+                 + ((e.children || []).length ? '<h4 class="rw-h">Sections</h4>'
+                     + e.children.map(c => `<p><a href="#" class="rw-link" data-cat="rules" data-id="${esc(c.id)}">${esc(c.name)}</a></p>`).join('') : '');
+        }
+        if (cat === 'conditions' && e.table) {
+            return P(e.desc) + '<table class="rw-table"><tr>'
+                 + e.table.headers.map(h => `<th>${esc(h)}</th>`).join('') + '</tr>'
+                 + e.table.rows.map(r => '<tr>' + r.map(c => `<td>${esc(c)}</td>`).join('') + '</tr>').join('')
+                 + '</table>';
+        }
+        return P(e.desc || e.content);
+    }
     window.SRD = {
         CATEGORIES,
-        search, index, category, entry, preload, fold,
+        search, index, category, entry, preload, fold, renderEntry, esc,
         setEdition: (e) => { edition = e; memory.clear(); },
         setLang: (l) => { lang = l; memory.clear(); },
         getEdition: () => edition,

@@ -137,6 +137,46 @@ document.addEventListener('DOMContentLoaded', () => {
         t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(20px)'; }, 2800);
     };
 
+    // --- Suppression annulable ---
+    // Remplace le couple « confirm() puis c'est perdu » par une suppression
+    // immédiate assortie d'un toast « Annuler » de 6 s. Moins de friction à
+    // chaque geste, et plus aucun regret définitif.
+    window.showUndoToast = function(msg, onUndo, seconds) {
+        const delay = (seconds || 6) * 1000;
+        let t = document.getElementById('app-toast-undo');
+        if (!t) {
+            t = document.createElement('div'); t.id = 'app-toast-undo'; t.className = 'no-print';
+            document.body.appendChild(t);
+        }
+        clearTimeout(t._timer);
+        t.innerHTML = '';
+        const label = document.createElement('span');
+        label.className = 'undo-label'; label.textContent = msg;
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'undo-btn'; btn.textContent = '↩ Annuler';
+        const hide = () => { t.classList.remove('is-on'); };
+        btn.addEventListener('click', () => { clearTimeout(t._timer); hide(); try { onUndo(); } catch (e) { console.warn(e); } });
+        t.appendChild(label); t.appendChild(btn);
+        // Reflow forcé plutôt que requestAnimationFrame : rAF ne se déclenche pas
+        // dans un onglet en arrière-plan, le toast resterait alors invisible.
+        void t.offsetWidth;
+        t.classList.add('is-on');
+        t._timer = setTimeout(hide, delay);
+    };
+
+    /** Retire l'élément `index` d'un tableau, sauvegarde, redessine, et propose
+     *  de revenir en arrière. `label` sert au message. */
+    window.deleteWithUndo = function(arr, index, label, save, render) {
+        if (index < 0 || index >= arr.length) return;
+        const removed = arr[index];
+        arr.splice(index, 1);
+        save(); render();
+        window.showUndoToast(`« ${label} » supprimé`, () => {
+            arr.splice(Math.min(index, arr.length), 0, removed);
+            save(); render();
+        });
+    };
+
     // --- Mode Nuit (fiche) ---
     const toggleDarkMode = document.getElementById('toggle-dark-mode');
     function applyDarkMode(on) { document.body.classList.toggle('theme-dark', on); if(toggleDarkMode) toggleDarkMode.checked = on; }
@@ -261,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // donc un câblage dans la branche « fiche » laisserait le bouton mort côté MJ.
     document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
         if (settingsDropdown) settingsDropdown.classList.add('hidden');
-        if (document.body.classList.contains('gm-active') && window.GMScreen && window.GMScreen.openShortcuts) { window.GMScreen.openShortcuts(); return; }
+        // (Renvoi vers les raccourcis de l'écran MJ retiré avec celui-ci — voir ecran-mj/README.md)
         if (window.__openPlayerShortcuts) { window.__openPlayerShortcuts(); return; }
         if (window.showAppToast) window.showAppToast('Ouvre une fiche ou l\'écran du MJ pour régler les raccourcis.', '#7a6050');
     });
@@ -1458,7 +1498,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 list.addEventListener('click', (e) => {
                     if (!e.target.closest('.qnote-del')) return;
                     const i = parseInt(e.target.closest('.qnote-card').dataset.ni, 10);
-                    if (confirm(`Supprimer « ${items[i].title || opt.deleteFallback} » ?`)) { items.splice(i, 1); save(); render(); }
+                    window.deleteWithUndo(items, i, items[i].title || opt.deleteFallback, save, render);
                 });
             }
             const addBtn = document.getElementById(opt.addBtnId);
@@ -2000,7 +2040,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     }
                     case 'del':
-                        if (confirm(`Supprimer « ${c.name || 'ce compagnon'} » ?`)) { companions.splice(i, 1); saveCompanions(); renderCompanions(); }
+                        window.deleteWithUndo(companions, i, c.name || 'ce compagnon', saveCompanions, renderCompanions);
                         break;
                     case 'addatk':
                         c.attacks.push({ id: 'a' + Date.now(), name: '', bonus: '', dmg: '' });
@@ -2370,7 +2410,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(e.target.closest('.ci-pin')) { inventory[index].pinned = !inventory[index].pinned; setStore('dnd-inventory', inventory); renderInventory(); return; }
                 if(e.target.closest('.ci-step')) { const act = e.target.closest('.ci-step').dataset.act; let q = parseInt(inventory[index].qty) || 1; q = act === 'inc' ? q + 1 : Math.max(1, q - 1); inventory[index].qty = q; setStore('dnd-inventory', inventory); renderInventory(); return; }
                 if(e.target.closest('.ci-edit')) { editingInvIndex = index; renderInventory(); return; }
-                if(e.target.closest('.ci-del')) { if(confirm(`Jeter « ${inventory[index].name} » ?`)) { inventory.splice(index, 1); setStore('dnd-inventory', inventory); renderInventory(); } return; }
+                if(e.target.closest('.ci-del')) { window.deleteWithUndo(inventory, index, inventory[index].name || 'cet objet', () => setStore('dnd-inventory', inventory), renderInventory); return; }
             });
             invListContainer.addEventListener('keydown', (e) => { if(e.key === 'Enter' && e.target.closest('.ci-edit-form')) { e.preventDefault(); const saveBtn = e.target.closest('.ci-edit-form').querySelector('.ci-e-save'); if(saveBtn) saveBtn.click(); } });
         }
@@ -2418,7 +2458,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-trait-modal') { editingTraitIndex = -1; document.getElementById('trait-modal-title').textContent = "Ajouter une Capacité"; document.querySelectorAll('#trait-form-modal input[type="text"], #trait-form-modal input[type="number"], #trait-form-modal textarea').forEach(i => i.value = ''); document.getElementById('new-trait-pinned').checked = false; traitModal.classList.remove('hidden'); } });
         if(document.getElementById('btn-save-trait')) { document.getElementById('btn-save-trait').addEventListener('click', () => { const trait = { name: document.getElementById('new-trait-name').value.trim(), type: document.getElementById('new-trait-type').value, level: parseInt(document.getElementById('new-trait-level').value) || 0, desc: document.getElementById('new-trait-desc').value, pinned: document.getElementById('new-trait-pinned').checked }; if(trait.name) { if(editingTraitIndex >= 0) traits[editingTraitIndex] = trait; else traits.push(trait); setStore('dnd-traits', traits); renderTraits(); traitModal.classList.add('hidden'); } }); }
-        window.deleteTrait = (index) => { if(confirm("Supprimer cette capacité ?")) { traits.splice(index, 1); setStore('dnd-traits', traits); renderTraits(); }}; window.moveTraitUp = (index) => { if(moveWithinFilter(traits, index, -1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.moveTraitDown = (index) => { if(moveWithinFilter(traits, index, 1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.editTrait = (index) => { const data = traits[index]; document.getElementById('new-trait-name').value = data.name; document.getElementById('new-trait-type').value = data.type; document.getElementById('new-trait-level').value = data.level || ''; document.getElementById('new-trait-desc').value = data.desc; document.getElementById('new-trait-pinned').checked = data.pinned; editingTraitIndex = index; document.getElementById('trait-modal-title').textContent = "Modifier la Capacité"; traitModal.classList.remove('hidden'); };
+        window.deleteTrait = (index) => window.deleteWithUndo(traits, index, (traits[index] || {}).name || 'cette capacité', () => setStore('dnd-traits', traits), renderTraits); window.moveTraitUp = (index) => { if(moveWithinFilter(traits, index, -1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.moveTraitDown = (index) => { if(moveWithinFilter(traits, index, 1, t => t.type === traits[index].type)) { setStore('dnd-traits', traits); renderTraits(); } }; window.editTrait = (index) => { const data = traits[index]; document.getElementById('new-trait-name').value = data.name; document.getElementById('new-trait-type').value = data.type; document.getElementById('new-trait-level').value = data.level || ''; document.getElementById('new-trait-desc').value = data.desc; document.getElementById('new-trait-pinned').checked = data.pinned; editingTraitIndex = index; document.getElementById('trait-modal-title').textContent = "Modifier la Capacité"; traitModal.classList.remove('hidden'); };
 
         const crudIgnoredPrefixes = ['new-', 'edit-', 'qa-', 'inv-name', 'inv-qty', 'inv-weight', 'inv-category', 'init-add', 'macro-', 'input-custom', 'pay-amount', 'new-atk', 'new-spell', 'new-ability', 'new-journal', 'new-trait', 'rest-hd-to-roll', 'hp-quick'];
 
@@ -2532,7 +2572,8 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAbilities();
             if(abilityConfigModal) abilityConfigModal.classList.add('hidden');
         });
-        window.deleteAbility = (index) => { if(confirm("Supprimer cette capacité ?")) { abilities.splice(index, 1); setStore('dnd-abilities', abilities); renderAbilities(); } };
+        window.deleteAbility = (index) => window.deleteWithUndo(abilities, index, (abilities[index] || {}).name || 'cette capacité',
+            () => setStore('dnd-abilities', abilities), renderAbilities);
 
         let macros = getStore('dnd-macros') || [];
         function renderMacros() { const list = document.getElementById('macro-list'); if(!list) return; list.innerHTML = ''; macros.forEach((m, i) => { list.innerHTML += `<div class="macro-pill"><button class="macro-btn rollable" data-formula="${m.formula}" data-name="${m.name}">${m.name}</button><span class="macro-del" onclick="deleteMacro(${i})">✖</span></div>`; }); }
@@ -2787,75 +2828,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             searchModal.addEventListener('click', (e) => { if (e.target === searchModal) closeSearch(); });
 
-            // --- Fiche détaillée d'une entrée du SRD ---
-            // Remplace l'ancienne constante DND_RULES (73 règles saisies à la main)
-            // par la base officielle : 1 450 entrées chargées à la demande.
-            const P = (arr) => (arr || []).map(t => `<p>${escAb(t)}</p>`).join('');
-            const KV = (label, val) => val ? `<p><b>${label} :</b> ${escAb(val)}</p>` : '';
-            const NAMED = (list, title) => (list && list.length)
-                ? `<h4 class="rw-h">${title}</h4>` + list.map(x =>
-                    `<p><b>${escAb(x.name)}.</b> ${escAb(Array.isArray(x.text) ? x.text.join(' ') : x.text)}</p>`).join('')
-                : '';
-
-            function renderSrdEntry(cat, e) {
-                if (cat === 'spells') {
-                    return KV('Temps d’incantation', e.casting_time) + KV('Portée', e.range)
-                         + KV('Composantes', e.components) + KV('Durée', e.duration)
-                         + '<hr class="rw-sep">' + P(e.desc)
-                         + (e.higher_levels ? `<p><b>À plus haut niveau.</b> ${escAb(e.higher_levels)}</p>` : '');
-                }
-                if (cat === 'monsters') {
-                    const ab = e.abilities || {};
-                    const mod = (v) => { const m = Math.floor((v - 10) / 2); return `${v} (${m >= 0 ? '+' : ''}${m})`; };
-                    const stats = ['str', 'dex', 'con', 'int', 'wis', 'cha']
-                        .map((k, i) => `<span class="rw-ab"><b>${['FOR','DEX','CON','INT','SAG','CHA'][i]}</b>${mod(ab[k] || 10)}</span>`).join('');
-                    return KV('Classe d’armure', e.ac + (e.ac_desc ? ` (${e.ac_desc})` : ''))
-                         + KV('Points de vie', `${e.hp} (${e.hp_roll})`) + KV('Vitesse', e.speed)
-                         + `<div class="rw-abs">${stats}</div>`
-                         + KV('Jets de sauvegarde', e.saves) + KV('Compétences', e.skills)
-                         + KV('Résistances', e.resistances) + KV('Immunités', e.immunities)
-                         + KV('Immunités (états)', e.condition_immunities)
-                         + KV('Sens', e.senses) + KV('Langues', e.languages)
-                         + KV('Facteur de puissance', `${e.cr_display} (${e.xp} PX)`)
-                         + NAMED(e.traits, '') + NAMED(e.actions, 'Actions')
-                         + NAMED(e.reactions, 'Réactions')
-                         + (e.legendary_intro ? `<h4 class="rw-h">Actions légendaires</h4><p>${escAb(e.legendary_intro)}</p>` : '')
-                         + NAMED(e.legendary_actions, e.legendary_intro ? '' : 'Actions légendaires');
-                }
-                if (cat === 'magic-items') {
-                    return KV('Type', e.type) + KV('Rareté', e.rarity)
-                         + (e.attunement ? `<p><b>Harmonisation requise</b>${e.attunement_note ? ' ' + escAb(e.attunement_note) : ''}</p>` : '')
-                         + '<hr class="rw-sep">' + P(e.desc);
-                }
-                if (cat === 'equipment') {
-                    return KV('Prix', e.cost) + (e.weight_kg != null ? KV('Poids', e.weight_kg + ' kg') : '')
-                         + (e.damage ? KV('Dégâts', `${e.damage.dice} ${e.damage.type}`) : '')
-                         + (e.versatile_damage ? KV('Polyvalente', e.versatile_damage) : '')
-                         + (e.armor_class ? KV('CA', e.armor_class.base + (e.armor_class.dex_bonus ? ' + mod. Dex' : '')) : '')
-                         + (e.range_m ? KV('Portée', `${e.range_m.normal} m${e.range_m.long ? ' / ' + e.range_m.long + ' m' : ''}`) : '')
-                         + (e.properties ? KV('Propriétés', e.properties.join(', ')) : '')
-                         + P(e.desc);
-                }
-                if (cat === 'races' || cat === 'classes') {
-                    return P(e.desc) + NAMED(e.traits, e.traits && e.traits.length ? 'Traits' : '')
-                         + NAMED(e.features, e.features && e.features.length ? 'Aptitudes' : '')
-                         + ((e.subraces || e.subclasses || []).length
-                             ? `<h4 class="rw-h">${cat === 'races' ? 'Sous-races' : 'Sous-classes'}</h4>`
-                               + (e.subraces || e.subclasses).map(s => `<p>• ${escAb(s.name)}</p>`).join('') : '');
-                }
-                if (cat === 'rules') {
-                    return P(e.content)
-                         + ((e.children || []).length
-                             ? '<h4 class="rw-h">Sections</h4>' + e.children.map(c => `<p>• ${escAb(c.name)}</p>`).join('') : '');
-                }
-                if (cat === 'conditions' && e.table) {
-                    return P(e.desc) + '<table class="rw-table"><tr>'
-                         + e.table.headers.map(h => `<th>${escAb(h)}</th>`).join('') + '</tr>'
-                         + e.table.rows.map(r => '<tr>' + r.map(c => `<td>${escAb(c)}</td>`).join('') + '</tr>').join('')
-                         + '</table>';
-                }
-                return P(e.desc || e.content);
-            }
 
             async function openSrdEntry(res) {
                 const titleEl = document.getElementById('rule-widget-title');
@@ -2870,7 +2842,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const e = await window.SRD.entry(res.category, res.id);
                     if (!e) throw new Error('introuvable');
-                    if (bodyEl) bodyEl.innerHTML = renderSrdEntry(res.category, e)
+                    if (bodyEl) bodyEl.innerHTML = window.SRD.renderEntry(res.category, e)
                         + `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`;
                 } catch (err) {
                     if (bodyEl) bodyEl.innerHTML = `<p style="color:#c0392b;">Impossible de charger cette fiche.<br><small>${escAb(err.message)}</small></p>`;

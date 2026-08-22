@@ -9,7 +9,10 @@ const CACHE = 'dnd-companion-v1';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
     e.waitUntil(
-        caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+        // On ne purge que NOS anciennes versions. `srd-data-v1` appartient à
+        // srd-data.js : le supprimer effacerait les règles hors connexion.
+        caches.keys().then(keys => Promise.all(
+            keys.filter(k => k !== CACHE && k.startsWith('dnd-companion-')).map(k => caches.delete(k))))
             .then(() => self.clients.claim())
     );
 });

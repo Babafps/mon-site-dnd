@@ -7,6 +7,11 @@
     --accent-color: #C49B35;
     --sheet-bg-color: #FAF3E0;
     --widget-bg: #FFFFFF;
+    /* Surfaces des panneaux. Étaient définies par themes.css, supprimé depuis :
+       sans elles, les fonds retombaient sur des blancs très transparents et
+       le texte devenait illisible par-dessus l'image de fond. */
+    --surface-1: rgba(255, 253, 244, 0.97);
+    --panel-1: rgba(0, 0, 0, 0.035);
     --concentration-color: #2980b9;
     --text-color: #2c1a10;
     --soft-border: rgba(138, 28, 28, 0.22);
@@ -2404,6 +2409,8 @@ body.theme-dark {
     --soft-border: rgba(196,155,53,0.22);
     --glass-bg: rgba(60,48,36,0.5);
     --glass-hover: rgba(72,58,42,0.7);
+    --surface-1: rgba(38, 30, 24, 0.97);
+    --panel-1: rgba(255, 255, 255, 0.05);
 }
 body.theme-dark .sheet-container {
     background: linear-gradient(172deg, #1d1712 0%, #241c16 100%);
@@ -3516,3 +3523,150 @@ body.theme-dark .rw-h { color: var(--accent-color); }
 body.theme-dark .rw-ab { background: rgba(255,255,255,0.07); }
 body.theme-dark .rw-ab b { color: var(--accent-color); }
 body.theme-dark .rw-src { color: #b6a484; }
+
+/* ============================================================
+   ✦ PAGE RÈGLES — consultation du SRD
+   Deux colonnes sur bureau (liste | fiche), empilées sur mobile.
+   ============================================================ */
+#rules-screen { padding: 18px 14px 30px; overflow-y: auto; }
+/* Cadre parchemin, comme .home-container et .sheet-container : sans fond opaque,
+   les panneaux flottaient sur l'image de fond et le texte devenait illisible. */
+.rules-wrap {
+    max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0;
+    background: linear-gradient(158deg, rgba(255,253,244,0.98) 0%, rgba(242,232,206,0.97) 100%);
+    border: 1.5px solid rgba(122,40,40,0.35);
+    border-radius: var(--radius-lg); padding: 26px 24px;
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(196,155,53,0.25);
+}
+body.theme-dark .rules-wrap {
+    background: linear-gradient(158deg, #261e18 0%, #1d1712 100%);
+    border-color: rgba(196,155,53,0.3);
+}
+
+.rules-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.rules-top h1 {
+    font-family: 'Cinzel', serif; font-size: 1.5rem; margin: 0;
+    color: var(--primary-color); flex: 0 0 auto;
+}
+.rules-back {
+    background: none; border: 1px solid var(--soft-border); border-radius: 9px;
+    padding: 7px 14px; cursor: pointer; font-family: 'Cinzel', serif;
+    font-size: 0.85rem; color: var(--text-color); flex: 0 0 auto;
+    transition: background .15s, border-color .15s;
+}
+.rules-back:hover { border-color: var(--primary-color); background: rgba(122,40,40,0.06); }
+#rules-search {
+    flex: 1 1 260px; min-width: 0; padding: 9px 14px; border-radius: 10px;
+    border: 1.5px solid var(--soft-border); background: var(--widget-bg);
+    color: var(--text-color); font-family: 'Lora', serif; font-size: 0.9rem;
+}
+#rules-search:focus { outline: none; border-color: var(--primary-color); }
+
+.rules-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.rules-cat {
+    background: rgba(0,0,0,0.04); border: 1px solid transparent; border-radius: 20px;
+    padding: 6px 14px; cursor: pointer; font-family: 'Lora', serif; font-size: 0.83rem;
+    color: var(--text-color); transition: all .15s;
+}
+.rules-cat:hover { border-color: var(--soft-border); background: rgba(0,0,0,0.07); }
+.rules-cat.is-on {
+    background: linear-gradient(160deg, var(--primary-hover), var(--primary-color));
+    color: var(--accent-color); border-color: var(--primary-color); font-weight: bold;
+}
+
+.rules-body { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+.rules-list {
+    max-height: 68vh; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;
+    border: 1px solid var(--soft-border); border-radius: 12px; padding: 8px;
+    background: var(--widget-bg);
+}
+.rules-list-head {
+    font-family: 'Cinzel', serif; font-size: 0.76rem; color: #8a7560;
+    padding: 4px 8px 8px; position: sticky; top: -8px;
+    background: var(--widget-bg); z-index: 1;
+}
+.rules-item {
+    display: flex; flex-direction: column; gap: 1px; text-align: left;
+    background: none; border: none; cursor: pointer;
+    padding: 7px 10px; border-radius: 8px; width: 100%; min-width: 0;
+    transition: background .12s;
+}
+.rules-item:hover { background: rgba(122,40,40,0.08); }
+.rules-item-name { font-weight: bold; font-size: 0.88rem; color: var(--text-color); overflow-wrap: break-word; }
+.rules-item-sub { font-size: 0.74rem; color: #8a7560; overflow-wrap: break-word; }
+
+.rules-detail {
+    border: 1px solid var(--soft-border); border-radius: 12px; padding: 18px 20px;
+    background: var(--widget-bg);
+    max-height: 68vh; overflow-y: auto; min-width: 0;
+}
+.rules-detail h2 { font-family: 'Cinzel', serif; color: var(--primary-color); margin: 0 0 2px; font-size: 1.25rem; }
+.rules-detail-sub { font-size: 0.82rem; color: #8a7560; margin: 0 0 12px; }
+.rules-detail p { margin: 0 0 8px; line-height: 1.55; }
+.rules-empty { text-align: center; color: #9a8a70; font-style: italic; padding: 26px 10px; font-size: 0.88rem; }
+.rules-trail { font-size: 0.78rem; color: #8a7560; margin-bottom: 8px; }
+.rw-link { color: var(--primary-color); text-decoration: none; border-bottom: 1px dotted; cursor: pointer; }
+.rw-link:hover { color: var(--primary-hover); }
+
+.rules-foot {
+    margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--soft-border);
+    font-size: 0.72rem; color: #9a8a70; line-height: 1.5;
+}
+.rules-foot a { color: inherit; }
+
+.home-rules { width: 100%; margin-top: 8px; }
+
+body.theme-dark .rules-list,
+body.theme-dark .rules-detail { background: rgba(255,255,255,0.05); border-color: rgba(196,155,53,0.22); }
+body.theme-dark .rules-cat { background: rgba(255,255,255,0.07); }
+body.theme-dark .rules-item:hover { background: rgba(196,155,53,0.14); }
+body.theme-dark .rules-item-sub,
+body.theme-dark .rules-list-head,
+body.theme-dark .rules-detail-sub,
+body.theme-dark .rules-trail,
+body.theme-dark .rules-foot,
+body.theme-dark .rules-empty { color: #b6a484; }
+body.theme-dark .rules-detail h2,
+body.theme-dark .rules-top h1 { color: var(--accent-color); }
+body.theme-dark #rules-search { background: #2a2118; }
+
+@media (max-width: 860px) {
+    .rules-body { grid-template-columns: 1fr; }
+    .rules-list { max-height: 40vh; }
+    .rules-detail { max-height: none; }
+    .rules-top h1 { font-size: 1.2rem; width: 100%; order: -1; }
+}
+@media print { #rules-screen { display: none !important; } }
+
+/* ---------- Toast d'annulation ---------- */
+#app-toast-undo {
+    position: fixed; bottom: 92px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    display: flex; align-items: center; gap: 14px;
+    padding: 11px 14px 11px 22px; border-radius: 30px;
+    background: #2c3e50; color: #f4ecd8;
+    font-family: 'Lora', serif; font-size: 0.88rem;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    opacity: 0; pointer-events: none; z-index: 8000;
+    transition: opacity .22s ease, transform .22s ease;
+    max-width: min(92vw, 460px);
+}
+#app-toast-undo.is-on { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#app-toast-undo .undo-label { min-width: 0; overflow-wrap: break-word; }
+#app-toast-undo .undo-btn {
+    flex: 0 0 auto; background: var(--accent-color); color: #2a1c08;
+    border: none; border-radius: 20px; padding: 6px 15px; cursor: pointer;
+    font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.82rem;
+}
+#app-toast-undo .undo-btn:hover { filter: brightness(1.12); }
+@media print { #app-toast-undo { display: none !important; } }
+
+/* ---------- Sélecteur d'édition (page Règles) ---------- */
+.rules-edition {
+    flex: 0 0 auto; padding: 7px 10px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--widget-bg);
+    color: var(--text-color); font-family: 'Cinzel', serif; font-size: 0.8rem;
+}
+.rules-edition:focus { outline: none; border-color: var(--primary-color); }
+.rules-edition option:disabled { color: #9a8a70; font-style: italic; }

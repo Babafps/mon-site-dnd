@@ -18,10 +18,6 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="music-player.css">
-    <!-- Interface Maître du Jeu : UNIQUE interrupteur du site.
-         false = gm-screen.css + gm-screen.js (508 Ko) ne sont même pas téléchargés.
-         Repasser à true réactive l'onglet MJ et charge les deux fichiers. -->
-    <script>window.GM_ENABLED = false;</script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
@@ -148,10 +144,6 @@
     <div class="home-container">
         <img class="brand-logo" src="IMG/logo-256.png" alt="Bones &amp; Blades" width="256" height="256">
         <h1 class="home-title">Bones &amp; Blades</h1>
-        <div class="home-tabs">
-            <button class="home-tab active" data-htab="player">🧝 Joueur</button>
-            <button class="home-tab" data-htab="gm">🛡️ Maître du Jeu</button>
-        </div>
         <div id="home-panel-player" class="home-panel">
             <div class="home-head">
                 <h2>Mes personnages</h2>
@@ -165,16 +157,8 @@
             </div>
             <div id="character-list" class="char-list"></div>
             <button id="btn-create-char" class="btn home-create">＋ Créer un personnage</button>
+            <button id="btn-open-rules" class="btn home-rules" type="button">📖 Règles du jeu</button>
             <label id="char-show-archived-wrap" class="home-archived-toggle hidden"><input type="checkbox" id="char-show-archived"> Afficher les archivés<span id="char-archived-count"></span></label>
-        </div>
-        <div id="home-panel-gm" class="home-panel hidden">
-            <h2>Mes Campagnes</h2>
-            <div id="gm-campaign-list" class="char-list"></div>
-            <div class="new-char-box">
-                <input type="text" id="new-campaign-name" placeholder="Nom de la nouvelle campagne...">
-                <button id="btn-create-campaign" class="btn">Créer</button>
-            </div>
-            <label class="home-archived-toggle"><input type="checkbox" id="gm-show-archived"> Afficher les campagnes archivées</label>
         </div>
     </div>
 </div>
@@ -402,20 +386,7 @@
 <script src="music-player.js"></script>
 <script src="fiche-layout.js"></script>
 <script src="print-sheet.js"></script>
-<script>
-// Chargement à la demande de l'écran MJ (508 Ko). Sans lui, c'est gm-screen.js
-// qui masquait l'onglet « Maître du Jeu » : on s'en charge ici.
-if (window.GM_ENABLED) {
-    document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="gm-screen.css">');
-    var gmS = document.createElement('script'); gmS.src = 'gm-screen.js';
-    document.body.appendChild(gmS);
-} else {
-    document.addEventListener('DOMContentLoaded', function () {
-        var bar = document.querySelector('.home-tabs');
-        if (bar) bar.classList.add('hidden');
-    });
-}
-</script>
+<script src="rules-page.js"></script>
 <script>
 // PWA : service worker « réseau d'abord » (jamais de version périmée en ligne, hors-ligne de secours)
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
