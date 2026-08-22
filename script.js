@@ -6,7 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const DB = {
         get: function(key) { try { return localStorage.getItem(key); } catch(e) { return null; } },
         set: function(key, val) { 
-            try { localStorage.setItem(key, val); } catch(e) { console.warn("Erreur sauvegarde locale."); }
+            try { localStorage.setItem(key, val); }
+            catch(e) { console.warn("Erreur sauvegarde locale.", e); DB.warnQuotaOnce(); }
             if (window.SupaAuth?.currentUser && window.SyncQueue && ACTIVE_CHAR_ID && key.startsWith(ACTIVE_CHAR_ID + '_')) {
                 const subKey = key.slice(ACTIVE_CHAR_ID.length + 1);
                 // `dnd-avatar-src` = image source pleine résolution gardée pour le re-recadrage local
@@ -17,6 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} },
+        // Quota du navigateur plein : l'écriture échoue silencieusement et
+        // l'utilisateur croirait sa fiche sauvegardée. On l'avertit une fois
+        // par session, en le renvoyant vers la sauvegarde complète.
+        _quotaWarned: false,
+        warnQuotaOnce: function() {
+            if (this._quotaWarned) return;
+            this._quotaWarned = true;
+            const msg = "⚠️ Mémoire du navigateur pleine : la sauvegarde a ÉCHOUÉ. "
+                      + "Fais une « Sauvegarde complète » (menu ☰) avant de fermer, "
+                      + "puis allège tes images ou supprime un personnage.";
+            if (window.showAppToast) window.showAppToast(msg, '#c0392b');
+            else setTimeout(() => alert(msg), 200);
+        },
         keys: function() { try { return Object.keys(localStorage); } catch(e) { return []; } }
     };
 
@@ -172,6 +186,60 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, false);
         });
     }
+
+    // ===== SAUVEGARDE COMPLÈTE (toutes les fiches en un fichier) =====
+    // Filet de sécurité : le stockage local peut être vidé par le navigateur ou
+    // saturer (cf. DB.warnQuotaOnce). L'export per-fiche existant ne couvre
+    // qu'un personnage à la fois.
+    function collectFullBackup() {
+        const data = {};
+        DB.keys().forEach(k => { if (k.startsWith('dnd-') || k.includes('_dnd-')) data[k] = DB.get(k); });
+        return {
+            format: 'bones-and-blades-backup', version: 1,
+            exportedAt: new Date().toISOString(),
+            characters: (() => { try { return JSON.parse(DB.get('dnd-character-list') || '[]'); } catch (e) { return []; } })(),
+            data
+        };
+    }
+
+    const btnBackupExport = document.getElementById('btn-backup-export');
+    if (btnBackupExport) btnBackupExport.addEventListener('click', () => {
+        const backup = collectFullBackup();
+        const n = backup.characters.length;
+        const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bones-and-blades-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        if (window.showAppToast) window.showAppToast(`💾 Sauvegarde de ${n} personnage${n > 1 ? 's' : ''} téléchargée`);
+    });
+
+    const backupImportInput = document.getElementById('backup-import-input');
+    if (backupImportInput) backupImportInput.addEventListener('change', (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            let backup;
+            try { backup = JSON.parse(ev.target.result); } catch (err) { alert('Fichier illisible.'); return; }
+            if (backup.format !== 'bones-and-blades-backup' || !backup.data) {
+                alert("Ce fichier n'est pas une sauvegarde complète Bones & Blades."); return;
+            }
+            const n = (backup.characters || []).length;
+            const when = (backup.exportedAt || '').slice(0, 10);
+            if (!confirm(`Restaurer ${n} personnage(s) sauvegardé(s) le ${when} ?\n\n`
+                       + `⚠️ Cela REMPLACE tout le contenu actuel de ce navigateur.`)) return;
+            // On repart d'un stockage propre pour ne pas laisser d'orphelins
+            DB.keys().forEach(k => { if (k.startsWith('dnd-') || k.includes('_dnd-')) DB.remove(k); });
+            Object.entries(backup.data).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch (err) { DB.warnQuotaOnce(); } });
+            DB.remove('dnd-active-char');
+            alert('Sauvegarde restaurée. La page va se recharger.');
+            location.reload();
+        };
+        reader.readAsText(file);
+        backupImportInput.value = '';
+    });
 
 
     const cPrim = document.getElementById('color-primary'); if(cPrim) cPrim.addEventListener('input', (e) => { document.body.style.setProperty('--primary-color', e.target.value); DB.set('dnd-theme-primary', e.target.value); });
@@ -382,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.addEventListener('click', closeCharMenus);
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCharMenus(); });
-        // Pousse archivage / ordre vers Supabase quand les colonnes existent (voir SUPABASE.sql).
+        // Pousse archivage / ordre vers Supabase quand les colonnes existent (voir « Archivage et ordre des personnages.sql »).
         // Sans la migration, l'appel est ignoré et tout reste local — aucun échec visible.
         function syncCharMetaCloud(id) {
             if (!window.SupaAuth || !window.SupaAuth.saveCharacterMeta) return;
@@ -1424,6 +1492,111 @@ document.addEventListener('DOMContentLoaded', () => {
             emptyText: 'Aucun PNJ — clique sur ➕ Ajouter.', deleteFallback: 'ce PNJ'
         });
 
+
+        // ===== MONTÉE DE NIVEAU =====
+        // Applique ce qui est déductible sans ambiguïté : niveau, dé de vie
+        // supplémentaire, et bonus de maîtrise (recalculé par le listener existant
+        // sur #char-level). Les emplacements de sorts et les aptitudes gagnées
+        // dépendent de la sous-classe : on les signale au lieu de les deviner.
+        const HIT_DIE_BY_CLASS = {
+            barbare: 12, guerrier: 10, paladin: 10, rodeur: 10,
+            barde: 8, clerc: 8, druide: 8, moine: 8, roublard: 8, occultiste: 8,
+            ensorceleur: 6, magicien: 6
+        };
+        const CASTER_CLASSES = ['barde', 'clerc', 'druide', 'ensorceleur', 'magicien',
+                                'occultiste', 'paladin', 'rodeur'];
+        const classKey = (s) => String(s || '').toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().split(/[\s/,]+/)[0];
+
+        const btnLevelUp = document.getElementById('btn-level-up');
+        if (btnLevelUp) btnLevelUp.addEventListener('click', () => {
+            const lvlEl = document.getElementById('char-level');
+            if (!lvlEl) return;
+            const lvl = parseInt(lvlEl.value, 10) || 1;
+            if (lvl >= 20) {
+                if (window.showAppToast) window.showAppToast('Niveau 20 : maximum atteint.', '#8a6320');
+                return;
+            }
+            const cls = classKey(document.getElementById('char-class')?.value);
+            const die = HIT_DIE_BY_CLASS[cls];
+            const newLvl = lvl + 1;
+
+            if (!confirm(`Passer du niveau ${lvl} au niveau ${newLvl} ?`)) return;
+
+            lvlEl.value = newLvl;
+            lvlEl.dispatchEvent(new Event('input', { bubbles: true }));   // recalcule le bonus de maîtrise
+
+            const hdMaxEl = document.getElementById('hd-max');
+            if (hdMaxEl) {
+                hdMaxEl.value = (parseInt(hdMaxEl.value, 10) || 0) + 1;
+                hdMaxEl.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (die) {
+                const hdSizeEl = document.getElementById('hd-size');
+                if (hdSizeEl && hdSizeEl.value !== String(die)) {
+                    hdSizeEl.value = String(die);
+                    hdSizeEl.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+
+            const prof = String(document.getElementById('prof-bonus')?.value || '').replace('+', '');
+            const rappels = ['❤️ Augmente tes PV max (dé de vie + mod. de Constitution)'];
+            if (CASTER_CLASSES.includes(cls)) rappels.push('✨ Vérifie tes emplacements de sorts');
+            rappels.push('📜 Ajoute les aptitudes gagnées à ce niveau');
+
+            // Le champ Niveau pulse en or
+            const grp = lvlEl.closest('.level-group');
+            if (grp) { grp.classList.remove('is-levelling'); void grp.offsetWidth; grp.classList.add('is-levelling'); }
+
+            showLevelUpFx({
+                level: newLvl,
+                className: document.getElementById('char-class')?.value || '',
+                prof: prof,
+                hitDice: die ? `${parseInt(hdMaxEl?.value, 10) || newLvl}d${die}` : '',
+                todo: rappels
+            });
+        });
+
+        // Célébration plein écran. Remplace l'alerte système : monter de niveau
+        // mérite mieux qu'une boîte de dialogue grise.
+        function showLevelUpFx(info) {
+            document.getElementById('levelup-fx')?.remove();
+            const ov = document.createElement('div');
+            ov.id = 'levelup-fx'; ov.className = 'no-print';
+            ov.setAttribute('role', 'dialog');
+            ov.setAttribute('aria-label', 'Montée de niveau ' + info.level);
+
+            const embers = Array.from({ length: 14 }, (_, i) =>
+                `<span class="lvfx-ember" style="left:${6 + Math.random() * 88}%;`
+                + `animation-delay:${(Math.random() * 2.2).toFixed(2)}s;`
+                + `animation-duration:${(1.8 + Math.random() * 1.4).toFixed(2)}s"></span>`).join('');
+
+            const stats = [
+                `<span class="lvfx-stat">Maîtrise +${escAb(info.prof)}</span>`,
+                info.hitDice ? `<span class="lvfx-stat">Dés de vie ${escAb(info.hitDice)}</span>` : '',
+                `<span class="lvfx-stat">Niveau ${info.level}</span>`
+            ].join('');
+
+            ov.innerHTML = embers + `<div class="lvfx-card">
+                <div class="lvfx-kicker">Niveau supérieur</div>
+                <div class="lvfx-number">${info.level}</div>
+                ${info.className ? `<div class="lvfx-class">${escAb(info.className)}</div>` : ''}
+                <div class="lvfx-stats">${stats}</div>
+                <ul class="lvfx-todo">${info.todo.map(t => `<li>${escAb(t)}</li>`).join('')}</ul>
+                <button type="button" class="lvfx-close">Continuer l’aventure</button>
+            </div>`;
+
+            const close = () => {
+                ov.classList.add('is-closing');
+                setTimeout(() => ov.remove(), 280);
+                document.removeEventListener('keydown', onKey);
+            };
+            const onKey = (e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); };
+            ov.addEventListener('click', close);
+            document.addEventListener('keydown', onKey);
+            document.body.appendChild(ov);
+            ov.querySelector('.lvfx-close')?.focus();
+        }
         const levelInput = document.getElementById('char-level'); const profInput = document.getElementById('prof-bonus'); const initInput = document.getElementById('initiative');
         function syncCharMeta() { const lvl = parseInt(document.getElementById('char-level').value) || 1; const cls = document.getElementById('char-class').value || ''; const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID); if(idx !== -1) { charactersList[idx].level = lvl; charactersList[idx].class = cls; DB.set('dnd-character-list', JSON.stringify(charactersList)); } }
         if(levelInput && profInput) { levelInput.addEventListener('input', () => { let lvl = parseInt(levelInput.value) || 1; let prof = Math.floor((lvl - 1) / 4) + 2; profInput.value = prof; setStore('dnd-sheet-prof-bonus', prof, false); updateStatsAndSkills(); syncCharMeta(); }); }
@@ -2598,98 +2771,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // ==========================================
         // BASE DE RÈGLES 5e (en français) — recherche + fiche détaillée
         // ==========================================
-        const DND_RULES = [
-            // --- Actions en combat ---
-            { name: 'Action : Attaquer', cat: 'Actions', text: "Effectue une attaque au corps à corps ou à distance contre une cible. Certaines capacités (Attaque supplémentaire) permettent plusieurs attaques avec la même action. Jet d'attaque : 1d20 + mod. de caractéristique + bonus de maîtrise (si l'arme est maîtrisée)." },
-            { name: 'Action : Lancer un sort', cat: 'Actions', text: "Lance un sort dont le temps d'incantation est de 1 action. Certains sorts utilisent une action bonus ou une réaction. On ne peut lancer qu'un seul sort nécessitant une action bonus par tour, et dans ce cas l'action ne peut servir qu'à un tour de magie." },
-            { name: 'Action : Foncer (Dash)', cat: 'Actions', text: "Gagne un déplacement supplémentaire égal à ta vitesse pour ce tour (après application des modificateurs de vitesse)." },
-            { name: 'Action : Se désengager', cat: 'Actions', text: "Ton déplacement ne provoque pas d'attaques d'opportunité pour le reste du tour." },
-            { name: 'Action : Esquiver', cat: 'Actions', text: "Jusqu'à ton prochain tour : les attaques contre toi ont le désavantage (si tu vois l'attaquant) et tu fais tes jets de sauvegarde de Dextérité avec l'avantage. Annulé si ta vitesse tombe à 0 ou si tu es neutralisé." },
-            { name: 'Action : Se cacher', cat: 'Actions', text: "Fais un test de Dextérité (Discrétion) opposé à la Perception passive (ou active) des créatures. En cas de succès, tu es caché : tu bénéficies de l'avantage à ta prochaine attaque et les créatures t'attaquent avec désavantage." },
-            { name: 'Action : Préparer', cat: 'Actions', text: "Choisis un déclencheur perceptible et une action (ou un déplacement) à exécuter en réaction quand il survient. Préparer un sort coûte un emplacement à l'avance et exige de maintenir la concentration jusqu'au déclenchement." },
-            { name: 'Action : Aider', cat: 'Actions', text: "Donne l'avantage au prochain test de caractéristique d'un allié sur une tâche pour laquelle tu l'assistes, OU à sa prochaine attaque contre une créature située à 1,50 m de toi (avant ton prochain tour)." },
-            { name: 'Action : Chercher', cat: 'Actions', text: "Consacre ton attention à trouver quelque chose : test de Sagesse (Perception) ou d'Intelligence (Investigation) selon la situation." },
-            { name: 'Action : Utiliser un objet', cat: 'Actions', text: "Interagir avec un second objet (le premier est gratuit via ton déplacement) ou utiliser un objet qui requiert une action. Ex. : boire une potion, activer un objet magique." },
-            { name: 'Action bonus', cat: 'Actions', text: "Action supplémentaire accordée par une capacité, un sort ou une règle spécifique. Tu ne peux en faire qu'UNE par tour, à ton tour uniquement." },
-            { name: 'Réaction', cat: 'Actions', text: "Action instantanée en réponse à un déclencheur, même hors de ton tour. Une seule réaction par round ; elle se récupère au début de ton tour. Ex. : attaque d'opportunité, certains sorts." },
-            { name: "Attaque d'opportunité", cat: 'Combat', text: "Réaction déclenchée quand une créature hostile que tu vois quitte ton allonge en se déplaçant : une attaque de mêlée contre elle. On l'évite avec l'action Se désengager ou en se téléportant." },
-            { name: 'Interaction avec un objet', cat: 'Combat', text: "Tu peux interagir gratuitement avec un objet une fois par tour pendant ton déplacement ou ton action (dégainer une arme, ouvrir une porte). Une seconde interaction nécessite l'action Utiliser un objet." },
-
-            // --- Mécaniques de combat ---
-            { name: 'Avantage / Désavantage', cat: 'Combat', text: "Avantage : lance 2d20 et garde le meilleur. Désavantage : lance 2d20 et garde le pire. Ils ne se cumulent pas : si tu as au moins une source de chaque, ils s'annulent et tu lances un seul d20." },
-            { name: 'Coup critique', cat: 'Combat', text: "Un 20 naturel sur un jet d'attaque touche automatiquement et constitue un coup critique : tu lances deux fois les dés de dégâts (pas les bonus fixes). Un 1 naturel rate automatiquement." },
-            { name: 'Initiative', cat: 'Combat', text: "Au début d'un combat, chaque participant lance 1d20 + mod. de Dextérité. On agit dans l'ordre décroissant. En cas d'égalité, le MJ tranche (ou DEX la plus haute)." },
-            { name: 'Surprise', cat: 'Combat', text: "Le MJ compare la Discrétion des assaillants à la Perception passive des autres. Une créature surprise ne peut ni agir ni réagir lors de son premier tour de combat." },
-            { name: 'Couverture', cat: 'Combat', text: "À demi-couvert : +2 à la CA et aux jets de sauvegarde de DEX. Aux trois quarts : +5. Couverture totale : la cible ne peut pas être visée directement." },
-            { name: 'Attaque à distance au contact', cat: 'Combat', text: "Effectuer une attaque à distance alors qu'une créature hostile se trouve à 1,50 m de toi impose le désavantage à ce jet d'attaque." },
-            { name: 'Combat à deux armes', cat: 'Combat', text: "Quand tu attaques avec une arme de mêlée légère à une main, tu peux, en action bonus, attaquer avec une seconde arme légère tenue dans l'autre main. Tu n'ajoutes pas ton mod. de caractéristique aux dégâts de cette seconde attaque (sauf s'il est négatif)." },
-            { name: 'Empoigner (grappling)', cat: 'Combat', text: "À la place d'une attaque, test de Force (Athlétisme) opposé à l'Athlétisme (Force) ou l'Acrobaties (DEX) de la cible (taille max : G+1). Réussite : la cible est Empoignée (vitesse 0)." },
-            { name: 'Bousculer', cat: 'Combat', text: "À la place d'une attaque : Force (Athlétisme) opposé à l'Athlétisme ou l'Acrobaties de la cible. Réussite : tu la mets à terre OU tu la repousses de 1,50 m." },
-            { name: 'Saut', cat: 'Déplacement', text: "Saut en longueur : distance en mètres ≈ valeur de Force (avec élan d'au moins 3 m), divisée par deux sans élan. Saut en hauteur : 90 cm + mod. de Force (avec élan). Le saut consomme du déplacement." },
-            { name: 'Dégâts massifs (mort subite)', cat: 'Combat', text: "Si des dégâts réduisent un personnage à 0 PV et que l'excédent est ≥ à son maximum de PV, il meurt sur le coup." },
-
-            // --- Concentration & magie ---
-            { name: 'Concentration', cat: 'Magie', text: "Certains sorts exigent de se concentrer pour durer. Tu perds la concentration si : tu lances un autre sort de concentration, tu es neutralisé/tué, ou tu subis des dégâts (jet de sauvegarde de Constitution, DD = 10 ou la moitié des dégâts subis, le plus élevé)." },
-            { name: 'Emplacements de sorts', cat: 'Magie', text: "Lancer un sort de niveau 1 ou plus dépense un emplacement de niveau égal ou supérieur. Les tours de magie (niveau 0) ne coûtent pas d'emplacement. Les emplacements se récupèrent au repos long (ou court pour certaines classes)." },
-            { name: 'Lancer à un niveau supérieur', cat: 'Magie', text: "Dépenser un emplacement de niveau plus élevé que celui du sort amplifie souvent son effet (« Aux niveaux supérieurs »). Le sort est considéré comme lancé au niveau de l'emplacement utilisé." },
-            { name: 'Composantes (V, S, M)', cat: 'Magie', text: "Verbale (incanter à voix haute), Somatique (geste d'une main libre), Matérielle (un composant ; un focaliseur ou une bourse à composants remplace ceux sans coût). Sans la composante requise, le sort ne peut être lancé." },
-            { name: 'Rituel', cat: 'Magie', text: "Un sort possédant la balise rituel peut être lancé sans dépenser d'emplacement si on y consacre 10 minutes de plus, à condition que la classe/capacité autorise l'incantation rituelle." },
-            { name: 'DD de sauvegarde des sorts', cat: 'Magie', text: "DD de sauvegarde = 8 + bonus de maîtrise + mod. de la caractéristique d'incantation. Bonus d'attaque de sort = bonus de maîtrise + mod. d'incantation." },
-            { name: 'Sorts de zone et couverture', cat: 'Magie', text: "Une créature bénéficiant d'une couverture totale par rapport au point d'origine d'un effet de zone n'est pas affectée. La zone part du point d'origine choisi par le lanceur." },
-
-            // --- Tests, compétences, sauvegardes ---
-            { name: 'Test de caractéristique', cat: 'Tests', text: "1d20 + mod. de caractéristique, comparé à un Degré de Difficulté (DD). On ajoute le bonus de maîtrise si une compétence pertinente est maîtrisée." },
-            { name: 'Degrés de Difficulté (DD)', cat: 'Tests', text: "Très facile 5 · Facile 10 · Moyen 15 · Difficile 20 · Très difficile 25 · Presque impossible 30." },
-            { name: 'Jet de sauvegarde', cat: 'Tests', text: "1d20 + mod. de caractéristique (+ maîtrise si tu maîtrises cette sauvegarde) pour résister à un effet (sort, poison, souffle…). Comparé au DD de l'effet." },
-            { name: 'Maîtrise et expertise', cat: 'Tests', text: "Le bonus de maîtrise (+2 au niveau 1, jusqu'à +6 au niveau 17) s'ajoute aux jets pour lesquels tu es maîtrisé. L'expertise double ce bonus pour la compétence concernée." },
-            { name: 'Test en groupe', cat: 'Tests', text: "Tout le monde lance le même test ; si la moitié au moins réussit, le groupe réussit. Utile pour la discrétion ou la traque collective." },
-            { name: 'Perception passive', cat: 'Tests', text: "Score passif = 10 + mod. de Sagesse (Perception) + maîtrise éventuelle. Utilisé pour repérer sans lancer de dé (ex. créatures cachées, pièges)." },
-            { name: 'Les 6 caractéristiques', cat: 'Tests', text: "Force (FOR), Dextérité (DEX), Constitution (CON), Intelligence (INT), Sagesse (SAG), Charisme (CHA). Modificateur = (score − 10) arrondi à l'inférieur, divisé par 2." },
-
-            // --- Repos & récupération ---
-            { name: 'Repos court', cat: 'Repos', text: "Au moins 1 heure d'activité légère. Tu peux dépenser des dés de vie (1 dé + mod. de CON chacun) pour récupérer des PV. Certaines capacités/emplacements se rechargent au repos court." },
-            { name: 'Repos long', cat: 'Repos', text: "Au moins 8 heures (dont 6 de sommeil). Récupère tous les PV, la moitié de tes dés de vie totaux (minimum 1) et la plupart des ressources. Un seul repos long bénéfique par 24 heures." },
-            { name: 'Dés de vie', cat: 'Repos', text: "Tu en possèdes autant que ton niveau, du type lié à ta classe (d6 à d12). Dépensés au repos court pour soigner, ils se récupèrent en partie au repos long." },
-
-            // --- Mort & soins ---
-            { name: 'Jets de sauvegarde contre la mort', cat: 'Mort & soins', text: "À 0 PV, au début de ton tour : 1d20. 10+ = succès, moins de 10 = échec. 3 succès → tu es stabilisé ; 3 échecs → tu meurs. Un 1 naturel compte double échec, un 20 naturel te rend 1 PV. Subir des dégâts à 0 PV = 1 échec (2 si critique au contact)." },
-            { name: 'Stabiliser une créature', cat: 'Mort & soins', text: "Action + test de Sagesse (Médecine) DD 10 sur une créature à 0 PV : elle devient stable (plus de jets contre la mort), reste inconsciente et regagne 1 PV après 1d4 heures." },
-            { name: 'Points de vie temporaires', cat: 'Mort & soins', text: "Ils forment un « tampon » absorbé en premier par les dégâts. Ils ne se cumulent pas (on garde le plus élevé), ne se soignent pas et disparaissent au repos long." },
-            { name: 'Résistance, vulnérabilité, immunité', cat: 'Mort & soins', text: "Résistance : dégâts du type concerné divisés par deux. Vulnérabilité : dégâts doublés. Immunité : aucun dégât de ce type. On applique d'abord les autres modificateurs, puis la résistance/vulnérabilité." },
-            { name: 'Types de dégâts', cat: 'Mort & soins', text: "Contondant, perforant, tranchant, feu, froid, foudre, acide, poison, nécrotique, radiant, psychique, tonnerre, force. Ils déterminent résistances et vulnérabilités." },
-
-            // --- Déplacement, environnement, vision ---
-            { name: 'Déplacement et vitesse', cat: 'Déplacement', text: "Tu peux répartir ton déplacement avant/après/entre tes attaques. Te relever (de À terre) coûte la moitié de ta vitesse. Tu peux te déplacer à travers l'espace d'un allié (pas d'un ennemi sans Acrobaties/Athlétisme)." },
-            { name: 'Terrain difficile', cat: 'Déplacement', text: "Chaque 1,50 m parcouru en terrain difficile (décombres, eau, broussailles, neige…) coûte 3 m de déplacement : ta distance utile est divisée par deux." },
-            { name: 'Capacité de charge', cat: 'Déplacement', text: "Charge maximale = score de Force × 7,5 kg. Au-delà de Force × 5 kg, tu es encombré (variante) : vitesse réduite et désavantages possibles." },
-            { name: 'Vision dans le noir', cat: 'Vision', text: "Dans le noir, tu vois en lumière faible comme en lumière vive, et dans l'obscurité comme en lumière faible (en nuances de gris), jusqu'à la distance indiquée." },
-            { name: 'Lumière (vive, faible, obscurité)', cat: 'Vision', text: "Lumière vive : vision normale. Lumière faible : zone de pénombre, perception visuelle avec désavantage. Obscurité : zone d'aveuglement (Aveuglé sans vision spéciale)." },
-            { name: 'Créature cachée / invisible', cat: 'Vision', text: "Attaquer une cible que tu ne vois pas : désavantage. Être attaqué sans être vu : l'attaquant a l'avantage. Une attaque révèle ta position si tu étais caché." },
-            { name: 'Chute', cat: 'Environnement', text: "1d6 dégâts contondants par tranche de 3 m de chute, jusqu'à 20d6 (60 m). La créature atterrit À terre, sauf si elle évite les dégâts." },
-            { name: 'Suffocation', cat: 'Environnement', text: "Tu peux retenir ta respiration 1 + mod. de CON minutes (min. 30 s). Ensuite, tu survis un nombre de rounds égal à ton mod. de CON (min. 1), puis tu tombes à 0 PV et tu te stabilises pas." },
-
-            // --- Conditions / états ---
-            { name: 'État : Aveuglé', cat: 'États', text: "Ne voit plus, rate automatiquement les tests liés à la vue. Ses attaques ont le désavantage ; les attaques contre lui ont l'avantage." },
-            { name: 'État : Charmé', cat: 'États', text: "Ne peut pas attaquer le charmeur ni le cibler par une capacité/un effet néfaste. Le charmeur a l'avantage aux tests d'interaction sociale avec lui." },
-            { name: 'État : Assourdi', cat: 'États', text: "N'entend plus et rate automatiquement les tests de caractéristique nécessitant l'ouïe." },
-            { name: 'État : Effrayé', cat: 'États', text: "Désavantage aux tests et aux attaques tant que la source de la peur est dans son champ de vision. Ne peut pas s'en rapprocher volontairement." },
-            { name: 'État : Empoigné', cat: 'États', text: "Sa vitesse tombe à 0 (pas de bonus de vitesse). Prend fin si l'empoigneur est neutralisé ou si la créature est sortie de portée par un effet." },
-            { name: 'État : Neutralisé', cat: 'États', text: "Ne peut effectuer aucune action ni réaction." },
-            { name: 'État : Invisible', cat: 'États', text: "Impossible à voir sans aide spéciale ; considéré comme fortement obscurci. Avantage à ses attaques ; les attaques contre lui ont le désavantage." },
-            { name: 'État : Paralysé', cat: 'États', text: "Neutralisé, ne peut ni bouger ni parler. Rate les sauvegardes de Force et de Dextérité. Les attaques contre lui ont l'avantage et tout coup porté à 1,50 m est un critique." },
-            { name: 'État : Pétrifié', cat: 'États', text: "Transformé en matière solide, neutralisé, ne perçoit plus, résistance à tous les dégâts, immunité au poison et aux maladies. Attaques contre lui avec avantage." },
-            { name: 'État : Empoisonné', cat: 'États', text: "Désavantage aux jets d'attaque et aux tests de caractéristique." },
-            { name: 'État : À terre', cat: 'États', text: "Ne peut que ramper (ou se relever en dépensant la moitié de sa vitesse). Désavantage à ses attaques. Attaques contre lui : avantage au contact, désavantage à distance." },
-            { name: 'État : Entravé', cat: 'États', text: "Vitesse à 0. Ses attaques ont le désavantage et les attaques contre lui l'avantage. Désavantage aux sauvegardes de Dextérité." },
-            { name: 'État : Étourdi', cat: 'États', text: "Neutralisé, ne peut bouger, parle avec peine. Rate les sauvegardes de Force et de Dextérité. Les attaques contre lui ont l'avantage." },
-            { name: 'État : Inconscient', cat: 'États', text: "Neutralisé, ne perçoit plus, lâche ce qu'il tient et tombe À terre. Rate FOR/DEX. Attaques contre lui avec avantage ; tout coup au contact à 1,50 m est un critique." },
-            { name: 'Épuisement', cat: 'États', text: "6 niveaux cumulatifs : 1) désavantage aux tests · 2) vitesse divisée par deux · 3) désavantage aux attaques et sauvegardes · 4) PV maximum divisés par deux · 5) vitesse à 0 · 6) mort. Un repos long retire 1 niveau (avec nourriture/boisson)." },
-
-            // --- Divers ---
-            { name: 'Inspiration', cat: 'Divers', text: "Récompense du MJ (souvent pour le roleplay). Tu peux la dépenser pour obtenir l'avantage sur un jet d'attaque, un test de caractéristique ou une sauvegarde. On n'en possède qu'une à la fois." },
-            { name: 'Monnaie et conversion', cat: 'Divers', text: "1 po = 10 pa = 100 pc ; 1 po = 2 pe ; 1 pp = 10 po. (po : or, pa : argent, pe : électrum, pc : cuivre, pp : platine)." },
-            { name: 'Liaison à un objet magique', cat: 'Divers', text: "Certains objets requièrent une liaison (attunement) : un repos court concentré sur l'objet. Un personnage ne peut être lié qu'à 3 objets magiques à la fois." }
-        ];
 
         const searchModal = document.getElementById('global-search-modal');
         const searchInput = document.getElementById('global-search-input');
@@ -2706,17 +2787,94 @@ document.addEventListener('DOMContentLoaded', () => {
 
             searchModal.addEventListener('click', (e) => { if (e.target === searchModal) closeSearch(); });
 
-            // --- Widget de règle (fiche détaillée, fermable) ---
-            function openRuleWidget(rule) {
+            // --- Fiche détaillée d'une entrée du SRD ---
+            // Remplace l'ancienne constante DND_RULES (73 règles saisies à la main)
+            // par la base officielle : 1 450 entrées chargées à la demande.
+            const P = (arr) => (arr || []).map(t => `<p>${escAb(t)}</p>`).join('');
+            const KV = (label, val) => val ? `<p><b>${label} :</b> ${escAb(val)}</p>` : '';
+            const NAMED = (list, title) => (list && list.length)
+                ? `<h4 class="rw-h">${title}</h4>` + list.map(x =>
+                    `<p><b>${escAb(x.name)}.</b> ${escAb(Array.isArray(x.text) ? x.text.join(' ') : x.text)}</p>`).join('')
+                : '';
+
+            function renderSrdEntry(cat, e) {
+                if (cat === 'spells') {
+                    return KV('Temps d’incantation', e.casting_time) + KV('Portée', e.range)
+                         + KV('Composantes', e.components) + KV('Durée', e.duration)
+                         + '<hr class="rw-sep">' + P(e.desc)
+                         + (e.higher_levels ? `<p><b>À plus haut niveau.</b> ${escAb(e.higher_levels)}</p>` : '');
+                }
+                if (cat === 'monsters') {
+                    const ab = e.abilities || {};
+                    const mod = (v) => { const m = Math.floor((v - 10) / 2); return `${v} (${m >= 0 ? '+' : ''}${m})`; };
+                    const stats = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+                        .map((k, i) => `<span class="rw-ab"><b>${['FOR','DEX','CON','INT','SAG','CHA'][i]}</b>${mod(ab[k] || 10)}</span>`).join('');
+                    return KV('Classe d’armure', e.ac + (e.ac_desc ? ` (${e.ac_desc})` : ''))
+                         + KV('Points de vie', `${e.hp} (${e.hp_roll})`) + KV('Vitesse', e.speed)
+                         + `<div class="rw-abs">${stats}</div>`
+                         + KV('Jets de sauvegarde', e.saves) + KV('Compétences', e.skills)
+                         + KV('Résistances', e.resistances) + KV('Immunités', e.immunities)
+                         + KV('Immunités (états)', e.condition_immunities)
+                         + KV('Sens', e.senses) + KV('Langues', e.languages)
+                         + KV('Facteur de puissance', `${e.cr_display} (${e.xp} PX)`)
+                         + NAMED(e.traits, '') + NAMED(e.actions, 'Actions')
+                         + NAMED(e.reactions, 'Réactions')
+                         + (e.legendary_intro ? `<h4 class="rw-h">Actions légendaires</h4><p>${escAb(e.legendary_intro)}</p>` : '')
+                         + NAMED(e.legendary_actions, e.legendary_intro ? '' : 'Actions légendaires');
+                }
+                if (cat === 'magic-items') {
+                    return KV('Type', e.type) + KV('Rareté', e.rarity)
+                         + (e.attunement ? `<p><b>Harmonisation requise</b>${e.attunement_note ? ' ' + escAb(e.attunement_note) : ''}</p>` : '')
+                         + '<hr class="rw-sep">' + P(e.desc);
+                }
+                if (cat === 'equipment') {
+                    return KV('Prix', e.cost) + (e.weight_kg != null ? KV('Poids', e.weight_kg + ' kg') : '')
+                         + (e.damage ? KV('Dégâts', `${e.damage.dice} ${e.damage.type}`) : '')
+                         + (e.versatile_damage ? KV('Polyvalente', e.versatile_damage) : '')
+                         + (e.armor_class ? KV('CA', e.armor_class.base + (e.armor_class.dex_bonus ? ' + mod. Dex' : '')) : '')
+                         + (e.range_m ? KV('Portée', `${e.range_m.normal} m${e.range_m.long ? ' / ' + e.range_m.long + ' m' : ''}`) : '')
+                         + (e.properties ? KV('Propriétés', e.properties.join(', ')) : '')
+                         + P(e.desc);
+                }
+                if (cat === 'races' || cat === 'classes') {
+                    return P(e.desc) + NAMED(e.traits, e.traits && e.traits.length ? 'Traits' : '')
+                         + NAMED(e.features, e.features && e.features.length ? 'Aptitudes' : '')
+                         + ((e.subraces || e.subclasses || []).length
+                             ? `<h4 class="rw-h">${cat === 'races' ? 'Sous-races' : 'Sous-classes'}</h4>`
+                               + (e.subraces || e.subclasses).map(s => `<p>• ${escAb(s.name)}</p>`).join('') : '');
+                }
+                if (cat === 'rules') {
+                    return P(e.content)
+                         + ((e.children || []).length
+                             ? '<h4 class="rw-h">Sections</h4>' + e.children.map(c => `<p>• ${escAb(c.name)}</p>`).join('') : '');
+                }
+                if (cat === 'conditions' && e.table) {
+                    return P(e.desc) + '<table class="rw-table"><tr>'
+                         + e.table.headers.map(h => `<th>${escAb(h)}</th>`).join('') + '</tr>'
+                         + e.table.rows.map(r => '<tr>' + r.map(c => `<td>${escAb(c)}</td>`).join('') + '</tr>').join('')
+                         + '</table>';
+                }
+                return P(e.desc || e.content);
+            }
+
+            async function openSrdEntry(res) {
                 const titleEl = document.getElementById('rule-widget-title');
                 const catEl = document.getElementById('rule-widget-cat');
                 const bodyEl = document.getElementById('rule-widget-body');
                 const modal = document.getElementById('rule-widget-modal');
                 if (!titleEl || !modal) return;
-                titleEl.textContent = rule.name;
-                if (catEl) catEl.textContent = rule.cat || '';
-                if (bodyEl) bodyEl.textContent = rule.text;
+                titleEl.textContent = res.name;
+                if (catEl) catEl.textContent = res.subtitle || res.categoryLabel || '';
+                if (bodyEl) bodyEl.innerHTML = '<p style="font-style:italic; color:#888;">Chargement…</p>';
                 modal.classList.remove('hidden');
+                try {
+                    const e = await window.SRD.entry(res.category, res.id);
+                    if (!e) throw new Error('introuvable');
+                    if (bodyEl) bodyEl.innerHTML = renderSrdEntry(res.category, e)
+                        + `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`;
+                } catch (err) {
+                    if (bodyEl) bodyEl.innerHTML = `<p style="color:#c0392b;">Impossible de charger cette fiche.<br><small>${escAb(err.message)}</small></p>`;
+                }
             }
 
             // --- Recherche dans les données saisies de la fiche ---
@@ -2801,6 +2959,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnCloseRule && ruleWidgetModal) btnCloseRule.addEventListener('click', () => ruleWidgetModal.classList.add('hidden'));
             if (ruleWidgetModal) ruleWidgetModal.addEventListener('click', (e) => { if (e.target === ruleWidgetModal) ruleWidgetModal.classList.add('hidden'); });
 
+            let srdSearchToken = 0;
             searchInput.addEventListener('input', () => {
                 const query = searchInput.value.toLowerCase().trim();
                 searchResults.innerHTML = '';
@@ -2815,12 +2974,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.slice(0, 12).forEach(d => searchResults.appendChild(makeResultRow(d.icon || '•', d.title, d.subtitle, () => { closeSearch(); revealAndScroll(document.getElementById(d.widgetId)); })));
                 }
 
-                // 2) Règles du jeu (clic → fiche détaillée dans un widget)
-                const rules = DND_RULES.filter(r => r.name.toLowerCase().includes(query) || r.text.toLowerCase().includes(query));
-                if (rules.length) {
-                    any = true;
-                    searchResults.appendChild(groupHeader('📖 Règles du jeu'));
-                    rules.slice(0, 14).forEach(r => searchResults.appendChild(makeResultRow('📖', r.name, r.cat, () => { closeSearch(); openRuleWidget(r); })));
+                // 2) Base de règles SRD — chargée à la demande, donc asynchrone.
+                // On réserve la place tout de suite et on la remplit à l'arrivée ;
+                // un jeton écarte les réponses d'une frappe déjà obsolète.
+                const srdSlot = document.createElement('div');
+                searchResults.appendChild(srdSlot);
+                const myToken = ++srdSearchToken;
+                if (window.SRD) {
+                    window.SRD.search(query, { limit: 14 }).then(results => {
+                        if (myToken !== srdSearchToken || !results.length) return;
+                        srdSlot.appendChild(groupHeader('📖 Règles du jeu'));
+                        results.forEach(r => srdSlot.appendChild(
+                            makeResultRow(r.icon, r.name, r.subtitle || r.categoryLabel,
+                                          () => { closeSearch(); openSrdEntry(r); })));
+                        emptyMsg?.remove();
+                    }).catch(err => {
+                        if (myToken !== srdSearchToken) return;
+                        srdSlot.innerHTML = `<div style="text-align:center; padding:10px; color:#c0392b; font-size:0.8rem;">Règles indisponibles hors connexion tant qu'elles n'ont pas été consultées une fois.</div>`;
+                    });
                 }
 
                 // 3) Autres libellés présents sur la fiche
@@ -2831,7 +3002,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     page.slice(0, 8).forEach(p => searchResults.appendChild(makeResultRow('🧭', p.title, p.context, () => { closeSearch(); revealAndScroll(p.element); if (p.element.tagName === 'INPUT' || p.element.tagName === 'TEXTAREA') setTimeout(() => p.element.focus(), 320); })));
                 }
 
-                if (!any) searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Aucun résultat. Essaie un autre mot-clé (règle, capacité, sort, objet…).</div>';
+                // Message « aucun résultat » : un élément à part, que la réponse SRD
+                // (asynchrone) peut retirer sans écraser les résultats déjà affichés.
+                var emptyMsg = null;
+                if (!any) { emptyMsg = document.createElement("div"); emptyMsg.style.cssText = "text-align:center; padding:20px; color:#777; font-style:italic;"; emptyMsg.textContent = "Aucun résultat. Essaie un autre mot-clé (règle, capacité, objet, sort…)."; searchResults.appendChild(emptyMsg); }
             });
 
             window.openGlobalSearch = openSearch;

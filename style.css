@@ -3373,3 +3373,146 @@ body.theme-dark .home-sort { background: #2a2118; }
 /* Carte dont le menu est ouvert : elle passe au-dessus des cartes suivantes,
    sinon le menu déroulant se retrouve masqué par la carte du dessous. */
 .char-card.is-menu-open { z-index: 60; }
+
+/* ============================================================
+   ✦ MONTÉE DE NIVEAU — bouton intégré + célébration
+   ============================================================ */
+
+/* --- Chevron doré ancré dans le champ Niveau (respecte la grille) --- */
+.level-group { position: relative; }
+.level-group input { padding-right: 26px; }
+.level-up-btn {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; padding: 0; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer;
+    font-size: 0.62rem; color: var(--accent-color);
+    opacity: 0.45; border-radius: 5px;
+    transition: opacity .15s, background .15s, transform .15s;
+}
+.level-up-btn:hover {
+    opacity: 1; background: rgba(196,155,53,0.18);
+    transform: translateY(-50%) translateY(-1px);
+}
+.level-up-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent-color); outline-offset: 1px; }
+@media (hover: none), (max-width: 700px) { .level-up-btn { opacity: 0.85; width: 24px; height: 24px; } }
+
+/* Le champ pulse en or juste après la montée */
+@keyframes levelFieldFlash {
+    0%   { box-shadow: 0 0 0 0 rgba(196,155,53,0.7); }
+    100% { box-shadow: 0 0 0 14px rgba(196,155,53,0); }
+}
+.level-group.is-levelling input {
+    animation: levelFieldFlash 1s ease-out;
+    border-color: var(--accent-color) !important;
+}
+
+/* --- Célébration plein écran --- */
+#levelup-fx {
+    position: fixed; inset: 0; z-index: 9000;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 45%, rgba(80,50,10,0.55), rgba(10,6,3,0.9) 70%);
+    backdrop-filter: blur(2px);
+    animation: fadeIn .35s ease;
+    cursor: pointer; padding: 20px;
+}
+#levelup-fx.is-closing { animation: fadeIn .3s ease reverse; }
+
+.lvfx-card {
+    position: relative; text-align: center; max-width: 460px; width: 100%;
+    padding: 26px 22px 20px;
+    animation: lvfxRise .55s cubic-bezier(0.2, 0.9, 0.25, 1.4) backwards;
+}
+@keyframes lvfxRise {
+    from { opacity: 0; transform: translateY(26px) scale(0.88); }
+    to   { opacity: 1; transform: none; }
+}
+
+.lvfx-kicker {
+    font-family: 'Cinzel', serif; font-size: 0.82rem; letter-spacing: 0.42em;
+    text-transform: uppercase; color: var(--accent-color); opacity: 0.85;
+    margin-bottom: 2px; text-indent: 0.42em;
+}
+.lvfx-number {
+    font-family: 'Cinzel', serif; font-weight: bold;
+    font-size: clamp(4.2rem, 22vw, 7rem); line-height: 1;
+    background: linear-gradient(175deg, #fff3c4 5%, #e8c25a 40%, #b8862a 75%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 22px rgba(196,155,53,0.55));
+    animation: lvfxPop .7s cubic-bezier(0.2, 0.9, 0.25, 1.5) backwards .1s;
+}
+@keyframes lvfxPop {
+    from { opacity: 0; transform: scale(0.4) rotate(-6deg); }
+    60%  { transform: scale(1.12) rotate(1deg); }
+    to   { opacity: 1; transform: none; }
+}
+.lvfx-class {
+    font-family: 'Lora', serif; font-size: 0.95rem; color: #f0e2c0;
+    margin-top: -2px; margin-bottom: 16px;
+}
+.lvfx-stats {
+    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.lvfx-stat {
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.4);
+    border-radius: 20px; padding: 5px 14px;
+    font-family: 'Cinzel', serif; font-size: 0.82rem; color: #f4e6c4;
+    animation: lvfxRise .5s ease backwards;
+}
+.lvfx-stat:nth-child(1) { animation-delay: .30s; }
+.lvfx-stat:nth-child(2) { animation-delay: .38s; }
+.lvfx-stat:nth-child(3) { animation-delay: .46s; }
+
+.lvfx-todo {
+    text-align: left; display: inline-block; margin: 0 auto 18px;
+    font-family: 'Lora', serif; font-size: 0.86rem; color: #e4d6b8;
+    list-style: none; padding: 0;
+    animation: lvfxRise .5s ease backwards .55s;
+}
+.lvfx-todo li { margin: 5px 0; padding-left: 4px; }
+.lvfx-close {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    border: none; border-radius: 10px; padding: 10px 30px; cursor: pointer;
+    font-family: 'Cinzel', serif; font-weight: bold; font-size: 0.95rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    animation: lvfxRise .5s ease backwards .65s;
+}
+.lvfx-close:hover { filter: brightness(1.1); }
+
+/* Braises qui montent — réutilise l'idée des effets de table existants */
+.lvfx-ember {
+    position: absolute; bottom: 8%; width: 6px; height: 6px; border-radius: 50%;
+    background: radial-gradient(circle, #ffe9a8, #c8912f 60%, transparent 70%);
+    animation: lvfxEmber 2.4s ease-out infinite; pointer-events: none;
+}
+@keyframes lvfxEmber {
+    0%   { opacity: 0; transform: translateY(0) scale(0.5); }
+    15%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-260px) scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lvfx-card, .lvfx-number, .lvfx-stat, .lvfx-todo, .lvfx-close { animation: none !important; }
+    .lvfx-ember { display: none; }
+    .level-group.is-levelling input { animation: none; }
+}
+@media print { #levelup-fx { display: none !important; } }
+
+/* ---------- Fiche détaillée d'une règle SRD ---------- */
+.rw-h { font-family: 'Cinzel', serif; font-size: 0.92rem; color: var(--primary-color); margin: 14px 0 6px; }
+.rw-sep { border: none; border-top: 1px solid var(--soft-border); margin: 12px 0; }
+.rw-abs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.rw-ab {
+    background: rgba(0,0,0,0.05); border-radius: 8px; padding: 4px 10px;
+    font-size: 0.82rem; text-align: center; min-width: 0;
+}
+.rw-ab b { display: block; font-family: 'Cinzel', serif; font-size: 0.72rem; color: var(--primary-color); }
+.rw-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85rem; }
+.rw-table th, .rw-table td { border: 1px solid var(--soft-border); padding: 4px 8px; text-align: left; }
+.rw-table th { font-family: 'Cinzel', serif; color: var(--primary-color); }
+.rw-src { margin-top: 16px; font-size: 0.7rem; color: #9a8a70; font-style: italic; }
+#rule-widget-body p { margin: 0 0 8px; line-height: 1.5; }
+body.theme-dark .rw-h { color: var(--accent-color); }
+body.theme-dark .rw-ab { background: rgba(255,255,255,0.07); }
+body.theme-dark .rw-ab b { color: var(--accent-color); }
+body.theme-dark .rw-src { color: #b6a484; }

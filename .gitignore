@@ -1,0 +1,33 @@
+# ---------- Généré : régénérable, ne pas versionner ----------
+
+# Fichiers intermédiaires de la conversion du SRD (12 Mo).
+# Recréés par tools/srd/extract_lines.py.
+tools/srd/lines.jsonl
+tools/srd/srd51fr-utf8.txt
+tools/srd/srd51fr-layout.txt
+tools/srd/srd51fr-raw.txt
+
+# PDF officiel (5 Mo) — retéléchargé automatiquement par les scripts
+# depuis media.wizards.com. Inutile de le stocker.
+tools/srd/*.pdf
+
+# Données anglaises de référence (5,7 Mo) — retéléchargées depuis
+# github.com/5e-bits/5e-database par les scripts de construction.
+tools/srd/ref-en/
+tools/srd/ref-fr/
+
+# Rapports de contrôle, régénérés à chaque construction
+tools/srd/rapport-divergences-*.txt
+
+# Graphe de connaissance, si tu le génères ici (refait par `graphify update .`)
+graphify-out/
+
+
+# ---------- Système / éditeurs ----------
+Thumbs.db
+desktop.ini
+.DS_Store
+*.bak
+*.tmp
+.vscode/
+.idea/

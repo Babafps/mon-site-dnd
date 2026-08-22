@@ -18,7 +18,10 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Lora:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="music-player.css">
-    <link rel="stylesheet" href="gm-screen.css">
+    <!-- Interface Maître du Jeu : UNIQUE interrupteur du site.
+         false = gm-screen.css + gm-screen.js (508 Ko) ne sont même pas téléchargés.
+         Repasser à true réactive l'onglet MJ et charge les deux fichiers. -->
+    <script>window.GM_ENABLED = false;</script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
@@ -123,6 +126,11 @@
         </label>
         <button id="btn-export-pdf" class="btn-menu-item">💾 Enregistrer en PDF</button>
         <hr>
+        <button id="btn-backup-export" class="btn-menu-item" style="color:#2e7d4f;">🛟 Sauvegarde complète</button>
+        <label class="btn-menu-item" style="color:#8a6320; cursor:pointer; display:block;">
+            ♻️ Restaurer une sauvegarde <input type="file" id="backup-import-input" accept=".json" class="hidden">
+        </label>
+        <hr>
         <button id="btn-change-bg" class="btn-menu-item">🖼️ Changer image de fond</button>
         <button id="btn-reset-bg" class="btn-menu-item" style="color:var(--primary-hover);">↺ Supprimer image fond</button>
         <input type="file" id="bg-file-input" accept="image/*" class="hidden">
@@ -215,7 +223,7 @@
                     <button id="mob-header-toggle" class="btn-icon no-print" type="button" title="Afficher / masquer les infos du personnage">▾ Infos</button>
                 </div>
                 <div class="info-grid">
-                    <div class="input-group"><input type="number" id="char-level" value="1" min="1" max="20"><label>Niveau</label></div>
+                    <div class="input-group level-group"><input type="number" id="char-level" value="1" min="1" max="20"><label>Niveau</label><button id="btn-level-up" class="level-up-btn no-print" title="Monter de niveau" aria-label="Monter de niveau">▲</button></div>
                     <div class="input-group"><input type="number" id="char-xp" value="0" min="0"><label>XP</label></div>
                     <div class="input-group"><input type="text" id="char-class"><label>Classe</label></div>
                     <div class="input-group"><input type="text" id="char-subclass"><label>Sous-classe</label></div>
@@ -389,11 +397,25 @@
 <script src="vtt-geo.js"></script>
 <script src="session.js"></script>
 <script src="pj-tutorial.js"></script>
+<script src="srd-data.js"></script>
 <script src="script.js"></script>
 <script src="music-player.js"></script>
 <script src="fiche-layout.js"></script>
 <script src="print-sheet.js"></script>
-<script src="gm-screen.js"></script>
+<script>
+// Chargement à la demande de l'écran MJ (508 Ko). Sans lui, c'est gm-screen.js
+// qui masquait l'onglet « Maître du Jeu » : on s'en charge ici.
+if (window.GM_ENABLED) {
+    document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="gm-screen.css">');
+    var gmS = document.createElement('script'); gmS.src = 'gm-screen.js';
+    document.body.appendChild(gmS);
+} else {
+    document.addEventListener('DOMContentLoaded', function () {
+        var bar = document.querySelector('.home-tabs');
+        if (bar) bar.classList.add('hidden');
+    });
+}
+</script>
 <script>
 // PWA : service worker « réseau d'abord » (jamais de version périmée en ligne, hors-ligne de secours)
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

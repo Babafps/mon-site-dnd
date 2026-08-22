@@ -68,7 +68,7 @@ window.SupaAuth = {
         });
     },
 
-    // `archived` et `sort_order` sont ajoutées par SUPABASE.sql. Elles sont OPTIONNELLES :
+    // `archived` et `sort_order` sont ajoutées par « Archivage et ordre des personnages.sql ». Elles sont OPTIONNELLES :
     // si la migration n'a pas été appliquée, la requête échoue et on retombe sur la
     // sélection de base — l'archivage et l'ordre restent alors locaux au navigateur.
     charMetaColumns: false,

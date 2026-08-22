@@ -7,9 +7,10 @@
     'use strict';
 
     // ---------- Accès à l'interface MJ ----------
-    // Mis à false : l'onglet « Maître du Jeu » est masqué et la route #gm/<id> reste inerte.
-    // AUCUN code MJ n'a été supprimé — repasser cette constante à true réactive tout.
-    const GM_ACCESS_ENABLED = false;
+    // L'interrupteur unique est `window.GM_ENABLED`, défini en tête d'index.html :
+    // à false, ce fichier n'est même pas téléchargé. On relit le drapeau ici pour
+    // que la route #gm/<id> et window.GMScreen restent inertes si on force le chargement.
+    const GM_ACCESS_ENABLED = window.GM_ENABLED === true;
 
     // ---------- Données statiques ----------
     const CONDITIONS = [
