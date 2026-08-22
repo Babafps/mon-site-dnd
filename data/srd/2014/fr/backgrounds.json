@@ -1,0 +1,27 @@
+{
+ "edition": "2014",
+ "lang": "fr",
+ "category": "backgrounds",
+ "source": "SRD 5.1 (version française officielle, Wizards of the Coast LLC) — CC-BY-4.0",
+ "count": 1,
+ "entries": [
+  {
+   "id": "acolyte",
+   "name": "Acolyte",
+   "desc": [
+    "Vous avez passé votre vie à servir au sein d’un temple dédié à un dieu ou un panthéon. Vous œuvrez comme intermédiaire entre le royaume saint et le monde des mortels, accomplissez des rites sacrés et menez des offrandes pour guider les fidèles vers la présence divine. Vous n’êtes pas forcément clerc : mener une cérémonie et canaliser la puissance divine sont deux choses bien différentes.",
+    "Choisissez un dieu, un panthéon ou autre entité de caractère divin parmi ceux de la section « Panthéons historiques et mythologiques » ou ceux que vous propose votre MJ, et discutez avec ce dernier des détails de votre service religieux. N’étiez-vous qu’un subalterne au sein du temple, élevé depuis l’enfance pour assister les prêtres lors des rites sacrés ? Ou un grand prêtre qui a soudainement entendu l’appel divin lui enjoignant de suivre une voie différente ? À moins d’avoir dirigé une petite secte détachée de toute structure ecclésiastique, voire une cellule occulte au service d’un maître fiélon que vous avez depuis renié.",
+    "Maîtrises de compétence : Intuition, Religion Langues : deux au choix Équipement : un symbole sacré (présent reçu en entrant dans les ordres), un livre de prières ou un moulin à prières, 5 bâtons d’encens, des habits de cérémonie, des habits courants et une bourse contenant 15 po",
+    "Aptitude : Abri des croyants",
+    "En tant qu’acolyte, vous méritez le respect de ceux qui partagent votre foi et pouvez accomplir les cérémonies religieuses correspondantes. Vous et vos compagnons d’aventure pouvez compter sur des soins gratuits et autres attentions lorsque vous vous présentez dans un temple, un sanctuaire ou autre site dédié à votre foi (vous devez toutefois fournir les composantes matérielles demandées par les sorts). Vos coreligionnaires vous assureront un train de vie modeste si besoin (uniquement vous).",
+    "Vous êtes peut-être très lié à un temple spécifique de votre divinité ou panthéon, dans lequel vous avez vos quartiers. Ce pourrait être le temple où vous avez servi si vous êtes resté en bons termes avec son personnel, ou un établissement où vous avez trouvé votre nouvelle famille. Tant que vous restez à proximité de ce temple, vous pouvez demander l’assistance de ses prêtres, à condition de ne pas les mettre en danger et de ne pas enfreindre les règles du site.",
+    "Suggestions de personnalité",
+    "Leur parcours au sein du temple ou de leur communauté religieuse façonne les acolytes. Leurs habitudes et leurs idéaux résultent en grande partie de leur étude des préceptes de leur foi, et de leur rapport avec la structure cléricale, sa hiérarchie et ses sites. Leurs failles cachent souvent une forme d’hypocrisie ou d’hérésie, ou traduisent un idéal ou une obligation poussés à l’extrême.",
+    "d8 Traits de personnalité 1 J’idolâtre un héros de ma foi et évoque sans cesse ses exploits et sa conduite. 2 Je sais trouver un terrain d’entente entre les plus féroces ennemis en me rapprochant d’eux ; j’œuvre toujours pour la paix. 3 Je perçois des présages en chaque événement, en chaque acte. Les dieux nous parlent, il faut juste écouter. 4 Rien ne peut ébranler mon optimisme. 5 Je cite (ou déforme) les textes et aphorismes sacrés à tout bout de champ. 6 Je suis tolérant (ou intolérant) envers les autres fois et respecte (ou condamne) le culte des autres dieux. 7 J’ai goûté à la bonne chère et aux mondanités de l’élite de mon temple. L’austérité m’insupporte. 8 Ma vie s’est résumée au temple, si bien que je manque d’expérience de terrain pour échanger avec le reste du monde.",
+    "d6 Idéal 1 Tradition. Il faut préserver et défendre les traditions du culte et du sacrifice. (loyal) 2 Charité. Je m’efforce toujours d’aider ceux qui en ont besoin, quoi qu’il m’en coûte. (bon) 3 Changement. Nous devons favoriser les changements que les dieux opèrent sans cesse en notre monde. (chaotique) 4 Pouvoir. J’espère un jour accéder au sommet de la hiérarchie de mon clergé. (loyal) 5 Foi. Je compte sur ma divinité pour guider mes actions. Je suis convaincu qu’en travaillant dur, les choses iront pour le mieux. (loyal) 6 Aspiration. Je cherche à me montrer digne de la faveur de ma divinité en prenant modèle sur elle par mes actes. (tout alignement)",
+    "d6 Obligation 1 Je suis prêt à mourir pour retrouver une relique perdue jadis par mon clergé. 2 Un jour, je prendrai ma revanche sur les supérieurs corrompus de mon temple qui m’ont taxé d’hérésie. 3 Je dois la vie au prêtre qui m’a pris sous son aile à la mort de mes parents. 4 Tous mes actes servent le petit peuple. 5 Je ferais n’importe quoi pour protéger le temple où j’ai servi. 6 Je dois préserver un texte sacré que mes ennemis considèrent comme hérétique et cherchent à détruire.",
+    "d6 Faille 1 Je juge sévèrement autrui et porte un regard plus critique encore sur moi-même. 2 Je place une trop grande confiance dans les autorités de mon temple. 3 Ma piété me rend parfois trop crédule à l’égard de ceux qui disent croire en mon dieu. 4 Je peux me montrer intraitable. 5 Je me méfie des étrangers et m’attends toujours au pire de leur part. 6 Quand je me fixe un but, c’en devient une obsession au détriment de tout le reste de mon existence."
+   ]
+  }
+ ]
+}

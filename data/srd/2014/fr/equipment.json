@@ -1,0 +1,2425 @@
+{
+ "edition": "2014",
+ "lang": "fr",
+ "category": "equipment",
+ "source": "SRD 5.1 (VF officielle, Wizards of the Coast LLC) — CC-BY-4.0 ; mécanique : SRD 5.1 EN",
+ "count": 237,
+ "entries": [
+  {
+   "id": "abacus",
+   "name": "Boulier",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "acid-vial",
+   "name": "Acide (fiole)",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Au prix d’une action, vous pouvez asperger une créature située à 1,50 m ou moins de vous du contenu de cette fiole ou la lancer à une distance maximale de 6 m, auquel cas elle se brise à l’impact. Dans les deux cas, effectuez une attaque à distance contre une créature ou un objet, l’acide étant considéré comme une arme improvisée. Si vous touchez la cible, elle subit 2d6 dégâts d’acide."
+   ]
+  },
+  {
+   "id": "alchemists-fire-flask",
+   "name": "Feu grégeois (flasque)",
+   "category": "adventuring-gear",
+   "cost": "50 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Ce liquide gluant et collant s’enflamme au contact de l’air. Au prix d’une action, vous pouvez lancer cette flasque à une distance maximale de 6 m, qui se brise à l’impact. Effectuez une attaque à distance contre une créature ou un objet, le feu grégeois étant considéré comme une arme improvisée. Si vous touchez la cible, elle subit 1d4 dégâts de feu au début de chacun de ses tours. Une créature peut tenter de mettre fin à ces dégâts en consacrant son action à effectuer un test de Dextérité DD 10 pour éteindre les flammes."
+   ]
+  },
+  {
+   "id": "alchemists-supplies",
+   "name": "Matériel d'alchimiste",
+   "category": "tools",
+   "cost": "50 po",
+   "weight_kg": 4.0
+  },
+  {
+   "id": "alms-box",
+   "name": "Tronc à offrandes",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "amulet",
+   "name": "Amulette",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "animal-feed-1-day",
+   "name": "Fourrage (par jour)",
+   "category": "mounts-and-vehicles",
+   "cost": "5 pc",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "antitoxin-vial",
+   "name": "Antidote (fiole)",
+   "category": "adventuring-gear",
+   "cost": "50 po",
+   "weight_kg": 0.0,
+   "desc": [
+    "Une créature qui boit le liquide de cette fiole reçoit l’avantage aux jets de sauvegarde contre le poison pendant 1 heure. Il n’octroie aucun bénéfice aux morts-vivants ou aux artificiels."
+   ]
+  },
+  {
+   "id": "arrow",
+   "name": "Flèches (20)",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "backpack",
+   "name": "Sac à dos",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "bagpipes",
+   "name": "Cornemuse",
+   "category": "tools",
+   "cost": "30 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "ball-bearings-bag-of-1000",
+   "name": "Billes (sac de 1 000)",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 1.0,
+   "desc": [
+    "Au prix d’une action, vous pouvez déverser ces minuscules billes métalliques de leur poche pour recouvrir une zone carrée et plane de 3 m de côté. Une créature qui se déplace sur la zone ainsi couverte doit réussir un jet de sauvegarde de Dextérité DD 10 sous peine de tomber à terre. Si elle traverse la zone à la moitié de sa vitesse, elle n’est pas soumise au jet de sauvegarde."
+   ]
+  },
+  {
+   "id": "barding-breastplate",
+   "name": "Barde : cuirasse",
+   "category": "mounts-and-vehicles",
+   "cost": "1600 po",
+   "weight_kg": 20.0
+  },
+  {
+   "id": "barding-chain-mail",
+   "name": "Barde : cotte de mailles",
+   "category": "mounts-and-vehicles",
+   "cost": "300 po",
+   "weight_kg": 55.0
+  },
+  {
+   "id": "barding-chain-shirt",
+   "name": "Barde : chemise de mailles",
+   "category": "mounts-and-vehicles",
+   "cost": "200 po",
+   "weight_kg": 20.0
+  },
+  {
+   "id": "barding-half-plate",
+   "name": "Barde : demi-plate",
+   "category": "mounts-and-vehicles",
+   "cost": "3000 po",
+   "weight_kg": 40.0
+  },
+  {
+   "id": "barding-hide",
+   "name": "Barde : peaux",
+   "category": "mounts-and-vehicles",
+   "cost": "40 po",
+   "weight_kg": 12.0
+  },
+  {
+   "id": "barding-leather",
+   "name": "Barde : cuir",
+   "category": "mounts-and-vehicles",
+   "cost": "40 po",
+   "weight_kg": 10.0
+  },
+  {
+   "id": "barding-padded",
+   "name": "Barde : matelassée",
+   "category": "mounts-and-vehicles",
+   "cost": "20 po",
+   "weight_kg": 8.0
+  },
+  {
+   "id": "barding-plate",
+   "name": "Barde : harnois",
+   "category": "mounts-and-vehicles",
+   "cost": "6000 po",
+   "weight_kg": 65.0
+  },
+  {
+   "id": "barding-ring-mail",
+   "name": "Barde : broigne",
+   "category": "mounts-and-vehicles",
+   "cost": "12 po",
+   "weight_kg": 40.0
+  },
+  {
+   "id": "barding-scale-mail",
+   "name": "Barde : écailles",
+   "category": "mounts-and-vehicles",
+   "cost": "200 po",
+   "weight_kg": 45.0
+  },
+  {
+   "id": "barding-splint",
+   "name": "Barde : clibanion",
+   "category": "mounts-and-vehicles",
+   "cost": "800 po",
+   "weight_kg": 60.0
+  },
+  {
+   "id": "barding-studded-leather",
+   "name": "Barde : cuir clouté",
+   "category": "mounts-and-vehicles",
+   "cost": "180 po",
+   "weight_kg": 13.0
+  },
+  {
+   "id": "barrel",
+   "name": "Tonneau",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 35.0
+  },
+  {
+   "id": "basket",
+   "name": "Panier",
+   "category": "adventuring-gear",
+   "cost": "4 pa",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "battleaxe",
+   "name": "Hache d'armes",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "slashing"
+   },
+   "versatile_damage": "1d10",
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "versatile"
+   ],
+   "cost": "10 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "bedroll",
+   "name": "Sac de couchage",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 3.5
+  },
+  {
+   "id": "bell",
+   "name": "Cloche",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "bit-and-bridle",
+   "name": "Mors et bride",
+   "category": "mounts-and-vehicles",
+   "cost": "2 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "blanket",
+   "name": "Couverture",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "block-and-tackle",
+   "name": "Palan",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 2.5,
+   "desc": [
+    "Le palan est un système de poulies avec un câble et un crochet qui vous permet de soulever jusqu’à quatre fois le poids que vous pouvez normalement soulever."
+   ]
+  },
+  {
+   "id": "block-of-incense",
+   "name": "Bloc d'encens",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "blowgun",
+   "name": "Sarbacane",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 7.5,
+    "long": 30.0
+   },
+   "properties": [
+    "ammunition",
+    "loading"
+   ],
+   "cost": "10 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "blowgun-needle",
+   "name": "Dards de sarbacane (50)",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "book",
+   "name": "Livre",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 2.5,
+   "desc": [
+    "Un livre peut contenir de la poésie, des récits historiques, des informations relatives à un domaine particulier de savoir, des diagrammes et des notes sur des inventions gnomes, en bref, tout ce qui peut être représenté sous forme de texte et d’images. Un livre de sorts est appelé grimoire (décrit plus haut dans cette section)."
+   ]
+  },
+  {
+   "id": "bottle-glass",
+   "name": "Bouteille, verre",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "breastplate",
+   "name": "Cuirasse",
+   "category": "armor",
+   "armor_category": "Medium",
+   "armor_class": {
+    "base": 14,
+    "dex_bonus": true,
+    "max_bonus": 2
+   },
+   "cost": "400 po",
+   "weight_kg": 10.0,
+   "desc": [
+    "Cette armure en une seule pièce de métal qui couvre le torse est complétée par du cuir souple. Si elle laisse bras et jambes sans couverture ou presque, cette armure permet de protéger efficacement les organes vitaux tout en préservant la liberté de mouvement du porteur."
+   ]
+  },
+  {
+   "id": "brewers-supplies",
+   "name": "Matériel de brasseur",
+   "category": "tools",
+   "cost": "20 po",
+   "weight_kg": 4.5
+  },
+  {
+   "id": "bucket",
+   "name": "Seau",
+   "category": "adventuring-gear",
+   "cost": "5 pc",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "burglars-pack",
+   "name": "Paquetage de cambrioleur",
+   "category": "adventuring-gear",
+   "cost": "16 po"
+  },
+  {
+   "id": "calligraphers-supplies",
+   "name": "Matériel de calligraphe",
+   "category": "tools",
+   "cost": "10 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "caltrops",
+   "name": "Chausse-trappes (sac de 20)",
+   "category": "adventuring-gear",
+   "cost": "5 pc",
+   "weight_kg": 1.0,
+   "desc": [
+    "Au prix d’une action, vous pouvez répandre le contenu d’un sac de chausse-trappes pour recouvrir une zone carrée de 1,50 m de côté. Toute créature qui pénètre dans la zone doit réussir un jet de sauvegarde de Dextérité DD 15 sous peine de voir son déplacement s’interrompre à ce tour et de subir 1 dégât perforant. Subir ces dégâts réduit la vitesse au sol de la créature de 3 m jusqu’à ce qu’elle récupère au moins 1 point de vie. Si elle traverse la zone à la moitié de sa vitesse, elle n’est pas soumise au jet de sauvegarde."
+   ]
+  },
+  {
+   "id": "camel",
+   "name": "Chameau",
+   "category": "mounts-and-vehicles",
+   "cost": "50 po",
+   "speed": "50 ft/round",
+   "capacity": "480 lb."
+  },
+  {
+   "id": "candle",
+   "name": "Bougie",
+   "category": "adventuring-gear",
+   "cost": "1 pc",
+   "weight_kg": 0.0,
+   "desc": [
+    "Pendant 1 heure, une bougie allumée produit une lumière vive sur un rayon de 1,50 m et une lumière faible sur 1,50 m de plus."
+   ]
+  },
+  {
+   "id": "carpenters-tools",
+   "name": "Outils de charpentier",
+   "category": "tools",
+   "cost": "8 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "carriage",
+   "name": "Calèche",
+   "category": "mounts-and-vehicles",
+   "cost": "100 po",
+   "weight_kg": 300.0
+  },
+  {
+   "id": "cart",
+   "name": "Charrette",
+   "category": "mounts-and-vehicles",
+   "cost": "15 po",
+   "weight_kg": 100.0
+  },
+  {
+   "id": "cartographers-tools",
+   "name": "Outils de cartographe",
+   "category": "tools",
+   "cost": "15 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "case-crossbow-bolt",
+   "name": "Étui pour carreaux d'arbalète",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Cet étui en bois peut contenir jusqu’à vingt carreaux d’arbalète."
+   ]
+  },
+  {
+   "id": "case-map-or-scroll",
+   "name": "Étui à cartes ou à parchemins",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Cet étui cylindrique en cuir peut contenir jusqu’à dix feuilles de papier roulées ou cinq parchemins roulés."
+   ]
+  },
+  {
+   "id": "censer",
+   "name": "Encensoir",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "chain-10-feet",
+   "name": "Chaîne (3 m)",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 5.0,
+   "desc": [
+    "Une chaîne a 10 points de vie. Une créature peut la briser en réussissant un test de Force DD 20."
+   ]
+  },
+  {
+   "id": "chain-mail",
+   "name": "Cotte de mailles",
+   "category": "armor",
+   "armor_category": "Heavy",
+   "armor_class": {
+    "base": 16,
+    "dex_bonus": false
+   },
+   "str_minimum": 13,
+   "stealth_disadvantage": true,
+   "cost": "75 po",
+   "weight_kg": 27.5,
+   "desc": [
+    "Composée d’anneaux métalliques entrecroisés, la cotte de mailles comprend une couche de tissu matelassé portée dessous pour éviter les frottements et amortir les coups. Des gantelets complètent l’ensemble."
+   ]
+  },
+  {
+   "id": "chain-shirt",
+   "name": "Chemise de mailles",
+   "category": "armor",
+   "armor_category": "Medium",
+   "armor_class": {
+    "base": 13,
+    "dex_bonus": true,
+    "max_bonus": 2
+   },
+   "cost": "50 po",
+   "weight_kg": 10.0,
+   "desc": [
+    "Constituée d’anneaux métalliques entrecroisés, la chemise de mailles se porte entre plusieurs couches de tissu ou de cuir. Cette armure offre une protection modeste au haut du corps du porteur tandis que le crissement des anneaux est étouffé par les couches extérieures."
+   ]
+  },
+  {
+   "id": "chalk-1-piece",
+   "name": "Craie (1 morceau)",
+   "category": "adventuring-gear",
+   "cost": "1 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "chariot",
+   "name": "Char",
+   "category": "mounts-and-vehicles",
+   "cost": "250 po",
+   "weight_kg": 50.0
+  },
+  {
+   "id": "chest",
+   "name": "Coffre",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 12.5
+  },
+  {
+   "id": "climbers-kit",
+   "name": "Matériel d'escalade",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 6.0,
+   "desc": [
+    "Le matériel d’escalade comprend des pitons spéciaux, des crampons de chaussures, des gants et un harnais. Vous pouvez utiliser le matériel d’escalade au prix d’une action pour vous accrocher à une paroi ; une fois cette précaution prise, vous ne pouvez pas dévisser de plus de 7,50 m de votre point d’ancrage, mais vous ne pouvez pas davantage escalader plus de 7,50 m dans n’importe quelle direction sans vous décrocher."
+   ]
+  },
+  {
+   "id": "clothes-common",
+   "name": "Vêtements ordinaires",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "clothes-costume",
+   "name": "Costume",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "clothes-fine",
+   "name": "Vêtements de qualité",
+   "category": "adventuring-gear",
+   "cost": "15 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "clothes-travelers",
+   "name": "Tenue de voyage",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "club",
+   "name": "Gourdin",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d4",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "light",
+    "monk"
+   ],
+   "cost": "1 pa",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "cobblers-tools",
+   "name": "Outils de cordonnier",
+   "category": "tools",
+   "cost": "5 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "component-pouch",
+   "name": "Sacoche à composantes",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 1.0,
+   "desc": [
+    "Une sacoche à composantes est une petite sacoche en cuir étanche qui se porte à la ceinture, dotée de compartiments accueillant toutes les composantes matérielles et autres objets demandés par l’incantation de vos sorts, en dehors des composantes associées à un coût (ce qui est alors indiqué dans la description du sort)."
+   ]
+  },
+  {
+   "id": "cooks-utensils",
+   "name": "Ustensiles de cuisinier",
+   "category": "tools",
+   "cost": "1 po",
+   "weight_kg": 4.0
+  },
+  {
+   "id": "crossbow-bolt",
+   "name": "Carreaux d'arbalète (20)",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.75
+  },
+  {
+   "id": "crossbow-hand",
+   "name": "Arbalète de poing",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d6",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 9.0,
+    "long": 36.0
+   },
+   "properties": [
+    "ammunition",
+    "light",
+    "loading"
+   ],
+   "cost": "75 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "crossbow-heavy",
+   "name": "Arbalète lourde",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d10",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 30.0,
+    "long": 120.0
+   },
+   "properties": [
+    "ammunition",
+    "heavy",
+    "loading",
+    "two-handed"
+   ],
+   "cost": "50 po",
+   "weight_kg": 9.0
+  },
+  {
+   "id": "crossbow-light",
+   "name": "Arbalète légère",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d8",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 24.0,
+    "long": 96.0
+   },
+   "properties": [
+    "ammunition",
+    "loading",
+    "two-handed"
+   ],
+   "cost": "25 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "crowbar",
+   "name": "Pied-de-biche",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 2.5,
+   "desc": [
+    "L’utilisation d’un pied-de-biche octroie l’avantage aux tests de Force pour lesquels l’objet peut servir de levier."
+   ]
+  },
+  {
+   "id": "crystal",
+   "name": "Cristal",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "dagger",
+   "name": "Dague",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d4",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "throw_range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "properties": [
+    "finesse",
+    "light",
+    "thrown",
+    "monk"
+   ],
+   "cost": "2 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "dart",
+   "name": "Fléchette",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d4",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "throw_range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "properties": [
+    "finesse",
+    "thrown"
+   ],
+   "cost": "5 pc",
+   "weight_kg": 0.125
+  },
+  {
+   "id": "dice-set",
+   "name": "Dés",
+   "category": "tools",
+   "cost": "1 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "diplomats-pack",
+   "name": "Paquetage de diplomate",
+   "category": "adventuring-gear",
+   "cost": "39 po"
+  },
+  {
+   "id": "disguise-kit",
+   "name": "Accessoires de déguisement",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 1.5,
+   "desc": [
+    "Cette pochette de maquillage, de teintures et d’accessoires vous permet d’altérer votre apparence physique. La maîtrise de ces accessoires vous permet d’ajouter votre bonus de maîtrise à tout test de caractéristique visant à créer un déguisement visuel."
+   ]
+  },
+  {
+   "id": "donkey",
+   "name": "Âne",
+   "category": "mounts-and-vehicles",
+   "cost": "8 po",
+   "speed": "40 ft/round",
+   "capacity": "420 lb."
+  },
+  {
+   "id": "drum",
+   "name": "Tambour",
+   "category": "tools",
+   "cost": "6 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "dulcimer",
+   "name": "Tympanon",
+   "category": "tools",
+   "cost": "25 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "dungeoneers-pack",
+   "name": "Paquetage d'exploration souterraine",
+   "category": "adventuring-gear",
+   "cost": "12 po"
+  },
+  {
+   "id": "elephant",
+   "name": "Éléphant",
+   "category": "mounts-and-vehicles",
+   "cost": "200 po",
+   "speed": "40 ft/round",
+   "capacity": "1,320 lb."
+  },
+  {
+   "id": "emblem",
+   "name": "Emblème",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "entertainers-pack",
+   "name": "Paquetage d'artiste",
+   "category": "adventuring-gear",
+   "cost": "40 po"
+  },
+  {
+   "id": "explorers-pack",
+   "name": "Paquetage d'explorateur",
+   "category": "adventuring-gear",
+   "cost": "10 po"
+  },
+  {
+   "id": "fishing-tackle",
+   "name": "Matériel de pêche",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 2.0,
+   "desc": [
+    "Ce matériel inclut une canne en bois, un fil de soie, des bouchons en liège, des hameçons en acier, des plombs, des leurres en velours et une épuisette."
+   ]
+  },
+  {
+   "id": "flail",
+   "name": "Fléau d'armes",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "cost": "10 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "flask-or-tankard",
+   "name": "Flasque ou chope",
+   "category": "adventuring-gear",
+   "cost": "2 pc",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "flute",
+   "name": "Flûte",
+   "category": "tools",
+   "cost": "2 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "forgery-kit",
+   "name": "Matériel de contrefaçon",
+   "category": "adventuring-gear",
+   "cost": "15 po",
+   "weight_kg": 2.5,
+   "desc": [
+    "Cette petite boîte contient un ensemble de papiers et parchemins, plumes et encres, sceaux et cire à cacheter, feuilles d’or et d’argent et autres fournitures nécessaires pour créer des contrefaçons convaincantes de documents tangibles. La maîtrise de ce matériel vous permet d’ajouter votre bonus de maîtrise à tout test de caractéristique visant à créer la contrefaçon d’un document physique."
+   ]
+  },
+  {
+   "id": "galley",
+   "name": "Galère",
+   "category": "mounts-and-vehicles",
+   "cost": "30000 po",
+   "speed": "4 mph"
+  },
+  {
+   "id": "glaive",
+   "name": "Coutille",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d10",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "heavy",
+    "reach",
+    "two-handed"
+   ],
+   "cost": "20 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "glassblowers-tools",
+   "name": "Outils de souffleur de verre",
+   "category": "tools",
+   "cost": "30 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "grappling-hook",
+   "name": "Grappin",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "greataxe",
+   "name": "Hache à deux mains",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d12",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "heavy",
+    "two-handed"
+   ],
+   "cost": "30 po",
+   "weight_kg": 3.5
+  },
+  {
+   "id": "greatclub",
+   "name": "Massue",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "two-handed"
+   ],
+   "cost": "2 pa",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "greatsword",
+   "name": "Épée à deux mains",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "2d6",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "heavy",
+    "two-handed"
+   ],
+   "cost": "50 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "halberd",
+   "name": "Hallebarde",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d10",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "heavy",
+    "reach",
+    "two-handed"
+   ],
+   "cost": "20 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "half-plate-armor",
+   "name": "Demi-plate",
+   "category": "armor",
+   "armor_category": "Medium",
+   "armor_class": {
+    "base": 15,
+    "dex_bonus": true,
+    "max_bonus": 2
+   },
+   "stealth_disadvantage": true,
+   "cost": "750 po",
+   "weight_kg": 20.0,
+   "desc": [
+    "La demi-plate se compose de plaques de métal qui couvrent la majeure partie du corps du porteur. Les jambes, en revanche, ne sont protégées que par des grèves attachées par des lanières de cuir."
+   ]
+  },
+  {
+   "id": "hammer",
+   "name": "Marteau",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "hammer-sledge",
+   "name": "Masse",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "handaxe",
+   "name": "Hachette",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "throw_range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "properties": [
+    "light",
+    "thrown",
+    "monk"
+   ],
+   "cost": "5 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "healers-kit",
+   "name": "Trousse de soins",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 1.5,
+   "desc": [
+    "Cette trousse se présente comme une pochette en cuir renfermant bandages, baumes et attelles. Elle peut servir dix fois. Au prix d’une action, vous pouvez dépenser l’une de ces doses pour stabiliser une créature à 0 point de vie, sans passer par un test de Sagesse (Médecine)."
+   ]
+  },
+  {
+   "id": "herbalism-kit",
+   "name": "Matériel d'herboriste",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 1.5,
+   "desc": [
+    "Ce matériel regroupe un ensemble d’outils : sécateurs, mortier et pilon, bourses et flacons utilisés par les herboristes pour créer leurs remèdes et potions. La maîtrise de ce matériel vous permet d’ajouter votre bonus de maîtrise à tout test de caractéristique visant à identifier et utiliser des plantes. En outre, la maîtrise de ce matériel est requise pour préparer antidotes et potions de guérison."
+   ]
+  },
+  {
+   "id": "hide-armor",
+   "name": "Peaux",
+   "category": "armor",
+   "armor_category": "Medium",
+   "armor_class": {
+    "base": 12,
+    "dex_bonus": true,
+    "max_bonus": 2
+   },
+   "cost": "10 po",
+   "weight_kg": 6.0
+  },
+  {
+   "id": "holy-water-flask",
+   "name": "Eau bénite (flasque)",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Au prix d’une action, vous pouvez asperger une créature située à 1,50 m ou moins de vous du contenu de cette flasque ou la lancer à une distance maximale de 6 m, auquel cas elle se brise à l’impact. Dans les deux cas, effectuez une attaque à distance contre la créature ciblée, l’eau bénite étant considérée comme une arme improvisée. Si la cible est un fiélon ou un mort-vivant, elle subit 2d6 dégâts radiants."
+   ]
+  },
+  {
+   "id": "horn",
+   "name": "Cor",
+   "category": "tools",
+   "cost": "3 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "horse-draft",
+   "name": "Cheval de trait",
+   "category": "mounts-and-vehicles",
+   "cost": "50 po",
+   "speed": "40 ft/round",
+   "capacity": "540 lb."
+  },
+  {
+   "id": "horse-riding",
+   "name": "Cheval de selle",
+   "category": "mounts-and-vehicles",
+   "cost": "75 po",
+   "speed": "60 ft/round",
+   "capacity": "480 lb."
+  },
+  {
+   "id": "hourglass",
+   "name": "Sablier",
+   "category": "adventuring-gear",
+   "cost": "25 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "hunting-trap",
+   "name": "Piège à mâchoires",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 12.5,
+   "desc": [
+    "Lorsque vous consacrez votre action à l’installer, ce piège se présente sous la forme d’un anneau d’acier dentelé qui se referme violemment lorsqu’une créature marche sur la plaque de pression située en son centre. Le piège est ancré par une lourde chaîne à un objet immobile, comme un arbre ou une"
+   ]
+  },
+  {
+   "id": "ink-1-ounce-bottle",
+   "name": "Encre (bouteille de 30 cl)",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "ink-pen",
+   "name": "Porte-plume",
+   "category": "adventuring-gear",
+   "cost": "2 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "javelin",
+   "name": "Javeline",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "throw_range_m": {
+    "normal": 9.0,
+    "long": 36.0
+   },
+   "properties": [
+    "thrown",
+    "monk"
+   ],
+   "cost": "5 pa",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "jewelers-tools",
+   "name": "Outils de joaillier",
+   "category": "tools",
+   "cost": "25 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "jug-or-pitcher",
+   "name": "Cruche ou pichet",
+   "category": "adventuring-gear",
+   "cost": "2 pc",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "keelboat",
+   "name": "Barge",
+   "category": "mounts-and-vehicles",
+   "cost": "3000 po",
+   "speed": "1 mph"
+  },
+  {
+   "id": "ladder-10-foot",
+   "name": "Échelle (3 m)",
+   "category": "adventuring-gear",
+   "cost": "1 pa",
+   "weight_kg": 12.5
+  },
+  {
+   "id": "lamp",
+   "name": "Lampe",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 0.5,
+   "desc": [
+    "Une lampe produit une lumière vive sur un rayon de 4,50 m et une lumière faible sur 9 m de plus. Une fois allumée, elle brûle pendant 6 heures en consommant une flasque d’huile (50 cl)."
+   ]
+  },
+  {
+   "id": "lance",
+   "name": "Lance d'arçon",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d12",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "reach",
+    "special"
+   ],
+   "cost": "10 po",
+   "weight_kg": 3.0,
+   "desc": [
+    "Vous êtes désavantagé lorsque vous utilisez une lance d’arçon pour attaquer une cible dans un rayon de 1,50 m. De plus, une lance d’arçon se manie à deux mains quand vous n’êtes pas sur une monture."
+   ]
+  },
+  {
+   "id": "lantern-bullseye",
+   "name": "Lanterne sourde",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 1.0,
+   "desc": [
+    "Une lanterne sourde produit une lumière vive dans un cône de 18 m et une lumière faible sur 18 m de plus. Une fois allumée, elle brûle pendant 6 heures en consommant une flasque d’huile (50 cl)."
+   ]
+  },
+  {
+   "id": "lantern-hooded",
+   "name": "Lanterne à capote",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 1.0,
+   "desc": [
+    "Une lanterne à capote produit une lumière vive sur un rayon de 9 m et une lumière faible sur 9 m de plus. Une fois allumée, elle brûle pendant 6 heures en consommant une flasque d’huile (50 cl). Au prix d’une action, vous pouvez abaisser la capote, ce qui réduit l’éclairage à une lumière faible sur un rayon de 1,50 m."
+   ]
+  },
+  {
+   "id": "leather-armor",
+   "name": "Cuir",
+   "category": "armor",
+   "armor_category": "Light",
+   "armor_class": {
+    "base": 11,
+    "dex_bonus": true
+   },
+   "cost": "10 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "leatherworkers-tools",
+   "name": "Outils de tanneur",
+   "category": "tools",
+   "cost": "5 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "light-hammer",
+   "name": "Marteau léger",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d4",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "throw_range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "properties": [
+    "light",
+    "thrown",
+    "monk"
+   ],
+   "cost": "2 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "little-bag-of-sand",
+   "name": "Petit sac de sable",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "lock",
+   "name": "Cadenas",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Ce cadenas est fourni avec une clef. Sans celle-ci, une créature ayant la maîtrise des outils de voleur peut crocheter le cadenas en réussissant un test de Dextérité DD 15. Votre MJ peut décider que de meilleurs cadenas sont disponibles à des prix plus élevés."
+   ]
+  },
+  {
+   "id": "longbow",
+   "name": "Arc long",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d8",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 45.0,
+    "long": 180.0
+   },
+   "properties": [
+    "ammunition",
+    "heavy",
+    "two-handed"
+   ],
+   "cost": "50 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "longship",
+   "name": "Drakkar",
+   "category": "mounts-and-vehicles",
+   "cost": "10000 po",
+   "speed": "3 mph"
+  },
+  {
+   "id": "longsword",
+   "name": "Épée longue",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "slashing"
+   },
+   "versatile_damage": "1d10",
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "versatile"
+   ],
+   "cost": "15 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "lute",
+   "name": "Luth",
+   "category": "tools",
+   "cost": "35 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "lyre",
+   "name": "Lyre",
+   "category": "tools",
+   "cost": "30 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "mace",
+   "name": "Masse d'armes",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "monk"
+   ],
+   "cost": "5 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "magnifying-glass",
+   "name": "Loupe",
+   "category": "adventuring-gear",
+   "cost": "100 po",
+   "weight_kg": 0.0,
+   "desc": [
+    "Cette lentille permet d’examiner de près les objets de petite taille. Elle peut se substituer à la boîte à amadou complète pour démarrer un feu. Démarrer un feu avec une loupe nécessite une lumière aussi vive que celle du soleil, que la lentille concentre sur de l’amadou, lequel s’enflamme au bout d’environ 5 minutes. Une loupe octroie l’avantage à tout test de caractéristique visant à inspecter ou estimer la valeur d’un objet de petite taille ou très détaillé."
+   ]
+  },
+  {
+   "id": "manacles",
+   "name": "Menottes",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 3.0,
+   "desc": [
+    "Ces entraves métalliques peuvent être utilisées sur une créature de taille P ou M. Se libérer de menottes nécessite de réussir un test de Dextérité DD 20. Pour les briser, il faut réussir un test de Force DD 20. Chaque paire de menottes est fournie avec une clef. Sans cette clef, une créature ayant la maîtrise des outils de voleur peut crocheter la serrure des menottes en réussissant un test de Dextérité DD 15. Les menottes ont 15 points de vie."
+   ]
+  },
+  {
+   "id": "masons-tools",
+   "name": "Outils de maçon",
+   "category": "tools",
+   "cost": "10 po",
+   "weight_kg": 4.0
+  },
+  {
+   "id": "mastiff",
+   "name": "Molosse",
+   "category": "mounts-and-vehicles",
+   "cost": "25 po",
+   "speed": "40 ft/round",
+   "capacity": "195 lb."
+  },
+  {
+   "id": "maul",
+   "name": "Maillet d'armes",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "2d6",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "heavy",
+    "two-handed"
+   ],
+   "cost": "10 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "mess-kit",
+   "name": "Gamelle",
+   "category": "adventuring-gear",
+   "cost": "2 pa",
+   "weight_kg": 0.5,
+   "desc": [
+    "Cette boîte en fer-blanc renferme un bol et des couverts rudimentaires. Elle est constituée de deux parties qui s’imbriquent, l’une pouvant servir de casserole tandis que l’autre sera utilisée comme assiette creuse."
+   ]
+  },
+  {
+   "id": "mirror-steel",
+   "name": "Miroir en acier",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 0.25
+  },
+  {
+   "id": "morningstar",
+   "name": "Morgenstern",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "cost": "15 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "mule",
+   "name": "Mule",
+   "category": "mounts-and-vehicles",
+   "cost": "8 po",
+   "speed": "40 ft/round",
+   "capacity": "420 lb."
+  },
+  {
+   "id": "navigators-tools",
+   "name": "Instruments de navigateur",
+   "category": "tools",
+   "cost": "25 po",
+   "weight_kg": 1.0,
+   "desc": [
+    "Cet ensemble d’instruments est utilisé pour la navigation en mer. La maîtrise des instruments de navigation vous permet de lire une carte et d’y tracer la route d’un navire. En outre, la maîtrise de ces outils vous permet d’ajouter"
+   ]
+  },
+  {
+   "id": "net",
+   "name": "Filet",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Ranged",
+   "range_m": {
+    "normal": 1.5,
+    "long": 4.5
+   },
+   "throw_range_m": {
+    "normal": 1.5,
+    "long": 4.5
+   },
+   "properties": [
+    "thrown",
+    "special"
+   ],
+   "cost": "1 po",
+   "weight_kg": 1.5,
+   "desc": [
+    "Une créature de taille G ou inférieure touchée par un filet est entravée jusqu’à ce qu’elle soit libérée. Le filet n’a aucun effet sur les créatures sans forme ainsi que sur les créatures de taille TG ou supérieure. Toute créature peut consacrer son action à effectuer un test de Force DD 10 pour se libérer du filet ou en extraire une autre créature à portée d’allonge. Infliger 5 dégâts tranchants au filet (CA 10) libère également la créature sans lui faire le moindre mal, ce qui met fin à l’effet et détruit le filet."
+   ]
+  },
+  {
+   "id": "oil-flask",
+   "name": "Huile (flasque)",
+   "category": "adventuring-gear",
+   "cost": "1 pa",
+   "weight_kg": 0.5,
+   "desc": [
+    "L’huile se présente généralement dans une flasque d’argile de 50 cl. Au prix d’une action, vous pouvez asperger d’huile une créature située à 1,50 m ou moins de vous du contenu de cette flasque ou la lancer à une distance maximale de 6 m, auquel cas elle se brise à l’impact. Dans un cas comme dans l’autre, effectuez une attaque à distance contre la créature ou l’objet ciblé, l’huile étant considérée comme une arme improvisée. Si l’attaque touche, la cible est recouverte d’huile. Si elle subit des dégâts de feu avant que l’huile ait séché (ce qui demande 1 minute), la cible subit 5 dégâts de feu supplémentaires, provoqués par l’embrasement de l’huile. Vous pouvez également verser le contenu de la flasque sur une zone horizontale carrée de 1,50 m de côté. Si vous embrasez la zone, l’huile brûle pendant 2 rounds et inflige 5 dégâts de feu à toute créature qui pénètre dans la zone ou y termine son tour. Une même créature ne peut subir ces dégâts qu’une fois par tour."
+   ]
+  },
+  {
+   "id": "orb",
+   "name": "Orbe",
+   "category": "adventuring-gear",
+   "cost": "20 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "padded-armor",
+   "name": "Matelassée",
+   "category": "armor",
+   "armor_category": "Light",
+   "armor_class": {
+    "base": 11,
+    "dex_bonus": true
+   },
+   "stealth_disadvantage": true,
+   "cost": "5 po",
+   "weight_kg": 4.0,
+   "desc": [
+    "Une armure matelassée se compose de plusieurs couches de tissus rembourrés."
+   ]
+  },
+  {
+   "id": "painters-supplies",
+   "name": "Matériel de peintre",
+   "category": "tools",
+   "cost": "10 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "pan-flute",
+   "name": "Flûte de pan",
+   "category": "tools",
+   "cost": "12 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "paper-one-sheet",
+   "name": "Papier (la feuille)",
+   "category": "adventuring-gear",
+   "cost": "2 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "parchment-one-sheet",
+   "name": "Parchemin (la feuille)",
+   "category": "adventuring-gear",
+   "cost": "1 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "perfume-vial",
+   "name": "Parfum (flacon)",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "pick-miners",
+   "name": "Pioche de mineur",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "pike",
+   "name": "Pique",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d10",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "heavy",
+    "reach",
+    "two-handed"
+   ],
+   "cost": "5 po",
+   "weight_kg": 9.0
+  },
+  {
+   "id": "piton",
+   "name": "Piton",
+   "category": "adventuring-gear",
+   "cost": "5 pc",
+   "weight_kg": 0.125
+  },
+  {
+   "id": "plate-armor",
+   "name": "Harnois",
+   "category": "armor",
+   "armor_category": "Heavy",
+   "armor_class": {
+    "base": 18,
+    "dex_bonus": false
+   },
+   "str_minimum": 15,
+   "stealth_disadvantage": true,
+   "cost": "1500 po",
+   "weight_kg": 32.5,
+   "desc": [
+    "Le harnois, ou armure de plates, se compose de plaques de métal superposées qui couvrent l’ensemble du corps. L’ensemble comprend des gantelets lourds, des bottes de cuir épais, un heaume à visière et plusieurs épaisseurs de rembourrage sous l’armure. Des sangles permettent de répartir le poids sur tout le corps."
+   ]
+  },
+  {
+   "id": "playing-card-set",
+   "name": "Jeu de cartes",
+   "category": "tools",
+   "cost": "5 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "poison-basic-vial",
+   "name": "Poison standard (fiole)",
+   "category": "adventuring-gear",
+   "cost": "100 po",
+   "weight_kg": 0.0,
+   "desc": [
+    "Vous pouvez utiliser le poison contenu dans cette fiole pour enduire la lame d’une arme tranchante ou perforante ou jusqu’à trois projectiles (munitions). L’application du poison nécessite une action. Une créature touchée par l’arme ou le projectile empoisonnés effectue un jet de sauvegarde de Constitution DD 10 sous peine de subir 1d4 dégâts de poison. Une fois appliqué, le poison conserve sa virulence pendant 1 minute avant de sécher."
+   ]
+  },
+  {
+   "id": "poisoners-kit",
+   "name": "Matériel d'empoisonneur",
+   "category": "adventuring-gear",
+   "cost": "50 po",
+   "weight_kg": 1.0,
+   "desc": [
+    "Le matériel d’empoisonneur comprend les flacons, produits chimiques et tout l’équipement nécessaire à la concoction de poison. La maîtrise de ce matériel vous permet d’ajouter votre bonus de maîtrise à tout test de caractéristique visant à créer ou utiliser un poison."
+   ]
+  },
+  {
+   "id": "pole-10-foot",
+   "name": "Perche (3 m)",
+   "category": "adventuring-gear",
+   "cost": "5 pc",
+   "weight_kg": 3.5
+  },
+  {
+   "id": "pony",
+   "name": "Poney",
+   "category": "mounts-and-vehicles",
+   "cost": "30 po",
+   "speed": "40 ft/round",
+   "capacity": "225 lb."
+  },
+  {
+   "id": "pot-iron",
+   "name": "Pot en fer",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "potters-tools",
+   "name": "Outils de potier",
+   "category": "tools",
+   "cost": "10 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "pouch",
+   "name": "Sacoche",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 0.5,
+   "desc": [
+    "Une sacoche en tissu ou en cuir peut contenir jusqu’à 20 billes de fronde ou 50 dards de sarbacane, entre autres. La sacoche compartimentée permettant de contenir des composantes de sort, et logiquement appelée sacoche à composantes, est décrite ci-après dans cette même section."
+   ]
+  },
+  {
+   "id": "priests-pack",
+   "name": "Paquetage d'ecclésiastique",
+   "category": "adventuring-gear",
+   "cost": "19 po"
+  },
+  {
+   "id": "quarterstaff",
+   "name": "Bâton de combat",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "bludgeoning"
+   },
+   "versatile_damage": "1d8",
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "versatile",
+    "monk"
+   ],
+   "cost": "2 pa",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "quiver",
+   "name": "Carquois",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Un carquois peut contenir jusqu’à 20 flèches."
+   ]
+  },
+  {
+   "id": "ram-portable",
+   "name": "Bélier portable",
+   "category": "adventuring-gear",
+   "cost": "4 po",
+   "weight_kg": 17.5,
+   "desc": [
+    "Vous pouvez utiliser un bélier portable pour enfoncer les portes. Vous recevez alors un bonus de +4 au test de Force associé. Si un autre personnage vous aide à utiliser le bélier, vous recevez en outre l’avantage à ce test."
+   ]
+  },
+  {
+   "id": "rapier",
+   "name": "Rapière",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "finesse"
+   ],
+   "cost": "25 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "rations-1-day",
+   "name": "Rations (1 jour)",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 1.0,
+   "desc": [
+    "Les rations consistent en des vivres adaptés aux longs voyages, notamment de la viande séchée, des biscuits, noix, noisettes et autres fruits secs."
+   ]
+  },
+  {
+   "id": "reliquary",
+   "name": "Reliquaire",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "ring-mail",
+   "name": "Broigne",
+   "category": "armor",
+   "armor_category": "Heavy",
+   "armor_class": {
+    "base": 14,
+    "dex_bonus": false
+   },
+   "stealth_disadvantage": true,
+   "cost": "30 po",
+   "weight_kg": 20.0,
+   "desc": [
+    "Cette armure est une armure de cuir sur laquelle ont été cousus de lourds anneaux. Les anneaux permettent de renforcer l’armure contre les coups d’épée et de hache. Moins protectrice qu’une cotte de mailles, la broigne est le plus souvent portée par ceux qui n’ont pas les moyens de se payer une meilleure armure."
+   ]
+  },
+  {
+   "id": "robes",
+   "name": "Habit de cérémonie",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "rod",
+   "name": "Sceptre",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "rope-hempen-50-feet",
+   "name": "Corde en chanvre (15 m)",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "rope-silk-50-feet",
+   "name": "Corde en soie (15 m)",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "rowboat",
+   "name": "Barque",
+   "category": "mounts-and-vehicles",
+   "cost": "50 po",
+   "speed": "1.5 mph"
+  },
+  {
+   "id": "sack",
+   "name": "Sac",
+   "category": "adventuring-gear",
+   "cost": "1 pc",
+   "weight_kg": 0.25
+  },
+  {
+   "id": "saddle-exotic",
+   "name": "Selle exotique",
+   "category": "mounts-and-vehicles",
+   "cost": "60 po",
+   "weight_kg": 25.0
+  },
+  {
+   "id": "saddle-military",
+   "name": "Selle militaire",
+   "category": "mounts-and-vehicles",
+   "cost": "20 po",
+   "weight_kg": 15.0
+  },
+  {
+   "id": "saddle-pack",
+   "name": "Selle de bât",
+   "category": "mounts-and-vehicles",
+   "cost": "5 po",
+   "weight_kg": 7.5
+  },
+  {
+   "id": "saddle-riding",
+   "name": "Selle d'équitation",
+   "category": "mounts-and-vehicles",
+   "cost": "10 po",
+   "weight_kg": 12.5
+  },
+  {
+   "id": "saddlebags",
+   "name": "Fontes",
+   "category": "mounts-and-vehicles",
+   "cost": "4 po",
+   "weight_kg": 4.0
+  },
+  {
+   "id": "sailing-ship",
+   "name": "Bateau à voiles",
+   "category": "mounts-and-vehicles",
+   "cost": "10000 po",
+   "speed": "2 mph"
+  },
+  {
+   "id": "scale-mail",
+   "name": "Écailles",
+   "category": "armor",
+   "armor_category": "Medium",
+   "armor_class": {
+    "base": 14,
+    "dex_bonus": true,
+    "max_bonus": 2
+   },
+   "stealth_disadvantage": true,
+   "cost": "50 po",
+   "weight_kg": 22.5
+  },
+  {
+   "id": "scale-merchants",
+   "name": "Balance de marchand",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 1.5,
+   "desc": [
+    "Cet appareil de mesure se présente sous la forme d’une petite potence, de deux plateaux et d’un assortiment de poids qui s’échelonnent jusqu’à 1 kg. Il vous permet de mesurer le poids exact de petits objets, métaux précieux bruts ou autres marchandises, afin d’en déterminer la valeur précise."
+   ]
+  },
+  {
+   "id": "scholars-pack",
+   "name": "Paquetage d'érudit",
+   "category": "adventuring-gear",
+   "cost": "40 po"
+  },
+  {
+   "id": "scimitar",
+   "name": "Cimeterre",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "finesse",
+    "light"
+   ],
+   "cost": "25 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "sealing-wax",
+   "name": "Cire à cacheter",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "shawm",
+   "name": "Chalemie",
+   "category": "tools",
+   "cost": "2 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "shield",
+   "name": "Bouclier",
+   "category": "armor",
+   "armor_category": "Shield",
+   "armor_class": {
+    "base": 2,
+    "dex_bonus": false
+   },
+   "cost": "10 po",
+   "weight_kg": 3.0
+  },
+  {
+   "id": "shortbow",
+   "name": "Arc court",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d6",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 24.0,
+    "long": 96.0
+   },
+   "properties": [
+    "ammunition",
+    "two-handed"
+   ],
+   "cost": "25 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "shortsword",
+   "name": "Épée courte",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "finesse",
+    "light",
+    "monk"
+   ],
+   "cost": "10 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "shovel",
+   "name": "Pelle",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "sickle",
+   "name": "Serpe",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d4",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "light",
+    "monk"
+   ],
+   "cost": "1 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "signal-whistle",
+   "name": "Sifflet",
+   "category": "adventuring-gear",
+   "cost": "5 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "signet-ring",
+   "name": "Chevalière",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "sled",
+   "name": "Traîneau",
+   "category": "mounts-and-vehicles",
+   "cost": "20 po",
+   "weight_kg": 150.0
+  },
+  {
+   "id": "sling",
+   "name": "Fronde",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Ranged",
+   "damage": {
+    "dice": "1d4",
+    "type": "bludgeoning"
+   },
+   "range_m": {
+    "normal": 9.0,
+    "long": 36.0
+   },
+   "properties": [
+    "ammunition"
+   ],
+   "cost": "1 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "sling-bullet",
+   "name": "Billes de fronde (20)",
+   "category": "adventuring-gear",
+   "cost": "4 pc",
+   "weight_kg": 0.75
+  },
+  {
+   "id": "small-knife",
+   "name": "Petit couteau",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "smiths-tools",
+   "name": "Outils de forgeron",
+   "category": "tools",
+   "cost": "20 po",
+   "weight_kg": 4.0
+  },
+  {
+   "id": "soap",
+   "name": "Savon",
+   "category": "adventuring-gear",
+   "cost": "2 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "spear",
+   "name": "Lance",
+   "category": "weapon",
+   "weapon_category": "Simple",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "piercing"
+   },
+   "versatile_damage": "1d8",
+   "range_m": {
+    "normal": 1.5
+   },
+   "throw_range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "properties": [
+    "thrown",
+    "versatile",
+    "monk"
+   ],
+   "cost": "1 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "spellbook",
+   "name": "Grimoire",
+   "category": "adventuring-gear",
+   "cost": "50 po",
+   "weight_kg": 1.5,
+   "desc": [
+    "Indispensable pour les magiciens, le grimoire est un tome en cuir relié comportant 100 pages en vélin pour accueillir les formules de sorts."
+   ]
+  },
+  {
+   "id": "spike-iron",
+   "name": "Pointes en fer (10)",
+   "category": "adventuring-gear",
+   "cost": "1 pa",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "splint-armor",
+   "name": "Clibanion",
+   "category": "armor",
+   "armor_category": "Heavy",
+   "armor_class": {
+    "base": 17,
+    "dex_bonus": false
+   },
+   "str_minimum": 15,
+   "stealth_disadvantage": true,
+   "cost": "200 po",
+   "weight_kg": 30.0,
+   "desc": [
+    "Cette armure est constituée d’étroites plaques de métal verticales rivetées à un support de cuir porté sur un vêtement rembourré. Une cotte de mailles plus souple protège les articulations."
+   ]
+  },
+  {
+   "id": "sprig-of-mistletoe",
+   "name": "Branche de houx",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "spyglass",
+   "name": "Longue-vue",
+   "category": "adventuring-gear",
+   "cost": "1000 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Une longue-vue permet de grossir jusqu’à deux fois les objets que vous voyez à distance."
+   ]
+  },
+  {
+   "id": "stabling-1-day",
+   "name": "Écuries (par jour)",
+   "category": "mounts-and-vehicles",
+   "cost": "5 pa",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "staff",
+   "name": "Bâton",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "string-10-feet",
+   "name": "Ficelle (3 m)",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "studded-leather-armor",
+   "name": "Cuir clouté",
+   "category": "armor",
+   "armor_category": "Light",
+   "armor_class": {
+    "base": 12,
+    "dex_bonus": true
+   },
+   "cost": "45 po",
+   "weight_kg": 6.5
+  },
+  {
+   "id": "tent-two-person",
+   "name": "Tente, 2 places",
+   "category": "adventuring-gear",
+   "cost": "2 po",
+   "weight_kg": 10.0
+  },
+  {
+   "id": "thieves-tools",
+   "name": "Outils de voleur",
+   "category": "tools",
+   "cost": "25 po",
+   "weight_kg": 0.5,
+   "desc": [
+    "Cet ensemble d’outils comprend une lime, plusieurs crochets, un petit miroir articulé sur une poignée métallique, des ciseaux fins et une paire de pinces. La maîtrise de ces outils vous permet d’ajouter votre bonus de maîtrise à tout test de caractéristique visant à désarmer un piège ou crocheter une serrure."
+   ]
+  },
+  {
+   "id": "tinderbox",
+   "name": "Boîte à amadou",
+   "category": "adventuring-gear",
+   "cost": "5 pa",
+   "weight_kg": 0.5,
+   "desc": [
+    "Ce petit conteneur renferme silex, pierre à briquet et amorce (généralement un morceau de tissu imbibé d’huile), soit de quoi allumer un feu. Utiliser cet objet pour allumer une torche ou un autre objet imprégné de combustible demande une action. Produire un autre type de flammes demande 1 minute."
+   ]
+  },
+  {
+   "id": "tinkers-tools",
+   "name": "Outils de bricoleur",
+   "category": "tools",
+   "cost": "50 po",
+   "weight_kg": 5.0
+  },
+  {
+   "id": "torch",
+   "name": "Torche",
+   "category": "adventuring-gear",
+   "cost": "1 pc",
+   "weight_kg": 0.5,
+   "desc": [
+    "Une torche produit une lumière vive sur un rayon de 6 m et une lumière faible sur 6 m de plus. Si vous effectuez une attaque de corps à corps avec une torche embrasée et que vous touchez, elle inflige 1 dégât de feu."
+   ]
+  },
+  {
+   "id": "totem",
+   "name": "Totem",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "trident",
+   "name": "Trident",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d6",
+    "type": "piercing"
+   },
+   "versatile_damage": "1d8",
+   "range_m": {
+    "normal": 1.5
+   },
+   "throw_range_m": {
+    "normal": 6.0,
+    "long": 18.0
+   },
+   "properties": [
+    "thrown",
+    "versatile"
+   ],
+   "cost": "5 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "vestments",
+   "name": "Habits liturgiques",
+   "category": "adventuring-gear",
+   "cost": "0 pc",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "vial",
+   "name": "Fiole",
+   "category": "adventuring-gear",
+   "cost": "1 po",
+   "weight_kg": 0.0
+  },
+  {
+   "id": "viol",
+   "name": "Viole",
+   "category": "tools",
+   "cost": "30 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "wagon",
+   "name": "Chariot",
+   "category": "mounts-and-vehicles",
+   "cost": "35 po",
+   "weight_kg": 200.0
+  },
+  {
+   "id": "wand",
+   "name": "Baguette",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "war-pick",
+   "name": "Pic de guerre",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "piercing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "cost": "5 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "warhammer",
+   "name": "Marteau de guerre",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d8",
+    "type": "bludgeoning"
+   },
+   "versatile_damage": "1d10",
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "versatile"
+   ],
+   "cost": "15 po",
+   "weight_kg": 1.0
+  },
+  {
+   "id": "warhorse",
+   "name": "Destrier",
+   "category": "mounts-and-vehicles",
+   "cost": "400 po",
+   "speed": "60 ft/round",
+   "capacity": "540 lb."
+  },
+  {
+   "id": "warship",
+   "name": "Navire de guerre",
+   "category": "mounts-and-vehicles",
+   "cost": "25000 po",
+   "speed": "2.5 mph"
+  },
+  {
+   "id": "waterskin",
+   "name": "Outre",
+   "category": "adventuring-gear",
+   "cost": "2 pa",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "weavers-tools",
+   "name": "Outils de tisserand",
+   "category": "tools",
+   "cost": "1 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "whetstone",
+   "name": "Pierre à aiguiser",
+   "category": "adventuring-gear",
+   "cost": "1 pc",
+   "weight_kg": 0.5
+  },
+  {
+   "id": "whip",
+   "name": "Fouet",
+   "category": "weapon",
+   "weapon_category": "Martial",
+   "weapon_range": "Melee",
+   "damage": {
+    "dice": "1d4",
+    "type": "slashing"
+   },
+   "range_m": {
+    "normal": 1.5
+   },
+   "properties": [
+    "finesse",
+    "reach"
+   ],
+   "cost": "2 po",
+   "weight_kg": 1.5
+  },
+  {
+   "id": "woodcarvers-tools",
+   "name": "Outils de menuisier",
+   "category": "tools",
+   "cost": "1 po",
+   "weight_kg": 2.5
+  },
+  {
+   "id": "wooden-staff",
+   "name": "Bâton en bois",
+   "category": "adventuring-gear",
+   "cost": "5 po",
+   "weight_kg": 2.0
+  },
+  {
+   "id": "yew-wand",
+   "name": "Baguette d'if",
+   "category": "adventuring-gear",
+   "cost": "10 po",
+   "weight_kg": 0.5
+  }
+ ]
+}

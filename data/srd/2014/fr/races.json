@@ -1,0 +1,822 @@
+{
+ "edition": "2014",
+ "lang": "fr",
+ "category": "races",
+ "source": "SRD 5.1 (version française officielle, Wizards of the Coast LLC) — CC-BY-4.0",
+ "count": 9,
+ "entries": [
+  {
+   "id": "elf",
+   "name": "Elfe",
+   "desc": [
+    "Traits des elfes",
+    "Votre personnage elfe possède un ensemble d’aptitudes naturelles, fruit de millénaires de raffinement elfique."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur de Dextérité augmente de 2."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Bien que les elfes atteignent leur maturité corporelle au même âge que les humains, ils considèrent qu’un adulte n’est pas juste physiquement développé, mais aussi un être d’expérience. Les elfes se déclarent généralement adultes et adoptent leur nom définitif aux alentours de leurs 100 ans. Ils peuvent vivre jusqu’à 750 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les elfes prisent la liberté, la variété et l’expression de chacun, si bien qu’ils sont enclins au chaos sous ses formes les plus douces. La liberté d’autrui mérite autant d’être protégée que la leur, c’est pourquoi le bien a tendance à obtenir leur adhésion."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les elfes mesurent entre 1,50 m et 1,80 m, avec une carrure plutôt fine. Vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 9 m. Vision ans le noir. Habitué aux forêts vespérales et au ciel nocturne, vous disposez d’une vision supérieure dans l’obscurité et la pénombre. Dans un rayon de 18 m, vous voyez en conditions de lumière faible comme si la lumière était vive, et dans les ténèbres comme sous une lumière faible. Vous ne discernez pas les couleurs dans les ténèbres, mais percevez des nuances de gris."
+     ]
+    },
+    {
+     "name": "Sens aiguisés",
+     "text": [
+      "Vous avez la maîtrise de la compétence Perception."
+     ]
+    },
+    {
+     "name": "Ascendance féerique",
+     "text": [
+      "Vous êtes avantagé aux jets de sauvegarde contre l’état charmé et la magie ne peut pas vous endormir."
+     ]
+    },
+    {
+     "name": "Transe",
+     "text": [
+      "Les elfes n’ont pas besoin de dormir. En lieu et place de sommeil, ils méditent profondément dans un état de conscience partielle, pendant 4 heures par jour. (Cette méditation est communément appelée « transe »). Elle peut s’accompagner de songes personnalisés qui sont en vérité des exercices mentaux, devenus au fil des ans une seconde nature. Une fois que vous terminez un tel repos, vous recevez les mêmes bénéfices qu’un humain émergeant de 8 heures de sommeil."
+     ]
+    },
+    {
+     "name": "Langues",
+     "text": [
+      "Vous parlez, lisez et écrivez le commun et l’elfique. Cette langue fluide mêle intonations subtiles et grammaire complexe. La littérature elfique, riche et variée, a produit de nombreux chants et poèmes célèbres chez d’autres cultures. De nombreux bardes apprennent cette langue pour pouvoir ajouter des ballades elfiques à leur répertoire."
+     ]
+    }
+   ],
+   "subraces": [
+    {
+     "id": "high-elf",
+     "name": "Haut-elfe",
+     "desc": [
+      "Les hauts-elfes, très vifs d’esprit, connaissent chacun les rudiments de la magie. Au sein de nombreux univers de fantasy, on rencontre deux types de hauts-elfes. Les premiers se montrent hautains, distants et s’estiment supérieurs à tous, y compris les autres cultures elfiques. Les seconds, plus courants et cordiaux, se mêlent volontiers aux humains et aux autres races."
+     ],
+     "traits": [
+      {
+       "name": "Augmentation de caractéristique",
+       "text": [
+        "Votre valeur d’Intelligence augmente de 1."
+       ]
+      },
+      {
+       "name": "Entraînement martial elfique",
+       "text": [
+        "Vous avez la maîtrise de l’épée longue, de l’épée courte, de l’arc court et de l’arc long."
+       ]
+      },
+      {
+       "name": "Sort mineur",
+       "text": [
+        "Vous connaissez un sort mineur de la liste de sorts du magicien (au choix). L’Intelligence est la caractéristique d’incantation correspondante."
+       ]
+      },
+      {
+       "name": "Langue supplémentaire",
+       "text": [
+        "Vous parlez, lisez et écrivez une langue supplémentaire de votre choix."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "halfling",
+   "name": "Halfelin",
+   "desc": [
+    "Traits des halfelins",
+    "Votre personnage halfelin possède un ensemble de traits communs à tout le peuple halfelin."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur de Dextérité augmente de 2."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les halfelins atteignent l’âge adulte à 20 ans et vivent généralement jusqu’à 150 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "La plupart des halfelins sont loyaux bons. Ils ont le cœur sur la main, détestent voir souffrir autrui et ne tolèrent pas l’oppression. Ils affectionnent l’ordre et les traditions, comptant grandement sur le soutien de la communauté et le confort des coutumes."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les halfelins mesurent environ 90 cm pour un poids avoisinant les 20 kg. Vous êtes de taille P."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 7,50 m. Chanceux. Lorsque vous obtenez un 1 sur le d20 d’un jet d’attaque, d’un test de caractéristique ou d’un jet de sauvegarde, vous pouvez relancer ce dé, auquel cas c’est le second résultat qui s’applique. Brave. Vous êtes avantagé aux jets de sauvegarde contre l’état effrayé. Agilité halfeline. Vous pouvez vous déplacer à travers l’espace de toute créature dont la catégorie de taille est supérieure à la vôtre. Langues. Vous parlez, lisez et écrivez le commun et le halfelin. Cette langue n’a rien de secret, mais les halfelins n’aiment guère la partager. Leur littérature est plutôt pauvre, car ils écrivent finalement très peu. Leur tradition orale s’avère en revanche très riche. Tous les halfelins ou presque recourent au commun pour converser avec la population des contrées qu’ils habitent ou qu’ils traversent."
+     ]
+    }
+   ],
+   "subraces": [
+    {
+     "id": "lightfoot-halfling",
+     "name": "Pied-léger",
+     "desc": [
+      "Comme tout halfelin pied-léger, vous maîtrisez l’art de vous soustraire à l’attention d’autrui et n’hésitez pas à vous cacher derrière plus grand que vous pour ce faire. De nature affable, vous vous entendez bien avec tout le monde.",
+      "Les pied-léger sont plus enclins aux voyages que les autres halfelins et vivent souvent aux côtés d’autres races ou sont adeptes du nomadisme."
+     ],
+     "traits": [
+      {
+       "name": "Augmentation de caractéristique",
+       "text": [
+        "Votre valeur de Charisme augmente de 1."
+       ]
+      },
+      {
+       "name": "Discrétion naturelle",
+       "text": [
+        "Il vous suffit d’être derrière une créature dont la catégorie de taille est d’au moins un cran supérieure à la vôtre pour pouvoir tenter de vous cacher."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "human",
+   "name": "Humain",
+   "desc": [
+    "Traits des humains",
+    "S’il est difficile de faire entrer tous les humains dans le même moule, votre personnage humain possède les traits suivants."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Chacune de vos valeurs de caractéristique augmente de 1."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les humains atteignent l’âge adulte à l’approche de la vingtaine et vivent moins d’un siècle."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les humains ne sont pas plus enclins à un alignement qu’à un autre. Ils sont capables du meilleur comme du pire."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les humains affichent des mensurations très variées, leur taille allant du mètre cinquante à bien plus d’un mètre quatre-vingts. Où que vous vous situiez dans cet intervalle, vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 9 m. Langues. Vous parlez, lisez et écrivez le commun et une langue supplémentaire de votre choix. Les humains apprennent généralement la langue des peuples qu’ils côtoient le plus, qui peut être un dialecte obscur. Ils adorent émailler leur discours de mots empruntés à d’autres langues : jurons orcs, termes musicaux elfiques, formules militaires naines, etc."
+     ]
+    }
+   ],
+   "subraces": []
+  },
+  {
+   "id": "dwarf",
+   "name": "Nain",
+   "desc": [
+    "Traits des nains",
+    "Votre personnage nain possède diverses capacités innées qui sont le reflet de la nature profonde du peuple nain."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur de Constitution augmente de 2."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les nains, qui se développent au même rythme que les humains, sont considérés comme jeunes jusqu’à l’âge de 50 ans. Ils vivent en moyenne 350 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "La plupart des nains sont loyaux, convaincus des bienfaits d’une société structurée. Ils sont également enclins au bien et croient à l’équité comme au droit de chacun à profiter des bénéfices d’un ordre juste."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les nains mesurent entre 1,20 m et 1,50 m, pour un poids moyen d’environ 70 kg. Vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 7,50 m. Votre vitesse n’est pas réduite par le port d’une armure lourde."
+     ]
+    },
+    {
+     "name": "Vision dans le noir",
+     "text": [
+      "Habitué à vivre sous terre, vous disposez d’une vision supérieure dans l’obscurité et la pénombre. Dans un rayon de 18 m, vous voyez en conditions de lumière faible comme si la lumière était vive, et dans les ténèbres comme sous une lumière faible. Vous ne discernez pas les couleurs dans les ténèbres, mais percevez des nuances de gris."
+     ]
+    },
+    {
+     "name": "Résistance naine",
+     "text": [
+      "Vous êtes avantagé aux jets de sauvegarde contre le poison et bénéficiez de la résistance aux dégâts de poison."
+     ]
+    },
+    {
+     "name": "Entraînement martial nain",
+     "text": [
+      "Vous avez la maîtrise de la hache d’armes, de la hachette, du marteau léger et du marteau de guerre."
+     ]
+    },
+    {
+     "name": "Maîtrise d’outils",
+     "text": [
+      "Vous recevez la maîtrise des outils d’artisan de votre choix parmi : outils de forgeron, matériel de brasseur, outils de maçon."
+     ]
+    },
+    {
+     "name": "Connaissance de la pierre",
+     "text": [
+      "Chaque fois que vous effectuez un test d’Intelligence (Histoire) lié aux origines d’un travail de maçonnerie, on considère que vous avez la maîtrise de la compétence Histoire et vous appliquez le double de votre bonus de maîtrise au test, au lieu du simple bonus."
+     ]
+    },
+    {
+     "name": "Langues",
+     "text": [
+      "Vous parlez, lisez et écrivez le commun et le nain. Le nain est une langue gutturale et percussive, ce qui se retrouve dans l’accent des nains, quel que soit l’idiome parlé."
+     ]
+    }
+   ],
+   "subraces": [
+    {
+     "id": "hill-dwarf",
+     "name": "Nain des collines",
+     "desc": [
+      "Nain des collines, vous êtes doté de sens aiguisés, d’une grande sagacité et d’une robustesse remarquable."
+     ],
+     "traits": [
+      {
+       "name": "Augmentation de caractéristique",
+       "text": [
+        "Votre valeur de Sagesse augmente de 1."
+       ]
+      },
+      {
+       "name": "Ténacité naine",
+       "text": [
+        "Votre maximum de points de vie augmente de 1, et augmente encore de 1 chaque fois que vous gagnez un niveau."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "half-elf",
+   "name": "Demi-elfe",
+   "desc": [
+    "Traits des demi-elfes",
+    "Votre personnage demi-elfe possède certaines qualités en commun avec les elfes et d’autres qui sont propres aux demi-elfes."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur de Charisme augmente de 2. La valeur de deux autres caractéristiques de votre choix augmente de 1."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les demi-elfes grandissent au même rythme que les humains et atteignent l’âge adulte vers 20 ans.",
+      "Ils vivent toutefois bien plus longtemps que les humains, dépassant souvent les 180 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les demi-elfes partagent le penchant chaotique de leur ascendance elfique. Plaçant très haut la liberté individuelle et la créativité, ils n’ont nulle envie d’obéir à un chef ou d’en devenir un. Ils n’apprécient guère qu’on veuille leur imposer des règles, qu’on attende quelque chose d’eux, et se montrent parfois peu dignes de confiance, ou à tout le moins imprévisibles."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les demi-elfes sont d’un gabarit comparable aux humains. Leur taille varie entre 1,50 m et 1,80 m. Vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 9 m. Vision dans le noir. Grâce à votre ascendance elfique, vous possédez une excellente vision dans le noir et la pénombre. Dans un rayon de 18 m, vous voyez en conditions de lumière faible comme si la lumière était vive, et dans les ténèbres comme sous une lumière faible. Vous ne discernez pas les couleurs dans les ténèbres, mais percevez des nuances de gris. Ascendance féerique. Vous êtes avantagé aux jets de sauvegarde contre l’état charmé et la magie ne peut pas vous endormir. Polyvalence. Vous recevez la maîtrise de deux compétences de votre choix. Langues. Vous parlez, lisez et écrivez le commun, l’elfique et une langue supplémentaire de votre choix."
+     ]
+    }
+   ],
+   "subraces": []
+  },
+  {
+   "id": "half-orc",
+   "name": "Demi-orc",
+   "desc": [
+    "Traits des demi-orcs",
+    "Votre personnage demi-orc a hérité de certains traits de votre ascendance orque."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur de Force augmente de 2 et votre valeur de Constitution augmente de 1."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les demi-orcs mûrissent un peu plus vite que les humains, atteignant l’âge adulte vers 14 ans. Ils vieillissent sensiblement plus vite, dépassant rarement les 75 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les demi-orcs héritent d’une tendance au chaos de leur ascendance orque et ne sont guère enclins au bien. Un demi-orc élevé parmi les orcs et souhaitant continuer à vivre parmi eux est généralement mauvais."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les demi-orcs sont en moyenne plus grands et massifs que les humains. Les plus petits mesurent 1,50 m tandis que les plus grands dépassent allègrement 1,80 m. Vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 9 m."
+     ]
+    },
+    {
+     "name": "Vision dans le noir",
+     "text": [
+      "Grâce à votre ascendance orque, vous possédez une excellente vision dans le noir et la pénombre. Dans un rayon de 18 m, vous voyez en conditions de lumière faible comme si la lumière était vive, et dans les ténèbres comme sous une lumière faible. Vous ne discernez pas les couleurs dans les ténèbres, mais percevez des nuances de gris."
+     ]
+    },
+    {
+     "name": "Menaçant",
+     "text": [
+      "Vous recevez la maîtrise de la compétence Intimidation."
+     ]
+    },
+    {
+     "name": "Acharnement",
+     "text": [
+      "Si vous tombez à 0 point de vie sans être tué sur le coup, vous pouvez en fait vous retrouver à 1 point de vie. Une fois que vous avez utilisé cette aptitude, vous devez terminer un repos long pour pouvoir y recourir de nouveau."
+     ]
+    },
+    {
+     "name": "Sauvagerie",
+     "text": [
+      "Quand vous obtenez un coup critique avec une attaque d’arme au corps à corps, vous pouvez lancer l’un des dés de dégâts de l’arme une fois de plus et en ajouter le résultat aux dégâts supplémentaires du coup critique."
+     ]
+    },
+    {
+     "name": "Langues",
+     "text": [
+      "Vous parlez, lisez et écrivez le commun et l’orc. La langue orque est gutturale, certains sons se rapprochent du grincement. N’ayant pas d’alphabet propre, elle reprend celui des nains."
+     ]
+    }
+   ],
+   "subraces": []
+  },
+  {
+   "id": "dragonborn",
+   "name": "Drakéide",
+   "desc": [
+    "Traits des drakéides",
+    "Votre héritage draconique se traduit par une panoplie de traits que vous partagez avec l’ensemble du peuple drakéide."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur de Force augmente de 2 et votre valeur de Charisme augmente de 1."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les drakéides connaissent une croissance rapide. Ils marchent quelques heures après l’éclosion, atteignent la taille et le développement d’un enfant humain de 10 ans à seulement 3 ans et sont adultes à 15. Ils vivent jusqu’à environ 80 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les drakéides tendent vers les extrêmes et choisissent en conscience un camp ou l’autre dans la guerre à l’échelle cosmique qui oppose le bien et le mal. La plupart des drakéides sont bons, mais ceux qui se rangent dans le camp du mal font de redoutables adversaires."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Plus grands et plus lourds que les humains, les drakéides dépassent facilement 1,80 m et pèsent en moyenne 120 kg. Vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 9 m."
+     ]
+    },
+    {
+     "name": "Ascendance draconique",
+     "text": [
+      "Dragon Airain Argent Blanc Bleu Bronze Cuivre Noir Or Rouge Vert",
+      "Type de dégâts Feu Froid Froid Foudre Foudre Acide Acide Feu Feu Poison",
+      "Souffle Ligne de 1,50 sur 9 mètres (jet de sauvegarde de Dex.) Cône de 4,50 m (jet de sauvegarde de Con.) Cône de 4,50 m (jet de sauvegarde de Con.) Ligne de 1,50 sur 9 mètres (jet de sauvegarde de Dex.) Ligne de 1,50 sur 9 mètres (jet de sauvegarde de Dex.) Ligne de 1,50 sur 9 mètres (jet de sauvegarde de Dex.) Ligne de 1,50 sur 9 mètres (jet de sauvegarde de Dex.) Cône de 4,50 m (jet de sauvegarde de Dex.) Cône de 4,50 m (jet de sauvegarde de Dex.) Cône de 4,50 m (jet de sauvegarde de Con.)"
+     ],
+     "sub": [
+      {
+       "name": "Ascendance draconique",
+       "text": [
+        "Vous avez des ancêtres draconiques. Choisissez un type de dragon dans la table Ascendance draconique. Ce choix détermine votre souffle et votre résistance aux dégâts, comme indiqué dans la table."
+       ]
+      },
+      {
+       "name": "Souffle",
+       "text": [
+        "Vous pouvez consacrer votre action à exhaler une vague d’énergie destructrice. Votre ascendance draconique détermine la taille, la forme et le type de dégâts de ce souffle.",
+        "Quand vous utilisez votre souffle, chaque créature dans la zone d’effet effectue un jet de sauvegarde dont le type est déterminé par votre ascendance draconique. Le DD du jet de sauvegarde contre ce souffle est égal à 8 + votre modificateur de Constitution + votre bonus de maîtrise. Une créature subit 2d6 dégâts en cas d’échec, la moitié en cas de réussite. La quantité de dégâts passe à 3d6 au niveau 6, à 4d6 au niveau 11 et à 5d6 au niveau 16.",
+        "Une fois votre souffle utilisé, vous ne pouvez plus y recourir avant d’avoir terminé un repos court ou long."
+       ]
+      },
+      {
+       "name": "Résistance aux dégâts",
+       "text": [
+        "Vous bénéficiez de la résistance au type de dégâts associé à votre ascendance draconique."
+       ]
+      },
+      {
+       "name": "Langues",
+       "text": [
+        "Vous parlez, lisez et écrivez le commun et le draconique. Le draconique, considéré comme l’une des langues les plus anciennes, est souvent utilisé pour étudier la magie. Comprenant de nombreuses consonnes dures et autres sifflements, cette langue heurte les tympans de nombre des créatures qui ne la parlent pas."
+       ]
+      }
+     ]
+    }
+   ],
+   "subraces": []
+  },
+  {
+   "id": "gnome",
+   "name": "Gnome",
+   "desc": [
+    "Traits des gnomes",
+    "Votre personnage gnome possède divers traits communs à tous ceux de son peuple."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur d’Intelligence augmente de 2."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Si les gnomes croissent au même rythme que les humains, ils n’atteignent l’âge adulte qu’aux alentours des 40 ans. Ils peuvent vivre de 350 à presque 500 ans."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les gnomes sont très majoritairement bons. Ceux qui tendent vers la loi s’orientent vers la carrière de sage, d’ingénieur, de chercheur, d’érudit, d’enquêteur ou d’inventeur. Ceux qui penchent davantage vers le chaos deviennent ménestrels, escrocs, vagabonds ou joailliers spécialisés en bijoux fantaisie. Les gnomes ont si bon cœur que même leurs arnaqueurs sont plus facétieux que mal intentionnés."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les gnomes mesurent entre 90 cm et 1,20 m et pèsent environ 20 kg. Vous êtes de taille P."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 7,50 m. Vision dans le noir. Habitué à vivre sous terre, vous disposez d’une vision supérieure dans l’obscurité et la pénombre. Dans un rayon de 18 m, vous voyez en conditions de lumière faible comme si la lumière était vive, et dans les ténèbres comme sous une lumière faible. Vous ne discernez pas les couleurs dans les ténèbres, mais percevez des nuances de gris. Ruse gnome. Vous êtes avantagé à tous les jets de sauvegarde d’Intelligence, de Sagesse et de Charisme contre la magie. Langues. Vous parlez, lisez et écrivez le commun et le gnome. La langue gnome, qui recourt à l’alphabet nain, est réputée pour ses traités techniques et ses encyclopédies consacrées au monde naturel."
+     ]
+    }
+   ],
+   "subraces": [
+    {
+     "id": "rock-gnome",
+     "name": "Gnome des roches",
+     "desc": [
+      "En tant que gnome des roches, vous faites preuve d’une inventivité et d’une robustesse supérieures à celles des autres gnomes."
+     ],
+     "traits": [
+      {
+       "name": "Augmentation de caractéristique",
+       "text": [
+        "Votre valeur de Constitution augmente de 1."
+       ]
+      },
+      {
+       "name": "Connaissances en ingénierie",
+       "text": [
+        "Chaque fois que vous effectuez un test d’Intelligence (Histoire) relatif aux objets magiques, alchimiques ou technologiques, vous ajoutez le double de votre bonus de maîtrise au lieu du bonus de maîtrise habituel."
+       ]
+      },
+      {
+       "name": "Bricoleur",
+       "text": [
+        "Vous avez la maîtrise des outils d’artisan (outils de bricoleur). Au moyen de ces outils et pour peu que vous passiez 1 heure et dépensiez 10 po de matériaux, vous construisez un mécanisme de taille TP (CA 5, 1 pv). Ce mécanisme cesse de fonctionner au bout de 24 heures (sauf si vous consacrez 1 heure à le réparer pour le maintenir en état de marche) ou si vous consacrez votre action à le démanteler. Vous pouvez alors récupérer les matériaux qui ont servi à sa création. Vous pouvez avoir jusqu’à trois mécanismes de ce type fonctionnant en même temps.",
+        "Quand vous créez un appareil, choisissez l’une des options suivantes :"
+       ]
+      },
+      {
+       "name": "Boîte à musique",
+       "text": [
+        "Quand elle est ouverte, cette boîte à musique joue une mélodie à un volume sonore modéré. La boîte à musique cesse de jouer lorsqu’elle atteint la fin de la chanson ou si elle est refermée."
+       ]
+      },
+      {
+       "name": "Boutefeu",
+       "text": [
+        "L’appareil produit une petite flamme qui permet d’allumer une bougie, une torche ou un feu de camp. Utiliser cet appareil nécessite que vous y consacriez votre action."
+       ]
+      },
+      {
+       "name": "Jouet mécanique",
+       "text": [
+        "Ce jouet est un animal, un monstre ou une personne mécanique : une grenouille, une souris, un oiseau, un dragon ou un soldat, par exemple. Placé au sol, le jouet se déplace de 1,50 m à chacun de vos tours dans une direction aléatoire. Il émet un bruit en rapport avec la créature qu’il représente."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tiefling",
+   "name": "Tieffelin",
+   "desc": [
+    "Traits des tieffelins",
+    "Les tieffelins ont hérité de certains traits raciaux liés à leur ascendance infernale."
+   ],
+   "traits": [
+    {
+     "name": "Augmentation de caractéristique",
+     "text": [
+      "Votre valeur d’Intelligence augmente de 1 et votre valeur de Charisme augmente de 2."
+     ]
+    },
+    {
+     "name": "Âge",
+     "text": [
+      "Les tieffelins mûrissent au même rythme que les humains, mais vivent quelques années de plus."
+     ]
+    },
+    {
+     "name": "Alignement",
+     "text": [
+      "Les tieffelins ont beau ne pas être naturellement attirés par le mal, beaucoup sont cependant d’alignement mauvais. Qu’ils soient mauvais ou non, leur nature indépendante les pousse le plus souvent vers un alignement chaotique."
+     ]
+    },
+    {
+     "name": "Catégorie de taille",
+     "text": [
+      "Les tieffelins sont d’un gabarit proche des humains. Vous êtes de taille M."
+     ]
+    },
+    {
+     "name": "Vitesse",
+     "text": [
+      "Votre vitesse de base au sol est de 9 m."
+     ]
+    },
+    {
+     "name": "Vision dans le noir",
+     "text": [
+      "Grâce à votre ascendance infernale, vous possédez une excellente vision dans le noir et la pénombre. Dans un rayon de 18 m, vous voyez en conditions de lumière faible comme si la lumière était vive, et dans les ténèbres comme sous une lumière faible. Vous ne discernez pas les couleurs dans les ténèbres, mais percevez des nuances de gris."
+     ]
+    },
+    {
+     "name": "Résistance infernale",
+     "text": [
+      "Vous bénéficiez de la résistance aux dégâts de feu."
+     ]
+    },
+    {
+     "name": "Ascendance infernale",
+     "text": [
+      "Vous connaissez le sort mineur thaumaturgie. Lorsque vous atteignez le niveau 3, vous pouvez lancer une fois le sort représailles infernales en tant que sort de 2e niveau par l’intermédiaire de ce trait et vous récupérez cette faculté en terminant un repos long. Lorsque vous atteignez le niveau 5, vous pouvez lancer le sort ténèbres une fois par l’intermédiaire de ce trait et récupérez cette faculté en terminant un repos long. Le Charisme est la caractéristique d’incantation pour ces sorts."
+     ]
+    },
+    {
+     "name": "Langues",
+     "text": [
+      "Vous parlez, lisez et écrivez le commun et l’infernal.",
+      "Barbare",
+      "Aptitudes de classe",
+      "Vous recevez les aptitudes de classe suivantes en tant que barbare.",
+      "Points de vie",
+      "Dés de vie : 1d12 par niveau de barbare Points de vie au niveau 1 : 12 + votre modificateur de Constitution Points de vie à plus haut niveau : 1d12 (ou 7) + votre modificateur de Constitution par niveau de barbare au-delà du premier",
+      "Maîtrises",
+      "Armures : armures légères, armures intermédiaires, boucliers",
+      "Armes : armes courantes, armes de guerre Outils : aucun Jets de sauvegarde : Force, Constitution Compétences : deux au choix parmi : Athlétisme,",
+      "Dressage, Intimidation, Nature, Perception et Survie",
+      "Équipement",
+      "Vous débutez avec l’équipement suivant, en plus de celui que vous octroie votre historique :",
+      "• (a) une hache à deux mains ou (b) une arme de guerre de corps à corps au choix",
+      "• (a) deux hachettes ou (b) une arme courante au choix",
+      "• Un paquetage d’explorateur et quatre javelines",
+      "Le barbare",
+      "Niveau 1",
+      "Bonus de maîtrise",
+      "+2",
+      "+2",
+      "+2",
+      "+2",
+      "+3",
+      "+3",
+      "Aptitudes Rage, Défense sans armure Témérité, Sens du danger Voie primitive Amélioration de caractéristique Attaque supplémentaire, Déplacement rapide Aptitude de voie",
+      "Rages 2 2 3 3 3",
+      "Dégâts de rage",
+      "+2 +2 +2 +2 +2",
+      "+2",
+      "7 Niveau",
+      "8 9 10 11 12 13 14 15 16 17 18 19 20",
+      "+3 Bonus de maîtrise",
+      "+3",
+      "+4",
+      "+4",
+      "+4 +4",
+      "+5",
+      "+5",
+      "+5",
+      "+5",
+      "+6",
+      "+6",
+      "+6",
+      "+6",
+      "Instinct sauvage",
+      "Aptitudes Amélioration de caractéristique Critique brutal (1 dé) Aptitude de voie Rage implacable Amélioration de caractéristique Critique brutal (2 dés) Aptitude de voie Rage persistante Amélioration de caractéristique Critique brutal (3 dés) Puissance indomptable Amélioration de caractéristique Champion primitif",
+      "4 Rages",
+      "4 4 4 4 5 5 5 5 5 6 6 6 Illimité",
+      "+2 Dégâts de rage",
+      "+2",
+      "+3",
+      "+3",
+      "+3 +3",
+      "+3",
+      "+3",
+      "+3",
+      "+4",
+      "+4",
+      "+4",
+      "+4",
+      "+4",
+      "Rage"
+     ]
+    },
+    {
+     "name": "Au combat, vous êtes animé par une férocité bestiale",
+     "text": [
+      "À votre tour, vous pouvez entrer en rage par une action bonus.",
+      "Sous l’effet de la rage et à la condition de ne pas porter d’armure lourde, vous recevez les bénéfices suivants :",
+      "• Vous êtes avantagé aux tests de Force et aux jets de sauvegarde de Force.",
+      "• Quand vous effectuez une attaque d’arme de corps à corps basée sur la Force, vous bénéficiez d’un bonus au jet de dégâts qui augmente avec votre niveau de barbare, comme indiqué à la colonne « Dégâts de rage » de la table « Le barbare ».",
+      "• Vous bénéficiez de la résistance aux dégâts contondants, perforants et tranchants.",
+      "Si vous êtes capable de lancer des sorts, vous ne pouvez pas en lancer ni rester concentré sur un sort tant que vous êtes en rage."
+     ]
+    },
+    {
+     "name": "Votre rage dure 1 minute",
+     "text": [
+      "Elle prend fin prématurément si vous subissez l’état inconscient ou si votre tour se termine sans que vous ayez attaqué une créature hostile ni subi de dégâts depuis votre tour précédent. À votre tour, vous pouvez en outre mettre fin à votre rage par une action bonus.",
+      "Une fois que vous êtes entré en rage autant de fois qu’indiqué pour votre niveau de barbare à la colonne « Rages » de la table « Le barbare », vous devez terminer un repos long avant de pouvoir à nouveau entrer en rage.",
+      "Défense sans armure",
+      "Tant que vous ne portez pas d’armure, votre classe d’armure est égale à 10 + votre modificateur de Dextérité + votre modificateur de Constitution. Vous conservez ce bénéfice si vous vous servez d’un bouclier.",
+      "Témérité",
+      "À partir du niveau 2, vous pouvez renoncer à toute velléité de vous défendre au profit d’une attaque à outrance. Lors de votre tour, quand vous effectuez votre première attaque, vous pouvez décider d’attaquer avec témérité. Vous êtes alors avantagé aux jets d’attaque d’arme de corps à corps basés sur la Force pendant ce tour, mais les jets d’attaque effectués contre vous sont avantagés jusqu’à votre tour suivant.",
+      "Sens du danger",
+      "En atteignant le niveau 2, vous acquérez un don surnaturel qui vous permet d’esquiver plus aisément les dangers qu’un autre que vous remarquerait trop tard.",
+      "Vous avez l’avantage à vos jets de sauvegarde de Dextérité contre tout effet que vous voyez, comme les pièges et certains sorts. Pour pouvoir bénéficier de cette aptitude, vous ne devez pas être aveuglé, assourdi ou neutralisé.",
+      "Voie primitive",
+      "Au niveau 3, vous choisissez une voie qui va façonner la façon dont s’exprime votre rage. La voie du berserker est proposée ici, détaillée à la fin de la section consacrée à cette classe. Ce choix vous octroie des aptitudes au niveau 3, puis aux niveaux 6, 10 et 14.",
+      "Amélioration de caractéristique",
+      "Lorsque vous atteignez le niveau 4 (puis à nouveau aux niveaux 8, 12, 16 et 19), vous pouvez augmenter de 2 la valeur de caractéristique de votre choix, ou augmenter de 1 deux valeurs de caractéristique de votre choix. Conformément à la règle habituelle, cette aptitude ne vous permet pas de porter une valeur au-delà de 20.",
+      "Attaque supplémentaire",
+      "À partir du niveau 5, vous pouvez attaquer deux fois au lieu d’une seule lorsque vous entreprenez l’action Attaquer à votre tour.",
+      "Déplacement rapide",
+      "À partir du niveau 5, votre vitesse augmente de 3 m tant que vous ne portez pas d’armure lourde.",
+      "Instinct sauvage",
+      "À compter du niveau 7, votre instinct s’est affûté au point que vous êtes avantagé aux jets d’initiative.",
+      "En outre, si vous êtes surpris au début du combat et n’êtes pas neutralisé, vous pouvez agir normalement lors de votre premier tour, mais uniquement si vous entrez en rage avant toute chose lors de ce tour.",
+      "Critique brutal",
+      "À partir du niveau 9, vous pouvez lancer un dé de dégâts d’arme supplémentaire pour déterminer les dégâts supplémentaires causés par le coup critique d’une attaque de corps à corps.",
+      "Ce bonus passe à deux dés supplémentaires au niveau 13, puis à trois dés supplémentaires au niveau 17.",
+      "Rage implacable",
+      "À partir du niveau 11, votre rage vous permet de continuer à combattre même en étant grièvement blessé. Si vous tombez à 0 point de vie alors que vous êtes en rage, et que vous ne mourez pas sur le coup, vous pouvez effectuer un jet de sauvegarde de Constitution DD 10. En cas de réussite, vous conservez 1 point de vie.",
+      "Par la suite et chaque fois que vous réutilisez cette aptitude, le DD augmente de 5. Lorsque vous terminez un repos court ou long, le DD retombe à 10.",
+      "Rage persistante",
+      "À partir du niveau 15, la rage qui vous habite est si féroce qu’elle ne se termine que si vous subissez l’état inconscient ou décidez d’y mettre fin.",
+      "Puissance indomptable",
+      "À partir du niveau 18, si le total obtenu lors d’un test de Force est inférieur à votre valeur de Force, vous pouvez utiliser celle-ci à la place du total obtenu.",
+      "Champion primitif",
+      "Au niveau 20, vous devenez l’incarnation de la puissance du monde sauvage. Vos valeurs de Force et de Constitution augmentent de 4. Votre maximum pour ces deux valeurs est désormais de 24.",
+      "Voie du berserker",
+      "Pour certains barbares, la rage est un moyen de parvenir à une fin… et cette fin est la violence. La voie du berserker est un chemin pavé de fureur débridée et poisseux de sang. Quand vous entrez dans la rage du berserker, tout à l’ivresse de la bataille, vous faites fi de votre santé comme de votre bien-être.",
+      "Frénésie",
+      "À partir du moment où vous choisissez cette voie au niveau 3, vous pouvez entrer en frénésie lors de vos rages. Ce faisant, pendant toute la durée de la rage, vous pouvez effectuer une unique attaque d’arme de corps à corps par une action bonus à chacun de vos tours suivants. Lorsque votre rage prend fin, vous subissez un niveau d’épuisement (comme décrit en annexe MdJ-A).",
+      "Rage aveugle",
+      "À partir du niveau 6, vous ne pouvez plus être ni charmé ni effrayé quand vous êtes en rage. Si vous étiez charmé ou effrayé au moment d’entrer en rage, l’effet est suspendu pendant toute la durée de la rage.",
+      "Présence intimidante",
+      "À partir du niveau 10, vous pouvez consacrer votre action à effrayer quelqu’un grâce à votre présence intimidante. Ce faisant, choisissez une créature que vous voyez dans un rayon de 9 m. Si cette créature vous voit ou vous entend, elle doit réussir un jet de sauvegarde de Sagesse (DD égal à 8 + votre bonus de maîtrise + votre modificateur de Charisme) sous peine d’être effrayée par vous jusqu’à la fin de votre tour suivant. Lors des tours qui suivent, vous pouvez consacrer votre action à prolonger la durée de cet effet sur la créature effrayée jusqu’à la fin de votre tour suivant. Cet effet prend fin si la créature termine son tour sans vous avoir en champ de vision ou en étant à plus de 18 m de vous.",
+      "Si cette créature réussit son jet de sauvegarde, vous ne pouvez plus utiliser cette aptitude sur elle pendant 24 heures.",
+      "Représailles",
+      "À partir du niveau 14, quand vous subissez des dégâts d’une créature située dans un rayon de 1,50 m de vous, vous pouvez jouer votre réaction pour effectuer une attaque d’arme de corps à corps contre cette créature.",
+      "Barde",
+      "Aptitudes de classe",
+      "Vous recevez les aptitudes de classe suivantes en tant que barde.",
+      "Maîtrises",
+      "Armures : armures légères Armes : armes courantes, arbalète de poing, épée courte, épée longue, rapière Outils : trois instruments de musique de votre choix Jets de sauvegarde : Dextérité, Charisme Compétences : trois au choix",
+      "Points de vie",
+      "Dés de vie : 1d8 par niveau de barde Points de vie au niveau 1 : 8 + votre modificateur de Constitution Points de vie à plus haut niveau : 1d8 (ou 5) + votre modificateur de Constitution par niveau de barde au-delà du premier",
+      "Équipement",
+      "Vous débutez avec l’équipement suivant, en plus de celui que vous octroie votre historique :",
+      "• (a) une rapière (b) une épée longue ou (c) une arme courante au choix",
+      "• (a) un paquetage de diplomate ou (b) un paquetage d’artiste",
+      "• (a) un luth ou (b) tout autre instrument de musique • Une armure de cuir et une dague",
+      "Le barde",
+      "Niveau 1 2 3 4 5",
+      "7 8 9 10",
+      "11 12 13 14",
+      "15 16 17 18 19 20",
+      "Bonus de maîtrise",
+      "+2 +2 +2 +2 +3",
+      "+3",
+      "+3 +3 +4 +4",
+      "+4 +4 +5 +5",
+      "+5 +5 +6 +6 +6 +6",
+      "Aptitudes Inspiration bardique (d6), Sorts Chant reposant (d6), Touche-à-tout Collège bardique, Expertise Amélioration de caractéristique Inspiration bardique (d8), Source d’inspiration Aptitude de Collège bardique, Contre-charme — Amélioration de caractéristique Chant reposant (d8) Inspiration bardique (d10), Expertise, Secrets magiques — Amélioration de caractéristique Chant reposant (d10) Aptitude de Collège bardique, Secrets magiques Inspiration bardique (d12) Amélioration de caractéristique Chant reposant (d12) Secrets magiques Amélioration de caractéristique Inspiration supérieure",
+      "Sorts mineurs connus 2 2 2 3 3",
+      "Sorts connus",
+      "4 5 6 7 8",
+      "—Emplacements par niveau de sort— 1er 2e 3e 4e 5e 6e 7e 8e 9e 2 ———————— 3 ———————— 4 2 ——————— 4 3 ——————— 4 3 2 ——————",
+      "4 3 3 ——————",
+      "10 4 3 3 1 — — — — —",
+      "11 4 3 3 2 — — — — —",
+      "12 4 3 3 3 1 — — — —",
+      "14 4 3 3 3 2 — — — —",
+      "15 4 3 3 3 2 1 — — —",
+      "15 4 3 3 3 2 1 — — —",
+      "16 4 3 3 3 2 1 1 — —",
+      "18 4 3 3 3 2 1 1 — —",
+      "19 4 3 3 3 2 1 1 1 —",
+      "19 4 3 3 3 2 1 1 1 —",
+      "20 4 3 3 3 2 1 1 1 1",
+      "22 4 3 3 3 3 1 1 1 1",
+      "22 4 3 3 3 3 2 1 1 1",
+      "22 4 3 3 3 3 2 2 1 1",
+      "Sorts",
+      "Vous avez appris à détisser et remodeler la trame de la réalité en harmonie avec vos désirs et vos mélodies. Vos sorts s’ajoutent à votre vaste répertoire : une magie que vous pouvez accorder à la situation.",
+      "Sorts mineurs",
+      "Vous connaissez deux sorts mineurs que vous choisissez dans la liste des sorts de barde. Vous en apprenez d’autres que vous choisissez à plus haut niveau, comme le montre la colonne «"
+     ]
+    }
+   ],
+   "subraces": []
+  }
+ ]
+}

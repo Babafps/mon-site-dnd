@@ -1,0 +1,19 @@
+{
+ "edition": "2014",
+ "lang": "fr",
+ "category": "feats",
+ "source": "SRD 5.1 (version française officielle, Wizards of the Coast LLC) — CC-BY-4.0",
+ "count": 1,
+ "entries": [
+  {
+   "id": "grappler",
+   "name": "Empoigneur",
+   "desc": [
+    "Prérequis : Force 13 ou plus",
+    "La pratique a fait de vous un adversaire coriace quand une empoignade éclate. Vous recevez les bénéfices suivants :",
+    "• Vous avez l’avantage aux jets d’attaque contre une créature que vous agrippez.",
+    "• Vous pouvez consacrer votre action à tenter d’immobiliser une créature que vous agrippez. Pour ce faire, effectuez un autre test de lutte. En cas de réussite, vous et la créature êtes tous deux entravés tant que vous l’agrippez."
+   ]
+  }
+ ]
+}
