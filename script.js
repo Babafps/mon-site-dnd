@@ -703,6 +703,96 @@ document.addEventListener('DOMContentLoaded', () => {
         let quillNewSpell = new Quill('#new-spell-desc', { theme: 'snow' });
         let quillEditJournal = null;
 
+
+        // ===== AUTOCOMPLÉTION SRD DANS LES FORMULAIRES =====
+        // Un composant unique (srd-autocomplete.js) branché trois fois. Remplir
+        // reste facultatif : tout champ pré-rempli demeure modifiable, et la
+        // saisie libre continue de fonctionner pour le contenu personnel.
+        if (window.SRDAuto) {
+            const setVal = (id, v) => {
+                const el = document.getElementById(id);
+                if (el == null || v == null || v === '') return;
+                el.value = v;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            };
+
+            // --- Grimoire : un sort du SRD remplit toute la fiche ---
+            window.SRDAuto.attach(document.getElementById('new-spell-name'), {
+                categories: ['spells'],
+                onPick: (s) => {
+                    setVal('new-spell-level', s.level);
+                    setVal('new-spell-time', s.casting_time);
+                    setVal('new-spell-range', s.range);
+                    setVal('new-spell-duration', s.duration);
+                    // Composantes : « V, S, M (une petite boule de guano…) »
+                    const comp = String(s.components || '');
+                    const head = comp.split('(')[0];
+                    const mat = (comp.match(/\(([^)]*)\)/) || [])[1] || '';
+                    const check = (id, on) => {
+                        const el = document.getElementById(id);
+                        if (el && el.checked !== on) { el.checked = on; el.dispatchEvent(new Event('change', { bubbles: true })); }
+                    };
+                    check('new-spell-comp-v', /\bV\b/.test(head));
+                    check('new-spell-comp-s', /\bS\b/.test(head));
+                    check('new-spell-comp-m', /\bM\b/.test(head));
+                    setVal('new-spell-comp-mat', mat);
+                    // La description est un éditeur Quill : on écrit dans sa zone de texte.
+                    const ed = document.querySelector('#new-spell-desc .ql-editor');
+                    if (ed) {
+                        const paras = (s.desc || []).map(p => `<p>${window.SRD.esc(p)}</p>`).join('');
+                        const hl = s.higher_levels
+                            ? `<p><strong>À plus haut niveau.</strong> ${window.SRD.esc(s.higher_levels)}</p>` : '';
+                        ed.innerHTML = paras + hl;
+                    }
+                    if (window.showAppToast) window.showAppToast(`✨ « ${s.name} » rempli depuis le SRD`);
+                }
+            });
+
+            // --- Attaques : armes de l'équipement ---
+            window.SRDAuto.attach(document.getElementById('new-atk-name'), {
+                categories: ['equipment', 'magic-items'],
+                onPick: (it) => {
+                    if (it.damage) {
+                        const t = window.SRDAuto.DMG_FR[it.damage.type] || it.damage.type;
+                        setVal('new-atk-dmg', `${it.damage.dice} ${t}`);
+                    }
+                    const notes = [];
+                    if (it.properties) {
+                        // « polyvalente » est fusionnée avec ses dégâts pour éviter le doublon
+                        notes.push(it.properties.map(p => (p === 'versatile' && it.versatile_damage)
+                            ? `polyvalente ${it.versatile_damage}`
+                            : (window.SRDAuto.PROP_FR[p] || p)).join(', '));
+                    } else if (it.versatile_damage) {
+                        notes.push(`polyvalente ${it.versatile_damage}`);
+                    }
+                    // Au corps à corps c'est une allonge, pas une portée — et 1,5 m
+                    // étant la valeur par défaut, l'afficher n'apprend rien.
+                    if (it.range_m) {
+                        if (it.weapon_range === 'Ranged') {
+                            notes.push(`portée ${it.range_m.normal} m${it.range_m.long ? '/' + it.range_m.long + ' m' : ''}`);
+                        } else if (it.range_m.normal && it.range_m.normal !== 1.5) {
+                            notes.push(`allonge ${it.range_m.normal} m`);
+                        }
+                    }
+                    if (it.throw_range_m) notes.push(`jet ${it.throw_range_m.normal} m${it.throw_range_m.long ? '/' + it.throw_range_m.long + ' m' : ''}`);
+                    if (notes.length) setVal('new-atk-notes', notes.join(' · '));
+                    // Le bonus au toucher dépend du personnage : on ne le devine pas.
+                    if (window.showAppToast) window.showAppToast(`⚔️ « ${it.name} » rempli — ajuste ton bonus au toucher`);
+                }
+            });
+
+            // --- Sac à dos : équipement et objets magiques ---
+            window.SRDAuto.attach(document.getElementById('inv-name'), {
+                categories: ['equipment', 'magic-items'],
+                onPick: (it) => {
+                    if (it.weight_kg != null) setVal('inv-weight', it.weight_kg);
+                    const qty = document.getElementById('inv-qty');
+                    if (qty && !qty.value) setVal('inv-qty', 1);
+                    const info = it.cost ? ` — ${it.cost}` : '';
+                    if (window.showAppToast) window.showAppToast(`🎒 « ${it.name} »${info}`);
+                }
+            });
+        }
         if(homeScreen) homeScreen.classList.add('hidden'); if(appScreen) appScreen.classList.remove('hidden'); 
 
         document.querySelectorAll('.btn-close-modal').forEach(btn => { btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); });
@@ -1535,21 +1625,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ===== MONTÉE DE NIVEAU =====
         // Applique ce qui est déductible sans ambiguïté : niveau, dé de vie
-        // supplémentaire, et bonus de maîtrise (recalculé par le listener existant
-        // sur #char-level). Les emplacements de sorts et les aptitudes gagnées
-        // dépendent de la sous-classe : on les signale au lieu de les deviner.
-        const HIT_DIE_BY_CLASS = {
+        // supplémentaire, bonus de maîtrise (recalculé par le listener existant
+        // sur #char-level), et annonce les aptitudes réellement gagnées.
+        //
+        // Ces aptitudes sont lues dans `levels[]` / `features[].level` de la
+        // classe — que celle-ci vienne du SRD ou de l'éditeur de contenu perso :
+        // même forme de données, même comportement. La table codée en dur qui
+        // suit ne sert plus que de secours quand les règles ne sont pas
+        // chargeables (hors connexion au tout premier lancement).
+        const HIT_DIE_FALLBACK = {
             barbare: 12, guerrier: 10, paladin: 10, rodeur: 10,
             barde: 8, clerc: 8, druide: 8, moine: 8, roublard: 8, occultiste: 8,
             ensorceleur: 6, magicien: 6
         };
-        const CASTER_CLASSES = ['barde', 'clerc', 'druide', 'ensorceleur', 'magicien',
-                                'occultiste', 'paladin', 'rodeur'];
         const classKey = (s) => String(s || '').toLowerCase()
             .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().split(/[\s/,]+/)[0];
 
+        // Retrouve la classe et la sous-classe saisies sur la fiche.
+        async function sheetClass() {
+            if (!window.SRD || !window.SRD.classByName) return { cls: null, sub: null };
+            try {
+                const cls = await window.SRD.classByName(document.getElementById('char-class')?.value);
+                const sub = cls ? window.SRD.subclassByName(cls, document.getElementById('char-subclass')?.value) : null;
+                return { cls, sub };
+            } catch (e) { return { cls: null, sub: null }; }
+        }
+
         const btnLevelUp = document.getElementById('btn-level-up');
-        if (btnLevelUp) btnLevelUp.addEventListener('click', () => {
+        if (btnLevelUp) btnLevelUp.addEventListener('click', async () => {
             const lvlEl = document.getElementById('char-level');
             if (!lvlEl) return;
             const lvl = parseInt(lvlEl.value, 10) || 1;
@@ -1557,11 +1660,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.showAppToast) window.showAppToast('Niveau 20 : maximum atteint.', '#8a6320');
                 return;
             }
-            const cls = classKey(document.getElementById('char-class')?.value);
-            const die = HIT_DIE_BY_CLASS[cls];
             const newLvl = lvl + 1;
-
             if (!confirm(`Passer du niveau ${lvl} au niveau ${newLvl} ?`)) return;
+
+            const { cls, sub } = await sheetClass();
+            const info = cls ? window.SRD.levelInfo(cls, newLvl, sub) : null;
+            const die = (cls && cls.hit_die)
+                     || HIT_DIE_FALLBACK[classKey(document.getElementById('char-class')?.value)];
 
             lvlEl.value = newLvl;
             lvlEl.dispatchEvent(new Event('input', { bubbles: true }));   // recalcule le bonus de maîtrise
@@ -1581,8 +1686,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const prof = String(document.getElementById('prof-bonus')?.value || '').replace('+', '');
             const rappels = ['❤️ Augmente tes PV max (dé de vie + mod. de Constitution)'];
-            if (CASTER_CLASSES.includes(cls)) rappels.push('✨ Vérifie tes emplacements de sorts');
-            rappels.push('📜 Ajoute les aptitudes gagnées à ce niveau');
+            const slots = info && info.spell_slots;
+            if (slots) {
+                rappels.push('✨ Emplacements de sorts : '
+                    + Object.keys(slots).sort((a, b) => a - b).map(r => `niv.${r} ×${slots[r]}`).join(', '));
+            } else if (info && info.class_specific && info.class_specific.spell_slots_count) {
+                rappels.push(`✨ Magie de pacte : ${info.class_specific.spell_slots_count} emplacement(s) `
+                           + `de niveau ${info.class_specific.slot_level}`);
+            } else if (!cls) {
+                rappels.push('✨ Vérifie tes emplacements de sorts');
+            }
+            if (info && info.class_specific) {
+                const cols = (cls.level_columns || []).filter(c => info.class_specific[c.key] != null);
+                if (cols.length) rappels.push('📈 ' + cols.map(c => `${c.label} : ${info.class_specific[c.key]}`).join(' · '));
+            }
+            const gained = info ? info.features : [];
+            if (!gained.length) rappels.push('📜 Ajoute les aptitudes gagnées à ce niveau');
 
             // Le champ Niveau pulse en or
             const grp = lvlEl.closest('.level-group');
@@ -1593,9 +1712,95 @@ document.addEventListener('DOMContentLoaded', () => {
                 className: document.getElementById('char-class')?.value || '',
                 prof: prof,
                 hitDice: die ? `${parseInt(hdMaxEl?.value, 10) || newLvl}d${die}` : '',
-                todo: rappels
+                todo: rappels,
+                gained: gained,
+                onAdd: gained.length ? () => addFeaturesAsTraits(gained, newLvl) : null
             });
         });
+
+        /** Verse des aptitudes de classe dans le module « Capacités » de la fiche.
+         *  Les doublons sont ignorés : monter deux fois au même niveau après un
+         *  retour en arrière ne duplique rien. */
+        function addFeaturesAsTraits(list, level) {
+            let added = 0;
+            list.forEach(f => {
+                if (traits.some(t => t.name === f.name && (t.level || 0) === level)) return;
+                traits.push({
+                    name: f.name, type: 'class', level: level,
+                    desc: Array.isArray(f.text) ? f.text.join('\n\n') : (f.text || ''),
+                    pinned: false
+                });
+                added++;
+            });
+            if (!added) {
+                if (window.showAppToast) window.showAppToast('Ces aptitudes sont déjà sur la fiche.', '#8a6320');
+                return;
+            }
+            setStore('dnd-traits', traits);
+            renderTraits();
+            if (window.showAppToast) window.showAppToast(`${added} aptitude(s) ajoutée(s) à la fiche.`, '#3d7a3d');
+        }
+
+        // ===== Passerelle pour l'assistant de création (pj-tutorial.js) =====
+        // L'assistant remplit lui-même les champs simples (valeur + événement
+        // input, la sauvegarde du site fait le reste). Tout ce qui vit dans un
+        // tableau — maîtrises, capacités, inventaire, emplacements de sorts —
+        // passe par ici : c'est le seul endroit qui connaît ces structures.
+        window.SheetApi = {
+            /** level : 0 aucune · 1 maîtrise · 2 expertise */
+            setSkillProf(skillId, level) {
+                const hidden = document.getElementById('prof-' + skillId);
+                if (!hidden) return false;
+                hidden.value = level;
+                setStore('dnd-sheet-prof-' + skillId, level, false);
+                updateSkillProfBtn(skillId);
+                updateStatsAndSkills();
+                return true;
+            },
+            addTraits(list) {
+                let added = 0;
+                (list || []).forEach(t => {
+                    if (!t || !t.name) return;
+                    if (traits.some(x => x.name === t.name)) return;
+                    traits.push({
+                        name: t.name, type: t.type || 'class', level: t.level || 0,
+                        desc: Array.isArray(t.desc) ? t.desc.join('\n\n') : (t.desc || ''),
+                        pinned: false
+                    });
+                    added++;
+                });
+                if (added) { setStore('dnd-traits', traits); renderTraits(); }
+                return added;
+            },
+            addInventory(items) {
+                let added = 0;
+                (items || []).forEach(name => {
+                    const label = String(name || '').trim();
+                    if (!label || inventory.some(i => i.name === label)) return;
+                    inventory.push({ name: label, qty: 1, weight: '-', category: 'Général', pinned: false });
+                    added++;
+                });
+                if (added) { setStore('dnd-inventory', inventory); renderInventory(); }
+                return added;
+            },
+            /** map : { "1": 2, "2": 3 } — rang de sort → nombre d'emplacements */
+            setSpellSlots(map) {
+                if (!map) return 0;
+                let touched = 0;
+                Object.keys(map).forEach(rank => {
+                    const i = parseInt(rank, 10) - 1;
+                    if (i < 0 || i >= spellSlotsData.length) return;
+                    const total = parseInt(map[rank], 10) || 0;
+                    spellSlotsData[i].total = total;
+                    spellSlotsData[i].used = (spellSlotsData[i].used || []).slice(0, total);
+                    while (spellSlotsData[i].used.length < total) spellSlotsData[i].used.push(false);
+                    touched++;
+                });
+                if (touched) { setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); }
+                return touched;
+            },
+            refresh() { updateStatsAndSkills(); }
+        };
 
         // Célébration plein écran. Remplace l'alerte système : monter de niveau
         // mérite mieux qu'une boîte de dialogue grise.
@@ -1617,11 +1822,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<span class="lvfx-stat">Niveau ${info.level}</span>`
             ].join('');
 
+            // Aptitudes gagnées : lues dans la table de progression de la classe
+            // (SRD ou perso). Sans elles, la carte se contente des rappels.
+            const gained = info.gained || [];
+            const gainedHtml = gained.length
+                ? `<div class="lvfx-gained"><div class="lvfx-gained-head">Tu gagnes</div>`
+                  + gained.map(f => `<span class="lvfx-feat">${escAb(f.name)}`
+                      + `${f.subclass ? ` <i>(${escAb(f.from)})</i>` : ''}</span>`).join('')
+                  + (info.onAdd ? `<button type="button" class="lvfx-add">📜 Ajouter à ma fiche</button>` : '')
+                  + `</div>`
+                : '';
+
             ov.innerHTML = embers + `<div class="lvfx-card">
                 <div class="lvfx-kicker">Niveau supérieur</div>
                 <div class="lvfx-number">${info.level}</div>
                 ${info.className ? `<div class="lvfx-class">${escAb(info.className)}</div>` : ''}
                 <div class="lvfx-stats">${stats}</div>
+                ${gainedHtml}
                 <ul class="lvfx-todo">${info.todo.map(t => `<li>${escAb(t)}</li>`).join('')}</ul>
                 <button type="button" class="lvfx-close">Continuer l’aventure</button>
             </div>`;
@@ -1632,7 +1849,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.removeEventListener('keydown', onKey);
             };
             const onKey = (e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); };
-            ov.addEventListener('click', close);
+            ov.addEventListener('click', (e) => {
+                // Tout clic ferme la carte — sauf celui qui verse les aptitudes.
+                const add = e.target.closest('.lvfx-add');
+                if (!add) { close(); return; }
+                e.stopPropagation();
+                add.disabled = true;
+                add.textContent = '✓ Ajouté';
+                if (info.onAdd) info.onAdd();
+            });
             document.addEventListener('keydown', onKey);
             document.body.appendChild(ov);
             ov.querySelector('.lvfx-close')?.focus();
@@ -2962,7 +3187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         emptyMsg?.remove();
                     }).catch(err => {
                         if (myToken !== srdSearchToken) return;
-                        srdSlot.innerHTML = `<div style="text-align:center; padding:10px; color:#c0392b; font-size:0.8rem;">Règles indisponibles hors connexion tant qu'elles n'ont pas été consultées une fois.</div>`;
+                        srdSlot.innerHTML = `<div style="text-align:center; padding:10px; color:#c0392b; font-size:0.8rem; white-space:pre-line;">${escAb(err.diagnostic || err.message)}</div>`;
                     });
                 }
 

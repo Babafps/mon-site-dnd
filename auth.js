@@ -24,7 +24,7 @@ function genSessionCode() {
 // Tous les écrans plein page sont des .screen-view ; on bascule
 // .hidden. `gm-active` sur <body> permet d'adapter le menu ☰.
 // =====================================================
-const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen'];
+const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen', 'homebrew-screen'];
 window.navTo = function (id) {
     APP_SCREENS.forEach(s => {
         const el = document.getElementById(s);
