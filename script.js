@@ -700,7 +700,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     } else { 
         let quillNewJournal = new Quill('#new-journal-content', { theme: 'snow' });
-        let quillNewSpell = new Quill('#new-spell-desc', { theme: 'snow' });
         let quillEditJournal = null;
 
 
@@ -736,90 +735,163 @@ document.addEventListener('DOMContentLoaded', () => {
                     check('new-spell-comp-s', /\bS\b/.test(head));
                     check('new-spell-comp-m', /\bM\b/.test(head));
                     setVal('new-spell-comp-mat', mat);
-                    // La description est un éditeur Quill : on écrit dans sa zone de texte.
-                    const ed = document.querySelector('#new-spell-desc .ql-editor');
+                    // La description du scribe est un contenteditable, pas Quill.
+                    const ed = document.getElementById('new-spell-desc');
                     if (ed) {
                         const paras = (s.desc || []).map(p => `<p>${window.SRD.esc(p)}</p>`).join('');
                         const hl = s.higher_levels
                             ? `<p><strong>À plus haut niveau.</strong> ${window.SRD.esc(s.higher_levels)}</p>` : '';
                         ed.innerHTML = paras + hl;
                     }
+                    // Jet et dégâts : le SRD les écrit en toutes lettres. Ce qu'on
+                    // ne sait pas déduire reste vide — mieux vaut un champ vide
+                    // qu'une valeur inventée.
+                    const txt = (s.desc || []).join(' ');
+                    const sav = txt.match(/jet de sauvegarde de (Force|Dextérité|Constitution|Intelligence|Sagesse|Charisme)/i);
+                    if (sav) { setVal('new-spell-mode', 'save'); setVal('new-spell-save-ability', sav[1]); }
+                    // Le SRD français dit « Effectuez une attaque de sort à
+                    // distance », pas « jet d'attaque » : les deux tournures comptent.
+                    else if (/attaque de sort|jet d[’']attaque/i.test(txt)) setVal('new-spell-mode', 'attack');
+                    else setVal('new-spell-mode', 'none');
+                    const dmg = txt.match(/(\d+d\d+)\s+dégâts\s+((?:de|d’|d')\s?\w+|\w+s)/i)
+                             || txt.match(/dégâts\s+de\s+(\w+)[^.]*?(\d+d\d+)/i);
+                    if (dmg) {
+                        const dice = /^\d+d\d+$/.test(dmg[1]) ? dmg[1] : dmg[2];
+                        const type = /^\d+d\d+$/.test(dmg[1]) ? dmg[2] : 'de ' + dmg[1];
+                        setVal('new-spell-dmg', dice);
+                        setVal('new-spell-dmg-type', String(type).trim());
+                    }
+                    spellSyncMode();
                     if (window.showAppToast) window.showAppToast(`✨ « ${s.name} » rempli depuis le SRD`);
                 }
             });
 
-            // --- Attaques : armes de l'équipement ---
+            // Nombre de charges et mode de recharge, lus dans le texte de l'objet :
+            // le SRD les énonce en toutes lettres (« possède 7 charges […] à l'aube »).
+            const guessCharges = (paras) => {
+                const txt = (Array.isArray(paras) ? paras.join(' ') : String(paras || '')).toLowerCase();
+                const out = {};
+                const n = txt.match(/(\d+)\s+charges?/);
+                if (n) { out.chargesMax = parseInt(n[1], 10); out.charges = out.chargesMax; }
+                if (/\bà l[’']aube\b|\baube\b/.test(txt)) out.recharge = 'dawn';
+                else if (/repos\s+long/.test(txt)) out.recharge = 'long';
+                else if (/repos\s+court/.test(txt)) out.recharge = 'short';
+                // « La baguette récupère quotidiennement 1d6 + 1 charges » : le dé
+                // n'est pas collé au verbe, et le SRD alterne les formulations.
+                const d = txt.match(/(?:récupère|regagne|retrouve)[^.]{0,40}?(\d*d\d+(?:\s*[+-]\s*\d+)?)/);
+                if (d) out.rechargeDice = d[1].replace(/\s+/g, '');
+                return out;
+            };
+            // Portée / allonge : au corps à corps c'est une allonge, et 1,50 m
+            // étant la valeur par défaut, l'afficher n'apprend rien.
+            const rangeText = (it) => {
+                const bits = [];
+                if (it.range_m) {
+                    if (it.weapon_range === 'Ranged') bits.push(`${it.range_m.normal} m${it.range_m.long ? '/' + it.range_m.long + ' m' : ''}`);
+                    else if (it.range_m.normal && it.range_m.normal !== 1.5) bits.push(`allonge ${it.range_m.normal} m`);
+                }
+                if (it.throw_range_m) bits.push(`jet ${it.throw_range_m.normal} m${it.throw_range_m.long ? '/' + it.throw_range_m.long + ' m' : ''}`);
+                return bits.join(' · ');
+            };
+
+            // --- Attaques : armes de l'équipement et objets magiques ---
+            // Le remplissage est extrait dans une fonction nommée : l'autocomplétion
+            // du nom et le sélecteur « armes standard » du formulaire l'appellent
+            // tous les deux, donc une seule règle de remplissage à maintenir.
+            window.fillAttackFromSrd = (it) => {
+                    if (!it) return;
+                    if (it.damage) {
+                        setVal('new-atk-dmg', it.damage.dice);
+                        setVal('new-atk-dmg-type', window.SRDAuto.DMG_FR[it.damage.type] || it.damage.type);
+                    }
+                    if (it.versatile_damage) setVal('new-atk-dmg2', it.versatile_damage);
+                    if (it.properties) {
+                        setVal('new-atk-props', it.properties
+                            .filter(p => p !== 'versatile' || !it.versatile_damage)
+                            .map(p => window.SRDAuto.PROP_FR[p] || p).join(', '));
+                    }
+                    const r = rangeText(it);
+                    if (r) setVal('new-atk-range', r);
+                    if (it.rarity) setVal('new-atk-rarity', it.rarity);
+                    if (it.type && !it.damage) setVal('new-atk-notes', it.type);
+                    // Objet magique : description complète + liaison + charges devinées
+                    if (it.desc && it.desc.length) {
+                        const box = document.getElementById('new-atk-desc');
+                        if (box) box.value = it.desc.join('\n\n');
+                        const g = guessCharges(it.desc);
+                        if (g.chargesMax) { setVal('new-atk-charges', g.charges); setVal('new-atk-charges-max', g.chargesMax); }
+                        if (g.recharge) setVal('new-atk-recharge', g.recharge);
+                        if (g.rechargeDice) setVal('new-atk-recharge-dice', g.rechargeDice);
+                    }
+                    const att = document.getElementById('new-atk-req-attune');
+                    if (att && it.attunement) { att.checked = true; }
+                    // Le type d'arme vient du SRD : il sert au regroupement et au
+                    // choix automatique de la caractéristique (distance ⇒ Dex).
+                    if (it.weapon_range || (it.properties || []).length) {
+                        const props = it.properties || [];
+                        const wt = props.includes('thrown') ? 'thrown'
+                            : (/ranged|distance|à distance/i.test(it.weapon_range || '') ? 'ranged' : 'melee');
+                        setVal('new-atk-wtype', wt);
+                    }
+                    // Le toucher se calcule tout seul dès qu'une arme est reconnue.
+                    if (it.damage) {
+                        const auto = document.getElementById('new-atk-auto');
+                        if (auto && auto.value === 'manual') auto.value = 'auto';
+                    }
+                    if (window.showAppToast) window.showAppToast(`⚔️ « ${it.name} » rempli depuis le SRD`);
+            };
             window.SRDAuto.attach(document.getElementById('new-atk-name'), {
                 categories: ['equipment', 'magic-items'],
-                onPick: (it) => {
-                    if (it.damage) {
-                        const t = window.SRDAuto.DMG_FR[it.damage.type] || it.damage.type;
-                        setVal('new-atk-dmg', `${it.damage.dice} ${t}`);
-                    }
-                    const notes = [];
-                    if (it.properties) {
-                        // « polyvalente » est fusionnée avec ses dégâts pour éviter le doublon
-                        notes.push(it.properties.map(p => (p === 'versatile' && it.versatile_damage)
-                            ? `polyvalente ${it.versatile_damage}`
-                            : (window.SRDAuto.PROP_FR[p] || p)).join(', '));
-                    } else if (it.versatile_damage) {
-                        notes.push(`polyvalente ${it.versatile_damage}`);
-                    }
-                    // Au corps à corps c'est une allonge, pas une portée — et 1,5 m
-                    // étant la valeur par défaut, l'afficher n'apprend rien.
-                    if (it.range_m) {
-                        if (it.weapon_range === 'Ranged') {
-                            notes.push(`portée ${it.range_m.normal} m${it.range_m.long ? '/' + it.range_m.long + ' m' : ''}`);
-                        } else if (it.range_m.normal && it.range_m.normal !== 1.5) {
-                            notes.push(`allonge ${it.range_m.normal} m`);
-                        }
-                    }
-                    if (it.throw_range_m) notes.push(`jet ${it.throw_range_m.normal} m${it.throw_range_m.long ? '/' + it.throw_range_m.long + ' m' : ''}`);
-                    if (notes.length) setVal('new-atk-notes', notes.join(' · '));
-                    // Le bonus au toucher dépend du personnage : on ne le devine pas.
-                    if (window.showAppToast) window.showAppToast(`⚔️ « ${it.name} » rempli — ajuste ton bonus au toucher`);
-                }
+                onPick: (it) => window.fillAttackFromSrd(it)
             });
 
             // --- Sac à dos : équipement et objets magiques ---
+            // La ligne d'ajout rapide n'a que trois champs ; le reste (description,
+            // rareté, charges) est mis de côté et repris à l'ajout de l'objet.
             window.SRDAuto.attach(document.getElementById('inv-name'), {
                 categories: ['equipment', 'magic-items'],
                 onPick: (it) => {
                     if (it.weight_kg != null) setVal('inv-weight', it.weight_kg);
                     const qty = document.getElementById('inv-qty');
                     if (qty && !qty.value) setVal('inv-qty', 1);
+                    const extra = {};
+                    if (it.desc && it.desc.length) Object.assign(extra, { desc: it.desc.join('\n\n') }, guessCharges(it.desc));
+                    if (it.rarity) extra.rarity = it.rarity;
+                    if (it.cost) extra.value = it.cost;
+                    if (it.attunement) extra.attunement = true;
+                    if (it.type && it.rarity) extra.notes = it.type;
+                    window._invPrefill = { name: it.name, data: extra };
                     const info = it.cost ? ` — ${it.cost}` : '';
                     if (window.showAppToast) window.showAppToast(`🎒 « ${it.name} »${info}`);
                 }
             });
+
         }
         if(homeScreen) homeScreen.classList.add('hidden'); if(appScreen) appScreen.classList.remove('hidden'); 
 
         document.querySelectorAll('.btn-close-modal').forEach(btn => { btn.addEventListener('click', (e) => e.target.closest('.modal-overlay').classList.add('hidden')); });
 
-        const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic-stats', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-macros', 'widget-notes', 'widget-calculator'];
-        
-        function safeStoreAllWidgets() { const storage = document.getElementById('widget-storage'); ALL_WIDGETS.forEach(wId => { const w = document.getElementById(wId); if(w && w.parentNode !== storage) { storage.appendChild(w); } }); }
+        const ALL_WIDGETS = ['widget-rests', 'widget-concentration', 'widget-inspiration', 'widget-proficiency', 'widget-stats', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory', 'widget-companion', 'widget-quests', 'widget-magic', 'widget-abilities', 'widget-macros', 'widget-notes', 'widget-calculator'];
 
-        document.body.addEventListener('click', (e) => {
-            const header = e.target.closest('.collapsible-header'); if(!header) return;
-            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.classList.contains('btn-icon')) return;
-            if(e.target.closest('.trait-card')) return; 
-            e.preventDefault(); const content = header.nextElementSibling; if(!content || !content.classList.contains('collapsible-content')) return;
-            const icon = header.querySelector('.collapse-icon'); content.classList.toggle('collapsed'); if(icon) icon.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
-        });
+        // Avant de reconstruire une disposition, tous les modules sont remisés dans
+        // un conteneur caché : sans ça, un module absent de la disposition choisie
+        // disparaîtrait du DOM au moment où sa colonne est vidée.
+        function safeStoreAllWidgets() {
+            const storage = document.getElementById('widget-storage'); if(!storage) return;
+            ALL_WIDGETS.forEach(wId => { const w = document.getElementById(wId); if(w) storage.appendChild(w); });
+        }
 
         const layoutSelector = document.getElementById('layout-selector'); const layoutTabsContainer = document.getElementById('layout-tabs-container'); const layoutClassicContainer = document.getElementById('layout-classic-container'); const layoutCustomContainer = document.getElementById('layout-custom-container'); const btnEditCustom = document.getElementById('btn-edit-custom'); let isEditMode = false;
         
-        const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-companion'], 'col-right': ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
-        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic-stats', 'widget-macros', 'widget-abilities', 'widget-spells', 'widget-prepared-spells', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
+        const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-companion'], 'col-right': ['widget-magic', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
+        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
 
         // ===== AFFICHAGE TÉLÉPHONE (≤700px) : une section à la fois + barre de navigation basse =====
         const MOBILE_LAYOUT = {
             'mob-sec-perso':  ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-traits', 'widget-training', 'widget-appearance'],
             'mob-sec-combat': ['widget-hp', 'widget-combat', 'widget-rests', 'widget-attacks', 'widget-macros', 'widget-calculator'],
             'mob-sec-sac':    ['widget-inventory', 'widget-currency', 'widget-companion'],
-            'mob-sec-magie':  ['widget-magic-stats', 'widget-prepared-spells', 'widget-spells', 'widget-abilities'],
+            'mob-sec-magie':  ['widget-magic', 'widget-abilities'],
             'mob-sec-notes':  ['widget-quests', 'widget-notes']
         };
         // Modules repliés au premier affichage mobile (désature l'écran ; l'utilisateur peut les rouvrir)
@@ -883,6 +955,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnDeleteProfile = document.getElementById('btn-delete-profile'); if(btnDeleteProfile) { btnDeleteProfile.addEventListener('click', () => { let selValue = layoutSelector.value; if(confirm("Supprimer ce profil ?")) { customProfiles = customProfiles.filter(p => p.id !== selValue); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); applyLayout('classic'); } }); }
 
         let customLayout = []; let activeCustomTabId = null; let managerActiveTabId = null; let hiddenCustomWidgets = [];
+        // Les trois anciens modules de magie ont fusionné en « widget-magic ».
+        // Sans cette reprise, une disposition personnalisée enregistrée avant la
+        // refonte perdrait la magie au lieu de l'afficher.
+        const MAGIC_OLD = ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells'];
+        function migrateMagicLayout(tabs) {
+            if (!Array.isArray(tabs)) return tabs;
+            tabs.forEach(t => ['col1','col2','col3'].forEach(c => {
+                if (!Array.isArray(t[c])) return;
+                const hit = t[c].some(w => MAGIC_OLD.includes(w));
+                t[c] = t[c].filter(w => !MAGIC_OLD.includes(w));
+                if (hit && !tabs.some(x => ['col1','col2','col3'].some(y => (x[y]||[]).includes('widget-magic')))) {
+                    t[c].push('widget-magic');
+                }
+            }));
+            return tabs;
+        }
+
         function syncHiddenWidgets() { let used = []; customLayout.forEach(t => used.push(...t.col1, ...t.col2, ...t.col3)); hiddenCustomWidgets = ALL_WIDGETS.filter(w => !used.includes(w)); }
 
         function renderCustomSheet() { safeStoreAllWidgets(); const nav = document.getElementById('custom-tabs-nav'); if(!nav) return; nav.innerHTML = ''; if (customLayout.length <= 1) { nav.style.display = 'none'; } else { nav.style.display = 'flex'; customLayout.forEach(tab => { let btn = document.createElement('button'); btn.className = `tab-btn-strict ${tab.id === activeCustomTabId ? 'active' : ''}`; btn.textContent = tab.name; btn.onclick = () => { activeCustomTabId = tab.id; renderCustomSheet(); }; nav.appendChild(btn); }); } let activeTab = customLayout.find(t => t.id === activeCustomTabId); if(!activeTab) { activeTab = customLayout[0]; activeCustomTabId = activeTab.id; } const c1 = document.getElementById('custom-col-1'); c1.innerHTML = ''; const c2 = document.getElementById('custom-col-2'); c2.innerHTML = ''; const c3 = document.getElementById('custom-col-3'); c3.innerHTML = ''; activeTab.col1.forEach(wId => { let w = document.getElementById(wId); if(w) c1.appendChild(w); }); activeTab.col2.forEach(wId => { let w = document.getElementById(wId); if(w) c2.appendChild(w); }); activeTab.col3.forEach(wId => { let w = document.getElementById(wId); if(w) c3.appendChild(w); }); applyWidgetSizes(); }
@@ -933,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (mode === 'tabs' && layoutTabsContainer) { layoutTabsContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_TABS_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } } switchStrictTab('tab-strict-gen');
             } else if (mode === 'classic' && layoutClassicContainer) { layoutClassicContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_CLASSIC_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } }
-            } else if (mode === 'custom' || mode.startsWith('prof_')) { layoutCustomContainer.classList.remove('hidden'); if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { customLayout = prof.layout; } else { applyLayout('classic'); return; } } else { let savedBrouillon = getStore('dnd-custom-layout'); if (savedBrouillon && Array.isArray(savedBrouillon)) { customLayout = savedBrouillon; } else { customLayout = [{ id: 'tab_custom_default', name: 'Ma Fiche', col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']], col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']], col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']] }]; } } if (!customLayout.find(t => t.id === activeCustomTabId)) { activeCustomTabId = customLayout[0].id; managerActiveTabId = customLayout[0].id; } renderCustomSheet(); }
+            } else if (mode === 'custom' || mode.startsWith('prof_')) { layoutCustomContainer.classList.remove('hidden'); if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { customLayout = migrateMagicLayout(prof.layout); } else { applyLayout('classic'); return; } } else { let savedBrouillon = getStore('dnd-custom-layout'); if (savedBrouillon && Array.isArray(savedBrouillon)) { customLayout = migrateMagicLayout(savedBrouillon); } else { customLayout = [{ id: 'tab_custom_default', name: 'Ma Fiche', col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']], col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']], col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']] }]; } } if (!customLayout.find(t => t.id === activeCustomTabId)) { activeCustomTabId = customLayout[0].id; managerActiveTabId = customLayout[0].id; } renderCustomSheet(); }
             if(settingsDropdown) settingsDropdown.classList.add('hidden');
         }
         if(layoutSelector) layoutSelector.addEventListener('change', (e) => applyLayout(e.target.value));
@@ -1513,7 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         let invCategories = getStore('dnd-inv-categories') || []; let atkCategories = getStore('dnd-atk-categories') || [];
-        function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); }   // (edit-inv-category retiré : l'ancienne fenêtre d'édition du sac n'existe plus, l'édition est inline)
+        function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); let itemSel = document.getElementById('new-item-category'); if(itemSel) itemSel.innerHTML = buildOptions(invCategories); }   // (edit-inv-category retiré : l'ancienne fenêtre d'édition du sac n'existe plus, l'édition est inline)
         const catManagerModal = document.getElementById('category-manager-modal'); let currentCatContext = null; 
         window.openCategoryManager = function(context) { currentCatContext = context; const title = document.getElementById('cat-manager-title'); if(title) title.textContent = context === 'inv' ? "Onglets : Sac à dos" : "Onglets : Attaques"; renderCategoryManagerList(); if(catManagerModal) catManagerModal.classList.remove('hidden'); }
         function renderCategoryManagerList() { const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; } categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.marginBottom = '10px'; let moveBox = document.createElement('div'); moveBox.className = 'cat-move-box'; let btnUp = document.createElement('button'); btnUp.className = 'btn-small cat-move-btn'; btnUp.textContent = '▲'; btnUp.title = 'Monter cet onglet'; btnUp.disabled = index === 0; btnUp.onclick = () => moveCategory(index, -1); let btnDown = document.createElement('button'); btnDown.className = 'btn-small cat-move-btn'; btnDown.textContent = '▼'; btnDown.title = 'Descendre cet onglet'; btnDown.disabled = index === categories.length - 1; btnDown.onclick = () => moveCategory(index, 1); moveBox.appendChild(btnUp); moveBox.appendChild(btnDown); let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid rgba(138,28,28,0.25)'; input.style.borderRadius = '4px'; input.style.background = 'rgba(255,255,255,0.5)'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(moveBox); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); }); }
@@ -2011,8 +2100,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-short-rest') { document.getElementById('rest-modal-title').innerText = "Repos Court"; restLongContent.classList.add('hidden'); restShortContent.classList.remove('hidden'); shortRestRollLog = []; restRollResult.innerHTML = ``; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); restModal.classList.remove('hidden'); } if(e.target.id === 'btn-long-rest') { document.getElementById('rest-modal-title').innerText = "Repos Long"; restShortContent.classList.add('hidden'); restLongContent.classList.remove('hidden'); restModal.classList.remove('hidden'); } });
         if(btnRollHitDie) { btnRollHitDie.addEventListener('click', () => { const hdMax = parseInt(document.getElementById('hd-max').value) || 0; let hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); if(available <= 0) return; let amountToRoll = parseInt(document.getElementById('rest-hd-to-roll').value) || 1; if(amountToRoll > available) amountToRoll = available; if(amountToRoll <= 0) return; const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const conText = conMod >= 0 ? `+${conMod}` : `${conMod}`; let totalHealed = 0; let rollDetails = []; for(let i=0; i < amountToRoll; i++) { const roll = Math.floor(Math.random() * hdSize) + 1; const healed = Math.max(0, roll + conMod); totalHealed += healed; rollDetails.push(`[${roll}${conText}=${healed}]`); } const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; const newHp = Math.min(maxHp, currentHp + totalHealed); hdSpent += amountToRoll; document.getElementById('hd-spent').value = hdSpent; setStore('dnd-sheet-hd-spent', hdSpent, false); document.getElementById('hp-current').value = newHp; setStore('dnd-sheet-hp-current', newHp, false); shortRestRollLog.push(`<strong>${amountToRoll}d${hdSize}</strong> : ${rollDetails.join(' + ')} ➔ <span style="color:#2ecc71;">+${totalHealed} PV</span>`); restRollResult.innerHTML = `<p class="rest-log-line" style="font-size:1.2rem;"><strong>Lancé (${amountToRoll} dés) :</strong> ➔ <strong>+${totalHealed} PV</strong></p><p class="rest-log-line">PV : ${currentHp} → ${newHp}</p><div class="rest-roll-history" style="margin-top:10px; border-top:1px dashed var(--primary-color); padding-top:10px;"><strong>Historique :</strong><br>${shortRestRollLog.join('<br>')}</div>`; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); updateHpVisuals(); }); }
-        if(document.getElementById('btn-confirm-short-rest')) document.getElementById('btn-confirm-short-rest').addEventListener('click', () => { recoverAbilitiesByRest('short'); recoverSpellSlotsByRest('short'); restModal.classList.add('hidden'); });
-        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
+        if(document.getElementById('btn-confirm-short-rest')) document.getElementById('btn-confirm-short-rest').addEventListener('click', () => { recoverAbilitiesByRest('short'); recoverSpellSlotsByRest('short'); recoverGearByRest('short'); restModal.classList.add('hidden'); });
+        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); recoverGearByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
 
         // ===== COMPAGNONS / FAMILIERS (plusieurs par personnage) =====
         // Modèle : dnd-companions = [{ id, name, type, ac, hp, hpMax, hpTemp, speed, init,
@@ -2294,154 +2383,646 @@ document.addEventListener('DOMContentLoaded', () => {
             const last = document.querySelector('#companions-list .companion-card:last-child input[data-cf="name"]'); if (last) last.focus();
         });
 
-        let spells = getStore('dnd-spells') || [];
-        // --- Composantes de sort (V/S/M) : cases à cocher + matériaux ---
-        // sp.comp = { v, s, m, mat } (source de vérité) ; sp.res = chaîne d'affichage
-        // composée automatiquement (« V, S, M (une perle…) ») pour compatibilité.
+        // ==========================================
+        // MODULE MAGIE — un seul module, trois blocs :
+        //   1. Grimoire · 2. Emplacements de sorts · 3. Caractéristiques
+        //
+        // Le grimoire est un livre relié qui s'ouvre DANS la fiche. Deux états :
+        // le sommaire (on y clique un NIVEAU, jamais un sort) et le folio d'un
+        // niveau, dont les sorts se répartissent sur les deux pages.
+        // Il n'y a plus de module « sorts préparés » : « préparé » est une case
+        // sur chaque sortilège, et le compte remonte au sommaire.
+        // ==========================================
+        // Composantes : la fiche les garde sous deux formes — un objet {v,s,m,mat}
+        // pour le formulaire, et la chaîne « V, S, M (…) » pour l'affichage et les
+        // sorts enregistrés avant que l'objet n'existe.
+        function readSpellCompForm() {
+            const g = (id) => document.getElementById(id);
+            return { v: !!(g('new-spell-comp-v') || {}).checked,
+                     s: !!(g('new-spell-comp-s') || {}).checked,
+                     m: !!(g('new-spell-comp-m') || {}).checked,
+                     mat: ((g('new-spell-comp-mat') || {}).value || '').trim() };
+        }
         function spellResString(c) {
             if (!c) return '';
-            const parts = [];
-            if (c.v) parts.push('V');
-            if (c.s) parts.push('S');
-            if (c.m) parts.push('M' + (c.mat ? ' (' + c.mat + ')' : ''));
-            return parts.join(', ');
+            let out = [c.v && 'V', c.s && 'S', c.m && 'M'].filter(Boolean).join(', ');
+            if (c.m && c.mat) out += ' (' + c.mat + ')';
+            return out;
         }
-        // Rétro-compatibilité : déduit les cases depuis l'ancien champ texte libre.
         function parseSpellRes(res) {
-            res = String(res || '');
-            const mat = (res.match(/\(([^)]*)\)/) || [])[1] || '';
-            const flat = res.replace(/\([^)]*\)/g, '');
-            const has = (k) => new RegExp('(^|[,;\\s/])' + k + '(?=$|[,;\\s/.])', 'i').test(flat);
-            return { v: has('V'), s: has('S'), m: has('M'), mat: mat.trim() };
+            if (!res) return null;
+            const head = String(res).split('(')[0];
+            return { v: /V/.test(head), s: /S/.test(head), m: /M/.test(head),
+                     mat: (String(res).match(/\(([^)]*)\)/) || [])[1] || '' };
         }
-        function readSpellCompForm() {
-            const g = id => document.getElementById(id);
-            const m = g('new-spell-comp-m').checked;
-            return { v: g('new-spell-comp-v').checked, s: g('new-spell-comp-s').checked, m: m, mat: m ? g('new-spell-comp-mat').value.trim() : '' };
+        function fillSpellCompForm(c) {
+            c = c || { v:false, s:false, m:false, mat:'' };
+            const set = (id, on) => { const el = document.getElementById(id); if (el) el.checked = !!on; };
+            set('new-spell-comp-v', c.v); set('new-spell-comp-s', c.s); set('new-spell-comp-m', c.m);
+            const mat = document.getElementById('new-spell-comp-mat');
+            if (mat) mat.value = c.mat || '';
         }
-        function fillSpellCompForm(comp) {
-            const g = id => document.getElementById(id);
-            const c = comp || { v: false, s: false, m: false, mat: '' };
-            g('new-spell-comp-v').checked = !!c.v; g('new-spell-comp-s').checked = !!c.s; g('new-spell-comp-m').checked = !!c.m;
-            g('new-spell-comp-mat').value = c.mat || '';
-            g('new-spell-comp-mat').classList.toggle('hidden', !c.m);
-        }
-        const compMCheckbox = document.getElementById('new-spell-comp-m');
-        if (compMCheckbox) compMCheckbox.addEventListener('change', () => {
-            document.getElementById('new-spell-comp-mat').classList.toggle('hidden', !compMCheckbox.checked);
-        });
-        function renderPinnedSpells() { const list = document.getElementById('spells-list'); if(!list) return; list.innerHTML = ''; spells.forEach((sp, index) => { if(!sp.pinned) return; list.innerHTML += `<div class="item-card spell-card"><div class="item-card-header"><h4>Niv.${sp.level||0} - ${sp.name}</h4><div class="item-controls no-print"><button title="Monter" onclick="moveSpellUp(${index})">▲</button><button title="Descendre" onclick="moveSpellDown(${index})">▼</button><button class="btn-pin pinned" onclick="togglePin(${index})">📍</button></div></div><div class="item-details"><span>⏱️ ${sp.time}</span><span>📏 ${sp.range}</span>${sp.duration ? `<span>⏳ ${sp.duration}</span>` : ''}${sp.res ? `<span>💎 ${sp.res}</span>` : ''}</div><p><em>${sp.desc}</em></p>${sp.notes ? `<p><small>📝 ${sp.notes}</small></p>` : ''}</div>`; }); }
-        function renderGrimoire() { const content = document.getElementById('grimoire-content'); if(!content) return; content.innerHTML = ''; let grouped = {}; spells.forEach((sp, index) => { let lvl = parseInt(sp.level) || 0; if(!grouped[lvl]) grouped[lvl] = []; grouped[lvl].push({ ...sp, originalIndex: index }); }); let levels = Object.keys(grouped).sort((a,b) => a - b); levels.forEach(lvl => { let sortedSpells = grouped[lvl].sort((a,b) => a.name.localeCompare(b.name)); let lvlHtml = `<div class="spell-level-group"><h3 class="spell-level-title">Niveau ${lvl} ${lvl == 0 ? '(Tours de magie)' : ''}</h3>`; sortedSpells.forEach(sp => { let pinClass = sp.pinned ? 'pinned' : ''; let pinText = sp.pinned ? '📍 Épinglé' : '📌 Épingler'; lvlHtml += `<div class="item-card spell-card"><div class="item-card-header"><h4>${sp.name}</h4><div class="item-controls"><button class="btn-pin ${pinClass}" onclick="togglePin(${sp.originalIndex})">${pinText}</button><button title="Modifier" onclick="editSpell(${sp.originalIndex})">✎</button><button title="Supprimer" class="btn-del" onclick="deleteSpell(${sp.originalIndex})">X</button></div></div><div class="item-details"><span>⏱️ ${sp.time}</span><span>📏 ${sp.range}</span>${sp.duration ? `<span>⏳ ${sp.duration}</span>` : ''}${sp.res ? `<span>💎 ${sp.res}</span>` : ''}</div><p><em>${sp.desc}</em></p>${sp.notes ? `<p><small>📝 ${sp.notes}</small></p>` : ''}</div>`; }); lvlHtml += `</div>`; content.innerHTML += lvlHtml; }); if(levels.length === 0) content.innerHTML = "<p style='text-align:center;'>Le grimoire est vide.</p>"; }
-        
-        function renderPreparedSpells() {
-            const list = document.getElementById('prepared-spells-list');
-            const countEl = document.getElementById('prepared-spell-count');
-            if(!list) return;
 
-            let preparedSpells = spells.filter(sp => sp.prepared);
-            if (countEl) countEl.textContent = `${preparedSpells.length} préparés`;
+        let spells = getStore('dnd-spells') || [];
+        const SP_LEVELS = [0,1,2,3,4,5,6,7,8,9];
+        const spLevelName = (l) => l === 0 ? 'Tours de magie' : 'Niveau ' + l;
+        const spLevelShort = (l) => l === 0 ? '✦' : String(l);
+        const spLvl = (sp) => parseInt(sp.level, 10) || 0;
+        // La concentration se déduit de la durée : c'est là que le joueur l'écrit.
+        const spIsConc = (sp) => /concentration/i.test(sp.duration || '');
 
-            list.innerHTML = '';
-            if (preparedSpells.length === 0) {
-                list.innerHTML = '<span style="font-size:0.8rem; color:#888; font-style:italic;">Aucun sort préparé.</span>';
-                return;
+        // ---------- Concentration : un seul sort à la fois ----------
+        // La fiche a déjà une case « Concentration » et son halo ; le grimoire
+        // ne crée pas un second système, il retient seulement QUEL sort occupe
+        // la place et pilote cette case-là.
+        function concentratingOn() {
+            const name = getStore('dnd-concentration-spell', false) || '';
+            if (!name) return -1;
+            return spells.findIndex(s => s.name === name);
+        }
+        function setConcentration(i) {
+            const name = (i >= 0 && spells[i]) ? spells[i].name : '';
+            setStore('dnd-concentration-spell', name, false);
+            const cb = document.getElementById('is-concentrating');
+            if (cb) {
+                cb.checked = !!name;
+                setStore('dnd-is-concentrating', cb.checked, false);
+                updateConcentrationUI();
             }
+        }
+        /** Réclame la concentration pour un sort. Renvoie false si le joueur renonce. */
+        function claimConcentration(i) {
+            const sp = spells[i];
+            if (!sp || !spIsConc(sp)) return true;
+            const cur = concentratingOn();
+            if (cur === i) return true;
+            if (cur >= 0) {
+                const other = spells[cur];
+                if (!confirm(`Tu te concentres déjà sur « ${other.name} ».\n\n`
+                    + `Lancer « ${sp.name} » met fin à « ${other.name} ».\n\nContinuer ?`)) return false;
+                if (window.showAppToast) window.showAppToast(`◈ « ${other.name} » prend fin.`, '#8a6320');
+            }
+            setConcentration(i);
+            return true;
+        }
+        // Décocher la case à la main libère aussi le sort retenu.
+        const cbConc = document.getElementById('is-concentrating');
+        if (cbConc) cbConc.addEventListener('change', () => {
+            if (!cbConc.checked) setStore('dnd-concentration-spell', '', false);
+            if (grim.open) renderGrimoire();
+        });
 
-            let grouped = {};
-            preparedSpells.forEach(sp => {
-                let lvl = parseInt(sp.level) || 0;
-                if(!grouped[lvl]) grouped[lvl] = [];
-                grouped[lvl].push(sp);
-            });
+        // ---------- Lancer un sort depuis sa page ----------
+        const spellAtkBonus = () => parseMod((document.getElementById('spell-attack-bonus') || {}).value || 0);
+        const spellSaveDC = () => (document.getElementById('spell-save-dc') || {}).value || '—';
 
-            let levels = Object.keys(grouped).sort((a,b) => a - b);
-            levels.forEach(lvl => {
-                let lvlHtml = `<div class="prepared-level-group"><div class="prepared-level-header">Niveau ${lvl}</div>`;
-                grouped[lvl].sort((a,b) => a.name.localeCompare(b.name)).forEach(sp => {
-                    lvlHtml += `<div class="prepared-spell-row">
-                        <span class="prepared-spell-name">${sp.name}</span>
-                        <span class="prepared-spell-meta">⏱️ ${sp.time}${sp.duration ? ` • ⏳ ${sp.duration}` : ''}</span>
-                    </div>`;
+        /** `part` : 'attack' | 'dmg' | 'cast'. Le résultat s'affiche par-dessus le livre. */
+        async function castSpell(index, part, opts) {
+            const sp = spells[index]; if (!sp) return;
+            const o = opts || {};
+            if (!claimConcentration(index)) return;
+
+            const bits = [];
+            let total = 0, nat = null;
+            if (part === 'attack') {
+                const d = await rollD20With(o.advMode || 'normal');
+                nat = d.nat;
+                const bonus = spellAtkBonus();
+                total = nat + bonus;
+                let dice = `🎲 ${nat}`;
+                if (d.roll2 != null) {
+                    const dropped = (o.advMode === 'adv') ? Math.min(d.roll1, d.roll2) : Math.max(d.roll1, d.roll2);
+                    dice += ` <s>${dropped}</s>`;
+                }
+                bits.push(`<div class="atkfx-line">${dice} ${bonus >= 0 ? '+' : ''}${bonus} = `
+                    + `<b class="atkfx-total${nat === 1 ? ' is-fumble' : (nat === 20 ? ' is-crit' : '')}">${total}</b>`
+                    + (nat === 20 ? ' <b class="atk-crit">CRITIQUE</b>' : (nat === 1 ? ' <b class="atk-fumble">ÉCHEC CRITIQUE</b>' : ''))
+                    + `</div>`);
+            }
+            // Les dégâts suivent l'attaque, et doublent leurs dés sur un 20.
+            const wantDmg = (part === 'dmg' || (part === 'attack' && hasVal(sp.dmg)));
+            if (wantDmg && hasVal(sp.dmg)) {
+                const crit = o.crit || nat === 20;
+                const res = rollExpression(crit ? doubleDice(sp.dmg) : sp.dmg);
+                if (res.error) bits.push(`<div class="atkfx-line">${escAb(res.error)}</div>`);
+                else {
+                    if (part === 'dmg') total = res.total;
+                    bits.push(`<div class="atkfx-line">💥 <b class="atkfx-dmg">${res.total}</b> `
+                        + `${sp.dmgType ? escAb(sp.dmgType) + ' ' : ''}<span class="atkfx-detail">(${escAb(res.detail)})</span>`
+                        + (crit ? ' <span class="atkfx-detail">dés doublés</span>' : '') + `</div>`);
+                }
+            }
+            if (sp.mode === 'save' && part !== 'attack') {
+                bits.push(`<div class="atkfx-line">🛡️ Sauvegarde <b>DD ${escAb(spellSaveDC())}</b>`
+                    + (sp.saveAbility ? ` de ${escAb(sp.saveAbility)}` : '') + `</div>`);
+            }
+            if (spIsConc(sp)) bits.push(`<div class="atkfx-line atkfx-conc">◈ Concentration en cours sur ce sort.</div>`);
+            if (!bits.length) bits.push(`<div class="atkfx-line">Ce sort n'a ni jet ni dégâts : à toi de décrire.</div>`);
+
+            showSpellRoll(sp, bits.join(''));
+            // Un simple rappel de DD n'est pas un jet : il n'encombre pas l'historique.
+            const aLance = nat != null || (wantDmg && hasVal(sp.dmg));
+            if (aLance) {
+                const label = '✨ ' + sp.name;
+                const detail = nat != null ? `attaque ${total} (d20 : ${nat})` : `dégâts ${total}`;
+                pushRollHistory(label, total, detail, nat);
+                if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, total, detail, nat);
+            }
+            renderGrimoire();
+        }
+
+        // La surcouche de résultat vit au-dessus du livre (3200) et du scribe
+        // (3400) : elle est à 3600, sinon elle s'ouvrirait derrière la page.
+        const sroOverlay = () => document.getElementById('spell-roll-overlay');
+        function showSpellRoll(sp, html) {
+            const ov = sroOverlay(); if (!ov) return;
+            const body = document.getElementById('spell-roll-body');
+            if (body) body.innerHTML = `<div class="sro-name">✨ ${escAb(sp.name)}</div>${html}`;
+            ov.classList.remove('hidden');
+        }
+        function closeSpellRoll() { const ov = sroOverlay(); if (ov) ov.classList.add('hidden'); }
+        (function initSpellRollOverlay() {
+            const ov = sroOverlay(); if (!ov) return;
+            ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeSpellRoll(); });
+            const x = document.getElementById('btn-close-spell-roll');
+            if (x) x.addEventListener('click', closeSpellRoll);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !ov.classList.contains('hidden')) {
+                    e.stopPropagation();   // Échap ferme le résultat avant le livre
+                    closeSpellRoll();
+                }
+            }, true);
+        })();
+
+        const grim = { open:false, page:'summary', level:0, spread:0, onlyPrepared:false, sort:'level' };
+
+        /** Le contenu de l'éditeur riche est du HTML : on n'en garde que la mise
+         *  en forme, jamais un script ni un gestionnaire d'événement. */
+        function cleanSpellHtml(html) {
+            const box = document.createElement('div');
+            box.innerHTML = String(html || '');
+            const OK = new Set(['P','BR','B','STRONG','I','EM','U','H4','BLOCKQUOTE','UL','OL','LI','A','SUP','SUB','SPAN','DIV']);
+            box.querySelectorAll('*').forEach(el => {
+                if (!OK.has(el.tagName)) { el.replaceWith(...el.childNodes); return; }
+                [...el.attributes].forEach(a => {
+                    const keep = el.tagName === 'A' && a.name === 'href' && !/^\s*javascript:/i.test(a.value);
+                    if (!keep) el.removeAttribute(a.name);
                 });
-                lvlHtml += `</div>`;
-                list.innerHTML += lvlHtml;
+                if (el.tagName === 'A') { el.setAttribute('target','_blank'); el.setAttribute('rel','noopener'); }
+            });
+            return box.innerHTML;
+        }
+
+        const sortSpellList = (arr) => arr.slice().sort((a,b) =>
+            grim.sort === 'alpha'
+                ? String(a.name).localeCompare(String(b.name),'fr')
+                : (spLvl(a) - spLvl(b)) || String(a.name).localeCompare(String(b.name),'fr'));
+        const spellsOfLevel = (l) => sortSpellList(spells.filter(s => spLvl(s) === l))
+            .filter(s => !grim.onlyPrepared || s.prepared);
+
+        // Le grimoire s'ouvre en surcouche : dans une colonne de fiche, une double
+        // page n'aurait jamais la place. Le module ne garde que la couverture.
+        const grimOverlay = () => document.getElementById('grimoire-overlay');
+        function openBook() {
+            const ov = grimOverlay(); if (!ov) return;
+            grim.open = true;
+            ov.classList.remove('hidden');
+            renderGrimoire();
+            setTimeout(() => document.getElementById('btn-close-grimoire')?.focus(), 80);
+        }
+        function closeBook() {
+            const ov = grimOverlay(); if (!ov) return;
+            ov.classList.add('hidden');
+            grim.open = false;
+            renderBookCover();
+            document.getElementById('book-cover')?.focus();
+        }
+        /** Couverture fermée : elle annonce ce que contient le livre. */
+        function renderBookCover() {
+            const n = spells.length, p = spells.filter(s => s.prepared).length;
+            const el = document.getElementById('book-count');
+            if (el) el.textContent = n
+                ? `${n} sortilège${n>1?'s':''}${p ? ' · ' + p + ' préparé' + (p>1?'s':'') : ''}`
+                : 'aucun sortilège';
+            const sub = document.getElementById('grim-sub');
+            if (sub) sub.textContent = 'fermé';
+        }
+
+        function renderGrimoire() {
+            const L = document.getElementById('pageL'), R = document.getElementById('pageR');
+            if (!L || !R) return;
+            const sub = document.getElementById('grim-sub');
+            if (!grim.open) { renderBookCover(); return; }
+            // Les caractéristiques magiques sont un VRAI bloc de la fiche qu'on
+            // déplace dans la page de droite : ses champs gardent leurs ids, donc
+            // la sauvegarde et le calcul du DD continuent de fonctionner.
+            parkStats();
+            if (grim.page === 'summary') renderGrimSummary(L, R, sub);
+            else renderGrimFolio(L, R, sub);
+        }
+
+        function parkStats() {
+            const home = document.getElementById('magic-stats-home');
+            const box = document.querySelector('.spell-stats-container');
+            if (home && box && box.parentElement !== home) home.appendChild(box);
+        }
+        function mountStats(slot) {
+            const box = document.querySelector('.spell-stats-container');
+            if (slot && box) slot.appendChild(box);
+        }
+
+        function renderGrimSummary(L, R, sub) {
+            if (sub) sub.textContent = 'sommaire';
+            const total = spells.length, prep = spells.filter(s => s.prepared).length;
+            L.innerHTML = `
+                <h3 class="folio-title">Le Grimoire<br>des Sortilèges</h3>
+                <div class="folio-rule"></div>
+                <div class="counter"><b>${total}</b> sortilège${total>1?'s':''} inscrit${total>1?'s':''}
+                  <span>· dont <b style="font-size:1rem">${prep}</b> préparé${prep>1?'s':''}</span></div>
+                <div class="settings">
+                  <label class="set-toggle${grim.onlyPrepared?' is-on':''}" id="set-prep">
+                    <input type="checkbox"${grim.onlyPrepared?' checked':''}> Préparés uniquement</label>
+                  <div class="set-sort" role="group" aria-label="Tri">
+                    <button type="button" data-gsort="level" class="${grim.sort==='level'?'is-on':''}">Par niveau</button>
+                    <button type="button" data-gsort="alpha" class="${grim.sort==='alpha'?'is-on':''}">A → Z</button>
+                  </div>
+                </div>
+                <h4 class="page-head">Sommaire</h4>
+                <ul class="levels">${SP_LEVELS.map(l => {
+                    const all = spells.filter(s => spLvl(s) === l);
+                    const shown = spellsOfLevel(l);
+                    const p = all.filter(s => s.prepared).length;
+                    const peek = shown.slice(0,3).map(s => s.name).join(' · ')
+                        || (all.length ? 'aucun préparé à ce rang' : 'aucun sort inscrit');
+                    return `<li><button class="level-row${all.length?'':' is-empty'}" data-glevel="${l}">
+                        <span class="medallion">${spLevelShort(l)}</span>
+                        <span class="level-main">
+                          <span class="level-name">${spLevelName(l)}</span>
+                          <span class="level-peek">${escAb(peek)}${shown.length>3?' …':''}</span>
+                        </span>
+                        <span class="level-count"><b>${all.length}</b>${p?p+' prêt'+(p>1?'s':''):'—'}</span>
+                        <span class="level-chev">❯</span></button></li>`;
+                }).join('')}</ul>`;
+
+            const pinned = spells.map((s,i) => ({ s, i })).filter(x => x.s.pinned);
+            const ci = concentratingOn();
+            R.innerHTML = `
+                <h4 class="page-head">Caractéristiques magiques</h4>
+                <div id="mg-stats-slot"></div>
+                ${ci >= 0 ? `<div class="conc-banner">
+                    <span class="conc-mark">◈</span>
+                    <span>Concentration sur <button class="conc-link" data-goto="${ci}">${escAb(spells[ci].name)}</button></span>
+                    <button class="conc-drop" data-dropconc title="Rompre la concentration">✕</button>
+                  </div>` : ''}
+                <h4 class="page-head">📌 Sorts épinglés</h4>
+                ${pinned.length
+                    ? `<ul class="pinned-list">${pinned.map(({s,i}) => `
+                        <li><button class="pinned-row${i === ci ? ' is-concentrating' : ''}" data-goto="${i}">
+                          <span class="pin-lvl">${spLevelShort(spLvl(s))}</span>
+                          <span class="pin-name">${escAb(s.name)}${i === ci ? ' <span class="pin-conc">◈</span>' : ''}</span>
+                          <span class="pin-meta">${escAb(s.time || '')}</span>
+                          <span class="level-chev">❯</span></button></li>`).join('')}</ul>`
+                    : `<p class="folio-empty">Aucun sort épinglé. Le repère 📌 d’une page de sort le pose ici.</p>`}
+                <div class="legend"><h4>Composantes</h4><dl>
+                  <dt>V</dt><dd>verbale — il faut pouvoir parler</dd>
+                  <dt>S</dt><dd>somatique — une main libre</dd>
+                  <dt>M</dt><dd>matérielle — un focaliseur ou l’ingrédient</dd>
+                </dl></div>
+                <span class="quill">🪶</span>`;
+            mountStats(document.getElementById('mg-stats-slot'));
+        }
+
+        /** Un sort par page : les deux pages ouvertes montrent deux sorts,
+         *  et l'on tourne les pages deux par deux à l'intérieur d'un rang. */
+        function renderGrimFolio(L, R, sub) {
+            const l = grim.level;
+            const list = spellsOfLevel(l);
+            const spreads = Math.max(1, Math.ceil(list.length / 2));
+            if (grim.spread >= spreads) grim.spread = spreads - 1;
+            if (grim.spread < 0) grim.spread = 0;
+            const left = list[grim.spread * 2], right = list[grim.spread * 2 + 1];
+            if (sub) sub.textContent = spLevelName(l).toLowerCase()
+                + (list.length > 2 ? ` · feuillet ${grim.spread + 1}/${spreads}` : '');
+
+            L.innerHTML = `
+                <div class="folio-top">
+                  <button class="link-btn" data-gback>❦ Sommaire</button>
+                  <span class="medallion" style="width:28px;height:28px;font-size:.78rem">${spLevelShort(l)}</span>
+                </div>
+                <h3 class="folio-title" style="font-size:1.2rem">${spLevelName(l)}</h3>
+                <div class="folio-rule"></div>
+                ${left ? spellCard(left)
+                       : `<p class="folio-empty">${grim.onlyPrepared && spells.some(s => spLvl(s) === l)
+                            ? 'Aucun sort préparé à ce rang. Décoche « préparés uniquement » pour tout voir.'
+                            : 'Aucun sort inscrit à ce rang — la page attend ta plume.'}</p>`}`;
+
+            R.innerHTML = `
+                <div class="folio-top" style="justify-content:flex-end">
+                  <button class="inscribe" id="btn-open-spell-add">✒ Inscrire</button>
+                </div>
+                ${right ? spellCard(right) : '<p class="folio-empty page-blank">page blanche</p>'}
+                <div class="folio-nav">
+                  <button class="link-btn" data-gstep="-1">❮ ${prevLabel(l, spreads)}</button>
+                  ${list.length > 2 ? `<span class="folio-page">${grim.spread + 1} / ${spreads}</span>` : ''}
+                  <button class="link-btn" data-gstep="1">${nextLabel(l, spreads)} ❯</button>
+                </div>`;
+        }
+        const prevLabel = (l, spreads) => grim.spread > 0 ? 'Page précédente'
+            : (l === 0 ? 'Sommaire' : spLevelName(l - 1));
+        const nextLabel = (l, spreads) => grim.spread < spreads - 1 ? 'Page suivante'
+            : (l === 9 ? 'Sommaire' : spLevelName(l + 1));
+
+        function spellCard(sp) {
+            const i = spells.indexOf(sp);
+            const c = sp.comp || parseSpellRes(sp.res) || {};
+            const comps = ['v','s','m'].filter(k => c[k]).map(k => k.toUpperCase()).join(' ');
+            const conc = spIsConc(sp), holds = conc && concentratingOn() === i;
+            // Un tap = un jet. On n'affiche que les boutons qui ont un sens :
+            // pas de « dégâts » sur un sort qui n'en fait pas.
+            const acts = [
+                sp.mode === 'attack' ? `<button class="sp-cast" data-part="attack">🎯 Attaque${hasVal(sp.dmg) ? ' + dégâts' : ''}</button>` : '',
+                sp.mode === 'save' ? `<button class="sp-cast is-dd" data-part="dmg">🛡️ DD ${escAb(spellSaveDC())}${sp.saveAbility ? ' ' + escAb(sp.saveAbility) : ''}</button>` : '',
+                (hasVal(sp.dmg) && sp.mode !== 'attack') ? `<button class="sp-cast" data-part="dmg">💥 ${escAb(sp.dmg)}${sp.dmgType ? ' ' + escAb(sp.dmgType) : ''}</button>` : '',
+                conc ? `<button class="sp-conc${holds ? ' is-on' : ''}" title="${holds ? 'Arrêter la concentration' : 'Se concentrer sur ce sort'}">◈ ${holds ? 'Concentré' : 'Se concentrer'}</button>` : ''
+            ].filter(Boolean).join('');
+            return `<article class="spell${sp.prepared?' is-prepared':''}${holds?' is-concentrating':''}" data-si="${i}">
+              <div class="spell-head">
+                <span class="seal" aria-hidden="true">✦</span>
+                <h4 class="spell-name">${escAb(sp.name)}</h4>
+                <span class="spell-tools">
+                  <button class="sp-pin${sp.pinned?' is-on':''}" title="${sp.pinned?'Retirer des épinglés':'Épingler au sommaire'}">📌</button>
+                  <button class="sp-edit" title="Modifier">✎</button>
+                  <button class="sp-del" title="Oublier ce sort">🗑</button>
+                </span>
+              </div>
+              <label class="prep" title="Sort préparé pour aujourd’hui">
+                <input type="checkbox" class="prep-cb"${sp.prepared?' checked':''}> préparé</label>
+              ${acts ? `<div class="spell-acts">${acts}</div>` : ''}
+              <div class="spell-meta">
+                ${sp.time ? `<span class="tag">⏱ ${escAb(sp.time)}</span>` : ''}
+                ${sp.range ? `<span class="tag">📏 ${escAb(sp.range)}</span>` : ''}
+                ${sp.duration ? `<span class="tag">⏳ ${escAb(sp.duration)}</span>` : ''}
+                ${comps ? `<span class="tag comp">${comps}</span>` : ''}
+                ${spIsConc(sp) ? `<span class="tag conc">◈ Concentration</span>` : ''}
+              </div>
+              <div class="spell-body">${sp.desc || '<p class="folio-empty">Pas encore de description.</p>'}</div>
+              ${c.m && c.mat ? `<div class="spell-notes">Matériel : ${escAb(c.mat)}</div>` : ''}
+              ${sp.notes ? `<div class="spell-notes">✎ ${escAb(sp.notes)}</div>` : ''}
+            </article>`;
+        }
+
+        /** Ouvre la page d'un sort donné (depuis les épinglés du sommaire). */
+        function goToSpell(globalIndex) {
+            const sp = spells[globalIndex]; if (!sp) return;
+            const l = spLvl(sp);
+            grim.level = l; grim.page = 'folio';
+            if (grim.onlyPrepared && !sp.prepared) grim.onlyPrepared = false;
+            const list = spellsOfLevel(l);
+            const pos = list.findIndex(x => x === sp);
+            grim.spread = pos < 0 ? 0 : Math.floor(pos / 2);
+            renderGrimoire();
+        }
+
+        // Chromium ne recalcule pas toujours un var() déjà résolu quand une
+        // classe change sur un ancêtre lointain : le papier passait au sombre
+        // mais les cartes de sort gardaient leur fond clair. On redessine le
+        // livre au changement de thème — les nœuds neufs relisent les variables.
+        if (window.MutationObserver) {
+            let lastTheme = document.body.classList.contains('theme-dark');
+            new MutationObserver(() => {
+                const now = document.body.classList.contains('theme-dark');
+                if (now === lastTheme) return;
+                lastTheme = now;
+                if (grim.open) renderGrimoire();
+            }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        }
+
+        // ---------- Interactions du livre ----------
+        document.getElementById('book-cover')?.addEventListener('click', openBook);
+        document.getElementById('btn-close-grimoire')?.addEventListener('click', closeBook);
+        grimOverlay()?.addEventListener('mousedown', (e) => { if (e.target === grimOverlay()) closeBook(); });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && grimOverlay() && !grimOverlay().classList.contains('hidden')) closeBook();
+        });
+
+        const spreadEl = document.getElementById('spread');
+        if (spreadEl) {
+            spreadEl.addEventListener('click', (e) => {
+                const lvl = e.target.closest('[data-glevel]');
+                if (lvl) { grim.level = +lvl.dataset.glevel; grim.page = 'folio'; grim.spread = 0; renderGrimoire(); return; }
+                if (e.target.closest('[data-gback]')) { grim.page = 'summary'; renderGrimoire(); return; }
+                if (e.target.closest('[data-dropconc]')) { setConcentration(-1); renderGrimoire(); return; }
+                const goto = e.target.closest('[data-goto]');
+                if (goto) { goToSpell(+goto.dataset.goto); return; }
+                const step = e.target.closest('[data-gstep]');
+                if (step) {
+                    // On tourne d'abord les feuillets du rang courant ; au bout,
+                    // on passe au rang voisin, et la navigation reboucle sur le
+                    // sommaire aux deux extrémités du livre.
+                    const dir = +step.dataset.gstep;
+                    const spreads = Math.max(1, Math.ceil(spellsOfLevel(grim.level).length / 2));
+                    const next = grim.spread + dir;
+                    if (next >= 0 && next < spreads) { grim.spread = next; }
+                    else {
+                        const lv = grim.level + dir;
+                        if (lv < 0 || lv > 9) grim.page = 'summary';
+                        else {
+                            grim.level = lv;
+                            const n = Math.max(1, Math.ceil(spellsOfLevel(lv).length / 2));
+                            grim.spread = dir > 0 ? 0 : n - 1;
+                        }
+                    }
+                    renderGrimoire(); return;
+                }
+                const gs = e.target.closest('[data-gsort]');
+                if (gs) { grim.sort = gs.dataset.gsort; grim.spread = 0; renderGrimoire(); return; }
+
+                const card = e.target.closest('.spell');
+                if (!card) return;
+                const i = parseInt(card.dataset.si, 10);
+                const castBtn = e.target.closest('.sp-cast');
+                if (castBtn) {
+                    castSpell(i, castBtn.dataset.part, { advMode: e.shiftKey ? 'adv' : (e.altKey ? 'dis' : 'normal') });
+                    return;
+                }
+                if (e.target.closest('.sp-conc')) {
+                    if (concentratingOn() === i) setConcentration(-1);
+                    else if (!claimConcentration(i)) return;
+                    renderGrimoire();
+                    return;
+                }
+                if (e.target.closest('.prep-cb')) {
+                    spells[i].prepared = !spells[i].prepared;
+                    setStore('dnd-spells', spells);
+                    card.classList.toggle('is-prepared', spells[i].prepared);
+                    const seal = card.querySelector('.seal');
+                    seal.classList.remove('is-stamping'); void seal.offsetWidth; seal.classList.add('is-stamping');
+                    return;
+                }
+                if (e.target.closest('.sp-pin')) {
+                    spells[i].pinned = !spells[i].pinned;
+                    setStore('dnd-spells', spells);
+                    e.target.closest('.sp-pin').classList.toggle('is-on', spells[i].pinned);
+                    if (window.showAppToast) window.showAppToast(
+                        spells[i].pinned ? `📌 « ${spells[i].name} » épinglé au sommaire.`
+                                         : `« ${spells[i].name} » retiré des épinglés.`, '#8a6320');
+                    return;
+                }
+                if (e.target.closest('.sp-edit')) { window.editSpell(i); return; }
+                if (e.target.closest('.sp-del')) {
+                    window.deleteWithUndo(spells, i, spells[i].name || 'ce sort',
+                        () => setStore('dnd-spells', spells), renderGrimoire);
+                }
+            });
+            spreadEl.addEventListener('change', (e) => {
+                if (!e.target.closest('#set-prep')) return;
+                grim.onlyPrepared = e.target.checked;
+                grim.spread = 0;
+                renderGrimoire();
             });
         }
 
-        function renderPrepareModalList() {
-            const checklist = document.getElementById('prepare-spells-checklist');
-            const search = document.getElementById('prepare-search')?.value.toLowerCase() || "";
-            const filterLvl = document.getElementById('prepare-filter-level')?.value || "";
-
-            if (!checklist) return;
-            checklist.innerHTML = '';
-
-            let filtered = spells.filter(sp => {
-                if (search && !sp.name.toLowerCase().includes(search)) return false;
-                if (filterLvl !== "" && String(sp.level||0) !== filterLvl) return false;
-                return true;
-            });
-
-            if (filtered.length === 0) {
-                checklist.innerHTML = '<p style="text-align:center; color:#888; font-style:italic;">Aucun sort correspondant.</p>';
-                return;
-            }
-
-            filtered.sort((a,b) => (parseInt(a.level)||0) - (parseInt(b.level)||0) || a.name.localeCompare(b.name)).forEach((sp) => {
-                const originalIndex = spells.indexOf(sp);
-                const isChecked = sp.prepared ? 'checked' : '';
-                checklist.innerHTML += `
-                    <label class="prepared-spell-row prepare-spell-row" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
-                        <input type="checkbox" style="transform:scale(1.2);" ${isChecked} onchange="toggleSpellPrepared(${originalIndex}, this.checked)">
-                        <div style="flex:1;">
-                            <div class="prepared-spell-name">${sp.name}</div>
-                            <div class="prepared-spell-meta">Niv. ${sp.level||0} • ${sp.time}</div>
-                        </div>
-                    </label>
-                `;
-            });
-        }
-
-        window.toggleSpellPrepared = (index, isPrepared) => {
-            spells[index].prepared = isPrepared;
-            setStore('dnd-spells', spells);
-            renderPreparedSpells();
-        };
-
-        const prepareSearchInput = document.getElementById('prepare-search');
-        if (prepareSearchInput) prepareSearchInput.addEventListener('input', renderPrepareModalList);
-
-        const prepareFilterLevel = document.getElementById('prepare-filter-level');
-        if (prepareFilterLevel) prepareFilterLevel.addEventListener('change', renderPrepareModalList);
-
+        // ---------- Le scribe : inscrire / modifier un sort ----------
         const spellModal = document.getElementById('spell-form-modal');
-        document.body.addEventListener('click', (e) => { 
-            if(e.target.id === 'btn-open-spell-add') { 
-                editingSpellIndex = -1; 
-                document.getElementById('spell-modal-title').textContent = "Inscrire un Sort"; 
-                document.querySelectorAll('#spell-form-modal input[type="text"], #spell-form-modal input[type="number"]').forEach(i => i.value = '');
-                fillSpellCompForm(null);
-                quillNewSpell.root.innerHTML = '';
-                spellModal.classList.remove('hidden');
-            }
-            
-            if (e.target.id === 'btn-open-prepare-spells') {
-                document.getElementById('prepare-spells-modal').classList.remove('hidden');
-                document.getElementById('prepare-search').value = '';
-                document.getElementById('prepare-filter-level').value = '';
-                renderPrepareModalList();
+        const spellLevelSel = document.getElementById('new-spell-level');
+        if (spellLevelSel) spellLevelSel.innerHTML = SP_LEVELS.map(l =>
+            `<option value="${l}">${l === 0 ? 'Tour de magie' : 'Niveau ' + l}</option>`).join('');
+        let scribePinned = false;
+
+        function resetScribe() {
+            ['new-spell-name','new-spell-time','new-spell-range','new-spell-duration','new-spell-comp-mat','new-spell-notes',
+             'new-spell-save-ability','new-spell-dmg','new-spell-dmg-type']
+                .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            const mode = document.getElementById('new-spell-mode'); if (mode) mode.value = 'none';
+            spellSyncMode();
+            fillSpellCompForm(null);
+            const d = document.getElementById('new-spell-desc'); if (d) d.innerHTML = '';
+            const m = document.getElementById('scribe-msg'); if (m) m.textContent = '';
+        }
+        // La caractéristique visée n'a de sens qu'avec une sauvegarde.
+        function spellSyncMode() {
+            const f = document.getElementById('new-spell-save-f');
+            const mode = (document.getElementById('new-spell-mode') || {}).value;
+            if (f) f.hidden = mode !== 'save';
+        }
+        if (document.getElementById('new-spell-mode'))
+            document.getElementById('new-spell-mode').addEventListener('change', spellSyncMode);
+        function openScribe(level) {
+            editingSpellIndex = -1;
+            resetScribe();
+            if (level != null && spellLevelSel) spellLevelSel.value = level;
+            document.getElementById('spell-modal-title').textContent = 'Inscrire un sortilège';
+            spellModal.classList.remove('hidden');
+            setTimeout(() => document.getElementById('new-spell-name')?.focus(), 90);
+        }
+        document.body.addEventListener('click', (e) => {
+            if (e.target.closest('#btn-open-spell-add')) openScribe(grim.page === 'folio' ? grim.level : null);
+        });
+        // Fermeture : ✕ (btn-close-modal, déjà branché), clic hors du panneau, Échap
+        if (spellModal) spellModal.addEventListener('mousedown', (e) => {
+            if (e.target === spellModal) spellModal.classList.add('hidden');
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && spellModal && !spellModal.classList.contains('hidden')) spellModal.classList.add('hidden');
+        });
+        const pinBtn = document.getElementById('btn-pin-scribe');
+        if (pinBtn) pinBtn.addEventListener('click', () => {
+            scribePinned = !scribePinned;
+            pinBtn.classList.toggle('is-on', scribePinned);
+            pinBtn.setAttribute('aria-pressed', String(scribePinned));
+            document.getElementById('scribe-msg').textContent =
+                scribePinned ? 'Le panneau restera ouvert après chaque sauvegarde.' : '';
+        });
+
+        // Barre d'outils de l'éditeur riche
+        const spellToolbar = document.getElementById('spell-toolbar');
+        if (spellToolbar) {
+            spellToolbar.addEventListener('click', (e) => {
+                const b = e.target.closest('button[data-cmd]'); if (!b) return;
+                e.preventDefault();
+                document.getElementById('new-spell-desc').focus();
+                if (b.dataset.cmd === 'createLink') {
+                    const url = prompt('Adresse du lien :', 'https://');
+                    if (url && !/^\s*javascript:/i.test(url)) document.execCommand('createLink', false, url);
+                    return;
+                }
+                document.execCommand(b.dataset.cmd, false, null);
+            });
+            spellToolbar.addEventListener('change', (e) => {
+                if (!e.target.matches('[data-block]')) return;
+                document.getElementById('new-spell-desc').focus();
+                document.execCommand('formatBlock', false, e.target.value);
+                e.target.value = 'p';
+            });
+        }
+
+        if (document.getElementById('btn-add-spell')) document.getElementById('btn-add-spell').addEventListener('click', () => {
+            const name = document.getElementById('new-spell-name').value.trim();
+            const msg = document.getElementById('scribe-msg');
+            if (!name) { if (msg) msg.textContent = 'Il faut au moins un nom.'; document.getElementById('new-spell-name').focus(); return; }
+            const comp = readSpellCompForm();
+            const level = parseInt(spellLevelSel.value, 10) || 0;
+            const sp = {
+                name, level,
+                time: document.getElementById('new-spell-time').value.trim(),
+                range: document.getElementById('new-spell-range').value.trim(),
+                duration: document.getElementById('new-spell-duration').value.trim(),
+                comp, res: spellResString(comp),
+                desc: cleanSpellHtml(document.getElementById('new-spell-desc').innerHTML),
+                notes: document.getElementById('new-spell-notes').value.trim(),
+                mode: (document.getElementById('new-spell-mode') || {}).value || 'none',
+                saveAbility: (document.getElementById('new-spell-save-ability') || {}).value || '',
+                dmg: (document.getElementById('new-spell-dmg') || {}).value.trim(),
+                dmgType: (document.getElementById('new-spell-dmg-type') || {}).value.trim(),
+                // Un sort qu'on vient d'inscrire est prêt à servir.
+                prepared: editingSpellIndex >= 0 ? !!spells[editingSpellIndex].prepared : true,
+                // L'épingle est un réglage du joueur, pas du sort : la modifier
+                // ne doit pas la faire tomber du sommaire.
+                pinned: editingSpellIndex >= 0 ? !!spells[editingSpellIndex].pinned : false
+            };
+            if (editingSpellIndex >= 0) spells[editingSpellIndex] = sp; else spells.push(sp);
+            setStore('dnd-spells', spells);
+            // Un sort modifié qui cesse d'être à concentration libère la place.
+            if (editingSpellIndex >= 0 && !spIsConc(sp) && concentratingOn() === editingSpellIndex) setConcentration(-1);
+
+            // On ouvre le folio du niveau concerné, sort déplié.
+            grim.page = 'folio'; grim.level = level; grim.spread = 0;
+            openBook(); renderGrimoire();
+
+            if (window.showAppToast) window.showAppToast(
+                `« ${sp.name} » inscrit${spIsConc(sp) ? ' — concentration relevée' : ''}.`, '#3d7a3d');
+            if (scribePinned && editingSpellIndex < 0) {
+                resetScribe(); spellLevelSel.value = level;
+                document.getElementById('new-spell-name').focus();
+                if (msg) msg.textContent = 'Sort inscrit. À la suivante.';
+            } else {
+                editingSpellIndex = -1;
+                spellModal.classList.add('hidden');
             }
         });
 
-        if(document.getElementById('btn-close-prepare-spells')) {
-            document.getElementById('btn-close-prepare-spells').addEventListener('click', () => {
-                document.getElementById('prepare-spells-modal').classList.add('hidden');
-            });
-        }
-
-        if(document.getElementById('btn-add-spell')) { document.getElementById('btn-add-spell').addEventListener('click', () => { const comp = readSpellCompForm(); const sp = { name: document.getElementById('new-spell-name').value, level: document.getElementById('new-spell-level').value || 0, time: document.getElementById('new-spell-time').value, range: document.getElementById('new-spell-range').value, duration: document.getElementById('new-spell-duration').value, comp: comp, res: spellResString(comp), desc: quillNewSpell.root.innerHTML, notes: document.getElementById('new-spell-notes').value, pinned: document.getElementById('new-spell-pinned').checked, prepared: editingSpellIndex >= 0 ? spells[editingSpellIndex].prepared : false }; if(sp.name) { if(editingSpellIndex >= 0) { spells[editingSpellIndex] = sp; } else { spells.push(sp); } setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); spellModal.classList.add('hidden'); } }); }
-        window.togglePin = (index) => { spells[index].pinned = !spells[index].pinned; setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); }; window.deleteSpell = (index) => { if(confirm("Oublier ce sort ?")) { spells.splice(index, 1); setStore('dnd-spells', spells); renderPinnedSpells(); renderGrimoire(); renderPreparedSpells(); }}; window.moveSpellUp = (index) => { let prevIndex = -1; for(let i = index - 1; i >= 0; i--) { if(spells[i].pinned) { prevIndex = i; break; } } if(prevIndex !== -1) { [spells[prevIndex], spells[index]] = [spells[index], spells[prevIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.moveSpellDown = (index) => { let nextIndex = -1; for(let i = index + 1; i < spells.length; i++) { if(spells[i].pinned) { nextIndex = i; break; } } if(nextIndex !== -1) { [spells[nextIndex], spells[index]] = [spells[index], spells[nextIndex]]; setStore('dnd-spells', spells); renderPinnedSpells(); }}; window.editSpell = (index) => { const data = spells[index]; document.getElementById('new-spell-name').value = data.name; document.getElementById('new-spell-level').value = data.level; document.getElementById('new-spell-time').value = data.time; document.getElementById('new-spell-range').value = data.range; document.getElementById('new-spell-duration').value = data.duration || ''; fillSpellCompForm(data.comp || parseSpellRes(data.res)); quillNewSpell.root.innerHTML = data.desc; document.getElementById('new-spell-notes').value = data.notes; document.getElementById('new-spell-pinned').checked = data.pinned; editingSpellIndex = index; document.getElementById('spell-modal-title').textContent = "Modifier le Sort"; spellModal.classList.remove('hidden'); };
-        const grimoireModal = document.getElementById('grimoire-modal'); document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-grimoire') { renderGrimoire(); grimoireModal.classList.remove('hidden', 'closing'); grimoireModal.classList.add('opening'); } }); if(document.getElementById('btn-close-grimoire')) document.getElementById('btn-close-grimoire').addEventListener('click', () => { if(grimoireModal.classList.contains('closing')) return; grimoireModal.classList.remove('opening'); grimoireModal.classList.add('closing'); setTimeout(() => { grimoireModal.classList.add('hidden'); grimoireModal.classList.remove('closing'); }, 1000); });
+        window.editSpell = (index) => {
+            const d = spells[index]; if (!d) return;
+            resetScribe();
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
+            set('new-spell-name', d.name);
+            if (spellLevelSel) spellLevelSel.value = parseInt(d.level, 10) || 0;
+            set('new-spell-time', d.time); set('new-spell-range', d.range); set('new-spell-duration', d.duration);
+            fillSpellCompForm(d.comp || parseSpellRes(d.res));
+            document.getElementById('new-spell-desc').innerHTML = d.desc || '';
+            set('new-spell-notes', d.notes);
+            set('new-spell-mode', d.mode || 'none');
+            set('new-spell-save-ability', d.saveAbility);
+            set('new-spell-dmg', d.dmg); set('new-spell-dmg-type', d.dmgType);
+            spellSyncMode();
+            editingSpellIndex = index;
+            document.getElementById('spell-modal-title').textContent = 'Modifier le sortilège';
+            spellModal.classList.remove('hidden');
+        };
+        window.deleteSpell = (index) => {
+            window.deleteWithUndo(spells, index, spells[index]?.name || 'ce sort',
+                () => setStore('dnd-spells', spells), renderGrimoire);
+        };
 
         let journal = getStore('dnd-journal') || []; const journalPage = document.getElementById('book-page-content');
         // Animation « page qui tourne » rejouée à chaque changement de contenu du livre
@@ -2509,38 +3090,566 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // ==========================================
+        // ARMES & ATTAQUES
+        //
+        // Une entrée peut être une simple attaque (nom + bonus + dégâts) ou un
+        // objet magique complet : rareté, liaison, description, charges et
+        // mode de recharge. Tous les champs ajoutés sont optionnels — une
+        // attaque enregistrée avant cette version s'affiche à l'identique.
+        //
+        // Le clic sur le nom lance l'attaque ENTIÈRE (d20 + dégâts, dés
+        // doublés sur un critique) ; les pastilles 🎯 et 💥 lancent chacune
+        // leur moitié. Le d20 passe par le même moteur 3D que les jets de
+        // caractéristique, avec le même repli aléatoire.
+        // ==========================================
         let attacks = getStore('dnd-attacks') || []; let activeAtkTab = 'Tout'; const atkModal = document.getElementById('attack-form-modal');
+        const gearAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+        const RECHARGE_LABEL = { none: '', short: 'repos court', long: 'repos long', dawn: 'à l’aube' };
+
+        // « +7 », « 7 », « DD 15 » → le premier nombre signé rencontré.
+        const parseMod = (raw) => { const m = String(raw == null ? '' : raw).match(/[+-]?\d+/); return m ? parseInt(m[0], 10) : 0; };
+        // « 1d8+3 » → « 2d8+3 » : un critique double les DÉS, jamais les bonus fixes.
+        const doubleDice = (expr) => String(expr || '').replace(/(\d*)d(\d+)/gi, (_, n, f) => ((parseInt(n || '1', 10) || 1) * 2) + 'd' + f);
+        const hasVal = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+
+        // ---------- Auto-calcul du toucher et des dégâts ----------
+        // Le bonus au toucher d'une arme, c'est modificateur de carac + maîtrise,
+        // et les dégâts ajoutent le même modificateur. La seule subtilité de la
+        // règle : « finesse » laisse le choix, donc on prend la meilleure des deux.
+        const ABIL_SHORT = { str: 'For', dex: 'Dex' };
+        const statMod = (id) => {
+            const el = document.getElementById('stat-' + id);
+            return getModifier(parseInt(el && el.value, 10) || 10);
+        };
+        const profBonus = () => parseInt((document.getElementById('prof-bonus') || {}).value, 10) || 2;
+        const hasProp = (atk, rx) => rx.test(String(atk.props || ''));
+
+        /** Type d'arme : corps à corps, distance ou lancer. Déduit si non renseigné. */
+        function weaponType(atk) {
+            if (atk.wtype) return atk.wtype;
+            if (hasProp(atk, /lanc/i)) return 'thrown';
+            if (hasProp(atk, /munition|portée/i)) return 'ranged';
+            // « 24/96 m » ou « 30 m » sans allonge : c'est une arme de tir.
+            if (/\d\s*\/\s*\d/.test(String(atk.range || ''))) return 'ranged';
+            return 'melee';
+        }
+        /** Caractéristique effectivement utilisée par l'arme. */
+        function weaponAbility(atk) {
+            const mode = atk.autoAbility || 'manual';
+            if (mode === 'str' || mode === 'dex') return mode;
+            if (mode !== 'auto') return null;
+            if (hasProp(atk, /finesse/i)) return statMod('dex') >= statMod('str') ? 'dex' : 'str';
+            return weaponType(atk) === 'ranged' ? 'dex' : 'str';
+        }
+        /** Bonus au toucher calculé, ou null si l'arme est en saisie manuelle. */
+        function autoHitBonus(atk) {
+            const ab = weaponAbility(atk); if (!ab) return null;
+            const extra = parseMod(atk.hitExtra || 0);
+            return statMod(ab) + (atk.noProf ? 0 : profBonus()) + extra;
+        }
+        /** Modificateur de dégâts ajouté aux dés, ou null en manuel. */
+        function autoDmgMod(atk) {
+            const ab = weaponAbility(atk); if (!ab) return null;
+            return statMod(ab) + parseMod(atk.dmgExtra || 0);
+        }
+        /** Le bonus affiché et joué : calculé si l'auto est actif, sinon la saisie. */
+        function hitBonusOf(atk) {
+            const auto = autoHitBonus(atk);
+            return auto === null ? atk.bonus : (auto >= 0 ? '+' + auto : String(auto));
+        }
+        /** « 1d8 » + modificateur de carac → « 1d8+3 ». En manuel, l'expression telle quelle. */
+        function damageExprOf(atk, versatile) {
+            const base = (versatile && hasVal(atk.dmg2)) ? atk.dmg2 : atk.dmg;
+            const mod = autoDmgMod(atk);
+            if (mod === null || !hasVal(base)) return base;
+            // Une expression qui porte déjà un modificateur fixe n'est pas retouchée.
+            if (/[+-]\s*\d+\s*$/.test(String(base))) return base;
+            if (mod === 0) return base;
+            return String(base) + (mod > 0 ? '+' + mod : mod);
+        }
+
+        /** Additionne les composantes de dégâts d'une arme (principale, polyvalente, bonus). */
+        function rollWeaponDamage(atk, opts) {
+            const o = opts || {};
+            const main = damageExprOf(atk, o.versatile);
+            const lines = []; let total = 0;
+            const add = (expr, type) => {
+                if (!hasVal(expr)) return;
+                const res = rollExpression(o.crit ? doubleDice(expr) : expr);
+                if (res.error) { lines.push({ text: res.error, bad: true }); return; }
+                total += res.total;
+                lines.push({ value: res.total, type: type || '', detail: res.detail });
+            };
+            add(main, atk.dmgType);
+            add(atk.bonusDmg, atk.bonusDmgType);
+            return { total, lines };
+        }
+
+        /** Un d20 (ou deux, avantage/désavantage), moteur 3D si disponible.
+         *  Partagé par les armes et par les sorts du grimoire : un seul endroit
+         *  où la logique avantage / désavantage est écrite. */
+        async function rollD20With(advMode) {
+            const n = advMode === 'normal' ? 1 : 2;
+            let roll1 = null, roll2 = null, used3d = false;
+            if (diceBoxReady && diceBox) {
+                try { const vals = await rollD20Set3D(n); roll1 = vals[0]; if (n === 2) roll2 = vals[1]; used3d = true; }
+                catch (e) { used3d = false; }
+            }
+            if (!used3d) { roll1 = Math.floor(Math.random() * 20) + 1; if (n === 2) roll2 = Math.floor(Math.random() * 20) + 1; }
+            let nat = roll1;
+            if (advMode === 'adv') nat = Math.max(roll1, roll2);
+            else if (advMode === 'dis') nat = Math.min(roll1, roll2);
+            return { roll1, roll2, nat };
+        }
+
+        /** Jet complet. `part` : 'full' | 'hit' | 'dmg'. */
+        async function rollAttackEntry(index, part, opts) {
+            const atk = attacks[index]; if (!atk) return;
+            const o = opts || {};
+            const advNode = document.querySelector('input[name="roll-mode"]:checked');
+            const advMode = o.advMode || (advNode ? advNode.value : 'normal');
+            const critThreshold = Math.min(20, Math.max(2, parseInt(atk.crit, 10) || 20));
+            const saveMode = atk.mode === 'save';
+
+            // Munitions : un tir consomme une flèche, et on refuse le carquois vide.
+            if (part !== 'dmg' && hasVal(atk.ammo)) {
+                const left = parseInt(atk.ammo, 10) || 0;
+                if (left <= 0) { if (window.showAppToast) window.showAppToast('🏹 Plus de munitions !', '#c0392b'); return; }
+                atk.ammo = left - 1;
+                setStore('dnd-attacks', attacks);
+            }
+
+            let nat = null, hitTotal = null, roll1 = null, roll2 = null, crit = !!o.crit;
+            if (part !== 'dmg' && !saveMode) {
+                const d = await rollD20With(advMode);
+                roll1 = d.roll1; roll2 = d.roll2; nat = d.nat;
+                hitTotal = nat + parseMod(hitBonusOf(atk));
+                if (nat >= critThreshold) crit = true;
+            }
+
+            const wantDamage = part !== 'hit' && (hasVal(atk.dmg) || hasVal(atk.bonusDmg));
+            const dmg = wantDamage ? rollWeaponDamage(atk, { crit, versatile: o.versatile }) : null;
+
+            // Charges : consommées par un usage effectif, pas par un jet de dégâts seul.
+            if (part !== 'dmg' && hasVal(atk.chargesMax)) {
+                const left = parseInt(atk.charges, 10) || 0;
+                if (left > 0) { atk.charges = left - 1; setStore('dnd-attacks', attacks); }
+            }
+
+            showAttackResult(atk, { nat, hitTotal, roll1, roll2, advMode, crit, dmg, saveMode, versatile: o.versatile });
+            renderAttacks();
+        }
+
+        function showAttackResult(atk, r) {
+            const bits = [];
+            const critTxt = r.crit ? ' <b class="atk-crit">CRITIQUE</b>' : '';
+            if (r.saveMode) {
+                const ab = atk.saveAbility ? ' de ' + escAb(atk.saveAbility) : '';
+                bits.push(`<div class="atkfx-line">🛡️ Jet de sauvegarde${ab} <b>DD ${escAb(atk.saveDC || atk.bonus || '?')}</b></div>`);
+            } else if (r.nat != null) {
+                let dice = `🎲 ${r.nat}`;
+                if (r.advMode !== 'normal' && r.roll2 != null) {
+                    const dropped = r.advMode === 'adv' ? Math.min(r.roll1, r.roll2) : Math.max(r.roll1, r.roll2);
+                    dice += ` <s>${dropped}</s>`;
+                }
+                const mod = parseMod(hitBonusOf(atk));
+                bits.push(`<div class="atkfx-line">${dice} ${mod >= 0 ? '+' : ''}${mod} = `
+                    + `<b class="atkfx-total${r.nat === 1 ? ' is-fumble' : (r.crit ? ' is-crit' : '')}">${r.hitTotal}</b>`
+                    + (r.nat === 1 ? ' <b class="atk-fumble">ÉCHEC CRITIQUE</b>' : critTxt) + `</div>`);
+            }
+            if (r.dmg && r.dmg.lines.length) {
+                const detail = r.dmg.lines.map(l => l.bad ? escAb(l.text)
+                    : `${l.value}${l.type ? ' ' + escAb(l.type) : ''} <span class="atkfx-detail">(${escAb(l.detail)})</span>`).join(' + ');
+                bits.push(`<div class="atkfx-line">💥 <b class="atkfx-dmg">${r.dmg.total}</b> ${detail}`
+                    + (r.versatile ? ' <span class="atkfx-detail">à deux mains</span>' : '') + `</div>`);
+            }
+            if (quickToast) {
+                quickToast.innerHTML = `<div class="atkfx-name">⚔️ ${escAb(atk.name)}</div>${bits.join('')}`;
+                quickToast.classList.remove('hidden');
+                quickToast.style.animation = 'none'; quickToast.offsetHeight;
+                quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                clearTimeout(quickToast._t);
+                quickToast._t = setTimeout(() => quickToast.classList.add('hidden'), 5200);
+            }
+            // Historique + partage avec la table, comme un jet de caractéristique
+            const label = '⚔️ ' + atk.name;
+            const parts = [];
+            if (r.hitTotal != null) parts.push(`toucher ${r.hitTotal} (d20 : ${r.nat})`);
+            if (r.dmg) parts.push(`dégâts ${r.dmg.total}${r.crit ? ' (critique)' : ''}`);
+            const total = r.hitTotal != null ? r.hitTotal : (r.dmg ? r.dmg.total : 0);
+            pushRollHistory(label, total, parts.join(' · '), r.nat);
+            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, total, parts.join(' · '), r.nat);
+            if (window.TableFX) { if (r.nat === 20) window.TableFX.crit(); else if (r.nat === 1) window.TableFX.fumble(); }
+        }
+
+        // Une ligne d'équipement ne montre que ce qui est rempli. Une corde de
+        // chanvre n'a ni rareté, ni charges, ni description : elle doit rester
+        // une ligne calme. Tout le secondaire (portée, propriétés, dégâts à deux
+        // mains, description) vit dans un panneau qui ne s'ouvre qu'à la demande.
+        function gearCounter(label, cur, max, hint) {
+            const n = parseInt(cur, 10) || 0;
+            return `<span class="gear-counter${n <= 0 ? ' is-empty' : ''}"${hint ? ` title="${gearAttr(hint)}"` : ''}>
+                <span class="gear-counter-lbl">${label}</span>
+                <button class="gear-minus" title="Retirer 1" aria-label="Retirer 1">−</button>
+                <b>${n}${max ? '<span class="gear-max">/' + escAb(max) + '</span>' : ''}</b>
+                <button class="gear-plus" title="Ajouter 1" aria-label="Ajouter 1">+</button>
+            </span>`;
+        }
+        const rechargeHint = (o) => (o.recharge && o.recharge !== 'none')
+            ? 'revient ' + (RECHARGE_LABEL[o.recharge] || '') + (hasVal(o.rechargeDice) ? ' (' + o.rechargeDice + ')' : '')
+            : 'récupération manuelle';
+        const detailRow = (label, value) => value
+            ? `<div class="gear-drow"><span>${label}</span><div>${value}</div></div>` : '';
+
         function renderAttacks() {
             const list = document.getElementById('attacks-list'); if(!list) return;
             renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); });
             list.innerHTML = '';
-            const filtered = activeAtkTab === 'Tout' ? attacks : attacks.filter(a => (a.category || 'Général') === activeAtkTab);
-            if(filtered.length === 0) { list.innerHTML = `<div class="compact-empty">Aucune attaque — clique sur ➕ Ajouter ci-dessus.</div>`; return; }
-            filtered.forEach(atk => {
-                const originalIndex = attacks.indexOf(atk);
-                const attuneHtml = atk.reqAttune ? `<label class="atk-attune ${atk.isAttuned ? 'on' : ''}" title="Objet lié ?"><input type="checkbox" ${atk.isAttuned ? 'checked' : ''} onchange="toggleAttune(${originalIndex})">Lié</label>` : '';
-                // Munitions (optionnelles) : − = tirer, + = récupérer. Rouge quand il n'en reste plus.
-                const hasAmmo = atk.ammo !== undefined && atk.ammo !== null && atk.ammo !== '';
-                const ammoHtml = hasAmmo ? `<span class="atk-ammo${(parseInt(atk.ammo, 10) || 0) <= 0 ? ' is-empty' : ''}" title="Munitions restantes">🏹 <button class="ammo-minus" title="Tirer (−1)">−</button><b>${atk.ammo}${atk.ammoMax ? '/' + atk.ammoMax : ''}</b><button class="ammo-plus" title="Récupérer (+1)">+</button></span>` : '';
-                list.innerHTML += `<div class="ca-row atk-row" data-i="${originalIndex}"><div class="ca-head"><span class="ca-name">⚔️ ${atk.name}</span>${attuneHtml}<span class="atk-stat" title="Bonus / DD">🎯 ${atk.bonus || '—'}</span><span class="atk-stat" title="Dégâts">💥 ${atk.dmg || '—'}</span>${ammoHtml}<div class="ca-actions"><button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>${atk.notes ? `<div class="atk-notes">📝 ${atk.notes}</div>` : ''}</div>`;
-            });
+            let entries = attacks.map((atk, index) => ({ atk, index }))
+                .filter(({ atk }) => activeAtkTab === 'Tout' || (atk.category || 'Général') === activeAtkTab);
+            entries.sort((a, b) => (b.atk.equipped ? 1 : 0) - (a.atk.equipped ? 1 : 0));
+            entries.sort((a, b) => (b.atk.pinned ? 1 : 0) - (a.atk.pinned ? 1 : 0));
+            if(entries.length === 0) {
+                list.innerHTML = `<div class="compact-empty">Aucune arme pour l'instant.<br>
+                    <small>« ➕ Ajouter » ci-dessus — ou menu ☰ → Aide → « Remplir mes armes ».</small></div>`;
+                return;
+            }
+
+            const rowHtml = ({ atk, index }) => {
+                const saveMode = atk.mode === 'save';
+                const twoH = !!atk.twoHanded && hasVal(atk.dmg2);
+                const badges = [
+                    hasVal(atk.rarity) ? `<span class="gear-tag">${escAb(atk.rarity)}</span>` : '',
+                    atk.reqAttune ? `<label class="gear-attune${atk.isAttuned ? ' on' : ''}" title="Coche quand tu t'es lié à cet objet"><input type="checkbox" class="atk-attune-cb"${atk.isAttuned ? ' checked' : ''}>lié</label>` : ''
+                ].join('');
+
+                const shownHit = hitBonusOf(atk);
+                const autoTip = weaponAbility(atk)
+                    ? ` — calculé : ${ABIL_SHORT[weaponAbility(atk)]}${atk.noProf ? '' : ' + maîtrise'}` : '';
+                const hit = saveMode
+                    ? `<span class="gear-chip is-static"><span>Sauvegarde</span><b>DD ${escAb(atk.saveDC || atk.bonus || '—')}</b>${atk.saveAbility ? `<i>${escAb(atk.saveAbility)}</i>` : ''}</span>`
+                    : `<button class="gear-chip atk-hit${weaponAbility(atk) ? ' is-auto' : ''}" title="Ne lancer que le d20 du toucher${autoTip}"><span>Toucher</span><b>${escAb(shownHit || '—')}</b></button>`;
+                const shownDmg = damageExprOf(atk, twoH);
+                const dmg = hasVal(shownDmg)
+                    ? `<button class="gear-chip atk-dmg${weaponAbility(atk) ? ' is-auto' : ''}" title="Ne lancer que les dégâts — Maj+clic pour un critique"><span>Dégâts</span><b>${escAb(shownDmg)}</b>${atk.dmgType ? `<i>${escAb(atk.dmgType)}</i>` : ''}</button>` : '';
+
+                const res = [
+                    hasVal(atk.ammo) ? gearCounter('Munitions', atk.ammo, atk.ammoMax, '') : '',
+                    hasVal(atk.chargesMax) ? gearCounter('Charges', atk.charges, atk.chargesMax, rechargeHint(atk)) : ''
+                ].filter(Boolean).join('');
+
+                // Panneau de détail : uniquement les lignes réellement renseignées.
+                const extra = [
+                    detailRow('Portée', hasVal(atk.range) ? escAb(atk.range) : ''),
+                    detailRow('Toucher', weaponAbility(atk)
+                        ? `automatique — ${ABIL_SHORT[weaponAbility(atk)]}${atk.noProf ? '' : ' + maîtrise'}`
+                        + (hasVal(atk.hitExtra) ? ' ' + escAb(atk.hitExtra) : '') : 'saisi à la main'),
+                    detailRow('Critique', (parseInt(atk.crit, 10) || 20) < 20 ? 'sur un ' + escAb(atk.crit) + ' ou plus' : ''),
+                    detailRow('À deux mains', hasVal(atk.dmg2)
+                        ? `<button class="gear-chip atk-dmg2" title="Maj+clic pour un critique"><b>${escAb(damageExprOf(atk, true))}</b></button>` : ''),
+                    detailRow('Dégâts bonus', hasVal(atk.bonusDmg)
+                        ? `${escAb(atk.bonusDmg)}${atk.bonusDmgType ? ' ' + escAb(atk.bonusDmgType) : ''} <em>(déjà compris dans le jet)</em>` : ''),
+                    detailRow('Recharge', hasVal(atk.chargesMax) ? escAb(rechargeHint(atk)) : ''),
+                    detailRow('Note', hasVal(atk.notes) ? escAb(atk.notes) : ''),
+                    hasVal(atk.desc) ? `<div class="gear-desc">${escAb(atk.desc).replace(/\n/g, '<br>')}</div>` : ''
+                ].filter(Boolean).join('');
+
+                // Propriétés en étiquettes : « finesse, légère » se lit d'un coup
+                // d'œil sans ouvrir le détail.
+                const tags = String(atk.props || '').split(/[,;]/).map(s => s.trim()).filter(Boolean)
+                    .slice(0, 4).map(p => `<span class="gear-tag is-prop">${escAb(p)}</span>`).join('');
+                // Polyvalente : la prise est un état de l'arme, elle se garde.
+                const grip = hasVal(atk.dmg2)
+                    ? `<button class="gear-chip atk-grip${twoH ? ' is-on' : ''}" title="${twoH ? 'Repasser à une main' : 'Passer à deux mains'}">${twoH ? '🙌 2 mains' : '✋ 1 main'}</button>` : '';
+
+                return `<div class="gear-row atk-row${atk.pinned ? ' is-pinned' : ''}${atk.equipped ? ' is-equipped' : ''}${extra ? '' : ' no-detail'}" data-i="${index}">
+                    <div class="gear-line">
+                        <button class="gear-pin" title="${atk.pinned ? 'Ne plus épingler' : 'Épingler en haut de la liste'}">${atk.pinned ? '📌' : '☆'}</button>
+                        <span class="gear-name">${escAb(atk.name)}</span>
+                        ${badges}${tags}
+                        <span class="gear-spacer"></span>
+                        <button class="gear-go atk-roll">${saveMode ? '💥 Dégâts' : '⚔️ Attaquer'}</button>
+                        ${saveMode ? '' : `<button class="gear-chip atk-opts" title="Avantage, désavantage, critique" aria-expanded="false">⚙</button>`}
+                        ${hit}${dmg}${grip}${res}
+                        ${extra ? `<button class="gear-more" title="Voir le détail" aria-expanded="false">▾</button>` : ''}
+                        <div class="gear-tools">
+                            <button class="gear-equip${atk.equipped ? ' is-on' : ''}" title="${atk.equipped ? 'Ranger' : 'Marquer comme dégainée'}">🗡️</button>
+                            <button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button>
+                            <button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button>
+                        </div>
+                    </div>
+                    ${saveMode ? '' : `<div class="atk-optbar hidden">
+                        <span class="atk-optlbl">Lancer avec :</span>
+                        <button class="atk-opt" data-adv="adv">◑ Avantage</button>
+                        <button class="atk-opt" data-adv="dis">◐ Désavantage</button>
+                        <button class="atk-opt" data-crit="1">💥 Critique</button>
+                    </div>`}
+                    ${extra ? `<div class="gear-detail">${extra}</div>` : ''}
+                </div>`;
+            };
+
+            // Regroupement par type d'arme. Les onglets restent les catégories du
+            // joueur ; ce classement-ci est un second axe, purement visuel, et il
+            // ne s'affiche que si la liste courante mélange plusieurs types.
+            const GROUPS = [
+                { key: 'melee',  label: 'Corps à corps', icon: '⚔️' },
+                { key: 'ranged', label: 'Distance',      icon: '🏹' },
+                { key: 'thrown', label: 'Lancer',        icon: '🎯' }
+            ];
+            const used = GROUPS.filter(g => entries.some(e => weaponType(e.atk) === g.key));
+            if (used.length < 2) { list.innerHTML = entries.map(rowHtml).join(''); return; }
+            list.innerHTML = used.map(g => {
+                const rows = entries.filter(e => weaponType(e.atk) === g.key);
+                return `<div class="atk-group"><div class="atk-group-head">${g.icon} ${g.label}
+                    <span>${rows.length}</span></div>${rows.map(rowHtml).join('')}</div>`;
+            }).join('');
         }
+
         const atkListContainer = document.getElementById('attacks-list');
         if(atkListContainer) atkListContainer.addEventListener('click', (e) => {
-            const row = e.target.closest('.ca-row'); if(!row) return; const index = parseInt(row.dataset.i);
-            if(e.target.closest('.ammo-minus')) { const a = attacks[index]; const n = parseInt(a.ammo, 10) || 0; if(n > 0) { a.ammo = n - 1; setStore('dnd-attacks', attacks); renderAttacks(); } else if(window.showAppToast) window.showAppToast('🏹 Plus de munitions !', '#c0392b'); return; }
-            if(e.target.closest('.ammo-plus')) { const a = attacks[index]; const n = parseInt(a.ammo, 10) || 0; const max = parseInt(a.ammoMax, 10) || 0; a.ammo = max > 0 ? Math.min(n + 1, max) : n + 1; setStore('dnd-attacks', attacks); renderAttacks(); return; }
+            const row = e.target.closest('.gear-row'); if(!row) return; const index = parseInt(row.dataset.i);
+            const a = attacks[index]; if(!a) return;
+            const counter = e.target.closest('.gear-counter');
+            if(counter) {
+                const isAmmo = /Munitions/.test(counter.textContent);
+                const field = isAmmo ? 'ammo' : 'charges', maxField = isAmmo ? 'ammoMax' : 'chargesMax';
+                const n = parseInt(a[field], 10) || 0, max = parseInt(a[maxField], 10) || 0;
+                if(e.target.closest('.gear-minus')) {
+                    if(n <= 0) { if(window.showAppToast) window.showAppToast(isAmmo ? '🏹 Plus de munitions !' : '⚡ Plus de charges !', '#c0392b'); return; }
+                    a[field] = n - 1;
+                } else if(e.target.closest('.gear-plus')) {
+                    a[field] = max > 0 ? Math.min(n + 1, max) : n + 1;
+                } else return;
+                setStore('dnd-attacks', attacks); renderAttacks(); return;
+            }
+            if(e.target.closest('.atk-attune-cb')) { a.isAttuned = !a.isAttuned; setStore('dnd-attacks', attacks); renderAttacks(); return; }
+            if(e.target.closest('.gear-pin')) { a.pinned = !a.pinned; setStore('dnd-attacks', attacks); renderAttacks(); return; }
+            if(e.target.closest('.gear-equip')) { a.equipped = !a.equipped; setStore('dnd-attacks', attacks); renderAttacks(); return; }
+            if(e.target.closest('.gear-more')) { toggleGearDetail(row); return; }
+            // La prise à deux mains est mémorisée : on ne la redemande pas à chaque tour.
+            if(e.target.closest('.atk-grip')) { a.twoHanded = !a.twoHanded; setStore('dnd-attacks', attacks); renderAttacks(); return; }
+            if(e.target.closest('.atk-opts')) {
+                const bar = row.querySelector('.atk-optbar'); if(!bar) return;
+                const open = bar.classList.toggle('hidden') === false;
+                const b = row.querySelector('.atk-opts'); if(b) b.setAttribute('aria-expanded', String(open));
+                return;
+            }
+            const opt = e.target.closest('.atk-opt');
+            if(opt) {
+                rollAttackEntry(index, 'full', {
+                    advMode: opt.dataset.adv || undefined,
+                    crit: opt.dataset.crit === '1',
+                    versatile: !!a.twoHanded
+                });
+                return;
+            }
+            if(e.target.closest('.atk-roll')) { rollAttackEntry(index, 'full', { versatile: !!a.twoHanded }); return; }
+            if(e.target.closest('.atk-hit')) { rollAttackEntry(index, 'hit', {}); return; }
+            if(e.target.closest('.atk-dmg')) { rollAttackEntry(index, 'dmg', { crit: e.shiftKey, versatile: !!a.twoHanded }); return; }
+            if(e.target.closest('.atk-dmg2')) { rollAttackEntry(index, 'dmg', { crit: e.shiftKey, versatile: true }); return; }
             if(e.target.closest('.ci-up')) { if(window.moveAttackUp) window.moveAttackUp(index); return; }
             if(e.target.closest('.ci-down')) { if(window.moveAttackDown) window.moveAttackDown(index); return; }
             if(e.target.closest('.ci-edit')) { if(window.editAttack) window.editAttack(index); return; }
             if(e.target.closest('.ci-del')) { if(window.deleteAttack) window.deleteAttack(index); return; }
+            // Un clic dans le vide de la ligne déplie aussi : la cible est large.
+            if(e.target.closest('.gear-name, .gear-spacer, .gear-line')) toggleGearDetail(row);
         });
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-attack-modal') { editingAttackIndex = -1; atkModal.classList.remove('hidden'); document.querySelectorAll('#attack-form-modal input[type="text"], #attack-form-modal input[type="number"]').forEach(i => i.value = ''); document.getElementById('new-atk-req-attune').checked = false; }});
-        if(document.getElementById('btn-save-atk')) { document.getElementById('btn-save-atk').addEventListener('click', () => { const ammoRaw = document.getElementById('new-atk-ammo').value.trim(); const ammoMaxRaw = document.getElementById('new-atk-ammo-max').value.trim(); const atk = { name: document.getElementById('new-atk-name').value, bonus: document.getElementById('new-atk-bonus').value, dmg: document.getElementById('new-atk-dmg').value, category: document.getElementById('new-atk-category').value.trim() || 'Général', notes: document.getElementById('new-atk-notes').value, reqAttune: document.getElementById('new-atk-req-attune').checked, isAttuned: false, ammo: ammoRaw === '' ? null : (parseInt(ammoRaw, 10) || 0), ammoMax: ammoMaxRaw === '' ? null : (parseInt(ammoMaxRaw, 10) || 0) }; if(atk.name) { if(editingAttackIndex >= 0) { atk.isAttuned = attacks[editingAttackIndex].isAttuned; attacks[editingAttackIndex] = atk; } else { attacks.push(atk); } setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden'); } }); }
-        window.toggleAttune = (index) => { attacks[index].isAttuned = !attacks[index].isAttuned; setStore('dnd-attacks', attacks); }; window.deleteAttack = (index) => { if(confirm("Supprimer ?")) { attacks.splice(index, 1); setStore('dnd-attacks', attacks); renderAttacks(); }}; window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } }; window.editAttack = (index) => { const data = attacks[index]; document.getElementById('new-atk-name').value = data.name; document.getElementById('new-atk-bonus').value = data.bonus; document.getElementById('new-atk-dmg').value = data.dmg; document.getElementById('new-atk-category').value = data.category || 'Général'; document.getElementById('new-atk-notes').value = data.notes; document.getElementById('new-atk-req-attune').checked = data.reqAttune; document.getElementById('new-atk-ammo').value = (data.ammo === null || data.ammo === undefined) ? '' : data.ammo; document.getElementById('new-atk-ammo-max').value = (data.ammoMax === null || data.ammoMax === undefined) ? '' : data.ammoMax; editingAttackIndex = index; atkModal.classList.remove('hidden'); };
 
+        function toggleGearDetail(row) {
+            const d = row.querySelector('.gear-detail'); if(!d) return;
+            const open = row.classList.toggle('is-open');
+            const b = row.querySelector('.gear-more');
+            if(b) { b.textContent = open ? '▴' : '▾'; b.setAttribute('aria-expanded', open); }
+        }
+
+        // ---- Formulaire ----
+        const ATK_FIELDS = ['name', 'category', 'rarity', 'mode', 'bonus', 'save-dc', 'save-ability', 'range', 'crit',
+                            'props', 'dmg', 'dmg-type', 'dmg2', 'bonus-dmg', 'bonus-dmg-type', 'ammo', 'ammo-max',
+                            'charges', 'charges-max', 'recharge', 'recharge-dice', 'desc', 'notes',
+                            'auto', 'wtype', 'hit-extra', 'dmg-extra'];
+        const atkEl = (k) => document.getElementById('new-atk-' + k);
+
+        function atkFormReset() {
+            ATK_FIELDS.forEach(k => { const el = atkEl(k); if (el) el.value = ''; });
+            const mode = atkEl('mode'); if (mode) mode.value = 'attack';
+            const rc = atkEl('recharge'); if (rc) rc.value = 'none';
+            const cat = atkEl('category'); if (cat) cat.value = activeAtkTab === 'Tout' ? 'Général' : activeAtkTab;
+            const auto = atkEl('auto'); if (auto) auto.value = 'auto';
+            ['req-attune', 'pinned', 'equipped', 'no-prof'].forEach(k => { const el = atkEl(k); if (el) el.checked = false; });
+            atkSyncMode();
+        }
+        // Le bloc « jet de sauvegarde » ne sert qu'en mode sauvegarde, et la
+        // saisie manuelle du bonus ne sert que si l'auto est débranché.
+        function atkSyncMode() {
+            const save = (atkEl('mode') || {}).value === 'save';
+            const manual = (atkEl('auto') || {}).value === 'manual';
+            const show = (id, on) => { const el = document.getElementById(id); if (el) el.hidden = !on; };
+            show('new-atk-save-row', save);
+            show('new-atk-hit-row', !save);
+            show('new-atk-auto-row', !save && !manual);
+            show('new-atk-noprof-row', !save && !manual);
+            show('new-atk-auto-hint', !save && !manual);
+            show('new-atk-manual-row', !save && manual);
+        }
+        if (atkEl('mode')) atkEl('mode').addEventListener('change', atkSyncMode);
+        if (atkEl('auto')) atkEl('auto').addEventListener('change', atkSyncMode);
+
+        document.body.addEventListener('click', (e) => {
+            if(e.target.id === 'btn-open-attack-modal') {
+                editingAttackIndex = -1;
+                atkFormReset();
+                const t = document.getElementById('atk-modal-title'); if (t) t.textContent = 'Forger une arme / attaque';
+                atkModal.classList.remove('hidden');
+            }
+        });
+
+        if(document.getElementById('btn-save-atk')) document.getElementById('btn-save-atk').addEventListener('click', () => {
+            const v = (k) => { const el = atkEl(k); return el ? el.value.trim() : ''; };
+            const numOrNull = (k) => { const s = v(k); return s === '' ? null : (parseInt(s, 10) || 0); };
+            const atk = {
+                name: v('name'), category: v('category') || 'Général', rarity: v('rarity'),
+                mode: v('mode') || 'attack', bonus: v('bonus'),
+                saveDC: v('save-dc'), saveAbility: v('save-ability'),
+                range: v('range'), crit: numOrNull('crit') || 20, props: v('props'),
+                dmg: v('dmg'), dmgType: v('dmg-type'), dmg2: v('dmg2'),
+                bonusDmg: v('bonus-dmg'), bonusDmgType: v('bonus-dmg-type'),
+                notes: v('notes'), desc: (atkEl('desc') || {}).value || '',
+                reqAttune: !!(atkEl('req-attune') || {}).checked,
+                isAttuned: false,
+                pinned: !!(atkEl('pinned') || {}).checked,
+                equipped: !!(atkEl('equipped') || {}).checked,
+                ammo: numOrNull('ammo'), ammoMax: numOrNull('ammo-max'),
+                charges: numOrNull('charges'), chargesMax: numOrNull('charges-max'),
+                recharge: v('recharge') || 'none', rechargeDice: v('recharge-dice'),
+                autoAbility: v('auto') || 'manual', wtype: v('wtype'),
+                hitExtra: v('hit-extra'), dmgExtra: v('dmg-extra'),
+                noProf: !!(atkEl('no-prof') || {}).checked
+            };
+            if(!atk.name) { const n = atkEl('name'); if (n) n.focus(); return; }
+            // Charges saisies sans total : on considère que le total est ce qu'on a.
+            if(atk.chargesMax == null && atk.charges != null) atk.chargesMax = atk.charges;
+            if(atk.chargesMax != null && atk.charges == null) atk.charges = atk.chargesMax;
+            if(editingAttackIndex >= 0) {
+                const old = attacks[editingAttackIndex];
+                atk.isAttuned = !!old.isAttuned;
+                atk.twoHanded = !!old.twoHanded;   // la prise choisie ne se perd pas à l'édition
+                attacks[editingAttackIndex] = atk;
+            }
+            else attacks.push(atk);
+            setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden');
+        });
+
+        window.deleteAttack = (index) => { window.deleteWithUndo(attacks, index, attacks[index].name || 'cette attaque', () => setStore('dnd-attacks', attacks), renderAttacks); };
+        window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } };
+        window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } };
+        window.editAttack = (index) => {
+            const d = attacks[index]; if(!d) return;
+            atkFormReset();
+            const set = (k, val) => { const el = atkEl(k); if (el) el.value = (val === null || val === undefined) ? '' : val; };
+            set('name', d.name); set('category', d.category || 'Général'); set('rarity', d.rarity);
+            set('mode', d.mode || 'attack'); set('bonus', d.bonus);
+            set('save-dc', d.saveDC); set('save-ability', d.saveAbility);
+            set('range', d.range); set('crit', d.crit && d.crit !== 20 ? d.crit : ''); set('props', d.props);
+            set('dmg', d.dmg); set('dmg-type', d.dmgType); set('dmg2', d.dmg2);
+            set('bonus-dmg', d.bonusDmg); set('bonus-dmg-type', d.bonusDmgType);
+            set('notes', d.notes); set('desc', d.desc);
+            set('ammo', d.ammo); set('ammo-max', d.ammoMax);
+            set('charges', d.charges); set('charges-max', d.chargesMax);
+            set('recharge', d.recharge || 'none'); set('recharge-dice', d.rechargeDice);
+            // Une arme enregistrée avant l'auto-calcul n'a pas de champ : elle
+            // reste donc en saisie manuelle, ses valeurs sont conservées telles quelles.
+            set('auto', d.autoAbility || 'manual'); set('wtype', d.wtype || '');
+            set('hit-extra', d.hitExtra); set('dmg-extra', d.dmgExtra);
+            const chk = (k, on) => { const el = atkEl(k); if (el) el.checked = !!on; };
+            chk('req-attune', d.reqAttune); chk('pinned', d.pinned); chk('equipped', d.equipped); chk('no-prof', d.noProf);
+            atkSyncMode();
+            editingAttackIndex = index;
+            const t = document.getElementById('atk-modal-title'); if (t) t.textContent = 'Modifier l’arme';
+            atkModal.classList.remove('hidden');
+        };
+
+        // ---------- Sélecteur d'armes standard ----------
+        // L'autocomplétion suppose de connaître le nom ; ce panneau sert à
+        // parcourir. Les données viennent du SRD déjà embarqué : rien n'est
+        // codé en dur ici, et le contenu personnel du joueur s'y ajoute.
+        (function initWeaponPicker() {
+            const btn = document.getElementById('btn-atk-pick');
+            const panel = document.getElementById('atk-picker');
+            const listBox = document.getElementById('atk-picker-list');
+            const search = document.getElementById('atk-picker-search');
+            if (!btn || !panel || !listBox || !window.SRD) return;
+            let weapons = null;
+
+            const WCAT = { simple: 'Armes courantes', martial: 'Armes de guerre' };
+            const catLabel = (w) => {
+                const c = String(w.weapon_category || '').toLowerCase();
+                const key = /martial|guerre/.test(c) ? 'martial' : 'simple';
+                const dist = /ranged|distance/i.test(w.weapon_range || '') ? ' à distance' : '';
+                return WCAT[key] + dist;
+            };
+
+            async function load() {
+                if (weapons) return weapons;
+                const all = await window.SRD.category('equipment');
+                weapons = (all || []).filter(w => w.weapon_category && w.damage);
+                weapons.sort((a, b) => catLabel(a).localeCompare(catLabel(b)) || a.name.localeCompare(b.name));
+                return weapons;
+            }
+            function draw(filter) {
+                const f = window.SRD.fold(filter || '');
+                const shown = weapons.filter(w => !f || window.SRD.fold(w.name).includes(f));
+                if (!shown.length) { listBox.innerHTML = `<p class="atk-picker-empty">Aucune arme ne correspond.</p>`; return; }
+                let last = '';
+                listBox.innerHTML = shown.map(w => {
+                    const c = catLabel(w);
+                    const head = c === last ? '' : `<div class="atk-picker-head">${window.SRD.esc(c)}</div>`;
+                    last = c;
+                    const dice = w.damage ? w.damage.dice : '';
+                    return `${head}<button type="button" class="atk-picker-item" data-wid="${window.SRD.esc(w.id)}">
+                        <span>${window.SRD.esc(w.name)}</span><em>${window.SRD.esc(dice)}</em></button>`;
+                }).join('');
+            }
+            btn.addEventListener('click', async () => {
+                const open = panel.classList.toggle('hidden') === false;
+                if (!open) return;
+                listBox.innerHTML = `<p class="atk-picker-empty">Chargement…</p>`;
+                await load(); draw(search ? search.value : '');
+                if (search) search.focus();
+            });
+            if (search) search.addEventListener('input', () => { if (weapons) draw(search.value); });
+            listBox.addEventListener('click', (e) => {
+                const it = e.target.closest('.atk-picker-item'); if (!it) return;
+                const w = (weapons || []).find(x => x.id === it.dataset.wid); if (!w) return;
+                const nameEl = document.getElementById('new-atk-name');
+                if (nameEl) nameEl.value = w.name;
+                if (window.fillAttackFromSrd) window.fillAttackFromSrd(w);
+                atkSyncMode();
+                panel.classList.add('hidden');
+            });
+        })();
+
+        // Une caractéristique ou un niveau qui change doit se voir tout de suite
+        // sur les armes en calcul automatique — sinon la ligne ment jusqu'au
+        // prochain rendu.
+        ['stat-str', 'stat-dex', 'prof-bonus'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => renderAttacks());
+        });
+
+        // ==========================================
+        // SAC À DOS
+        //
+        // Un objet peut rester une simple ligne (nom, quantité, poids) ou
+        // devenir un objet magique complet : rareté, valeur, liaison,
+        // description dépliable, charges et recharge au repos. La ligne
+        // d'ajout rapide en haut du module ne demande toujours que le nom ;
+        // le reste se remplit dans la fiche de l'objet (✎), ou tout seul
+        // depuis le SRD et le contenu personnel via l'autocomplétion.
+        // ==========================================
         let inventory = getStore('dnd-inventory') || []; let activeInvTabPinned = 'Tout'; let invSearch = ''; let invSortMode = getStore('dnd-inv-sort', false) || 'manual'; let activeInvTabModal = 'Tout';
         const invAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+        const itemModal = document.getElementById('item-form-modal');
 
         function renderInventory() {
             const listEl = document.getElementById('pinned-inventory-list'); if(!listEl) return;
@@ -2548,39 +3657,68 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTabs('inv-tabs-container-pinned', inventory, activeInvTabPinned, invCategories, (tab) => { activeInvTabPinned = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); });
 
             let totalWeight = 0; inventory.forEach(item => { let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); });
+            const attunedCount = inventory.filter(i => i.attunement && i.attuned).length
+                               + attacks.filter(a => a.reqAttune && a.isAttuned).length;
 
-            // Recherche + tri : on part des objets de l'onglet courant, on filtre sur le nom,
-            // puis on trie. Les favoris et les objets équipés restent groupés en tête.
             const needle = invSearch.trim().toLowerCase();
             let entries = inventory.map((item, index) => ({ item, index }))
                 .filter(({ item }) => activeInvTabPinned === 'Tout' || (item.category || 'Général') === activeInvTabPinned)
-                .filter(({ item }) => !needle || String(item.name || '').toLowerCase().includes(needle));
+                .filter(({ item }) => !needle
+                    || String(item.name || '').toLowerCase().includes(needle)
+                    || String(item.desc || '').toLowerCase().includes(needle));
 
             const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
             if (invSortMode === 'name') entries.sort((a, b) => String(a.item.name || '').localeCompare(String(b.item.name || ''), 'fr', { sensitivity: 'base' }));
             else if (invSortMode === 'weight') entries.sort((a, b) => num(b.item.weight) - num(a.item.weight));
             else if (invSortMode === 'qty') entries.sort((a, b) => (parseInt(b.item.qty, 10) || 1) - (parseInt(a.item.qty, 10) || 1));
-            // Favoris d'abord, puis équipés — tri stable, donc l'ordre choisi ci-dessus est conservé.
             entries.sort((a, b) => (b.item.equipped ? 1 : 0) - (a.item.equipped ? 1 : 0));
             entries.sort((a, b) => (b.item.pinned ? 1 : 0) - (a.item.pinned ? 1 : 0));
 
-            listEl.innerHTML = '';
             if(entries.length === 0) {
-                listEl.innerHTML = `<div class="compact-empty">${inventory.length === 0 ? 'Sac vide — ajoute un objet ci-dessus.' : (needle ? 'Aucun objet ne correspond à « ' + escAb(invSearch) + ' ».' : 'Aucun objet dans cet onglet.')}</div>`;
+                listEl.innerHTML = `<div class="compact-empty">${inventory.length === 0
+                    ? 'Sac vide.<br><small>Tape un nom dans la ligne ci-dessus — ou menu ☰ → Aide → « Remplir mon sac ».</small>'
+                    : (needle ? 'Aucun objet ne correspond à « ' + escAb(invSearch) + ' ».' : 'Aucun objet dans cet onglet.')}</div>`;
             } else {
-                entries.forEach(({ item, index }) => {
-                    if(editingInvIndex === index) {
-                        const cats = `<option value="Général">Général</option>` + invCategories.map(c => `<option value="${invAttr(c)}" ${(item.category || 'Général') === c ? 'selected' : ''}>${c}</option>`).join('');
-                        listEl.innerHTML += `<div class="ci-row ci-editing" data-i="${index}"><div class="ci-edit-form"><input class="qa-input qa-grow ci-e-name" value="${invAttr(item.name)}" placeholder="Nom"><input type="number" min="1" class="qa-input qa-num ci-e-qty" value="${parseInt(item.qty) || 1}"><input class="qa-input qa-num ci-e-weight" value="${invAttr(item.weight === '-' ? '' : item.weight)}" placeholder="Poids"><select class="qa-input qa-cat ci-e-cat">${cats}</select><button class="qa-add ci-e-save" title="Enregistrer">✓</button><button class="ci-e-cancel" title="Annuler" style="background:none; border:none; cursor:pointer; font-size:1.1rem; color:#9a8a70;">✕</button></div></div>`;
-                        return;
-                    }
-                    const weightTxt = (item.weight !== undefined && item.weight !== null && item.weight !== '-' && String(item.weight).trim() !== '') ? item.weight : '—';
-                    const eq = !!item.equipped;
-                    listEl.innerHTML += `<div class="ci-row${item.pinned ? ' is-pinned' : ''}${eq ? ' is-equipped' : ''}" data-i="${index}"><button class="ci-pin" title="${item.pinned ? 'Retirer des favoris' : 'Mettre en favori'}">${item.pinned ? '📌' : '☆'}</button><button class="ci-equip${eq ? ' is-on' : ''}" title="${eq ? 'Déséquiper' : 'Équiper'}">⚔️</button><span class="ci-name" title="${invAttr(item.name)}">${item.name}</span><div class="ci-qty"><button class="ci-step" data-act="dec" title="-1">−</button><span class="ci-qval">${parseInt(item.qty) || 1}</span><button class="ci-step" data-act="inc" title="+1">＋</button></div><span class="ci-weight">${weightTxt}</span><div class="ci-actions">${invSortMode === 'manual' ? `<button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button>` : ''}<button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button></div></div>`;
-                });
+                listEl.innerHTML = entries.map(({ item, index }) => {
+                    const w = (item.weight !== undefined && item.weight !== null && item.weight !== '-' && String(item.weight).trim() !== '') ? escAb(item.weight) : '';
+                    const badges = [
+                        hasVal(item.rarity) ? `<span class="gear-tag">${escAb(item.rarity)}</span>` : '',
+                        item.attunement ? `<label class="gear-attune${item.attuned ? ' on' : ''}" title="Coche quand tu t'es lié à cet objet"><input type="checkbox" class="ci-attune-cb"${item.attuned ? ' checked' : ''}>lié</label>` : ''
+                    ].join('');
+                    const body = [
+                        detailRow('Valeur', hasVal(item.value) ? escAb(item.value) : ''),
+                        detailRow('Recharge', hasVal(item.chargesMax) ? escAb(rechargeHint(item)) : ''),
+                        detailRow('Note', hasVal(item.notes) ? escAb(item.notes) : ''),
+                        hasVal(item.desc) ? `<div class="gear-desc">${escAb(item.desc).replace(/\n/g, '<br>')}</div>` : ''
+                    ].filter(Boolean).join('');
+                    // Pas de flèche sur une corde de chanvre : le panneau n'existe
+                    // que si l'objet a vraiment quelque chose à raconter.
+                    const extra = body
+                        ? body + `<div class="gear-dactions"><button class="ci-toatk">⚔️ En faire une arme</button></div>`
+                        : '';
+                    return `<div class="gear-row gear-row-sm${item.pinned ? ' is-pinned' : ''}${item.equipped ? ' is-equipped' : ''}" data-i="${index}">
+                        <div class="gear-line">
+                            <button class="gear-pin" title="${item.pinned ? 'Ne plus épingler' : 'Épingler en haut de la liste'}">${item.pinned ? '📌' : '☆'}</button>
+                            <span class="gear-name">${escAb(item.name)}</span>
+                            ${badges}
+                            <span class="gear-spacer"></span>
+                            ${hasVal(item.chargesMax) ? gearCounter('Charges', item.charges, item.chargesMax, rechargeHint(item)) : ''}
+                            <span class="gear-qty" title="Quantité"><button class="ci-step" data-act="dec" title="Retirer 1">−</button><b>×${parseInt(item.qty) || 1}</b><button class="ci-step" data-act="inc" title="Ajouter 1">+</button></span>
+                            ${w ? `<span class="gear-weight" title="Poids unitaire">${w} kg</span>` : '<span class="gear-weight"></span>'}
+                            ${extra ? '<button class="gear-more" title="Voir le détail" aria-expanded="false">▾</button>' : ''}
+                            <div class="gear-tools">
+                                <button class="gear-equip${item.equipped ? ' is-on' : ''}" title="${item.equipped ? 'Ranger dans le sac' : 'Marquer comme équipé'}">⚔️</button>
+                                ${invSortMode === 'manual' ? '<button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button>' : ''}
+                                <button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button>
+                            </div>
+                        </div>
+                        ${extra ? `<div class="gear-detail">${extra}</div>` : ''}
+                    </div>`;
+                }).join('');
             }
             const weightDisplay = document.getElementById('inv-total-weight');
-            if(weightDisplay) weightDisplay.textContent = `${(totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight} • ${inventory.length} objet${inventory.length > 1 ? 's' : ''}`;
+            if(weightDisplay) weightDisplay.textContent = `${(totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight} kg • ${inventory.length} objet${inventory.length > 1 ? 's' : ''}`
+                + (attunedCount ? ` • ${attunedCount} lié${attunedCount > 1 ? 's' : ''} sur 3` : '');
         }
 
         // Réordonne un objet dans l'ordre affiché (sans franchir la frontière favoris/non-favoris)
@@ -2597,7 +3735,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function addInventoryFromInputs() {
             const nameEl = document.getElementById('inv-name'); const name = (nameEl.value || '').trim(); if(!name) { nameEl.focus(); return; }
-            inventory.push({ name, qty: parseInt(document.getElementById('inv-qty').value) || 1, weight: (document.getElementById('inv-weight').value || '').trim() || '-', category: (document.getElementById('inv-category').value || '').trim() || 'Général', pinned: false });
+            // L'autocomplétion SRD dépose ici ce qu'elle a trouvé (description, rareté…) :
+            // on le récupère puis on remet le presse-papier à zéro.
+            const extra = window._invPrefill && window._invPrefill.name === name ? window._invPrefill.data : {};
+            window._invPrefill = null;
+            inventory.push(Object.assign({
+                name,
+                qty: parseInt(document.getElementById('inv-qty').value) || 1,
+                weight: (document.getElementById('inv-weight').value || '').trim() || '-',
+                category: (document.getElementById('inv-category').value || '').trim() || 'Général',
+                pinned: false
+            }, extra));
             setStore('dnd-inventory', inventory);
             nameEl.value = ''; document.getElementById('inv-qty').value = ''; document.getElementById('inv-weight').value = '';
             renderInventory(); nameEl.focus();
@@ -2612,6 +3760,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     qty: parseInt(item.qty) || 1,
                     weight: (item.weight != null && String(item.weight).trim()) ? String(item.weight).trim() : '-',
                     category: item.category || 'Cadeaux',
+                    desc: item.desc || '',
                     pinned: false
                 });
                 setStore('dnd-inventory', inventory);
@@ -2627,18 +3776,103 @@ document.addEventListener('DOMContentLoaded', () => {
         if(invListContainer) {
             invListContainer.addEventListener('click', (e) => {
                 const rowEl = e.target.closest('[data-i]'); if(!rowEl) return; const index = parseInt(rowEl.dataset.i);
-                if(e.target.closest('.ci-e-cancel')) { editingInvIndex = -1; renderInventory(); return; }
-                if(e.target.closest('.ci-e-save')) { inventory[index] = { name: (rowEl.querySelector('.ci-e-name').value || '').trim() || 'Objet', qty: parseInt(rowEl.querySelector('.ci-e-qty').value) || 1, weight: (rowEl.querySelector('.ci-e-weight').value || '').trim() || '-', category: (rowEl.querySelector('.ci-e-cat').value || '').trim() || 'Général', pinned: inventory[index].pinned }; editingInvIndex = -1; setStore('dnd-inventory', inventory); updateCategorySelects(); renderInventory(); return; }
+                const it = inventory[index]; if(!it) return;
+                const save = () => { setStore('dnd-inventory', inventory); renderInventory(); };
                 if(e.target.closest('.ci-up')) { moveInvInView(index, -1); return; }
                 if(e.target.closest('.ci-down')) { moveInvInView(index, 1); return; }
-                if(e.target.closest('.ci-equip')) { inventory[index].equipped = !inventory[index].equipped; setStore('dnd-inventory', inventory); renderInventory(); return; }
-                if(e.target.closest('.ci-pin')) { inventory[index].pinned = !inventory[index].pinned; setStore('dnd-inventory', inventory); renderInventory(); return; }
-                if(e.target.closest('.ci-step')) { const act = e.target.closest('.ci-step').dataset.act; let q = parseInt(inventory[index].qty) || 1; q = act === 'inc' ? q + 1 : Math.max(1, q - 1); inventory[index].qty = q; setStore('dnd-inventory', inventory); renderInventory(); return; }
-                if(e.target.closest('.ci-edit')) { editingInvIndex = index; renderInventory(); return; }
-                if(e.target.closest('.ci-del')) { window.deleteWithUndo(inventory, index, inventory[index].name || 'cet objet', () => setStore('dnd-inventory', inventory), renderInventory); return; }
+                if(e.target.closest('.gear-equip')) { it.equipped = !it.equipped; save(); return; }
+                if(e.target.closest('.gear-pin')) { it.pinned = !it.pinned; save(); return; }
+                if(e.target.closest('.ci-attune-cb')) { it.attuned = !it.attuned; save(); return; }
+                if(e.target.closest('.ci-step')) { const act = e.target.closest('.ci-step').dataset.act; let q = parseInt(it.qty) || 1; it.qty = act === 'inc' ? q + 1 : Math.max(1, q - 1); save(); return; }
+                if(e.target.closest('.gear-minus')) {
+                    const n = parseInt(it.charges, 10) || 0;
+                    if(n <= 0) { if(window.showAppToast) window.showAppToast('⚡ Plus de charges !', '#c0392b'); return; }
+                    it.charges = n - 1; save(); return;
+                }
+                if(e.target.closest('.gear-plus')) {
+                    const n = parseInt(it.charges, 10) || 0, max = parseInt(it.chargesMax, 10) || 0;
+                    it.charges = max > 0 ? Math.min(n + 1, max) : n + 1; save(); return;
+                }
+                if(e.target.closest('.ci-toatk')) { itemToAttack(index); return; }
+                if(e.target.closest('.ci-edit')) { openItemModal(index); return; }
+                if(e.target.closest('.ci-del')) { window.deleteWithUndo(inventory, index, it.name || 'cet objet', () => setStore('dnd-inventory', inventory), renderInventory); return; }
+                if(e.target.closest('.gear-more, .gear-name, .gear-spacer, .gear-line')) toggleGearDetail(rowEl);
             });
-            invListContainer.addEventListener('keydown', (e) => { if(e.key === 'Enter' && e.target.closest('.ci-edit-form')) { e.preventDefault(); const saveBtn = e.target.closest('.ci-edit-form').querySelector('.ci-e-save'); if(saveBtn) saveBtn.click(); } });
         }
+
+        /** Verse un objet du sac dans le module Attaques — le cas typique de
+         *  l'arme magique trouvée en jeu, qu'on veut pouvoir lancer d'un clic. */
+        function itemToAttack(index) {
+            const it = inventory[index]; if(!it) return;
+            if(attacks.some(a => a.name === it.name)) { if(window.showAppToast) window.showAppToast('Cette arme est déjà dans tes attaques.', '#8a6320'); return; }
+            attacks.push({
+                name: it.name, category: 'Général', rarity: it.rarity || '', mode: 'attack',
+                bonus: '', dmg: '', dmgType: '', crit: 20,
+                desc: it.desc || '', notes: it.notes || '',
+                reqAttune: !!it.attunement, isAttuned: !!it.attuned,
+                charges: it.charges != null ? it.charges : null,
+                chargesMax: it.chargesMax != null ? it.chargesMax : null,
+                recharge: it.recharge || 'none', rechargeDice: it.rechargeDice || '',
+                ammo: null, ammoMax: null, pinned: false, equipped: !!it.equipped
+            });
+            setStore('dnd-attacks', attacks); renderAttacks();
+            if(window.showAppToast) window.showAppToast(`⚔️ « ${it.name} » ajouté aux attaques — complète son bonus et ses dégâts.`, '#3d7a3d');
+            window.editAttack(attacks.length - 1);
+        }
+
+        // ---- Fiche d'objet ----
+        const ITEM_FIELDS = ['name', 'qty', 'weight', 'category', 'value', 'rarity',
+                             'charges', 'charges-max', 'recharge', 'recharge-dice', 'desc', 'notes'];
+        const itemEl = (k) => document.getElementById('new-item-' + k);
+        let editingItemIndex = -1;
+
+        function openItemModal(index) {
+            if(!itemModal) return;
+            editingItemIndex = index;
+            const d = index >= 0 ? inventory[index] : {};
+            const set = (k, val) => { const el = itemEl(k); if(el) el.value = (val === null || val === undefined) ? '' : val; };
+            ITEM_FIELDS.forEach(k => set(k, ''));
+            set('name', d.name); set('qty', parseInt(d.qty, 10) || 1);
+            set('weight', d.weight === '-' ? '' : d.weight);
+            set('category', d.category || 'Général');
+            set('value', d.value); set('rarity', d.rarity);
+            set('charges', d.charges); set('charges-max', d.chargesMax);
+            set('recharge', d.recharge || 'none'); set('recharge-dice', d.rechargeDice);
+            set('desc', d.desc); set('notes', d.notes);
+            const chk = (k, on) => { const el = itemEl(k); if(el) el.checked = !!on; };
+            chk('attunement', d.attunement); chk('attuned', d.attuned);
+            chk('equipped', d.equipped); chk('pinned', d.pinned);
+            const t = document.getElementById('item-modal-title');
+            if(t) t.textContent = index >= 0 ? 'Modifier l’objet' : 'Nouvel objet';
+            itemModal.classList.remove('hidden');
+            setTimeout(() => itemEl('name')?.focus(), 60);
+        }
+
+        if(document.getElementById('btn-save-item')) document.getElementById('btn-save-item').addEventListener('click', () => {
+            const v = (k) => { const el = itemEl(k); return el ? el.value.trim() : ''; };
+            const numOrNull = (k) => { const s = v(k); return s === '' ? null : (parseInt(s, 10) || 0); };
+            const name = v('name');
+            if(!name) { itemEl('name')?.focus(); return; }
+            const item = {
+                name, qty: parseInt(v('qty'), 10) || 1, weight: v('weight') || '-',
+                category: v('category') || 'Général',
+                value: v('value'), rarity: v('rarity'),
+                charges: numOrNull('charges'), chargesMax: numOrNull('charges-max'),
+                recharge: v('recharge') || 'none', rechargeDice: v('recharge-dice'),
+                desc: (itemEl('desc') || {}).value || '', notes: v('notes'),
+                attunement: !!(itemEl('attunement') || {}).checked,
+                attuned: !!(itemEl('attuned') || {}).checked,
+                equipped: !!(itemEl('equipped') || {}).checked,
+                pinned: !!(itemEl('pinned') || {}).checked
+            };
+            if(item.chargesMax == null && item.charges != null) item.chargesMax = item.charges;
+            if(item.chargesMax != null && item.charges == null) item.charges = item.chargesMax;
+            if(editingItemIndex >= 0) inventory[editingItemIndex] = item; else inventory.push(item);
+            editingItemIndex = -1;
+            setStore('dnd-inventory', inventory); updateCategorySelects(); renderInventory();
+            itemModal.classList.add('hidden');
+        });
+
         // Recherche & tri du sac à dos
         const invSearchEl = document.getElementById('inv-search');
         if (invSearchEl) invSearchEl.addEventListener('input', (e) => { invSearch = e.target.value; renderInventory(); invSearchEl.focus(); });
@@ -2646,6 +3880,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (invSortEl) {
             invSortEl.value = invSortMode;
             invSortEl.addEventListener('change', (e) => { invSortMode = e.target.value; setStore('dnd-inv-sort', invSortMode, false); renderInventory(); });
+        }
+
+        /** Recharge des objets et armes au repos. Une quantité (« 1d6+4 ») est
+         *  lancée ; sans quantité, tout revient. « À l'aube » suit le repos long,
+         *  qui est la nuit de sommeil dans la quasi-totalité des parties. */
+        function recoverGearByRest(restType) {
+            let touched = 0;
+            const apply = (o) => {
+                const max = parseInt(o.chargesMax, 10) || 0;
+                if(!max) return;
+                const mode = o.recharge || 'none';
+                if(mode === 'none') return;
+                if(restType === 'short' && mode !== 'short') return;
+                if(restType === 'long' && mode !== 'short' && mode !== 'long' && mode !== 'dawn') return;
+                const cur = parseInt(o.charges, 10) || 0;
+                if(cur >= max) return;
+                let gain = max - cur;
+                if(hasVal(o.rechargeDice)) { const r = rollExpression(o.rechargeDice); if(!r.error) gain = Math.max(0, r.total); }
+                o.charges = Math.min(max, cur + gain);
+                touched++;
+            };
+            attacks.forEach(apply); inventory.forEach(apply);
+            if(touched) { setStore('dnd-attacks', attacks); setStore('dnd-inventory', inventory); renderAttacks(); renderInventory(); }
+            return touched;
         }
 
         function renderTraits() { 
@@ -2914,6 +4172,36 @@ document.addEventListener('DOMContentLoaded', () => {
             hpTrack.addEventListener('pointercancel', endHpScrub);
         }
 
+        // ===== REPLI DES MODULES =====
+        // Chaque module a un en-tête « .collapsible-header » avec sa flèche ▼,
+        // mais rien ne les écoutait : les flèches étaient décoratives. Un seul
+        // écouteur délégué les rend toutes cliquables, et l'état est retenu.
+        const COLLAPSE_KEY = 'dnd-collapsed-widgets';
+        function setWidgetCollapsed(widget, collapsed) {
+            const content = widget.querySelector('.collapsible-content');
+            const icon = widget.querySelector('.collapse-icon');
+            if (!content) return;
+            content.classList.toggle('collapsed', collapsed);
+            if (icon) icon.textContent = collapsed ? '▶' : '▼';
+        }
+        function restoreCollapsedWidgets() {
+            const list = getStore(COLLAPSE_KEY) || [];
+            list.forEach(id => { const w = document.getElementById(id); if (w) setWidgetCollapsed(w, true); });
+        }
+        document.body.addEventListener('click', (e) => {
+            const head = e.target.closest('.collapsible-header');
+            if (!head) return;
+            // On ne replie pas quand on vise un bouton posé dans l'en-tête.
+            if (e.target.closest('button, input, select, a')) return;
+            const widget = head.closest('.draggable-widget'); if (!widget) return;
+            const content = widget.querySelector('.collapsible-content'); if (!content) return;
+            const willCollapse = !content.classList.contains('collapsed');
+            setWidgetCollapsed(widget, willCollapse);
+            const list = new Set(getStore(COLLAPSE_KEY) || []);
+            if (willCollapse) list.add(widget.id); else list.delete(widget.id);
+            setStore(COLLAPSE_KEY, [...list]);
+        });
+
         function initGlobalSave() {
             const allSimpleInputs = document.querySelectorAll('#app-screen input:not(.slot-total-input):not(#avatar-file-input):not(#bg-file-input):not(#btn-import-json):not(.color-picker):not([type="radio"]):not([type="file"]):not(#pay-amount-val):not(#calc-display):not(#new-trait-pinned):not(#global-search-input), #app-screen textarea:not(#new-trait-desc), #app-screen select:not(#hd-size):not(#layout-selector):not(#pay-amount-type):not(#traits-sort-select):not(#new-trait-type):not(#inv-category):not(#edit-inv-category):not(#new-atk-category)');
             allSimpleInputs.forEach(input => {
@@ -2941,14 +4229,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let savedLayout = getStore('dnd-layout-mode', false) || 'classic'; if(layoutSelector) layoutSelector.value = savedLayout; applyLayout(savedLayout);
-        initSkillProfSave(); initGlobalSave(); 
+        initSkillProfSave(); initGlobalSave(); restoreCollapsedWidgets(); 
         // Bonus de maîtrise : auto-calculé depuis le niveau UNIQUEMENT s'il n'a jamais été saisi
         // (même logique que l'initiative ci-dessous — une valeur éditée à la main survit au rechargement ;
         //  changer le Niveau recalcule toujours, via le listener plus haut).
         if(levelInput && getStore('dnd-sheet-prof-bonus', false) === null) { const prof = Math.floor(((parseInt(levelInput.value) || 1) - 1) / 4) + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = prof; }
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
-        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderPinnedSpells(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderCustomConditions(); renderTraits(); renderPreparedSpells(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
+        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderBookCover(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderCustomConditions(); renderTraits(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
 
         // ===== RACCOURCIS CLAVIER (#22) — personnalisables =====
         // Ignorés dès qu'on saisit du texte (champ, zone de texte, éditeur riche).
@@ -3077,9 +4365,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- Recherche dans les données saisies de la fiche ---
             function searchSheetData(q) {
                 const out = [];
-                const add = (arr, icon, subtitle, widgetId) => { (arr || []).forEach(it => { const nm = String((it && (it.name || it.title)) || '').trim(); if (nm && nm.toLowerCase().includes(q)) out.push({ icon, title: nm, subtitle, widgetId }); }); };
+                // La recherche porte aussi sur les descriptions : c'est ce qui permet
+                // de retrouver « celui qui donne la résistance au feu » sans se
+                // rappeler du nom de l'objet. Le sous-titre indique alors le passage trouvé.
+                const add = (arr, icon, subtitle, widgetId) => { (arr || []).forEach(it => {
+                    const nm = String((it && (it.name || it.title)) || '').trim(); if (!nm) return;
+                    if (nm.toLowerCase().includes(q)) { out.push({ icon, title: nm, subtitle, widgetId }); return; }
+                    const body = String((it && (it.desc || it.notes || it.text)) || '').replace(/<[^>]*>/g, ' ');
+                    const at = body.toLowerCase().indexOf(q);
+                    if (at === -1) return;
+                    const snippet = body.slice(Math.max(0, at - 30), at + 60).trim();
+                    out.push({ icon, title: nm, subtitle: subtitle + ' — …' + snippet + '…', widgetId });
+                }); };
                 add(getStore('dnd-abilities'), '🔋', 'Capacité limitée', 'widget-abilities');
-                add(getStore('dnd-spells'),    '✨', 'Sort',             'widget-spells');
+                add(getStore('dnd-spells'),    '✨', 'Sort',             'widget-magic');
                 add(getStore('dnd-attacks'),   '⚔️', 'Attaque / arme',   'widget-attacks');
                 add(getStore('dnd-inventory'), '🎒', 'Objet (sac à dos)','widget-inventory');
                 add(getStore('dnd-traits'),    '📜', 'Capacité / don',   'widget-traits');
@@ -3088,7 +4387,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const modules = [
                     { kw: ['bourse', 'argent', 'piece', 'pièce', 'or', 'monnaie', 'po'], title: 'Bourse', widgetId: 'widget-currency', icon: '💰' },
                     { kw: ['inventaire', 'sac', 'poids', 'objet'], title: 'Sac à dos', widgetId: 'widget-inventory', icon: '🎒' },
-                    { kw: ['magie', 'emplacement', 'incantation', 'dd'], title: 'Caractéristiques magiques', widgetId: 'widget-magic-stats', icon: '✨' },
+                    { kw: ['magie', 'emplacement', 'incantation', 'dd'], title: 'Caractéristiques magiques', widgetId: 'widget-magic', icon: '✨' },
                     { kw: ['compagnon', 'familier', 'animal', 'monture'], title: 'Compagnons / Familiers', widgetId: 'widget-companion', icon: '🐾' },
                     { kw: ['note', 'journal'], title: 'Notes & Journal', widgetId: 'widget-notes', icon: '📝' },
                     { kw: ['pv', 'vie', 'sante', 'santé', 'soin', 'mort'], title: 'Points de vie', widgetId: 'widget-hp', icon: '❤️' },

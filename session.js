@@ -93,7 +93,7 @@
             identity: { background: v('char-background'), alignment: v('char-alignment'), languages: v('char-languages'), xp: v('char-xp'), size: v('char-size'), appearance: v('char-appearance') },
             skills: skills,
             // On envoie l'essentiel (pas les descriptions HTML complètes) pour garder le snapshot léger.
-            attacks: (jstore('dnd-attacks') || []).map(a => ({ name: a.name, bonus: a.bonus, dmg: a.dmg, notes: a.notes })),
+            attacks: (jstore('dnd-attacks') || []).map(a => ({ name: a.name, bonus: a.bonus, dmg: [a.dmg, a.dmgType].filter(Boolean).join(' '), notes: a.notes })),
             spells: (jstore('dnd-spells') || []).map(sp => ({ name: sp.name, level: sp.level, notes: sp.notes })),
             spellSlots: jstore('dnd-spell-slots') || [],
             spellInfo: { ability: v('spellcasting-ability'), mod: v('spell-modifier'), dc: v('spell-save-dc'), atk: v('spell-attack-bonus') },

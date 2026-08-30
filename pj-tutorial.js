@@ -770,17 +770,13 @@
     // =====================================================
     // Bouton « Revoir » dans le menu ☰ + déclenchement au chargement
     // =====================================================
+    // Les deux boutons vivent dans index.html, sous « Aide & tutoriels » :
+    // ici on ne fait que les brancher.
     function injectMenuButtons() {
-        const dd = byId('settings-dropdown'); if (!dd || byId('btn-pj-tuto-replay')) return;
-        const wrap = document.createElement('div');
-        wrap.className = 'player-only-setting';
-        wrap.innerHTML = `<hr>
-            <label style="font-weight:bold; font-size:0.85rem; color:var(--primary-color);">🎓 Aide :</label>
-            <button id="btn-pj-tuto-replay" class="btn-small" style="width:100%; margin-top:4px;">🎓 Revoir le tutoriel de la fiche</button>
-            <button id="btn-pj-wizard-replay" class="btn-small" style="width:100%; margin-top:5px;">✨ Relancer l'assistant de création</button>`;
-        dd.appendChild(wrap);
-        byId('btn-pj-tuto-replay').addEventListener('click', () => { dd.classList.add('hidden'); startPjTutorial(true); });
-        byId('btn-pj-wizard-replay').addEventListener('click', () => { dd.classList.add('hidden'); startWizard(); });
+        const dd = byId('settings-dropdown'); if (!dd || dd.dataset.pjWired) return;
+        dd.dataset.pjWired = '1';
+        byId('btn-pj-tuto-replay')?.addEventListener('click', () => { dd.classList.add('hidden'); startPjTutorial(true); });
+        byId('btn-pj-wizard-replay')?.addEventListener('click', () => { dd.classList.add('hidden'); startWizard(); });
     }
 
     function injectStyles() {

@@ -104,7 +104,10 @@
         attacks.slice(0, 6).forEach((a, i) => {
             const r = i + 1;
             F['weapons' + r + '1'] = a.name || ''; F['weapons' + r + '2'] = a.bonus || '';
-            F['weapons' + r + '3'] = a.dmg || '';  F['weapons' + r + '4'] = a.notes || '';
+            // Le type de dégâts et les propriétés vivent désormais dans leurs
+            // propres champs : on les recolle pour la feuille papier.
+            F['weapons' + r + '3'] = [a.dmg, a.dmgType].filter(Boolean).join(' ');
+            F['weapons' + r + '4'] = [a.notes, a.props, a.range].filter(Boolean).join(' · ');
         });
         attacks.filter(a => a.reqAttune).slice(0, 3).forEach((a, i) => {
             F['attun' + (i + 1)] = a.name || ''; C['attunChk' + (i + 1)] = !!a.isAttuned;
