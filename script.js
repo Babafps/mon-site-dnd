@@ -703,6 +703,45 @@ document.addEventListener('DOMContentLoaded', () => {
         let quillEditJournal = null;
 
 
+        // ===== UN SORT DU SRD, TRADUIT DANS LA FORME DE LA FICHE =====
+        // Une seule règle de conversion, partagée par le scribe (autocomplétion
+        // du nom) et par la montée de niveau (sorts choisis à l'écran). Deux
+        // conversions différentes finiraient par diverger.
+        // Ce qu'on ne sait pas déduire reste vide : mieux vaut un champ vide
+        // qu'une valeur inventée.
+        window.srdSpellToSheet = (s) => {
+            // Composantes : « V, S, M (une petite boule de guano…) »
+            const comp = String(s.components || '');
+            const head = comp.split('(')[0];
+            const c = {
+                v: /\bV\b/.test(head), s: /\bS\b/.test(head), m: /\bM\b/.test(head),
+                mat: (comp.match(/\(([^)]*)\)/) || [])[1] || ''
+            };
+            const paras = (s.desc || []).map(p => `<p>${window.SRD.esc(p)}</p>`).join('');
+            const hl = s.higher_levels
+                ? `<p><strong>À plus haut niveau.</strong> ${window.SRD.esc(s.higher_levels)}</p>` : '';
+
+            const txt = (s.desc || []).join(' ');
+            const sav = txt.match(/jet de sauvegarde de (Force|Dextérité|Constitution|Intelligence|Sagesse|Charisme)/i);
+            // Le SRD français dit « Effectuez une attaque de sort à distance »,
+            // pas « jet d'attaque » : les deux tournures comptent.
+            const mode = sav ? 'save'
+                : (/attaque de sort|jet d[’']attaque/i.test(txt) ? 'attack' : 'none');
+            const dmg = txt.match(/(\d+d\d+)\s+dégâts\s+((?:de|d’|d')\s?\w+|\w+s)/i)
+                     || txt.match(/dégâts\s+de\s+(\w+)[^.]*?(\d+d\d+)/i);
+            const dice = dmg ? (/^\d+d\d+$/.test(dmg[1]) ? dmg[1] : dmg[2]) : '';
+            const dtype = dmg ? (/^\d+d\d+$/.test(dmg[1]) ? dmg[2] : 'de ' + dmg[1]) : '';
+
+            return {
+                name: s.name || '', level: parseInt(s.level, 10) || 0,
+                time: s.casting_time || '', range: s.range || '', duration: s.duration || '',
+                comp: c, res: spellResString(c),
+                desc: paras + hl, notes: '',
+                mode, saveAbility: sav ? sav[1] : '',
+                dmg: dice, dmgType: String(dtype).trim()
+            };
+        };
+
         // ===== AUTOCOMPLÉTION SRD DANS LES FORMULAIRES =====
         // Un composant unique (srd-autocomplete.js) branché trois fois. Remplir
         // reste facultatif : tout champ pré-rempli demeure modifiable, et la
@@ -719,48 +758,25 @@ document.addEventListener('DOMContentLoaded', () => {
             window.SRDAuto.attach(document.getElementById('new-spell-name'), {
                 categories: ['spells'],
                 onPick: (s) => {
-                    setVal('new-spell-level', s.level);
-                    setVal('new-spell-time', s.casting_time);
-                    setVal('new-spell-range', s.range);
-                    setVal('new-spell-duration', s.duration);
-                    // Composantes : « V, S, M (une petite boule de guano…) »
-                    const comp = String(s.components || '');
-                    const head = comp.split('(')[0];
-                    const mat = (comp.match(/\(([^)]*)\)/) || [])[1] || '';
+                    const f = window.srdSpellToSheet(s);
+                    setVal('new-spell-level', f.level);
+                    setVal('new-spell-time', f.time);
+                    setVal('new-spell-range', f.range);
+                    setVal('new-spell-duration', f.duration);
                     const check = (id, on) => {
                         const el = document.getElementById(id);
                         if (el && el.checked !== on) { el.checked = on; el.dispatchEvent(new Event('change', { bubbles: true })); }
                     };
-                    check('new-spell-comp-v', /\bV\b/.test(head));
-                    check('new-spell-comp-s', /\bS\b/.test(head));
-                    check('new-spell-comp-m', /\bM\b/.test(head));
-                    setVal('new-spell-comp-mat', mat);
+                    check('new-spell-comp-v', f.comp.v);
+                    check('new-spell-comp-s', f.comp.s);
+                    check('new-spell-comp-m', f.comp.m);
+                    setVal('new-spell-comp-mat', f.comp.mat);
                     // La description du scribe est un contenteditable, pas Quill.
                     const ed = document.getElementById('new-spell-desc');
-                    if (ed) {
-                        const paras = (s.desc || []).map(p => `<p>${window.SRD.esc(p)}</p>`).join('');
-                        const hl = s.higher_levels
-                            ? `<p><strong>À plus haut niveau.</strong> ${window.SRD.esc(s.higher_levels)}</p>` : '';
-                        ed.innerHTML = paras + hl;
-                    }
-                    // Jet et dégâts : le SRD les écrit en toutes lettres. Ce qu'on
-                    // ne sait pas déduire reste vide — mieux vaut un champ vide
-                    // qu'une valeur inventée.
-                    const txt = (s.desc || []).join(' ');
-                    const sav = txt.match(/jet de sauvegarde de (Force|Dextérité|Constitution|Intelligence|Sagesse|Charisme)/i);
-                    if (sav) { setVal('new-spell-mode', 'save'); setVal('new-spell-save-ability', sav[1]); }
-                    // Le SRD français dit « Effectuez une attaque de sort à
-                    // distance », pas « jet d'attaque » : les deux tournures comptent.
-                    else if (/attaque de sort|jet d[’']attaque/i.test(txt)) setVal('new-spell-mode', 'attack');
-                    else setVal('new-spell-mode', 'none');
-                    const dmg = txt.match(/(\d+d\d+)\s+dégâts\s+((?:de|d’|d')\s?\w+|\w+s)/i)
-                             || txt.match(/dégâts\s+de\s+(\w+)[^.]*?(\d+d\d+)/i);
-                    if (dmg) {
-                        const dice = /^\d+d\d+$/.test(dmg[1]) ? dmg[1] : dmg[2];
-                        const type = /^\d+d\d+$/.test(dmg[1]) ? dmg[2] : 'de ' + dmg[1];
-                        setVal('new-spell-dmg', dice);
-                        setVal('new-spell-dmg-type', String(type).trim());
-                    }
+                    if (ed) ed.innerHTML = f.desc;
+                    setVal('new-spell-mode', f.mode);
+                    if (f.saveAbility) setVal('new-spell-save-ability', f.saveAbility);
+                    if (f.dmg) { setVal('new-spell-dmg', f.dmg); setVal('new-spell-dmg-type', f.dmgType); }
                     spellSyncMode();
                     if (window.showAppToast) window.showAppToast(`✨ « ${s.name} » rempli depuis le SRD`);
                 }
@@ -1873,7 +1889,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Colonnes de la table (rages, ki, attaque sournoise…) : rappel
             // seulement, la fiche n'a pas de champ dédié pour les accueillir.
-            const skipCols = new Set(['spell_slots_count', 'slot_level']);
+            // Les colonnes de sorts sont traitées par la ligne « Sorts », qui
+            // fait bien mieux que rappeler un nombre : elle laisse le choisir.
+            const skipCols = new Set(['spell_slots_count', 'slot_level',
+                                      'cantrips_known', 'spells_known']);
             ((cls && cls.level_columns) || []).forEach(col => {
                 if (skipCols.has(col.key)) return;
                 const v = lvupColVal(info, col);
@@ -1883,30 +1902,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 plan.columns.push({ label: col.label || col.key, from: p, to: v });
             });
 
-            // Sorts à choisir. On ne DÉDUIT que ce que la table dit vraiment :
-            // les sorts mineurs et les sorts connus quand la classe a ces
-            // colonnes, et le rang le plus haut désormais lançable. Le reste
-            // (« le magicien copie deux sorts dans son grimoire ») vit dans le
-            // texte des aptitudes, pas dans les données : on ne l'invente pas,
-            // on ouvre simplement le grimoire pour que le joueur s'en charge.
-            const cantripsUp = Math.max(0, lvupInt(info && info.cantrips_known) - lvupInt(prev && prev.cantrips_known));
-            const knownUp = Math.max(0, lvupInt(info && info.spells_known) - lvupInt(prev && prev.spells_known));
-            const rankBefore = lvupMaxRank(prev);
-            const rankAfter = lvupMaxRank(info);
-            if (cantripsUp || knownUp || rankAfter > rankBefore || plan.slots.length || plan.pact) {
-                const have0 = spells.filter(s => (parseInt(s.level, 10) || 0) === 0).length;
-                const haveN = spells.length - have0;
-                plan.spells = {
-                    cantripsUp, knownUp,
-                    newRank: rankAfter > rankBefore ? rankAfter : 0,
-                    rank: rankAfter,
-                    // Ce qui manque VRAIMENT sur la fiche, quand la table le dit.
-                    missing0: info && info.cantrips_known != null
-                        ? Math.max(0, lvupInt(info.cantrips_known) - have0) : 0,
-                    missingN: info && info.spells_known != null
-                        ? Math.max(0, lvupInt(info.spells_known) - haveN) : 0
-                };
-            }
+            // Sorts : le niveau dit combien on en apprend, la liste de la
+            // classe dit lesquels sont possibles. Les deux sont chargés ici
+            // pour que l'écran n'ait plus qu'à les afficher.
+            plan.spells = await buildSpellPlan(plan, prev, info);
 
             // Aptitudes. L'amélioration de caractéristique est mise à part :
             // c'est un choix, pas une capacité à recopier sur la fiche.
@@ -1921,6 +1920,76 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             return plan;
+        }
+
+        // ---------- Sorts gagnés au niveau ----------
+        // Le principe est celui de Baldur's Gate 3 : à la montée, on voit la
+        // liste de sa classe, on coche ce qu'on apprend, et les sorts partent
+        // directement dans le grimoire. Rien n'est deviné : le nombre vient de
+        // la table de progression, la liste vient des sorts qui déclarent la
+        // classe. Une classe perso munie d'une colonne « Sorts connus » se
+        // comporte donc comme un barde, sans une ligne de code de plus.
+
+        // Combien de sorts une classe à grimoire copie à chaque niveau. Le SRD
+        // l'écrit dans le texte de l'aptitude, pas dans une table : il n'y a
+        // rien à lire, seulement à savoir.
+        const SPELLBOOK_GAIN = { wizard: 2 };
+
+        const SP_SCHOOL_FR = {
+            abjuration: 'abjuration', conjuration: 'invocation', divination: 'divination',
+            enchantment: 'enchantement', evocation: 'évocation', illusion: 'illusion',
+            necromancy: 'nécromancie', transmutation: 'transmutation'
+        };
+        const spRankLabel = (r) => (r === 0 ? 'Sorts mineurs' : 'Niveau ' + r);
+        const spPlural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+
+        async function buildSpellPlan(plan, prev, info) {
+            const cls = plan.cls;
+            const rankBefore = lvupMaxRank(prev);
+            const rankAfter = lvupMaxRank(info);
+            const cantripsUp = Math.max(0, lvupInt(info && info.cantrips_known) - lvupInt(prev && prev.cantrips_known));
+            const knownUp = Math.max(0, lvupInt(info && info.spells_known) - lvupInt(prev && prev.spells_known));
+            const bookUp = (cls && SPELLBOOK_GAIN[cls.id]) || 0;
+            if (!cantripsUp && !knownUp && !bookUp && !rankAfter && !plan.slots.length && !plan.pact) return null;
+
+            // Comment cette classe apprend : liste fermée de sorts connus,
+            // grimoire à recopier, ou préparation dans toute la liste.
+            const kind = (info && info.spells_known != null) ? 'known'
+                       : (bookUp ? 'book'
+                       : (((cls && cls.spellcasting) || rankAfter) ? 'prepared' : null));
+            if (!kind) return null;
+
+            const have0 = spells.filter(s => (parseInt(s.level, 10) || 0) === 0).length;
+            const haveN = spells.length - have0;
+            const known = new Set(spells.map(s => window.SRD.fold(s.name || '')));
+
+            let catalog = [];
+            try {
+                catalog = (await window.SRD.spellsForClass(cls && cls.id, rankAfter))
+                    .filter(s => !known.has(window.SRD.fold(s.name || '')));
+            } catch (e) { catalog = []; }
+
+            const byId = new Map(catalog.map(s => [s.id, s]));
+            const ranks = [...new Set(catalog.map(s => parseInt(s.level, 10) || 0))].sort((a, b) => a - b);
+
+            return {
+                kind, cantripsUp,
+                // Sorts (hors mineurs) que le niveau octroie.
+                need: kind === 'book' ? bookUp : knownUp,
+                rank: rankAfter,
+                newRank: rankAfter > rankBefore ? rankAfter : 0,
+                // Ce qui manque VRAIMENT sur la fiche, quand la table le dit.
+                missing0: info && info.cantrips_known != null
+                    ? Math.max(0, lvupInt(info.cantrips_known) - have0) : 0,
+                missingN: info && info.spells_known != null
+                    ? Math.max(0, lvupInt(info.spells_known) - haveN) : 0,
+                // Les listes fermées autorisent un échange à chaque niveau.
+                canSwap: kind === 'known' && spells.length > 0,
+                catalog, byId, ranks,
+                mine: spells.map((s, i) => ({ i, name: s.name || '', level: parseInt(s.level, 10) || 0 }))
+                    .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'fr')),
+                chosen: new Set(), swap: -1
+            };
         }
 
         // ---------- Rendu ----------
@@ -1971,6 +2040,59 @@ document.addEventListener('DOMContentLoaded', () => {
                             perso — ou tape simplement le nom, la saisie libre marche toujours.</div>
                     </div>
                     <div class="lvup-asi-preview" role="status"></div>
+                </div>
+            </div>`;
+        }
+
+        /** La ligne « Sorts » : le résumé, puis la liste de la classe où l'on
+         *  coche ce qu'on apprend. Reste utilisable en récapitulatif — choisir
+         *  ses sorts est le geste principal du niveau, pas un réglage avancé. */
+        function lvupSpellsMarkup(plan) {
+            const sp = plan.spells;
+            const bits = [];
+            if (sp.cantripsUp) bits.push(spPlural(sp.cantripsUp, 'sort mineur', 'sorts mineurs') + ' de plus');
+            if (sp.need) bits.push(sp.kind === 'book'
+                ? spPlural(sp.need, 'sort à copier', 'sorts à copier') + ' dans le grimoire'
+                : spPlural(sp.need, 'nouveau sort', 'nouveaux sorts'));
+            if (sp.newRank) bits.push(`accès aux sorts de niveau ${sp.newRank}`);
+            const head = bits.length ? bits.join(' · ') : 'De nouveaux emplacements s’ouvrent';
+
+            const manque = [];
+            if (sp.missing0) manque.push(spPlural(sp.missing0, 'sort mineur', 'sorts mineurs'));
+            if (sp.missingN) manque.push(spPlural(sp.missingN, 'sort', 'sorts'));
+            const sub = sp.kind === 'prepared'
+                ? 'Ta classe prépare ses sorts dans toute sa liste : prends ceux que tu veux avoir sous la main.'
+                : (manque.length ? `Il te manque ${manque.join(' et ')} sur la fiche.` : '');
+
+            if (!sp.catalog.length) return lvupRow({
+                key: 'spells', kind: 'info', ico: '📖', title: 'Sorts',
+                detail: escAb(head) + '<br>Aucun sort à te proposer ici — le grimoire s’ouvrira à la fin.'
+            });
+
+            const tabs = sp.ranks.map(r =>
+                `<button type="button" class="lvup-sp-tab" data-rank="${r}">${escAb(spRankLabel(r))}</button>`).join('');
+            const swap = (sp.canSwap && sp.mine.length) ? `
+                    <div class="lvup-sp-swap">
+                        <label><input type="checkbox" class="lvup-sp-swap-on"> Remplacer un sort que je connais</label>
+                        <select class="lvup-sp-swap-pick" aria-label="Sort rendu">
+                            <option value="-1">— lequel ? —</option>
+                            ${sp.mine.map(m => `<option value="${m.i}">${escAb(m.name)} · ${escAb(m.level ? 'niv. ' + m.level : 'mineur')}</option>`).join('')}
+                        </select>
+                    </div>` : '';
+
+            return `<div class="lvup-row lvup-sp">
+                <input type="checkbox" id="lvup-ck-spells" class="lvup-ck" data-ck="spells" checked>
+                <span class="lvup-ico" aria-hidden="true">📖</span>
+                <div class="lvup-txt">
+                    <b>Sorts</b>
+                    <i>${escAb(head)}${sub ? ' — ' + escAb(sub) : ''}</i>
+                    <div class="lvup-sp-pick">
+                        <div class="lvup-sp-tabs">${tabs}</div>
+                        <input type="search" class="lvup-sp-search" placeholder="Chercher un sort…"
+                               aria-label="Chercher un sort">
+                        <div class="lvup-sp-list"></div>${swap}
+                        <div class="lvup-sp-count" role="status"></div>
+                    </div>
                 </div>
             </div>`;
         }
@@ -2029,24 +2151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          : '')
             }));
 
-            if (plan.spells) {
-                const bits = [];
-                if (plan.spells.cantripsUp) bits.push(`${plan.spells.cantripsUp} sort(s) mineur(s) de plus`);
-                if (plan.spells.knownUp) bits.push(`${plan.spells.knownUp} sort(s) connu(s) de plus`);
-                if (plan.spells.newRank) bits.push(`accès aux sorts de niveau ${plan.spells.newRank}`);
-                const manque = [];
-                if (plan.spells.missing0) manque.push(`${plan.spells.missing0} sort(s) mineur(s)`);
-                if (plan.spells.missingN) manque.push(`${plan.spells.missingN} sort(s)`);
-                rows.push(lvupRow({
-                    key: 'spells', kind: 'info', ico: '📖',
-                    title: 'Sorts à choisir',
-                    detail: (bits.length ? escAb(bits.join(' · ')) : 'De nouveaux emplacements s’ouvrent')
-                          + (manque.length
-                             ? ` — il te manque ${escAb(manque.join(' et '))} sur la fiche`
-                             : '')
-                          + '<br>Le grimoire s’ouvrira à la fin pour les inscrire.'
-                }));
-            }
+            if (plan.spells) rows.push(lvupSpellsMarkup(plan));
 
             plan.features.forEach((f, i) => {
                 const txt = Array.isArray(f.text) ? f.text : (f.text ? [String(f.text)] : []);
@@ -2134,6 +2239,157 @@ document.addEventListener('DOMContentLoaded', () => {
             if (a) out.push([a, 1]);
             if (b && b !== a) out.push([b, 1]);
             return out;
+        }
+
+        // ---------- Sorts : quota, cases à cocher, échange ----------
+
+        const spIsCantrip = (sp, id) => (parseInt((sp.byId.get(id) || {}).level, 10) || 0) === 0;
+        const spPicked = (sp, cantrips) => [...sp.chosen].filter(id => spIsCantrip(sp, id) === cantrips).length;
+        const spSwapOn = (ov) => !!ov.querySelector('.lvup-sp-swap-on')?.checked;
+        // Rendre un sort connu libère une place : c'est un échange, pas une perte.
+        const spNeedN = (sp, ov) => sp.need + (spSwapOn(ov) ? 1 : 0);
+
+        /** Ce qui empêche d'appliquer, ou '' si le compte est bon. */
+        function lvupSpellsIssue(ov, plan) {
+            const sp = plan.spells;
+            if (!sp || !sp.catalog.length) return '';
+            const row = ov.querySelector('.lvup-ck[data-ck="spells"]');
+            if (row && !row.checked) return '';               // ligne décochée : plus tard
+            if (spSwapOn(ov) && !(parseInt(ov.querySelector('.lvup-sp-swap-pick')?.value, 10) >= 0)) {
+                return 'Dis quel sort tu rends avant d’en prendre un autre.';
+            }
+            const lv0 = spPicked(sp, true);
+            const lvN = spPicked(sp, false);
+            const need = spNeedN(sp, ov);
+            const manque = [];
+            if (sp.cantripsUp > lv0) manque.push(spPlural(sp.cantripsUp - lv0, 'sort mineur', 'sorts mineurs'));
+            if (need > lvN) manque.push(spPlural(need - lvN, 'sort', 'sorts'));
+            if (manque.length) {
+                return `Il te reste ${manque.join(' et ')} à choisir — ou décoche la ligne « Sorts » `
+                     + `pour t’en occuper plus tard.`;
+            }
+            if (sp.cantripsUp && lv0 > sp.cantripsUp) return 'Trop de sorts mineurs choisis.';
+            if (need && lvN > need) return 'Trop de sorts choisis.';
+            return '';
+        }
+
+        /** Le choix figé au moment de valider : identifiants et sort rendu. */
+        function lvupReadSpells(ov, plan) {
+            const sp = plan.spells;
+            const row = ov.querySelector('.lvup-ck[data-ck="spells"]');
+            if (!sp || !sp.chosen.size || (row && !row.checked)) return null;
+            const idx = spSwapOn(ov)
+                ? parseInt(ov.querySelector('.lvup-sp-swap-pick').value, 10) : -1;
+            return { ids: [...sp.chosen], swap: (idx >= 0 ? idx : -1) };
+        }
+
+        /** Inscrit les sorts choisis dans le grimoire. Le sort rendu part en
+         *  premier : son indice vient de la liste d'avant l'ajout. */
+        async function lvupWriteSpells(pick) {
+            if (!pick) return { added: 0, removed: '' };
+            let removed = '';
+            if (pick.swap >= 0 && spells[pick.swap]) {
+                removed = spells[pick.swap].name || '';
+                spells.splice(pick.swap, 1);
+            }
+            let added = 0;
+            for (const id of pick.ids) {
+                let full = null;
+                try { full = await window.SRD.entry('spells', id); } catch (e) {}
+                if (!full) continue;
+                const f = window.srdSpellToSheet(full);
+                // Un sort déjà inscrit ne l'est pas deux fois.
+                if (spells.some(s => window.SRD.fold(s.name || '') === window.SRD.fold(f.name))) continue;
+                spells.push(Object.assign(f, { prepared: true, pinned: false }));
+                added++;
+            }
+            if (added || removed) { setStore('dnd-spells', spells); renderGrimoire(); }
+            return { added, removed };
+        }
+
+        function lvupSpellsSetup(ov, plan, showErr) {
+            const sp = plan.spells;
+            const box = ov.querySelector('.lvup-sp-pick');
+            if (!sp || !box) return;
+            const listEl = box.querySelector('.lvup-sp-list');
+            const countEl = box.querySelector('.lvup-sp-count');
+            const searchEl = box.querySelector('.lvup-sp-search');
+            const swapPick = box.querySelector('.lvup-sp-swap-pick');
+
+            // On ouvre sur le rang qui vient de se débloquer : c'est celui que
+            // le joueur est venu voir.
+            let rank = sp.newRank || (sp.cantripsUp ? 0 : sp.rank);
+            if (!sp.ranks.includes(rank)) rank = sp.ranks[sp.ranks.length - 1];
+
+            const full = (lv) => {
+                const q = lv === 0 ? sp.cantripsUp : spNeedN(sp, ov);
+                return q > 0 && spPicked(sp, lv === 0) >= q;
+            };
+
+            const refresh = () => {
+                const q = window.SRD.fold(searchEl.value.trim());
+                // Cocher un sort redessine la liste (les autres peuvent devenir
+                // indisponibles) : on rend sa place au lecteur.
+                const scroll = listEl.scrollTop;
+                const items = sp.catalog.filter(s => (parseInt(s.level, 10) || 0) === rank
+                    && (!q || window.SRD.fold(s.name || '').includes(q)));
+                listEl.innerHTML = items.length ? items.map(s => {
+                    const on = sp.chosen.has(s.id);
+                    const off = !on && full(rank);
+                    const meta = [SP_SCHOOL_FR[s.school] || s.school || '',
+                                  s.ritual ? 'rituel' : '', s.concentration ? 'concentration' : '']
+                        .filter(Boolean).join(' · ');
+                    return `<label class="lvup-sp-item${on ? ' is-on' : ''}${off ? ' is-off' : ''}">
+                        <input type="checkbox" data-sp="${escAb(s.id)}"${on ? ' checked' : ''}${off ? ' disabled' : ''}>
+                        <span class="lvup-sp-n">${escAb(s.name)}</span>
+                        <span class="lvup-sp-m">${escAb(meta)}</span>
+                    </label>`;
+                }).join('') : '<p class="lvup-sp-empty">Aucun sort ne correspond.</p>';
+                listEl.scrollTop = scroll;
+
+                box.querySelectorAll('.lvup-sp-tab').forEach(t =>
+                    t.classList.toggle('is-on', (parseInt(t.dataset.rank, 10) || 0) === rank));
+
+                const parts = [];
+                if (sp.cantripsUp) parts.push(`Sorts mineurs ${spPicked(sp, true)}/${sp.cantripsUp}`);
+                if (spNeedN(sp, ov)) parts.push(`Sorts ${spPicked(sp, false)}/${spNeedN(sp, ov)}`);
+                if (!parts.length) parts.push(sp.chosen.size
+                    ? `${spPlural(sp.chosen.size, 'sort choisi', 'sorts choisis')} — autant que tu veux`
+                    : 'Choisis autant de sorts que tu veux, ou aucun.');
+                countEl.textContent = parts.join(' · ');
+                countEl.classList.toggle('is-done', !lvupSpellsIssue(ov, plan));
+            };
+
+            box.addEventListener('click', (e) => {
+                const tab = e.target.closest('.lvup-sp-tab');
+                if (!tab) return;
+                e.preventDefault();
+                rank = parseInt(tab.dataset.rank, 10) || 0;
+                refresh();
+            });
+
+            box.addEventListener('change', (e) => {
+                const ck = e.target.closest('input[data-sp]');
+                if (ck) {
+                    if (ck.checked) sp.chosen.add(ck.dataset.sp); else sp.chosen.delete(ck.dataset.sp);
+                } else if (e.target.closest('.lvup-sp-swap')) {
+                    if (!spSwapOn(ov) && swapPick) swapPick.value = '-1';
+                    // Décocher l'échange reprend la place qu'il donnait.
+                    if (sp.need > 0 || spSwapOn(ov)) {
+                        const q = spNeedN(sp, ov);
+                        while (spPicked(sp, false) > q) {
+                            const last = [...sp.chosen].reverse().find(id => !spIsCantrip(sp, id));
+                            if (!last) break;
+                            sp.chosen.delete(last);
+                        }
+                    }
+                } else return;
+                showErr('');
+                refresh();
+            });
+
+            searchEl.addEventListener('input', refresh);
+            refresh();
         }
 
         function openLevelUpScreen(plan) {
@@ -2256,6 +2512,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 refreshAsi();
             }
 
+            // --- Sorts ---
+            lvupSpellsSetup(ov, plan, showErr);
+
             // --- Boutons ---
             ov.addEventListener('click', (e) => {
                 if (e.target === ov) return;                       // le fond ne ferme pas : trop facile à perdre
@@ -2266,11 +2525,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (act === 'choose') { panel.classList.add('is-choosing'); showErr(''); return; }
                 if (act === 'back') { panel.classList.remove('is-choosing'); showErr(''); return; }
                 if (act === 'all' || act === 'confirm') {
-                    const issue = lvupAsiIssue(ov, plan);
-                    if (issue) {
+                    const asiIssue = lvupAsiIssue(ov, plan);
+                    if (asiIssue) {
                         panel.classList.add('is-choosing');
-                        showErr(issue);
+                        showErr(asiIssue);
                         ov.querySelector('.lvup-asi')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        return;
+                    }
+                    const spIssue = lvupSpellsIssue(ov, plan);
+                    if (spIssue) {
+                        showErr(spIssue);
+                        ov.querySelector('.lvup-sp')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                         return;
                     }
                     applyLevelUpPlan(plan, ov);
@@ -2283,7 +2548,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ---------- Application (le seul endroit qui écrit sur la fiche) ----------
 
-        function applyLevelUpPlan(plan, ov) {
+        async function applyLevelUpPlan(plan, ov) {
             const on = (key) => {
                 const el = ov.querySelector(`.lvup-ck[data-ck="${key}"]`);
                 return !el || el.checked;
@@ -2379,9 +2644,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // 9. Sorts choisis à l'écran. Le choix est figé MAINTENANT, avant
+            //    toute attente : l'écran se referme pendant l'écriture.
+            const spellPick = lvupReadSpells(ov, plan);
+
             // Le champ Niveau pulse en or.
             const grp = lvlEl.closest('.level-group');
             if (grp) { grp.classList.remove('is-levelling'); void grp.offsetWidth; grp.classList.add('is-levelling'); }
+
+            const spellsDone = await lvupWriteSpells(spellPick);
 
             // Ce qu'il reste à faire à la main.
             const rappels = [];
@@ -2396,24 +2667,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 rappels.push('📜 Aucune aptitude à ce niveau — profite de la marge');
             }
 
-            // Des sorts à choisir : la célébration propose d'ouvrir le grimoire
-            // au bon rang, plutôt que de laisser le joueur le chercher.
+            // Sorts : ce qui vient d'être inscrit, et ce qui manque encore. Le
+            // compte est refait sur la fiche telle qu'elle est MAINTENANT, pas
+            // sur celle d'avant la montée.
             let spellsFx = null;
             if (plan.spells) {
+                const inf = plan.info;
+                const have0 = spells.filter(s => (parseInt(s.level, 10) || 0) === 0).length;
+                const m0 = (inf && inf.cantrips_known != null)
+                    ? Math.max(0, lvupInt(inf.cantrips_known) - have0) : 0;
+                const mN = (inf && inf.spells_known != null)
+                    ? Math.max(0, lvupInt(inf.spells_known) - (spells.length - have0)) : 0;
+
+                if (spellsDone.removed) rappels.push(`📖 « ${spellsDone.removed} » rendu à l’oubli`);
+                if (spellsDone.added) rappels.push(`📖 ${spPlural(spellsDone.added, 'sort inscrit', 'sorts inscrits')} au grimoire`);
+
                 const manque = [];
-                if (plan.spells.missing0) manque.push(`${plan.spells.missing0} sort(s) mineur(s)`);
-                if (plan.spells.missingN) manque.push(`${plan.spells.missingN} sort(s)`);
-                rappels.push('📖 Sorts à inscrire' + (manque.length ? ' : ' + manque.join(' et ') : ''));
-                spellsFx = {
-                    label: manque.length
-                        ? `📖 Choisir mes sorts (${plan.spells.missing0 + plan.spells.missingN})`
-                        : '📖 Ouvrir le grimoire',
-                    // Le rang sur lequel le grimoire s'ouvre : celui qui vient
-                    // de se débloquer, sinon les sorts mineurs s'il en manque,
-                    // sinon le plus haut rang lançable.
-                    rank: plan.spells.newRank
-                       || (plan.spells.missing0 ? 0 : plan.spells.rank)
-                };
+                if (m0) manque.push(spPlural(m0, 'sort mineur', 'sorts mineurs'));
+                if (mN) manque.push(spPlural(mN, 'sort', 'sorts'));
+                // Le grimoire s'ouvre au rang utile : celui qui manque, sinon
+                // celui qui vient de se débloquer.
+                if (manque.length) {
+                    rappels.push(`📖 Il manque encore ${manque.join(' et ')}`);
+                    spellsFx = { label: `📖 Choisir mes sorts (${m0 + mN})`, rank: m0 ? 0 : plan.spells.rank };
+                } else if (!spellsDone.added) {
+                    spellsFx = { label: '📖 Ouvrir le grimoire',
+                                 rank: plan.spells.newRank || plan.spells.rank };
+                }
             }
 
             showLevelUpFx({

@@ -3728,6 +3728,74 @@ body.theme-dark .lvup-error { color: #ff9c8f; }
     opacity: 0.7; line-height: 1.35;
 }
 
+/* --- Sorts gagnés au niveau ---
+   La liste de la classe s'affiche DANS le panneau : on coche ce qu'on
+   apprend, et les sorts partent au grimoire à la validation. Le compteur
+   dit toujours combien il en reste à prendre. */
+.lvup-sp { border-color: rgba(196,155,53,0.55); }
+.lvup-sp-pick { margin-top: 8px; }
+.lvup-sp-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
+.lvup-sp-tab {
+    font-family: 'Cinzel', serif; font-size: 0.72rem;
+    padding: 4px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+    transition: var(--transition-smooth);
+}
+.lvup-sp-tab:hover { border-color: var(--accent-color); }
+.lvup-sp-tab.is-on {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    border-color: rgba(196,155,53,0.8); font-weight: 600;
+}
+.lvup-sp-search {
+    width: 100%; margin-top: 7px; padding: 6px 8px;
+    font-family: 'Lora', serif; font-size: 0.78rem;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+}
+.lvup-sp-list {
+    margin-top: 6px; max-height: 210px; overflow-y: auto;
+    border: 1px solid var(--soft-border); border-radius: var(--radius-sm);
+    background: var(--widget-bg);
+}
+.lvup-sp-item {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 6px 9px; cursor: pointer;
+    border-bottom: 1px solid var(--soft-border);
+    font-family: 'Lora', serif; font-size: 0.79rem;
+}
+.lvup-sp-item:last-child { border-bottom: none; }
+.lvup-sp-item:hover { background: rgba(196,155,53,0.12); }
+.lvup-sp-item.is-on { background: rgba(196,155,53,0.2); }
+.lvup-sp-item.is-off { opacity: 0.45; cursor: not-allowed; }
+.lvup-sp-item input { flex: 0 0 auto; accent-color: var(--accent-color); cursor: inherit; }
+.lvup-sp-n { flex: 1 1 auto; min-width: 0; }
+.lvup-sp-m { flex: 0 0 auto; font-size: 0.7rem; font-style: italic; opacity: 0.62; }
+.lvup-sp-empty {
+    padding: 12px; text-align: center; opacity: 0.7;
+    font-family: 'Lora', serif; font-size: 0.78rem;
+}
+.lvup-sp-swap {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px;
+    font-family: 'Lora', serif; font-size: 0.77rem;
+}
+.lvup-sp-swap label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.lvup-sp-swap input { accent-color: var(--accent-color); cursor: pointer; }
+.lvup-sp-swap select {
+    font-family: 'Lora', serif; font-size: 0.76rem; padding: 4px 6px; max-width: 100%;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+}
+/* Le sort rendu ne se choisit que si l'échange est demandé. */
+.lvup-sp-swap:not(:has(.lvup-sp-swap-on:checked)) select { display: none; }
+.lvup-sp-count {
+    margin-top: 7px; font-family: 'Cinzel', serif; font-size: 0.76rem;
+    color: var(--primary-color);
+}
+body.theme-dark .lvup-sp-count { color: var(--accent-color); }
+.lvup-sp-count.is-done::after { content: ' ✓'; color: #3d7a3d; }
+body.theme-dark .lvup-sp-count.is-done::after { color: #7fc47f; }
+
 /* Célébration : quand des sorts restent à choisir, « Continuer l'aventure »
    passe au second plan derrière le bouton qui ouvre le grimoire. */
 .lvfx-close.lvfx-secondary {

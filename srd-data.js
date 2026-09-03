@@ -455,6 +455,27 @@
         };
     }
 
+    /** Les sorts qu'une classe peut apprendre, jusqu'à un rang donné.
+     *  L'identifiant est le même des deux côtés (« wizard ») : chaque sort
+     *  déclare les listes auxquelles il appartient. Un sort perso qui ne
+     *  déclare aucune classe est toujours proposé — son auteur est le seul à
+     *  savoir à qui il appartient, on ne le lui cache pas. */
+    async function spellsForClass(classId, maxRank) {
+        if (!classId) return [];
+        const max = (maxRank == null) ? 9 : Number(maxRank);
+        let list;
+        try { list = await category('spells'); } catch (e) { return []; }
+        return list
+            .filter(s => {
+                if ((Number(s.level) || 0) > max) return false;
+                const cl = s.classes;
+                if (!Array.isArray(cl) || !cl.length) return s.source === 'perso';
+                return cl.includes(classId);
+            })
+            .sort((a, b) => (Number(a.level) || 0) - (Number(b.level) || 0)
+                         || String(a.name || '').localeCompare(String(b.name || ''), 'fr'));
+    }
+
     /** Précharge en tâche de fond, sans bloquer (pour le mode hors connexion). */
     function preload(cats) {
         (cats || ['index']).forEach(c => {
@@ -691,7 +712,7 @@
     window.SRD = {
         CATEGORIES,
         search, index, category, entry, preload, fold, renderEntry, esc, linkify,
-        classByName, subclassByName, levelInfo,
+        classByName, subclassByName, levelInfo, spellsForClass,
         homebrew: HOMEBREW,
         ABILITY_LABELS,
         setEdition: (e) => { edition = e; memory.clear(); lastIndex = null; linkRx = undefined; },
