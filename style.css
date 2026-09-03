@@ -3505,6 +3505,214 @@ body.theme-dark .home-sort { background: #2a2118; }
 }
 @media print { #levelup-fx { display: none !important; } }
 
+/* ============================================================
+   Écran de montée de niveau (avant application)
+   Suit les jetons du thème : lisible en clair comme en sombre,
+   aucun bouton blanc. Le récapitulatif et le mode « choisir »
+   partagent le même balisage : seule la classe .is-choosing change.
+   ============================================================ */
+#levelup-plan {
+    position: fixed; inset: 0; z-index: 9100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px;
+    background: radial-gradient(circle at 50% 40%, rgba(60,38,10,0.55), rgba(8,5,3,0.86) 72%);
+    backdrop-filter: blur(3px);
+    animation: fadeIn .3s ease;
+}
+#levelup-plan.is-closing { animation: fadeIn .22s ease reverse; }
+
+.lvup-panel {
+    display: flex; flex-direction: column;
+    width: 100%; max-width: 580px; max-height: 88vh;
+    background: var(--surface-1);
+    color: var(--text-color);
+    border: 1px solid var(--accent-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg), var(--glow-gold);
+    overflow: hidden;
+    animation: lvfxRise .45s cubic-bezier(0.2, 0.9, 0.25, 1.35) backwards;
+}
+.lvup-panel.is-shaking { animation: lvupShake .32s ease; }
+@keyframes lvupShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-7px); }
+    75% { transform: translateX(7px); }
+}
+
+/* --- En-tête --- */
+.lvup-head {
+    text-align: center; padding: 16px 20px 12px;
+    background: linear-gradient(170deg, rgba(196,155,53,0.16), transparent 85%);
+    border-bottom: 1px solid var(--soft-border);
+}
+.lvup-kicker {
+    font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.34em;
+    text-transform: uppercase; color: var(--accent-color); text-indent: 0.34em;
+}
+.lvup-big {
+    font-family: 'Cinzel', serif; font-weight: bold; line-height: 1;
+    font-size: clamp(2.6rem, 12vw, 3.6rem); margin: 2px 0;
+    background: linear-gradient(175deg, #ffeeb8 5%, #e0b74e 45%, #a97a22 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 14px rgba(196,155,53,0.4));
+}
+.lvup-sub { font-family: 'Lora', serif; font-size: 0.88rem; opacity: 0.85; }
+
+.lvup-hint {
+    padding: 9px 20px 0; font-family: 'Lora', serif;
+    font-size: 0.8rem; font-style: italic; opacity: 0.75; text-align: center;
+}
+.lvup-warns {
+    margin: 10px 18px 0; padding: 9px 12px; border-radius: var(--radius-sm);
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.45);
+    font-family: 'Lora', serif; font-size: 0.8rem;
+}
+.lvup-warns p + p { margin-top: 5px; }
+
+/* --- Corps : une ligne par gain --- */
+.lvup-body {
+    flex: 1 1 auto; overflow-y: auto; padding: 12px 18px 6px;
+    display: flex; flex-direction: column; gap: 7px;
+}
+.lvup-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 11px; border-radius: var(--radius-sm);
+    background: var(--panel-1); border: 1px solid var(--soft-border);
+}
+.lvup-row.is-info { opacity: 0.82; border-style: dashed; }
+
+.lvup-ck, .lvup-ck-fix {
+    flex: 0 0 auto; margin-top: 2px; width: 17px; text-align: center;
+}
+.lvup-ck { accent-color: var(--accent-color); cursor: pointer; transform: scale(1.15); }
+.lvup-ck-fix { color: var(--accent-color); font-size: 0.9rem; line-height: 1.3; }
+.lvup-ck-fix.is-info { color: var(--primary-color); opacity: 0.7; }
+.lvup-ck-fix.is-choice { color: var(--accent-color); }
+
+/* Récapitulatif : les cases montrent ce qui sera appliqué, sans être
+   manipulables — c'est « Choisir moi-même » qui les déverrouille. */
+.lvup-panel:not(.is-choosing) .lvup-ck { pointer-events: none; opacity: 0.7; }
+
+.lvup-ico { flex: 0 0 auto; font-size: 1rem; line-height: 1.35; }
+.lvup-txt { flex: 1 1 auto; min-width: 0; display: block; }
+label.lvup-txt { cursor: pointer; }
+.lvup-panel:not(.is-choosing) label.lvup-txt { cursor: default; }
+.lvup-txt b {
+    display: block; font-family: 'Cinzel', serif;
+    font-size: 0.87rem; font-weight: 600; line-height: 1.35;
+}
+.lvup-txt i {
+    display: block; font-family: 'Lora', serif; font-style: normal;
+    font-size: 0.78rem; opacity: 0.72; margin-top: 2px;
+}
+.lvup-arrow { color: var(--accent-color); font-weight: bold; padding: 0 2px; }
+.lvup-src { font-size: 0.74rem; font-style: italic; opacity: 0.75; font-weight: normal; }
+
+.lvup-feat { margin-top: 5px; font-family: 'Lora', serif; font-size: 0.79rem; }
+.lvup-feat > summary {
+    cursor: pointer; color: var(--primary-color);
+    font-size: 0.75rem; opacity: 0.9; width: fit-content;
+}
+body.theme-dark .lvup-feat > summary { color: var(--accent-color); }
+.lvup-feat p { margin-top: 5px; line-height: 1.45; opacity: 0.88; }
+
+/* --- Réglages visibles seulement en mode « choisir » ---
+   Chaque élément garde son display naturel : on ne fait que masquer
+   la moitié qui ne correspond pas au mode courant. */
+.lvup-panel:not(.is-choosing) .lvup-choice-only { display: none !important; }
+.lvup-panel.is-choosing .lvup-recap-only { display: none !important; }
+
+.lvup-ctl { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; padding-top: 1px; }
+.lvup-ctl select, .lvup-ctl input {
+    font-family: 'Lora', serif; font-size: 0.75rem; padding: 3px 5px;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+}
+.lvup-ctl input { width: 48px; text-align: center; }
+.lvup-ctl input:disabled { opacity: 0.6; }
+.lvup-mini {
+    border: 1px solid var(--soft-border); border-radius: 6px; cursor: pointer;
+    background: rgba(196,155,53,0.3); color: var(--text-color);
+    border-color: rgba(196,155,53,0.55);
+    padding: 3px 6px; font-size: 0.8rem; line-height: 1;
+}
+.lvup-mini:hover { background: rgba(196,155,53,0.32); }
+
+/* --- Amélioration de caractéristique --- */
+.lvup-asi { border-color: var(--accent-color); background: rgba(196,155,53,0.09); }
+.lvup-asi-modes {
+    display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 7px;
+    font-family: 'Lora', serif; font-size: 0.78rem;
+}
+.lvup-asi-modes label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.lvup-asi-modes input { accent-color: var(--accent-color); cursor: pointer; }
+.lvup-asi-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.lvup-asi-picks select {
+    font-family: 'Lora', serif; font-size: 0.78rem; padding: 4px 7px;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color); max-width: 100%;
+}
+.lvup-asi-picks[data-mode="two"] .lvup-asi-one,
+.lvup-asi-picks[data-mode="one"] .lvup-asi-a,
+.lvup-asi-picks[data-mode="one"] .lvup-asi-b,
+.lvup-asi-picks[data-mode="later"] select { display: none; }
+.lvup-asi-preview {
+    margin-top: 6px; font-family: 'Cinzel', serif; font-size: 0.78rem;
+    color: var(--primary-color); min-height: 1em;
+}
+body.theme-dark .lvup-asi-preview { color: var(--accent-color); }
+.lvup-asi-preview.is-capped b { color: #b06a1e; }
+body.theme-dark .lvup-asi-preview.is-capped b { color: #e8a94c; }
+
+/* --- Erreur de saisie --- */
+.lvup-error {
+    display: none; margin: 0 18px; padding: 8px 11px; border-radius: var(--radius-sm);
+    background: rgba(192,57,43,0.14); border: 1px solid rgba(192,57,43,0.5);
+    font-family: 'Lora', serif; font-size: 0.79rem; color: #a53024;
+}
+body.theme-dark .lvup-error { color: #ff9c8f; }
+.lvup-error.is-on { display: block; }
+
+/* --- Pied --- */
+.lvup-foot {
+    display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+    padding: 12px 18px; margin-top: 8px;
+    border-top: 1px solid var(--soft-border);
+    background: var(--panel-1);
+}
+.lvup-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'Cinzel', serif; font-size: 0.82rem; font-weight: 600;
+    padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid transparent; transition: var(--transition-smooth);
+}
+.lvup-btn-main {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.28);
+}
+.lvup-btn-alt {
+    background: var(--primary-color); color: #fdf6e6;
+    border-color: rgba(0,0,0,0.15);
+}
+.lvup-btn-ghost {
+    background: transparent; color: var(--text-color);
+    border-color: var(--soft-border); opacity: 0.85;
+}
+.lvup-btn:hover { filter: brightness(1.09); }
+.lvup-btn-ghost:hover { background: var(--panel-1); filter: none; opacity: 1; }
+.lvup-btn:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+@media (max-width: 520px) {
+    .lvup-foot { justify-content: stretch; }
+    .lvup-foot .lvup-btn { flex: 1 1 auto; justify-content: center; }
+    .lvup-ctl { flex-basis: 100%; padding-top: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #levelup-plan, .lvup-panel { animation: none !important; }
+}
+@media print { #levelup-plan { display: none !important; } }
+
+
 /* ---------- Fiche détaillée d'une règle SRD ---------- */
 .rw-h { font-family: 'Cinzel', serif; font-size: 0.92rem; color: var(--primary-color); margin: 14px 0 6px; }
 .rw-sep { border: none; border-top: 1px solid var(--soft-border); margin: 12px 0; }

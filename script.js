@@ -1740,6 +1740,558 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { return { cls: null, sub: null }; }
         }
 
+        // ===== ÉCRAN DE MONTÉE DE NIVEAU =====
+        // Remplace l'ancien confirm(). Le principe : on construit d'abord un
+        // PLAN (tout ce que le niveau apporte), on l'affiche, et rien n'est
+        // écrit sur la fiche tant que le joueur n'a pas validé. Annuler ou
+        // Échap = aucun effet de bord, pas même le niveau.
+        //
+        // Deux chemins depuis l'écran :
+        //   « Tout appliquer »   applique le plan tel quel ;
+        //   « Choisir moi-même » ouvre les cases à cocher et les réglages,
+        //                        l'écran reste ouvert jusqu'à « Valider ».
+        //
+        // Les données viennent de SRD.levelInfo(), qui traite une classe perso
+        // exactement comme une classe officielle. Une classe qui n'a que des
+        // features[].level (pas de table de progression) donne donc un plan
+        // valable : aptitudes + dé de vie + PV, sans emplacements de sorts.
+
+        const LVUP_ABILITIES = [
+            ['str', 'Force'], ['dex', 'Dextérité'], ['con', 'Constitution'],
+            ['int', 'Intelligence'], ['wis', 'Sagesse'], ['cha', 'Charisme']
+        ];
+        const lvupAbName = (id) => (LVUP_ABILITIES.find(a => a[0] === id) || [, id])[1];
+        const lvupNum = (id) => parseInt(document.getElementById(id)?.value, 10) || 0;
+        const lvupSigned = (n) => (n >= 0 ? '+' + n : String(n));
+
+        /** Est-ce l'aptitude « Amélioration de caractéristique » ?
+         *  L'identifiant SRD suffit ; le nom sert de secours pour le contenu
+         *  perso. « Amélioration d'ennemi juré » (rôdeur) ne doit PAS matcher. */
+        function isAsiFeature(f) {
+            if (!f) return false;
+            if (String(f.id || '') === 'amelioration-de-caracteristique') return true;
+            return /am[ée]lioration\s+de\s+caract/i.test(String(f.name || ''));
+        }
+
+        /** Valeur d'une colonne de table de progression, où qu'elle vive :
+         *  soit dans class_specific, soit directement sur la ligne. */
+        function lvupColVal(inf, col) {
+            if (!inf || !col) return undefined;
+            if (col.field === 'class_specific') return inf.class_specific ? inf.class_specific[col.key] : undefined;
+            return inf[col.field || col.key];
+        }
+
+        /** Construit le plan de montée. Ne touche à RIEN sur la fiche. */
+        async function buildLevelUpPlan(from) {
+            const to = from + 1;
+            const { cls, sub } = await sheetClass();
+            const className = document.getElementById('char-class')?.value || '';
+            const info = cls ? window.SRD.levelInfo(cls, to, sub) : null;
+            const prev = cls ? window.SRD.levelInfo(cls, from, sub) : null;
+            const die = (cls && Number(cls.hit_die)) || HIT_DIE_FALLBACK[classKey(className)] || 0;
+
+            const plan = {
+                from, to, cls, sub, info, className,
+                subName: (sub && sub.name) || '',
+                die, warnings: [],
+                prof: null, hitDice: null, hp: null,
+                slots: [], pact: null, columns: [], features: [], asi: null
+            };
+
+            if (!cls) {
+                plan.warnings.push('Classe introuvable dans les règles : les aptitudes et les '
+                    + 'emplacements de sorts ne peuvent pas être déduits. Le reste s’applique quand même.');
+            }
+            if (!die) plan.warnings.push('Dé de vie inconnu : renseigne-le toi-même dans le bloc Repos.');
+
+            // Bonus de maîtrise — la table de la classe fait foi si elle existe.
+            const profNow = parseInt(document.getElementById('prof-bonus')?.value, 10) || (Math.floor((from - 1) / 4) + 2);
+            const profNew = (info && info.prof_bonus != null) ? Number(info.prof_bonus) : (Math.floor((to - 1) / 4) + 2);
+            plan.prof = { from: profNow, to: profNew, changed: profNew !== profNow };
+
+            // Dés de vie.
+            const hdMax = lvupNum('hd-max');
+            plan.hitDice = { from: hdMax, to: hdMax + 1 };
+
+            // Points de vie : moyenne du dé + mod. de Constitution (minimum 1).
+            const conMod = getModifier(lvupNum('stat-con') || 10);
+            const avg = die ? Math.floor(die / 2) + 1 : 0;
+            plan.hp = {
+                die, conMod, average: avg,
+                value: die ? Math.max(1, avg + conMod) : 0,
+                current: lvupNum('hp-max')
+            };
+
+            // Emplacements de sorts : on ne PROPOSE que ce qui augmente. Un
+            // multiclassé qui a plus d'emplacements que la table ne les perd pas.
+            if (info && info.spell_slots) {
+                Object.keys(info.spell_slots).forEach(r => {
+                    const rank = parseInt(r, 10);
+                    if (!(rank >= 1 && rank <= 9)) return;
+                    const want = parseInt(info.spell_slots[r], 10) || 0;
+                    const have = (spellSlotsData[rank - 1] || {}).total || 0;
+                    if (want > have) plan.slots.push({ rank, from: have, to: want });
+                });
+                plan.slots.sort((a, b) => a.rank - b.rank);
+            }
+
+            // Magie de pacte (occultiste) : le rang monte et les emplacements
+            // du rang précédent disparaissent — une seule et même ligne.
+            // Deux garde-fous, pour ne jamais retirer des emplacements qui
+            // viennent d'ailleurs (multiclassé, saisie manuelle) :
+            //   · le rang visé n'est jamais RÉDUIT, seulement complété ;
+            //   · l'ancien rang n'est vidé que s'il correspond exactement à ce
+            //     que la magie de pacte y avait mis au niveau précédent.
+            const cs = info && info.class_specific;
+            const pcs = prev && prev.class_specific;
+            if (cs && cs.spell_slots_count) {
+                const rank = parseInt(cs.slot_level, 10) || 1;
+                const count = parseInt(cs.spell_slots_count, 10) || 0;
+                const have = (spellSlotsData[rank - 1] || {}).total || 0;
+                const to = Math.max(count, have);
+                const oldRank = (pcs && pcs.slot_level) ? parseInt(pcs.slot_level, 10) : 0;
+                const oldCount = (pcs && pcs.spell_slots_count) ? parseInt(pcs.spell_slots_count, 10) : 0;
+                const oldHave = oldRank ? ((spellSlotsData[oldRank - 1] || {}).total || 0) : 0;
+                const clear = (oldRank && oldRank !== rank && oldCount && oldHave === oldCount) ? oldRank : 0;
+                if (to > have || clear) plan.pact = { rank, count, from: have, to, clear, cleared: oldHave };
+            }
+
+            // Colonnes de la table (rages, ki, attaque sournoise…) : rappel
+            // seulement, la fiche n'a pas de champ dédié pour les accueillir.
+            const skipCols = new Set(['spell_slots_count', 'slot_level']);
+            ((cls && cls.level_columns) || []).forEach(col => {
+                if (skipCols.has(col.key)) return;
+                const v = lvupColVal(info, col);
+                if (v == null) return;
+                const p = lvupColVal(prev, col);
+                if (String(p) === String(v)) return;
+                plan.columns.push({ label: col.label || col.key, from: p, to: v });
+            });
+
+            // Aptitudes. L'amélioration de caractéristique est mise à part :
+            // c'est un choix, pas une capacité à recopier sur la fiche.
+            ((info && info.features) || []).forEach(f => {
+                if (isAsiFeature(f)) {
+                    if (!plan.asi) plan.asi = { name: f.name, text: f.text };
+                    return;
+                }
+                plan.features.push({
+                    name: f.name, text: f.text, from: f.from, subclass: !!f.subclass
+                });
+            });
+
+            return plan;
+        }
+
+        // ---------- Rendu ----------
+
+        function lvupRow(o) {
+            const id = 'lvup-ck-' + o.key;
+            let mark;
+            if (o.kind === 'info') mark = '<span class="lvup-ck-fix is-info" aria-hidden="true">ℹ</span>';
+            else if (o.kind === 'fixed') mark = '<span class="lvup-ck-fix" aria-hidden="true">✓</span>';
+            else mark = `<input type="checkbox" id="${id}" class="lvup-ck" data-ck="${o.key}" checked>`;
+            const txtTag = (o.kind === 'info' || o.kind === 'fixed') ? 'div' : 'label';
+            const txtAttr = txtTag === 'label' ? ` for="${id}"` : '';
+            return `<div class="lvup-row${o.kind ? ' is-' + o.kind : ''}">${mark}`
+                 + `<span class="lvup-ico" aria-hidden="true">${o.ico}</span>`
+                 + `<${txtTag} class="lvup-txt"${txtAttr}><b>${o.title}</b>`
+                 + `${o.detail ? `<i>${o.detail}</i>` : ''}${o.extra || ''}</${txtTag}>`
+                 + `${o.ctl || ''}</div>`;
+        }
+
+        function lvupAsiMarkup(plan) {
+            const opts = (sel) => '<option value="">— choisir —</option>'
+                + LVUP_ABILITIES.map(([k, n]) =>
+                    `<option value="${k}">${n} (${lvupNum('stat-' + k) || 10})</option>`).join('');
+            return `<div class="lvup-row lvup-asi">
+                <span class="lvup-ck-fix is-choice" aria-hidden="true">★</span>
+                <span class="lvup-ico" aria-hidden="true">✨</span>
+                <div class="lvup-txt">
+                    <b>${escAb(plan.asi.name || 'Amélioration de caractéristique')}</b>
+                    <i>Un choix à faire : personne ne peut le deviner à ta place.</i>
+                    <div class="lvup-asi-modes">
+                        <label><input type="radio" name="lvup-asi-mode" value="two" checked> +1 à deux caractéristiques</label>
+                        <label><input type="radio" name="lvup-asi-mode" value="one"> +2 à une seule</label>
+                        <label><input type="radio" name="lvup-asi-mode" value="later"> Plus tard (ou je prends un don)</label>
+                    </div>
+                    <div class="lvup-asi-picks" data-mode="two">
+                        <select class="lvup-asi-a" aria-label="Première caractéristique">${opts()}</select>
+                        <select class="lvup-asi-b" aria-label="Seconde caractéristique">${opts()}</select>
+                        <select class="lvup-asi-one" aria-label="Caractéristique à +2">${opts()}</select>
+                    </div>
+                    <div class="lvup-asi-preview" role="status"></div>
+                </div>
+            </div>`;
+        }
+
+        function lvupMarkup(plan) {
+            const rows = [];
+
+            rows.push(lvupRow({
+                key: 'level', kind: 'fixed', ico: '⬆️',
+                title: `Niveau ${plan.from} <span class="lvup-arrow">→</span> ${plan.to}`,
+                detail: plan.className
+                    ? escAb(plan.className) + (plan.subName ? ' · ' + escAb(plan.subName) : '')
+                    : 'Classe non renseignée sur la fiche'
+            }));
+
+            if (plan.prof.changed) rows.push(lvupRow({
+                key: 'prof', kind: 'fixed', ico: '🎯',
+                title: `Bonus de maîtrise +${plan.prof.from} <span class="lvup-arrow">→</span> +${plan.prof.to}`
+            }));
+
+            rows.push(lvupRow({
+                key: 'hd', ico: '🎲', title: 'Dé de vie supplémentaire',
+                detail: plan.die
+                    ? `${plan.hitDice.from}d${plan.die} <span class="lvup-arrow">→</span> ${plan.hitDice.to}d${plan.die}`
+                    : `${plan.hitDice.from} <span class="lvup-arrow">→</span> ${plan.hitDice.to} dés`
+            }));
+
+            if (plan.die) rows.push(lvupRow({
+                key: 'hp', ico: '❤️', title: 'Points de vie maximum',
+                detail: '<span class="lvup-hp-detail"></span>',
+                ctl: `<span class="lvup-ctl lvup-choice-only">
+                        <select class="lvup-hp-mode" aria-label="Mode de calcul des PV">
+                            <option value="average">Moyenne</option>
+                            <option value="roll">Dé lancé</option>
+                            <option value="manual">Manuel</option>
+                        </select>
+                        <input type="number" class="lvup-hp-val" min="0" max="99"
+                               value="${plan.hp.value}" aria-label="PV gagnés" disabled>
+                        <button type="button" class="lvup-mini lvup-hp-roll"
+                                title="Lancer 1d${plan.die}">🎲</button>
+                      </span>`
+            }));
+
+            plan.slots.forEach(s => rows.push(lvupRow({
+                key: 'slot' + s.rank, ico: '✨',
+                title: `Emplacements de sorts de niveau ${s.rank}`,
+                detail: `${s.from} <span class="lvup-arrow">→</span> ${s.to}`
+            })));
+
+            if (plan.pact) rows.push(lvupRow({
+                key: 'pact', ico: '🕯️',
+                title: `Magie de pacte : ${plan.pact.count} emplacement(s) de niveau ${plan.pact.rank}`,
+                detail: `${plan.pact.from} <span class="lvup-arrow">→</span> ${plan.pact.to}`
+                      + (plan.pact.clear
+                         ? ` · remplace les ${plan.pact.cleared} emplacement(s) de niveau ${plan.pact.clear}`
+                         : '')
+            }));
+
+            plan.features.forEach((f, i) => {
+                const txt = Array.isArray(f.text) ? f.text : (f.text ? [String(f.text)] : []);
+                const body = txt.length
+                    ? `<details class="lvup-feat"><summary>Lire le texte</summary>`
+                      + txt.map(p => `<p>${escAb(p)}</p>`).join('') + `</details>`
+                    : '';
+                rows.push(lvupRow({
+                    key: 'feat' + i, ico: '📜',
+                    title: escAb(f.name) + (f.subclass ? ` <span class="lvup-src">(${escAb(f.from)})</span>` : ''),
+                    detail: 'Ajoutée au module « Capacités »',
+                    extra: body
+                }));
+            });
+
+            if (plan.asi) rows.push(lvupAsiMarkup(plan));
+
+            plan.columns.forEach((c, i) => rows.push(lvupRow({
+                key: 'col' + i, kind: 'info', ico: '📈',
+                title: `${escAb(c.label)} : ${escAb(c.from == null ? '—' : c.from)} `
+                     + `<span class="lvup-arrow">→</span> ${escAb(c.to)}`,
+                detail: 'Table de progression — à reporter toi-même'
+            })));
+
+            const warn = plan.warnings.length
+                ? `<div class="lvup-warns">${plan.warnings.map(w => `<p>⚠️ ${escAb(w)}</p>`).join('')}</div>`
+                : '';
+
+            return `<div class="lvup-panel" role="document">
+                <header class="lvup-head">
+                    <div class="lvup-kicker">Montée de niveau</div>
+                    <div class="lvup-big">${plan.to}</div>
+                    <div class="lvup-sub">${plan.className
+                        ? escAb(plan.className) + (plan.subName ? ' · ' + escAb(plan.subName) : '')
+                        : 'Personnage'}</div>
+                </header>
+                <div class="lvup-hint lvup-recap-only">Voici ce que tu gagnes. Rien n’est écrit sur la fiche pour l’instant.</div>
+                <div class="lvup-hint lvup-choice-only">Décoche ce que tu ne veux pas, ajuste, puis valide.</div>
+                ${warn}
+                <div class="lvup-body">${rows.join('')}</div>
+                <div class="lvup-error" role="alert"></div>
+                <footer class="lvup-foot">
+                    <button type="button" class="lvup-btn lvup-btn-ghost" data-act="cancel">Annuler</button>
+                    <button type="button" class="lvup-btn lvup-btn-alt lvup-recap-only" data-act="choose">⚙ Choisir moi-même</button>
+                    <button type="button" class="lvup-btn lvup-btn-alt lvup-choice-only" data-act="back">← Récapitulatif</button>
+                    <button type="button" class="lvup-btn lvup-btn-main lvup-recap-only" data-act="all">✦ Tout appliquer</button>
+                    <button type="button" class="lvup-btn lvup-btn-main lvup-choice-only" data-act="confirm">✓ Valider la montée</button>
+                </footer>
+            </div>`;
+        }
+
+        // ---------- Interactions ----------
+
+        /** Ce qui manque pour pouvoir appliquer, ou '' si tout est décidé. */
+        function lvupAsiIssue(ov, plan) {
+            if (!plan.asi) return '';
+            const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'later';
+            if (mode === 'later') return '';
+            if (mode === 'one') {
+                return ov.querySelector('.lvup-asi-one')?.value
+                    ? '' : 'Choisis la caractéristique à augmenter de 2.';
+            }
+            const a = ov.querySelector('.lvup-asi-a')?.value;
+            const b = ov.querySelector('.lvup-asi-b')?.value;
+            if (!a || !b) return 'Choisis les deux caractéristiques à augmenter de 1.';
+            if (a === b) return 'Deux caractéristiques différentes — pour +2 sur la même, prends l’autre option.';
+            return '';
+        }
+
+        function lvupAsiPicks(ov, plan) {
+            if (!plan.asi) return [];
+            const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'later';
+            if (mode === 'later') return [];
+            if (mode === 'one') {
+                const o = ov.querySelector('.lvup-asi-one')?.value;
+                return o ? [[o, 2]] : [];
+            }
+            const a = ov.querySelector('.lvup-asi-a')?.value;
+            const b = ov.querySelector('.lvup-asi-b')?.value;
+            const out = [];
+            if (a) out.push([a, 1]);
+            if (b && b !== a) out.push([b, 1]);
+            return out;
+        }
+
+        function openLevelUpScreen(plan) {
+            document.getElementById('levelup-plan')?.remove();
+            const ov = document.createElement('div');
+            ov.id = 'levelup-plan';
+            ov.className = 'no-print';
+            ov.setAttribute('role', 'dialog');
+            ov.setAttribute('aria-modal', 'true');
+            ov.setAttribute('aria-label', `Montée au niveau ${plan.to}`);
+            ov.innerHTML = lvupMarkup(plan);
+            document.body.appendChild(ov);
+
+            const panel = ov.querySelector('.lvup-panel');
+            const errEl = ov.querySelector('.lvup-error');
+            const prevFocus = document.activeElement;
+
+            const close = () => {
+                ov.classList.add('is-closing');
+                document.removeEventListener('keydown', onKey, true);
+                setTimeout(() => ov.remove(), 220);
+                try { prevFocus && prevFocus.focus(); } catch (e) {}
+            };
+            const onKey = (e) => {
+                if (e.key === 'Escape') { e.stopPropagation(); close(); }
+            };
+            document.addEventListener('keydown', onKey, true);
+
+            const showErr = (msg) => {
+                errEl.textContent = msg || '';
+                errEl.classList.toggle('is-on', !!msg);
+                if (msg) { panel.classList.remove('is-shaking'); void panel.offsetWidth; panel.classList.add('is-shaking'); }
+            };
+
+            // --- Points de vie : moyenne / dé lancé / manuel ---
+            const hpMode = ov.querySelector('.lvup-hp-mode');
+            const hpVal = ov.querySelector('.lvup-hp-val');
+            const hpRoll = ov.querySelector('.lvup-hp-roll');
+            const hpDetail = ov.querySelector('.lvup-hp-detail');
+            const refreshHp = () => {
+                if (!hpVal || !hpDetail) return;
+                const v = Math.max(0, parseInt(hpVal.value, 10) || 0);
+                const src = hpMode.value === 'average'
+                    ? `moyenne d${plan.die} ${lvupSigned(plan.hp.conMod)} CON`
+                    : (hpMode.value === 'roll' ? `1d${plan.die} lancé ${lvupSigned(plan.hp.conMod)} CON` : 'saisie manuelle');
+                hpDetail.innerHTML = `+${v} PV (${escAb(src)}) — `
+                    + `${plan.hp.current} <span class="lvup-arrow">→</span> ${plan.hp.current + v}`;
+            };
+            if (hpMode) {
+                hpMode.addEventListener('change', () => {
+                    hpVal.disabled = (hpMode.value !== 'manual');
+                    if (hpMode.value === 'average') hpVal.value = plan.hp.value;
+                    if (hpMode.value === 'roll') hpVal.value = Math.max(1, (1 + Math.floor(Math.random() * plan.die)) + plan.hp.conMod);
+                    refreshHp();
+                });
+                hpVal.addEventListener('input', refreshHp);
+                hpRoll.addEventListener('click', () => {
+                    hpMode.value = 'roll';
+                    hpVal.disabled = true;
+                    hpVal.value = Math.max(1, (1 + Math.floor(Math.random() * plan.die)) + plan.hp.conMod);
+                    refreshHp();
+                });
+                refreshHp();
+            }
+
+            // --- Amélioration de caractéristique ---
+            const picks = ov.querySelector('.lvup-asi-picks');
+            const asiPrev = ov.querySelector('.lvup-asi-preview');
+            const refreshAsi = () => {
+                if (!plan.asi) return;
+                const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'two';
+                picks.dataset.mode = mode;
+                const list = lvupAsiPicks(ov, plan);
+                if (!list.length) {
+                    asiPrev.textContent = mode === 'later'
+                        ? 'Rien ne sera modifié — un rappel restera après la montée.' : '';
+                    asiPrev.classList.remove('is-capped');
+                    return;
+                }
+                let capped = false;
+                asiPrev.innerHTML = list.map(([ab, n]) => {
+                    const before = lvupNum('stat-' + ab) || 10;
+                    const after = Math.min(20, before + n);
+                    if (after < before + n) capped = true;
+                    return `${escAb(lvupAbName(ab))} ${before} <span class="lvup-arrow">→</span> ${after}`;
+                }).join(' · ') + (capped ? ' <b>· plafonné à 20</b>' : '');
+                asiPrev.classList.toggle('is-capped', capped);
+            };
+            if (plan.asi) {
+                ov.querySelectorAll('input[name="lvup-asi-mode"]').forEach(r =>
+                    r.addEventListener('change', () => { showErr(''); refreshAsi(); }));
+                ov.querySelectorAll('.lvup-asi-picks select').forEach(s =>
+                    s.addEventListener('change', () => { showErr(''); refreshAsi(); }));
+                refreshAsi();
+            }
+
+            // --- Boutons ---
+            ov.addEventListener('click', (e) => {
+                if (e.target === ov) return;                       // le fond ne ferme pas : trop facile à perdre
+                const btn = e.target.closest('.lvup-btn');
+                if (!btn) return;
+                const act = btn.dataset.act;
+                if (act === 'cancel') { close(); return; }
+                if (act === 'choose') { panel.classList.add('is-choosing'); showErr(''); return; }
+                if (act === 'back') { panel.classList.remove('is-choosing'); showErr(''); return; }
+                if (act === 'all' || act === 'confirm') {
+                    const issue = lvupAsiIssue(ov, plan);
+                    if (issue) {
+                        panel.classList.add('is-choosing');
+                        showErr(issue);
+                        ov.querySelector('.lvup-asi')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        return;
+                    }
+                    applyLevelUpPlan(plan, ov);
+                    close();
+                }
+            });
+
+            ov.querySelector('[data-act="all"]')?.focus();
+        }
+
+        // ---------- Application (le seul endroit qui écrit sur la fiche) ----------
+
+        function applyLevelUpPlan(plan, ov) {
+            const on = (key) => {
+                const el = ov.querySelector(`.lvup-ck[data-ck="${key}"]`);
+                return !el || el.checked;
+            };
+            const fire = (el, types) => types.forEach(t => el.dispatchEvent(new Event(t, { bubbles: true })));
+
+            // 1. Niveau — le listener de #char-level recalcule la maîtrise
+            //    et met à jour la liste des personnages.
+            const lvlEl = document.getElementById('char-level');
+            lvlEl.value = plan.to;
+            fire(lvlEl, ['input']);
+
+            // 2. Maîtrise : la table de la classe l'emporte sur la formule
+            //    standard (une classe perso peut avoir sa propre progression).
+            const profEl = document.getElementById('prof-bonus');
+            if (profEl && String(profEl.value) !== String(plan.prof.to)) {
+                profEl.value = plan.prof.to;
+                fire(profEl, ['input']);
+            }
+
+            // 3. Dés de vie.
+            if (on('hd')) {
+                const hdMaxEl = document.getElementById('hd-max');
+                if (hdMaxEl) { hdMaxEl.value = plan.hitDice.to; fire(hdMaxEl, ['input']); }
+                const hdSizeEl = document.getElementById('hd-size');
+                if (plan.die && hdSizeEl && hdSizeEl.value !== String(plan.die)
+                    && [...hdSizeEl.options].some(o => o.value === String(plan.die))) {
+                    hdSizeEl.value = String(plan.die);
+                    fire(hdSizeEl, ['change']);
+                }
+            }
+
+            // 4. Points de vie. Les PV actuels suivent le gain : monter de
+            //    niveau ne soigne pas, mais ne doit pas laisser le personnage
+            //    artificiellement blessé.
+            let hpAdded = 0;
+            if (plan.die && on('hp')) {
+                const v = Math.max(0, parseInt(ov.querySelector('.lvup-hp-val')?.value, 10) || 0);
+                if (v) {
+                    const hpMaxEl = document.getElementById('hp-max');
+                    if (hpMaxEl) {
+                        hpMaxEl.value = (parseInt(hpMaxEl.value, 10) || 0) + v;
+                        fire(hpMaxEl, ['input']);
+                    }
+                    const hpCurEl = document.getElementById('hp-current');
+                    if (hpCurEl && String(hpCurEl.value).trim() !== '') {
+                        hpCurEl.value = (parseInt(hpCurEl.value, 10) || 0) + v;
+                        fire(hpCurEl, ['input']);
+                    }
+                    hpAdded = v;
+                }
+            }
+
+            // 5. Emplacements de sorts.
+            const slotMap = {};
+            plan.slots.forEach(s => { if (on('slot' + s.rank)) slotMap[s.rank] = s.to; });
+            if (plan.pact && on('pact')) {
+                slotMap[plan.pact.rank] = Math.max(plan.pact.to, slotMap[plan.pact.rank] || 0);
+                if (plan.pact.clear) slotMap[plan.pact.clear] = 0;
+            }
+            if (Object.keys(slotMap).length && window.SheetApi) window.SheetApi.setSpellSlots(slotMap);
+
+            // 6. Aptitudes → module « Capacités ».
+            const kept = plan.features.filter((f, i) => on('feat' + i));
+            if (kept.length) addFeaturesAsTraits(kept, plan.to);
+
+            // 7. Amélioration de caractéristique.
+            const asiDone = [];
+            lvupAsiPicks(ov, plan).forEach(([ab, n]) => {
+                const el = document.getElementById('stat-' + ab);
+                if (!el) return;
+                const before = parseInt(el.value, 10) || 10;
+                const after = Math.min(20, before + n);
+                if (after === before) return;
+                el.value = after;
+                fire(el, ['input', 'change']);
+                asiDone.push(`${lvupAbName(ab)} ${before} → ${after}`);
+            });
+            updateStatsAndSkills();
+
+            // Le champ Niveau pulse en or.
+            const grp = lvlEl.closest('.level-group');
+            if (grp) { grp.classList.remove('is-levelling'); void grp.offsetWidth; grp.classList.add('is-levelling'); }
+
+            // Ce qu'il reste à faire à la main.
+            const rappels = [];
+            if (hpAdded) rappels.push(`❤️ PV max +${hpAdded}`);
+            else rappels.push('❤️ Augmente tes PV max (dé de vie + mod. de Constitution)');
+            if (asiDone.length) rappels.push('✨ ' + asiDone.join(' · '));
+            else if (plan.asi) rappels.push('✨ Amélioration de caractéristique ou don : à choisir');
+            plan.columns.forEach(c => rappels.push(`📈 ${c.label} : ${c.to}`));
+            if (!plan.cls) rappels.push('✨ Vérifie tes emplacements de sorts');
+            if (plan.cls && !plan.features.length && !plan.asi) {
+                rappels.push('📜 Aucune aptitude à ce niveau — profite de la marge');
+            }
+
+            showLevelUpFx({
+                level: plan.to,
+                className: plan.className,
+                prof: String(plan.prof.to),
+                hitDice: plan.die ? `${plan.hitDice.to}d${plan.die}` : '',
+                todo: rappels,
+                gained: kept,
+                onAdd: null
+            });
+        }
+
         const btnLevelUp = document.getElementById('btn-level-up');
         if (btnLevelUp) btnLevelUp.addEventListener('click', async () => {
             const lvlEl = document.getElementById('char-level');
@@ -1749,62 +2301,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.showAppToast) window.showAppToast('Niveau 20 : maximum atteint.', '#8a6320');
                 return;
             }
-            const newLvl = lvl + 1;
-            if (!confirm(`Passer du niveau ${lvl} au niveau ${newLvl} ?`)) return;
-
-            const { cls, sub } = await sheetClass();
-            const info = cls ? window.SRD.levelInfo(cls, newLvl, sub) : null;
-            const die = (cls && cls.hit_die)
-                     || HIT_DIE_FALLBACK[classKey(document.getElementById('char-class')?.value)];
-
-            lvlEl.value = newLvl;
-            lvlEl.dispatchEvent(new Event('input', { bubbles: true }));   // recalcule le bonus de maîtrise
-
-            const hdMaxEl = document.getElementById('hd-max');
-            if (hdMaxEl) {
-                hdMaxEl.value = (parseInt(hdMaxEl.value, 10) || 0) + 1;
-                hdMaxEl.dispatchEvent(new Event('input', { bubbles: true }));
+            if (document.getElementById('levelup-plan')) return;
+            btnLevelUp.disabled = true;
+            try {
+                openLevelUpScreen(await buildLevelUpPlan(lvl));
+            } catch (e) {
+                console.error('[montée de niveau]', e);
+                if (window.showAppToast) window.showAppToast('Impossible de préparer la montée de niveau.', '#c0392b');
+            } finally {
+                btnLevelUp.disabled = false;
             }
-            if (die) {
-                const hdSizeEl = document.getElementById('hd-size');
-                if (hdSizeEl && hdSizeEl.value !== String(die)) {
-                    hdSizeEl.value = String(die);
-                    hdSizeEl.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }
-
-            const prof = String(document.getElementById('prof-bonus')?.value || '').replace('+', '');
-            const rappels = ['❤️ Augmente tes PV max (dé de vie + mod. de Constitution)'];
-            const slots = info && info.spell_slots;
-            if (slots) {
-                rappels.push('✨ Emplacements de sorts : '
-                    + Object.keys(slots).sort((a, b) => a - b).map(r => `niv.${r} ×${slots[r]}`).join(', '));
-            } else if (info && info.class_specific && info.class_specific.spell_slots_count) {
-                rappels.push(`✨ Magie de pacte : ${info.class_specific.spell_slots_count} emplacement(s) `
-                           + `de niveau ${info.class_specific.slot_level}`);
-            } else if (!cls) {
-                rappels.push('✨ Vérifie tes emplacements de sorts');
-            }
-            if (info && info.class_specific) {
-                const cols = (cls.level_columns || []).filter(c => info.class_specific[c.key] != null);
-                if (cols.length) rappels.push('📈 ' + cols.map(c => `${c.label} : ${info.class_specific[c.key]}`).join(' · '));
-            }
-            const gained = info ? info.features : [];
-            if (!gained.length) rappels.push('📜 Ajoute les aptitudes gagnées à ce niveau');
-
-            // Le champ Niveau pulse en or
-            const grp = lvlEl.closest('.level-group');
-            if (grp) { grp.classList.remove('is-levelling'); void grp.offsetWidth; grp.classList.add('is-levelling'); }
-
-            showLevelUpFx({
-                level: newLvl,
-                className: document.getElementById('char-class')?.value || '',
-                prof: prof,
-                hitDice: die ? `${parseInt(hdMaxEl?.value, 10) || newLvl}d${die}` : '',
-                todo: rappels,
-                gained: gained,
-                onAdd: gained.length ? () => addFeaturesAsTraits(gained, newLvl) : null
-            });
         });
 
         /** Verse des aptitudes de classe dans le module « Capacités » de la fiche.
