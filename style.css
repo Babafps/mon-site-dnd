@@ -5609,3 +5609,217 @@ body.theme-dark #spell-roll-overlay .sro-name { color: #e0b850; }
 body.theme-dark #spell-roll-overlay .atkfx-detail { color: #b6a484; }
 #spell-roll-overlay .atkfx-conc { margin-top: 9px; font-size: .78rem; opacity: .75; font-style: italic; }
 @media (max-width: 760px) { #spell-roll-overlay .sro-panel { width: 100%; } }
+
+/* ============================================================
+   Exporter / importer une fiche (sheet-io.js)
+   Mêmes jetons que le reste : lisible en clair comme en sombre,
+   aucun bouton blanc. Tout se passe dans le navigateur — l'écran
+   le dit, parce que c'est la première question qu'on se pose en
+   déposant un fichier quelque part.
+   ============================================================ */
+#sheet-io {
+    position: fixed; inset: 0; z-index: 9200;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: radial-gradient(circle at 50% 40%, rgba(60,38,10,0.5), rgba(8,5,3,0.85) 72%);
+    backdrop-filter: blur(3px);
+    animation: fadeIn .25s ease;
+}
+#sheet-io.is-closing { animation: fadeIn .2s ease reverse; }
+
+.sio-panel {
+    display: flex; flex-direction: column;
+    width: 100%; max-width: 640px; max-height: 90vh;
+    background: var(--surface-1); color: var(--text-color);
+    border: 1px solid var(--accent-color); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg), var(--glow-gold);
+    overflow: hidden;
+}
+.sio-head {
+    position: relative; text-align: center; padding: 15px 44px 12px;
+    background: linear-gradient(170deg, rgba(196,155,53,0.16), transparent 85%);
+    border-bottom: 1px solid var(--soft-border);
+}
+.sio-kicker {
+    font-family: 'Cinzel', serif; font-size: 0.64rem; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--accent-color); text-indent: 0.3em;
+}
+.sio-title { font-family: 'Cinzel', serif; font-size: 1.15rem; margin: 3px 0 0; font-weight: 600; }
+.sio-x {
+    position: absolute; top: 10px; right: 10px;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--widget-bg);
+    color: var(--text-color); font-size: 0.85rem; line-height: 1;
+}
+.sio-x:hover { border-color: var(--accent-color); }
+
+.sio-tabs { display: flex; gap: 4px; padding: 10px 16px 0; }
+.sio-tab {
+    flex: 1 1 auto; padding: 8px 10px; cursor: pointer;
+    font-family: 'Cinzel', serif; font-size: 0.78rem;
+    border: 1px solid var(--soft-border); border-bottom: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: var(--widget-bg); color: var(--text-color); opacity: 0.75;
+    transition: var(--transition-smooth);
+}
+.sio-tab:hover { opacity: 1; border-color: var(--accent-color); }
+.sio-tab.is-on {
+    opacity: 1; font-weight: 600;
+    background: rgba(196,155,53,0.16); border-color: rgba(196,155,53,0.5);
+}
+
+.sio-body {
+    flex: 1 1 auto; overflow-y: auto; padding: 14px 16px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+    border-top: 1px solid var(--soft-border); margin-top: -1px;
+}
+.sio-body.is-hidden { display: none; }
+.sio-note {
+    font-family: 'Lora', serif; font-size: 0.78rem; line-height: 1.5;
+    opacity: 0.78; margin: 0;
+}
+
+.sio-sheet {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    background: var(--panel-1); border: 1px solid var(--soft-border);
+}
+.sio-sheet b { font-family: 'Cinzel', serif; font-size: 0.95rem; }
+.sio-sheet span { font-family: 'Lora', serif; font-size: 0.78rem; opacity: 0.8; }
+.sio-counts { font-style: italic; opacity: 0.62 !important; }
+
+.sio-cards { display: grid; gap: 9px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.sio-card {
+    display: flex; flex-direction: column; gap: 5px; text-align: left;
+    padding: 12px 13px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--panel-1);
+    color: var(--text-color); transition: var(--transition-smooth);
+}
+.sio-card:hover {
+    border-color: var(--accent-color); transform: translateY(-1px);
+    box-shadow: var(--glow-gold);
+}
+.sio-card-name { font-family: 'Cinzel', serif; font-size: 0.88rem; font-weight: 600; color: var(--primary-color); }
+body.theme-dark .sio-card-name { color: var(--accent-color); }
+.sio-card-text { font-family: 'Lora', serif; font-size: 0.76rem; line-height: 1.45; opacity: 0.82; }
+
+.sio-opts { display: flex; flex-direction: column; gap: 6px; }
+.sio-opts label {
+    display: flex; align-items: flex-start; gap: 7px; cursor: pointer;
+    font-family: 'Lora', serif; font-size: 0.77rem; opacity: 0.85;
+}
+.sio-opts input { accent-color: var(--accent-color); cursor: pointer; margin-top: 2px; }
+
+/* --- Zone de dépôt --- */
+.sio-drop {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 26px 16px; cursor: pointer; text-align: center;
+    border: 2px dashed var(--soft-border); border-radius: var(--radius-sm);
+    background: var(--panel-1); transition: var(--transition-smooth);
+}
+.sio-drop:hover, .sio-drop:focus-visible, .sio-drop.is-over {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.12);
+    outline: none;
+}
+.sio-drop.is-over { transform: scale(1.01); }
+.sio-drop-ico { font-size: 1.7rem; line-height: 1; }
+.sio-drop-main { font-family: 'Cinzel', serif; font-size: 0.88rem; font-weight: 600; }
+.sio-drop-sub { font-family: 'Lora', serif; font-size: 0.74rem; opacity: 0.68; }
+.sio-drop-fmt {
+    margin-top: 4px; font-family: 'Cinzel', serif; font-size: 0.65rem;
+    letter-spacing: 0.06em; opacity: 0.5;
+}
+.sio-warn {
+    margin: 0; padding: 9px 12px; border-radius: var(--radius-sm);
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.5);
+    font-family: 'Lora', serif; font-size: 0.77rem; line-height: 1.5;
+}
+
+/* --- Aperçu avant import --- */
+.sio-prev { display: flex; flex-direction: column; gap: 9px; }
+.sio-prev-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sio-badge {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    background: rgba(196,155,53,0.18); border: 1px solid rgba(196,155,53,0.45);
+    font-family: 'Cinzel', serif; font-size: 0.7rem;
+}
+.sio-prev-date { font-family: 'Lora', serif; font-size: 0.72rem; opacity: 0.6; font-style: italic; }
+.sio-facts { display: flex; flex-direction: column; gap: 5px; margin: 0; }
+.sio-facts > div { display: flex; gap: 8px; align-items: baseline; }
+.sio-facts dt {
+    flex: 0 0 auto; min-width: 150px;
+    font-family: 'Cinzel', serif; font-size: 0.72rem; opacity: 0.75;
+}
+.sio-facts dd {
+    margin: 0; flex: 1 1 auto; min-width: 0;
+    font-family: 'Lora', serif; font-size: 0.77rem;
+}
+.sio-lost {
+    padding: 9px 12px; border-radius: var(--radius-sm);
+    background: rgba(196,155,53,0.12); border: 1px solid rgba(196,155,53,0.42);
+}
+.sio-lost-head {
+    font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--accent-color); margin-bottom: 5px;
+}
+.sio-lost ul { margin: 0; padding-left: 18px; }
+.sio-lost li { font-family: 'Lora', serif; font-size: 0.76rem; line-height: 1.45; opacity: 0.88; }
+
+.sio-modes { display: flex; flex-direction: column; gap: 6px; }
+.sio-modes label {
+    display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; cursor: pointer;
+    padding: 9px 11px; border-radius: var(--radius-sm);
+    border: 1px solid var(--soft-border); background: var(--panel-1);
+    transition: var(--transition-smooth);
+}
+.sio-modes label:hover { border-color: rgba(196,155,53,0.55); }
+.sio-modes label:has(input:checked) {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.13);
+}
+.sio-modes label.is-off { opacity: 0.5; cursor: not-allowed; }
+.sio-modes input { grid-row: 1 / 3; align-self: center; accent-color: var(--accent-color); cursor: inherit; }
+.sio-modes b { font-family: 'Cinzel', serif; font-size: 0.82rem; }
+.sio-modes i {
+    font-family: 'Lora', serif; font-size: 0.73rem; font-style: normal; opacity: 0.72;
+}
+
+.sio-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.sio-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'Cinzel', serif; font-size: 0.82rem; font-weight: 600;
+    padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid transparent; transition: var(--transition-smooth);
+}
+.sio-btn-main {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.28);
+}
+.sio-btn-ghost { background: transparent; color: var(--text-color); border-color: var(--soft-border); opacity: 0.85; }
+.sio-btn:hover { filter: brightness(1.09); }
+.sio-btn-ghost:hover { background: var(--widget-bg); filter: none; opacity: 1; }
+.sio-btn:disabled { opacity: 0.5; cursor: default; filter: none; }
+
+.sio-out:empty { display: none; }
+.sio-out, .sio-ok, .sio-err {
+    padding: 9px 12px; border-radius: var(--radius-sm);
+    font-family: 'Lora', serif; font-size: 0.79rem; line-height: 1.5;
+}
+.sio-out.is-ok, .sio-ok { background: rgba(61,122,61,0.14); border: 1px solid rgba(61,122,61,0.45); }
+.sio-err {
+    background: rgba(192,57,43,0.13); border: 1px solid rgba(192,57,43,0.45);
+    color: #a53024; margin: 0;
+}
+body.theme-dark .sio-err { color: #ff9c8f; }
+.sio-out .sio-lost { margin-top: 8px; }
+
+@media (max-width: 560px) {
+    #sheet-io { padding: 0; }
+    .sio-panel { max-width: none; max-height: 100vh; height: 100%; border-radius: 0; border-left: none; border-right: none; }
+    .sio-facts dt { min-width: 0; flex-basis: 100%; }
+    .sio-facts > div { flex-wrap: wrap; }
+    .sio-actions .sio-btn { flex: 1 1 auto; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #sheet-io { animation: none !important; }
+    .sio-card, .sio-drop, .sio-modes label { transition: none; }
+}
+@media print { #sheet-io { display: none !important; } }

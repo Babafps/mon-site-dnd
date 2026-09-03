@@ -50,10 +50,94 @@ document.addEventListener('DOMContentLoaded', () => {
         if(isJson) { try { return JSON.parse(val); } catch(e) { return null; } }
         return val;
     }
-    function setStore(key, val, isJson = true) { 
+    function setStore(key, val, isJson = true) {
         if(!ACTIVE_CHAR_ID) return;
-        DB.set(`${ACTIVE_CHAR_ID}_${key}`, isJson ? JSON.stringify(val) : val); 
+        DB.set(`${ACTIVE_CHAR_ID}_${key}`, isJson ? JSON.stringify(val) : val);
     }
+
+    // ==========================================
+    // Passerelle de stockage pour l'export / import (sheet-io.js)
+    //
+    // Le FORMAT des fichiers vit ailleurs ; ici on n'ouvre que la porte du
+    // stockage, avec les mêmes règles que le reste du site : le cloud quand on
+    // est connecté, le navigateur sinon, jamais l'un sans l'autre.
+    // ==========================================
+    window.SheetStore = {
+        activeId: () => ACTIVE_CHAR_ID,
+        list: () => charactersList.slice(),
+        meta: () => charactersList.find(c => c.id === ACTIVE_CHAR_ID) || null,
+
+        /** Toutes les clés d'une fiche, sans le préfixe du personnage. */
+        async dump(charId) {
+            const id = charId || ACTIVE_CHAR_ID;
+            if (!id) return {};
+            if (window.SupaAuth?.currentUser) {
+                try {
+                    const cloud = await window.SupaAuth.loadCharacterData(id);
+                    if (cloud && Object.keys(cloud).length) return cloud;
+                } catch (e) { /* le local fait foi en cas de panne réseau */ }
+            }
+            const out = {}, prefix = id + '_';
+            DB.keys().forEach(k => { if (k.startsWith(prefix)) out[k.slice(prefix.length)] = DB.get(k); });
+            return out;
+        },
+
+        /** Écrit un paquet de clés déjà sérialisées sur un personnage.
+         *  Local d'abord (c'est ce que l'écran lit), cloud ensuite. */
+        async write(charId, data) {
+            const entries = Object.entries(data || {}).filter(([, v]) => v != null);
+            entries.forEach(([k, v]) => {
+                try { localStorage.setItem(charId + '_' + k, String(v)); }
+                catch (e) { DB.warnQuotaOnce(); }
+            });
+            if (window.SupaAuth?.currentUser) {
+                await window.SupaAuth.saveKeys(charId,
+                    entries.map(([key, value]) => ({ key, value: String(value) })));
+            }
+        },
+
+        /** Vide une fiche avant un écrasement, en gardant les clés que l'import
+         *  va réécrire (inutile de les effacer pour les remettre juste après).
+         *  Côté cloud il n'y a pas de suppression : une valeur vide se lit
+         *  comme une absence partout où la fiche va chercher. */
+        async clear(charId, keepKeys) {
+            const keep = new Set(keepKeys || []);
+            const prefix = charId + '_';
+            const gone = [];
+            DB.keys().forEach(k => {
+                if (!k.startsWith(prefix)) return;
+                const sub = k.slice(prefix.length);
+                if (keep.has(sub)) return;
+                DB.remove(k);
+                gone.push(sub);
+            });
+            if (gone.length && window.SupaAuth?.currentUser) {
+                await window.SupaAuth.saveKeys(charId, gone.map(key => ({ key, value: '' })));
+            }
+        },
+
+        /** Crée un personnage (cloud ou local) et renvoie son identifiant. */
+        async create(name, meta) {
+            let id;
+            if (window.SupaAuth?.currentUser) {
+                const c = await window.SupaAuth.createCharacter(name);
+                if (!c) throw new Error('Le cloud a refusé la création du personnage.');
+                id = c.id;
+            } else {
+                id = 'char_' + Date.now();
+            }
+            charactersList.push({
+                id, name,
+                level: (meta && meta.level) || 1,
+                class: (meta && meta.class) || ''
+            });
+            DB.set('dnd-character-list', JSON.stringify(charactersList));
+            return id;
+        },
+
+        /** Ouvre une fiche (et recharge, comme partout ailleurs sur le site). */
+        open(charId) { DB.set('dnd-active-char', charId); location.reload(); }
+    };
 
     // ==========================================
     // EFFETS VISUELS ET ÉTATS
@@ -357,86 +441,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     })();
 
-    // Partage d'UNE fiche (la fiche active) → fichier .json importable
-    const btnExportChar = document.getElementById('btn-export-char');
-    if (btnExportChar) {
-        btnExportChar.addEventListener('click', async () => {
-            if (!ACTIVE_CHAR_ID) { alert("Ouvre d'abord une fiche de personnage."); return; }
-            btnExportChar.disabled = true; const old = btnExportChar.textContent; btnExportChar.textContent = '⏳ Export…';
-            try {
-                let data = {}, meta = null;
-                if (window.SupaAuth?.currentUser) {
-                    data = await window.SupaAuth.loadCharacterData(ACTIVE_CHAR_ID);
-                    const chars = await window.SupaAuth.loadCharacters(); meta = chars.find(c => c.id === ACTIVE_CHAR_ID) || null;
-                } else {
-                    const prefix = ACTIVE_CHAR_ID + '_';
-                    DB.keys().forEach(k => { if (k.startsWith(prefix)) data[k.slice(prefix.length)] = DB.get(k); });
-                    meta = charactersList.find(c => c.id === ACTIVE_CHAR_ID) || null;
-                }
-                const rawName = (data['dnd-sheet-char-name'] || (meta && meta.name) || 'fiche').toString();
-                const safe = rawName.replace(/[^\w\-]+/g, '_');
-                const exportData = { version: "char-1.0", meta: meta, data: data };
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-                // Nom de fichier lisible : « Fiche de <nom du perso>.json » (on ne retire que les
-                // caractères interdits par les systèmes de fichiers, pour garder accents et espaces).
-                const fileName = 'Fiche de ' + rawName.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ') + '.json';
-                const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", fileName); document.body.appendChild(a); a.click(); a.remove();
-            } catch (err) { alert("Erreur lors de l'export : " + err.message); }
-            finally { btnExportChar.disabled = false; btnExportChar.textContent = old; }
+    // Export / import d'UNE fiche : le format vit dans sheet-io.js, l'écran
+    // aussi. Ici on ne fait qu'ouvrir la fenêtre — et on garde les deux entrées
+    // de menu historiques, qui mènent maintenant au même endroit.
+    ['btn-export-char', 'btn-import-char'].forEach(id => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.addEventListener('click', () => {
+            if (settingsDropdown) settingsDropdown.classList.add('hidden');
+            if (window.SheetIO) window.SheetIO.open(b.dataset.ioTab);
+            else alert("L'export de fiche n'a pas pu se charger.");
         });
-    }
-
-    const btnImportJson = document.getElementById('btn-import-json');
-    if (btnImportJson) {
-        btnImportJson.addEventListener('change', (e) => {
-            const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const parsed = JSON.parse(event.target.result);
-                    if (window.SupaAuth?.currentUser) {
-                        if (parsed.version === "char-1.0" && parsed.data) {
-                            const charName = parsed.data['dnd-sheet-char-name'] || parsed.meta?.name || 'Fiche importée';
-                            if (!confirm(`Importer la fiche « ${charName} » comme nouveau personnage ?`)) { btnImportJson.value = ''; return; }
-                            const newChar = await window.SupaAuth.createCharacter(charName); if (!newChar) { alert("Erreur lors de la création."); btnImportJson.value = ''; return; }
-                            const entries = Object.entries(parsed.data).filter(([, v]) => v !== null && v !== undefined).map(([key, value]) => ({ key, value: String(value) }));
-                            if (entries.length > 0) await window.SupaAuth.saveKeys(newChar.id, entries);
-                            alert(`✅ Fiche « ${charName} » importée !`); location.reload();
-                        } else if (parsed.version === "4.0" && Array.isArray(parsed.characters)) {
-                            if (!confirm(`Importer ${parsed.characters.length} personnage(s) ? Ils seront ajoutés à vos personnages existants.`)) { btnImportJson.value = ''; return; }
-                            let ok = 0;
-                            for (const charExport of parsed.characters) {
-                                const charName = charExport.data?.['dnd-sheet-char-name'] || charExport.meta?.name || 'Personnage importé';
-                                const newChar = await window.SupaAuth.createCharacter(charName); if (!newChar) return;
-                                const entries = Object.entries(charExport.data || {}).filter(([, v]) => v !== null && v !== undefined).map(([key, value]) => ({ key, value: String(value) }));
-                                if (entries.length > 0) await window.SupaAuth.saveKeys(newChar.id, entries); ok++;
-                            }
-                            alert(`✅ ${ok} personnage(s) importé(s) !`); location.reload();
-                        } else if (parsed.allData && Array.isArray(parsed.charactersList)) {
-                            if (!confirm(`Importer ${parsed.charactersList.length} personnage(s) depuis un ancien format ?`)) { btnImportJson.value = ''; return; }
-                            let ok = 0;
-                            for (const c of parsed.charactersList) {
-                                const charName = parsed.allData[c.id + '_dnd-sheet-char-name'] || c.name || 'Personnage importé';
-                                const newChar = await window.SupaAuth.createCharacter(charName); if (!newChar) continue; const prefix = c.id + '_';
-                                const entries = Object.entries(parsed.allData).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => ({ key: k.slice(prefix.length), value: String(v) }));
-                                if (entries.length > 0) await window.SupaAuth.saveKeys(newChar.id, entries); ok++;
-                            }
-                            alert(`✅ ${ok} personnage(s) importé(s) !`); location.reload();
-                        } else { alert("Format de fichier non reconnu."); }
-                    } else {
-                        if (parsed.version === "char-1.0" && parsed.data) {
-                            const newId = 'char_' + Date.now();
-                            const charName = parsed.data['dnd-sheet-char-name'] || parsed.meta?.name || 'Fiche importée';
-                            Object.entries(parsed.data).forEach(([k, v]) => DB.set(newId + '_' + k, v));
-                            let list = []; try { list = JSON.parse(DB.get('dnd-character-list') || '[]'); } catch (e) {}
-                            list.push({ id: newId, name: charName, level: (parsed.meta && parsed.meta.level) || 1, class: (parsed.meta && parsed.meta.class) || '' });
-                            DB.set('dnd-character-list', JSON.stringify(list));
-                            alert(`✅ Fiche « ${charName} » importée !`); location.reload();
-                        } else if (parsed.allData) { Object.keys(parsed.allData).forEach(k => { DB.set(k, parsed.allData[k]); }); if (parsed.charactersList) DB.set('dnd-character-list', JSON.stringify(parsed.charactersList)); if (parsed.activeCharId) DB.set('dnd-active-char', parsed.activeCharId); alert("Sauvegarde importée !"); location.reload(); } else { alert("Format de fichier invalide."); }
-                    }
-                } catch (err) { alert("Erreur lors de la lecture du fichier : " + err.message); } btnImportJson.value = '';
-            }; reader.readAsText(file);
-        });
-    }
+    });
 
     const bgInput = document.getElementById('bg-file-input'); const CUSTOM_BG_KEY = 'dnd-custom-background-image';
     // --custom-bg : sur mobile le fond est peint par un calque fixe (body::before, cf. style.css
@@ -5628,7 +5644,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         function initGlobalSave() {
-            const allSimpleInputs = document.querySelectorAll('#app-screen input:not(.slot-total-input):not(#avatar-file-input):not(#bg-file-input):not(#btn-import-json):not(.color-picker):not([type="radio"]):not([type="file"]):not(#pay-amount-val):not(#calc-display):not(#new-trait-pinned):not(#global-search-input), #app-screen textarea:not(#new-trait-desc), #app-screen select:not(#hd-size):not(#layout-selector):not(#pay-amount-type):not(#traits-sort-select):not(#new-trait-type):not(#inv-category):not(#edit-inv-category):not(#new-atk-category)');
+            const allSimpleInputs = document.querySelectorAll('#app-screen input:not(.slot-total-input):not(#avatar-file-input):not(#bg-file-input):not(.color-picker):not([type="radio"]):not([type="file"]):not(#pay-amount-val):not(#calc-display):not(#new-trait-pinned):not(#global-search-input), #app-screen textarea:not(#new-trait-desc), #app-screen select:not(#hd-size):not(#layout-selector):not(#pay-amount-type):not(#traits-sort-select):not(#new-trait-type):not(#inv-category):not(#edit-inv-category):not(#new-atk-category)');
             allSimpleInputs.forEach(input => {
                 if(!input.id || crudIgnoredPrefixes.some(pref => input.id.startsWith(pref))) return;
                 if (input.type === 'checkbox') {

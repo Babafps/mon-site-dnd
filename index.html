@@ -145,10 +145,8 @@
         <details class="menu-cat">
             <summary>💾 Fiche &amp; sauvegardes</summary>
             <div class="menu-cat-body">
-                <button id="btn-export-char" class="btn-menu-item" style="color:#8a6320;">🪪 Partager cette fiche</button>
-                <label class="btn-menu-item" style="color:#27ae60; cursor:pointer; display:block;">
-                    📤 Importer une fiche <input type="file" id="btn-import-json" accept=".json" class="hidden">
-                </label>
+                <button id="btn-export-char" class="btn-menu-item" style="color:#8a6320;" data-io-tab="export">🪪 Exporter cette fiche</button>
+                <button id="btn-import-char" class="btn-menu-item" style="color:#27ae60;" data-io-tab="import">📤 Importer une fiche</button>
                 <button id="btn-export-pdf" class="btn-menu-item">🖨️ Enregistrer en PDF</button>
                 <hr>
                 <p class="menu-hint">La sauvegarde complète emporte tous tes personnages et ton contenu personnel.</p>
@@ -454,6 +452,7 @@
 <script src="srd-data.js"></script>
 <script src="srd-autocomplete.js"></script>
 <script src="script.js"></script>
+<script src="sheet-io.js"></script>
 <script src="music-player.js"></script>
 <script src="fiche-layout.js"></script>
 <script src="print-sheet.js"></script>
