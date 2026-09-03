@@ -1763,6 +1763,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const lvupAbName = (id) => (LVUP_ABILITIES.find(a => a[0] === id) || [, id])[1];
         const lvupNum = (id) => parseInt(document.getElementById(id)?.value, 10) || 0;
         const lvupSigned = (n) => (n >= 0 ? '+' + n : String(n));
+        const lvupInt = (v) => parseInt(v, 10) || 0;
+
+        /** Rang de sort le plus haut réellement lançable à ce niveau
+         *  (emplacements classiques ou magie de pacte). 0 = pas de magie. */
+        function lvupMaxRank(inf) {
+            if (!inf) return 0;
+            let m = 0;
+            if (inf.spell_slots) Object.keys(inf.spell_slots).forEach(r => {
+                if (lvupInt(inf.spell_slots[r]) > 0) m = Math.max(m, lvupInt(r));
+            });
+            if (inf.class_specific && lvupInt(inf.class_specific.spell_slots_count) > 0) {
+                m = Math.max(m, lvupInt(inf.class_specific.slot_level));
+            }
+            return m;
+        }
 
         /** Est-ce l'aptitude « Amélioration de caractéristique » ?
          *  L'identifiant SRD suffit ; le nom sert de secours pour le contenu
@@ -1868,6 +1883,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 plan.columns.push({ label: col.label || col.key, from: p, to: v });
             });
 
+            // Sorts à choisir. On ne DÉDUIT que ce que la table dit vraiment :
+            // les sorts mineurs et les sorts connus quand la classe a ces
+            // colonnes, et le rang le plus haut désormais lançable. Le reste
+            // (« le magicien copie deux sorts dans son grimoire ») vit dans le
+            // texte des aptitudes, pas dans les données : on ne l'invente pas,
+            // on ouvre simplement le grimoire pour que le joueur s'en charge.
+            const cantripsUp = Math.max(0, lvupInt(info && info.cantrips_known) - lvupInt(prev && prev.cantrips_known));
+            const knownUp = Math.max(0, lvupInt(info && info.spells_known) - lvupInt(prev && prev.spells_known));
+            const rankBefore = lvupMaxRank(prev);
+            const rankAfter = lvupMaxRank(info);
+            if (cantripsUp || knownUp || rankAfter > rankBefore || plan.slots.length || plan.pact) {
+                const have0 = spells.filter(s => (parseInt(s.level, 10) || 0) === 0).length;
+                const haveN = spells.length - have0;
+                plan.spells = {
+                    cantripsUp, knownUp,
+                    newRank: rankAfter > rankBefore ? rankAfter : 0,
+                    rank: rankAfter,
+                    // Ce qui manque VRAIMENT sur la fiche, quand la table le dit.
+                    missing0: info && info.cantrips_known != null
+                        ? Math.max(0, lvupInt(info.cantrips_known) - have0) : 0,
+                    missingN: info && info.spells_known != null
+                        ? Math.max(0, lvupInt(info.spells_known) - haveN) : 0
+                };
+            }
+
             // Aptitudes. L'amélioration de caractéristique est mise à part :
             // c'est un choix, pas une capacité à recopier sur la fiche.
             ((info && info.features) || []).forEach(f => {
@@ -1913,12 +1953,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="lvup-asi-modes">
                         <label><input type="radio" name="lvup-asi-mode" value="two" checked> +1 à deux caractéristiques</label>
                         <label><input type="radio" name="lvup-asi-mode" value="one"> +2 à une seule</label>
-                        <label><input type="radio" name="lvup-asi-mode" value="later"> Plus tard (ou je prends un don)</label>
+                        <label><input type="radio" name="lvup-asi-mode" value="feat"> Un don</label>
+                        <label><input type="radio" name="lvup-asi-mode" value="later"> Plus tard</label>
                     </div>
                     <div class="lvup-asi-picks" data-mode="two">
                         <select class="lvup-asi-a" aria-label="Première caractéristique">${opts()}</select>
                         <select class="lvup-asi-b" aria-label="Seconde caractéristique">${opts()}</select>
                         <select class="lvup-asi-one" aria-label="Caractéristique à +2">${opts()}</select>
+                    </div>
+                    <div class="lvup-feat-pick">
+                        <input type="text" class="lvup-feat-name" placeholder="Nom du don — tape pour chercher"
+                               aria-label="Nom du don">
+                        <textarea class="lvup-feat-desc" rows="3"
+                                  placeholder="Ce que le don apporte (rempli tout seul si tu le choisis dans la liste)."
+                                  aria-label="Description du don"></textarea>
+                        <div class="lvup-feat-note">Le SRD ne publie qu’un don. Les autres viennent de ton contenu
+                            perso — ou tape simplement le nom, la saisie libre marche toujours.</div>
                     </div>
                     <div class="lvup-asi-preview" role="status"></div>
                 </div>
@@ -1979,6 +2029,25 @@ document.addEventListener('DOMContentLoaded', () => {
                          : '')
             }));
 
+            if (plan.spells) {
+                const bits = [];
+                if (plan.spells.cantripsUp) bits.push(`${plan.spells.cantripsUp} sort(s) mineur(s) de plus`);
+                if (plan.spells.knownUp) bits.push(`${plan.spells.knownUp} sort(s) connu(s) de plus`);
+                if (plan.spells.newRank) bits.push(`accès aux sorts de niveau ${plan.spells.newRank}`);
+                const manque = [];
+                if (plan.spells.missing0) manque.push(`${plan.spells.missing0} sort(s) mineur(s)`);
+                if (plan.spells.missingN) manque.push(`${plan.spells.missingN} sort(s)`);
+                rows.push(lvupRow({
+                    key: 'spells', kind: 'info', ico: '📖',
+                    title: 'Sorts à choisir',
+                    detail: (bits.length ? escAb(bits.join(' · ')) : 'De nouveaux emplacements s’ouvrent')
+                          + (manque.length
+                             ? ` — il te manque ${escAb(manque.join(' et '))} sur la fiche`
+                             : '')
+                          + '<br>Le grimoire s’ouvrira à la fin pour les inscrire.'
+                }));
+            }
+
             plan.features.forEach((f, i) => {
                 const txt = Array.isArray(f.text) ? f.text : (f.text ? [String(f.text)] : []);
                 const body = txt.length
@@ -2036,6 +2105,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!plan.asi) return '';
             const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'later';
             if (mode === 'later') return '';
+            if (mode === 'feat') {
+                return ov.querySelector('.lvup-feat-name')?.value.trim()
+                    ? '' : 'Donne le nom du don que tu prends.';
+            }
             if (mode === 'one') {
                 return ov.querySelector('.lvup-asi-one')?.value
                     ? '' : 'Choisis la caractéristique à augmenter de 2.';
@@ -2050,7 +2123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function lvupAsiPicks(ov, plan) {
             if (!plan.asi) return [];
             const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'later';
-            if (mode === 'later') return [];
+            if (mode === 'later' || mode === 'feat') return [];
             if (mode === 'one') {
                 const o = ov.querySelector('.lvup-asi-one')?.value;
                 return o ? [[o, 2]] : [];
@@ -2135,8 +2208,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 picks.dataset.mode = mode;
                 const list = lvupAsiPicks(ov, plan);
                 if (!list.length) {
-                    asiPrev.textContent = mode === 'later'
-                        ? 'Rien ne sera modifié — un rappel restera après la montée.' : '';
+                    if (mode === 'feat') {
+                        const fn = ov.querySelector('.lvup-feat-name').value.trim();
+                        asiPrev.textContent = fn
+                            ? `« ${fn} » sera ajouté au module « Capacités ».`
+                            : 'Choisis un don dans la liste, ou tape son nom.';
+                    } else {
+                        asiPrev.textContent = mode === 'later'
+                            ? 'Rien ne sera modifié — un rappel restera après la montée.' : '';
+                    }
                     asiPrev.classList.remove('is-capped');
                     return;
                 }
@@ -2151,9 +2231,28 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             if (plan.asi) {
                 ov.querySelectorAll('input[name="lvup-asi-mode"]').forEach(r =>
-                    r.addEventListener('change', () => { showErr(''); refreshAsi(); }));
+                    r.addEventListener('change', () => {
+                        showErr(''); refreshAsi();
+                        if (r.checked && r.value === 'feat') ov.querySelector('.lvup-feat-name')?.focus();
+                    }));
                 ov.querySelectorAll('.lvup-asi-picks select').forEach(s =>
                     s.addEventListener('change', () => { showErr(''); refreshAsi(); }));
+
+                // Le don : même autocomplétion que partout ailleurs. Elle
+                // interroge les dons du SRD ET le contenu perso ; la saisie
+                // libre reste possible pour un don du Manuel des Joueurs.
+                const featName = ov.querySelector('.lvup-feat-name');
+                const featDesc = ov.querySelector('.lvup-feat-desc');
+                featName.addEventListener('input', () => { showErr(''); refreshAsi(); });
+                if (window.SRDAuto) window.SRDAuto.attach(featName, {
+                    categories: ['feats'],
+                    onPick: (full) => {
+                        const t = Array.isArray(full.desc) ? full.desc.join('\n\n')
+                                : (full.desc || (Array.isArray(full.text) ? full.text.join('\n\n') : full.text) || '');
+                        featDesc.value = t;
+                        refreshAsi();
+                    }
+                });
                 refreshAsi();
             }
 
@@ -2265,6 +2364,21 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             updateStatsAndSkills();
 
+            // 8. Le don, s'il remplace l'amélioration de caractéristique.
+            //    Il part dans « Capacités » avec le type « feat », comme s'il
+            //    avait été saisi à la main dans le module.
+            let featDone = '';
+            if (plan.asi && ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value === 'feat') {
+                const name = ov.querySelector('.lvup-feat-name').value.trim();
+                if (name && window.SheetApi) {
+                    window.SheetApi.addTraits([{
+                        name, type: 'feat', level: plan.to,
+                        desc: ov.querySelector('.lvup-feat-desc').value.trim()
+                    }]);
+                    featDone = name;
+                }
+            }
+
             // Le champ Niveau pulse en or.
             const grp = lvlEl.closest('.level-group');
             if (grp) { grp.classList.remove('is-levelling'); void grp.offsetWidth; grp.classList.add('is-levelling'); }
@@ -2274,11 +2388,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hpAdded) rappels.push(`❤️ PV max +${hpAdded}`);
             else rappels.push('❤️ Augmente tes PV max (dé de vie + mod. de Constitution)');
             if (asiDone.length) rappels.push('✨ ' + asiDone.join(' · '));
+            else if (featDone) rappels.push(`⭐ Don : ${featDone}`);
             else if (plan.asi) rappels.push('✨ Amélioration de caractéristique ou don : à choisir');
             plan.columns.forEach(c => rappels.push(`📈 ${c.label} : ${c.to}`));
             if (!plan.cls) rappels.push('✨ Vérifie tes emplacements de sorts');
             if (plan.cls && !plan.features.length && !plan.asi) {
                 rappels.push('📜 Aucune aptitude à ce niveau — profite de la marge');
+            }
+
+            // Des sorts à choisir : la célébration propose d'ouvrir le grimoire
+            // au bon rang, plutôt que de laisser le joueur le chercher.
+            let spellsFx = null;
+            if (plan.spells) {
+                const manque = [];
+                if (plan.spells.missing0) manque.push(`${plan.spells.missing0} sort(s) mineur(s)`);
+                if (plan.spells.missingN) manque.push(`${plan.spells.missingN} sort(s)`);
+                rappels.push('📖 Sorts à inscrire' + (manque.length ? ' : ' + manque.join(' et ') : ''));
+                spellsFx = {
+                    label: manque.length
+                        ? `📖 Choisir mes sorts (${plan.spells.missing0 + plan.spells.missingN})`
+                        : '📖 Ouvrir le grimoire',
+                    // Le rang sur lequel le grimoire s'ouvre : celui qui vient
+                    // de se débloquer, sinon les sorts mineurs s'il en manque,
+                    // sinon le plus haut rang lançable.
+                    rank: plan.spells.newRank
+                       || (plan.spells.missing0 ? 0 : plan.spells.rank)
+                };
             }
 
             showLevelUpFx({
@@ -2287,9 +2422,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 prof: String(plan.prof.to),
                 hitDice: plan.die ? `${plan.hitDice.to}d${plan.die}` : '',
                 todo: rappels,
-                gained: kept,
-                onAdd: null
+                gained: kept.concat(featDone ? [{ name: featDone, from: 'don', subclass: false }] : []),
+                onAdd: null,
+                spells: spellsFx
             });
+        }
+
+        /** Ouvre le grimoire au rang demandé, prêt à inscrire un sort. */
+        function openGrimoireAt(rank) {
+            const r = Math.max(0, Math.min(9, parseInt(rank, 10) || 0));
+            grim.page = 'folio'; grim.level = r; grim.spread = 0;
+            openBook();
+            renderGrimoire();
+            setTimeout(() => openScribe(r), 220);
         }
 
         const btnLevelUp = document.getElementById('btn-level-up');
@@ -2435,7 +2580,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="lvfx-stats">${stats}</div>
                 ${gainedHtml}
                 <ul class="lvfx-todo">${info.todo.map(t => `<li>${escAb(t)}</li>`).join('')}</ul>
-                <button type="button" class="lvfx-close">Continuer l’aventure</button>
+                ${info.spells ? `<button type="button" class="lvfx-close lvfx-grim">${escAb(info.spells.label)}</button>` : ''}
+                <button type="button" class="lvfx-close${info.spells ? ' lvfx-secondary' : ''}">Continuer l’aventure</button>
             </div>`;
 
             const close = () => {
@@ -2445,7 +2591,15 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             const onKey = (e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); };
             ov.addEventListener('click', (e) => {
-                // Tout clic ferme la carte — sauf celui qui verse les aptitudes.
+                // Le grimoire d'abord : c'est le seul clic qui mène ailleurs
+                // que vers la fermeture.
+                if (info.spells && e.target.closest('.lvfx-grim')) {
+                    e.stopPropagation();
+                    close();
+                    setTimeout(() => openGrimoireAt(info.spells.rank), 300);
+                    return;
+                }
+                // Tout autre clic ferme la carte — sauf celui qui verse les aptitudes.
                 const add = e.target.closest('.lvfx-add');
                 if (!add) { close(); return; }
                 e.stopPropagation();

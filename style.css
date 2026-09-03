@@ -3710,6 +3710,35 @@ body.theme-dark .lvup-error { color: #ff9c8f; }
 @media (prefers-reduced-motion: reduce) {
     #levelup-plan, .lvup-panel { animation: none !important; }
 }
+
+/* Don pris à la place de l'amélioration de caractéristique.
+   Visible seulement quand le mode « Un don » est coché. */
+.lvup-feat-pick { display: none; margin-top: 7px; }
+.lvup-asi-picks[data-mode="feat"] select { display: none; }
+.lvup-asi-picks[data-mode="feat"] ~ .lvup-feat-pick { display: block; }
+.lvup-feat-pick input, .lvup-feat-pick textarea {
+    width: 100%; font-family: 'Lora', serif; font-size: 0.8rem;
+    padding: 6px 8px; border-radius: 6px;
+    border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+}
+.lvup-feat-pick textarea { margin-top: 6px; resize: vertical; line-height: 1.4; }
+.lvup-feat-note {
+    margin-top: 5px; font-family: 'Lora', serif; font-size: 0.72rem;
+    opacity: 0.7; line-height: 1.35;
+}
+
+/* Célébration : quand des sorts restent à choisir, « Continuer l'aventure »
+   passe au second plan derrière le bouton qui ouvre le grimoire. */
+.lvfx-close.lvfx-secondary {
+    background: transparent; color: #e4d6b8;
+    border: 1px solid rgba(196,155,53,0.5);
+    box-shadow: none; margin-top: 8px; display: block;
+    margin-left: auto; margin-right: auto;
+    animation-delay: .72s;
+}
+.lvfx-close.lvfx-secondary:hover { background: rgba(196,155,53,0.16); filter: none; }
+
 @media print { #levelup-plan { display: none !important; } }
 
 
