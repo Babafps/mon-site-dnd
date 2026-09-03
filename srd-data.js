@@ -432,17 +432,20 @@
             const label = (row.feature_labels || [])[i] || (f && f.name) || id;
             if (seen.has(label)) return;
             seen.add(label);
-            features.push({ name: label, text: f ? f.text : [], id, from: cls.name });
+            features.push({ name: label, text: f ? f.text : [], id, from: cls.name,
+                            options: (f && f.options) || null });
         });
         (cls.features || []).forEach(f => {
             const hit = (f.levels || (f.level ? [f.level] : [])).includes(lv);
             if (!hit || seen.has(f.name)) return;
             seen.add(f.name);
-            features.push({ name: f.name, text: f.text, id: f.id, from: cls.name });
+            features.push({ name: f.name, text: f.text, id: f.id, from: cls.name,
+                            options: f.options || null });
         });
         (subclass ? subclass.features || [] : []).forEach(f => {
             if (Number(f.level) !== lv) return;
-            features.push({ name: f.name, text: f.text, id: f.id, from: subclass.name, subclass: true });
+            features.push({ name: f.name, text: f.text, id: f.id, from: subclass.name,
+                            subclass: true, options: f.options || null });
         });
         return {
             level: lv,

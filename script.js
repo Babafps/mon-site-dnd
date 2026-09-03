@@ -1915,11 +1915,116 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 plan.features.push({
-                    name: f.name, text: f.text, from: f.from, subclass: !!f.subclass
+                    id: f.id, name: f.name, text: f.text, from: f.from,
+                    subclass: !!f.subclass, options: f.options || null
                 });
             });
 
+            // Sous-classe : le niveau où elle se choisit, ou le rattrapage.
+            plan.subclass = buildSubclassStep(plan);
+            // Aptitudes qui portent un choix (style de combat, pacte, métamagie…).
+            plan.features.forEach(f => { f.choice = lvupFeatureChoice(plan, f); });
+
             return plan;
+        }
+
+        // ---------- Les choix portés par une aptitude ----------
+        // « Style de combat », « Pacte », « Métamagie » : le SRD énonce un choix
+        // puis aligne ses options. Mais tous les options[] ne sont pas des
+        // choix — « Sorts » du barde ou « Le ki » du moine sont des
+        // sous-sections, acquises en bloc. C'est le TEXTE du parent qui
+        // tranche ; au moindre doute le bloc reste facultatif et ne verrouille
+        // rien, parce qu'une heuristique qui bloque une montée de niveau est
+        // pire que pas d'heuristique du tout.
+        const LVUP_CHOICE_STRONG =
+            /choisis(?:sez|)\s+(?:l[’']\s*)?(?:un|une|deux|trois|quatre|cinq)\b|l[’'](?:une|un)\s+des|au choix/i;
+        const LVUP_CHOICE_WEAK = /choisi/i;
+        const LVUP_NUM_FR = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5 };
+
+        /** Le niveau auquel une aptitude apparaît pour la première fois. */
+        function lvupFirstLevel(cls, f) {
+            const src = ((cls && cls.features) || []).find(x => x.id === f.id || x.name === f.name);
+            if (!src) return 0;
+            const list = src.levels || (src.level ? [src.level] : []);
+            return list.length ? Math.min.apply(null, list.map(Number)) : 0;
+        }
+
+        function lvupFeatureChoice(plan, f) {
+            const opts = Array.isArray(f.options) ? f.options : [];
+            if (opts.length < 2) return null;
+            const txt = (Array.isArray(f.text) ? f.text : [f.text || '']).join(' ');
+            const strong = LVUP_CHOICE_STRONG.test(txt);
+            if (!strong && !LVUP_CHOICE_WEAK.test(txt)) return null;
+
+            let count = 1;
+            const m = txt.match(/choisis(?:sez|)\s+(?:l[’']\s*)?(un|une|deux|trois|quatre|cinq)\b/i);
+            if (m) count = LVUP_NUM_FR[m[1].toLowerCase()] || 1;
+            // « Vous en recevez une autre aux niveaux 10 et 17 » : aux niveaux
+            // suivants, c'est UNE de plus, pas la fournée du début.
+            const first = lvupFirstLevel(plan.cls, f);
+            if (first && plan.to > first && /(?:une|un)\s+autre|suppl[ée]mentaire/i.test(txt)) count = 1;
+            count = Math.max(1, Math.min(count, opts.length));
+
+            // Ce qui est déjà écrit sur la fiche ne se reprend pas.
+            const taken = new Set(traits.map(t => window.SRD.fold(t.name || '')));
+            return {
+                name: f.name, count, required: strong,
+                options: opts.map(o => ({
+                    id: o.id || window.SRD.fold(o.name || ''),
+                    name: o.name || '',
+                    text: (Array.isArray(o.text) ? o.text : [o.text || '']).join(' '),
+                    taken: taken.has(window.SRD.fold(f.name + ' : ' + (o.name || '')))
+                })),
+                chosen: new Set()
+            };
+        }
+
+        // ---------- La sous-classe ----------
+        // Le niveau où elle se choisit se LIT dans les données : c'est le plus
+        // petit niveau porté par les aptitudes des sous-classes. Aucune table à
+        // écrire, et une classe perso est traitée exactement comme une autre.
+        function lvupSubclassLevel(cls) {
+            let at = 0;
+            ((cls && cls.subclasses) || []).forEach(s => (s.features || []).forEach(f => {
+                const lv = Number(f.level) || 0;
+                if (lv && (!at || lv < at)) at = lv;
+            }));
+            return at;
+        }
+
+        function buildSubclassStep(plan) {
+            const subs = (plan.cls && plan.cls.subclasses) || [];
+            if (!subs.length) return null;
+            const at = lvupSubclassLevel(plan.cls);
+            if (!at) return null;
+            const typed = (document.getElementById('char-subclass')?.value || '').trim();
+            if (plan.to === at) {
+                return { at, list: subs, chosen: plan.sub || null, required: !plan.sub, late: false };
+            }
+            // Rattrapage : le niveau est passé et la fiche n'en porte aucune.
+            // Proposé, jamais imposé — un multiclassé peut avoir ses raisons.
+            if (plan.to > at && !typed) {
+                return { at, list: subs, chosen: null, required: false, late: true };
+            }
+            return null;
+        }
+
+        /** Les aptitudes qu'une sous-classe donne À CE NIVEAU. */
+        function lvupSubFeatures(plan, sub) {
+            return ((sub && sub.features) || [])
+                .filter(f => Number(f.level) === plan.to)
+                .map(f => ({ id: f.id, name: f.name, text: f.text, from: sub.name,
+                             subclass: true, options: f.options || null }));
+        }
+
+        /** Choisir une sous-classe à l'écran : ses aptitudes du niveau rejoignent
+         *  le plan aussitôt, comme si elle avait toujours été sur la fiche. */
+        function lvupChooseSubclass(plan, sub) {
+            plan.subclass.chosen = sub;
+            plan.subName = sub ? sub.name : ((plan.sub && plan.sub.name) || '');
+            plan.features = plan.features.filter(f => !f.subclass)
+                .concat(lvupSubFeatures(plan, sub));
+            plan.features.forEach(f => { if (!f.choice) f.choice = lvupFeatureChoice(plan, f); });
         }
 
         // ---------- Sorts gagnés au niveau ----------
@@ -1963,10 +2068,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const haveN = spells.length - have0;
             const known = new Set(spells.map(s => window.SRD.fold(s.name || '')));
 
+            // Les sorts déjà connus restent dans la liste, marqués : les
+            // retirer donnerait l'illusion qu'ils n'existent pas.
             let catalog = [];
             try {
                 catalog = (await window.SRD.spellsForClass(cls && cls.id, rankAfter))
-                    .filter(s => !known.has(window.SRD.fold(s.name || '')));
+                    .map(s => Object.assign({}, s, { known: known.has(window.SRD.fold(s.name || '')) }));
             } catch (e) { catalog = []; }
 
             const byId = new Map(catalog.map(s => [s.id, s]));
@@ -1992,7 +2099,35 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        // ---------- Rendu ----------
+        // ---------- Registre de progression : le livre ----------
+        // Le panneau reprend la métaphore que le site possède déjà, celle du
+        // grimoire : une double page. À gauche, ce qui ne bouge pas — le
+        // niveau, le fil des étapes, et le récapitulatif VIVANT de ce qu'on
+        // gagne. À droite, l'étape courante et elle seule. Un seul défilement,
+        // celui de la page de droite.
+        //
+        // Il n'y a plus de mode « récapitulatif » et de mode « choisir » : tout
+        // est actionnable en permanence. Ce qui empêche de finir n'est plus un
+        // bandeau rouge mais un ⚠ sur l'étape fautive et un bouton « Terminer »
+        // grisé qui, cliqué, emmène droit à cette étape.
+
+        const LVUP_STEP_NAMES = {
+            recap: 'Récapitulatif', subclass: 'Sous-classe', feats: 'Aptitudes',
+            asi: 'Caractéristique ou don', spells: 'Sorts'
+        };
+
+        /** Les étapes réellement utiles à CETTE montée : une seule pour un
+         *  guerrier niveau 5, quatre pour un magicien niveau 4. */
+        function lvupSteps(plan) {
+            const ids = ['recap'];
+            if (plan.subclass) ids.push('subclass');
+            if (plan.features.length || plan.subclass) ids.push('feats');
+            if (plan.asi) ids.push('asi');
+            if (plan.spells) ids.push('spells');
+            return ids;
+        }
+
+        // ---------- Briques de rendu ----------
 
         function lvupRow(o) {
             const id = 'lvup-ck-' + o.key;
@@ -2009,95 +2144,22 @@ document.addEventListener('DOMContentLoaded', () => {
                  + `${o.ctl || ''}</div>`;
         }
 
-        function lvupAsiMarkup(plan) {
-            const opts = (sel) => '<option value="">— choisir —</option>'
-                + LVUP_ABILITIES.map(([k, n]) =>
-                    `<option value="${k}">${n} (${lvupNum('stat-' + k) || 10})</option>`).join('');
-            return `<div class="lvup-row lvup-asi">
-                <span class="lvup-ck-fix is-choice" aria-hidden="true">★</span>
-                <span class="lvup-ico" aria-hidden="true">✨</span>
-                <div class="lvup-txt">
-                    <b>${escAb(plan.asi.name || 'Amélioration de caractéristique')}</b>
-                    <i>Un choix à faire : personne ne peut le deviner à ta place.</i>
-                    <div class="lvup-asi-modes">
-                        <label><input type="radio" name="lvup-asi-mode" value="two" checked> +1 à deux caractéristiques</label>
-                        <label><input type="radio" name="lvup-asi-mode" value="one"> +2 à une seule</label>
-                        <label><input type="radio" name="lvup-asi-mode" value="feat"> Un don</label>
-                        <label><input type="radio" name="lvup-asi-mode" value="later"> Plus tard</label>
-                    </div>
-                    <div class="lvup-asi-picks" data-mode="two">
-                        <select class="lvup-asi-a" aria-label="Première caractéristique">${opts()}</select>
-                        <select class="lvup-asi-b" aria-label="Seconde caractéristique">${opts()}</select>
-                        <select class="lvup-asi-one" aria-label="Caractéristique à +2">${opts()}</select>
-                    </div>
-                    <div class="lvup-feat-pick">
-                        <input type="text" class="lvup-feat-name" placeholder="Nom du don — tape pour chercher"
-                               aria-label="Nom du don">
-                        <textarea class="lvup-feat-desc" rows="3"
-                                  placeholder="Ce que le don apporte (rempli tout seul si tu le choisis dans la liste)."
-                                  aria-label="Description du don"></textarea>
-                        <div class="lvup-feat-note">Le SRD ne publie qu’un don. Les autres viennent de ton contenu
-                            perso — ou tape simplement le nom, la saisie libre marche toujours.</div>
-                    </div>
-                    <div class="lvup-asi-preview" role="status"></div>
-                </div>
-            </div>`;
+        const lvupFeatText = (f) => Array.isArray(f.text) ? f.text : (f.text ? [String(f.text)] : []);
+
+        /** Le texte d'une aptitude, replié. Les options d'un vrai choix sont
+         *  montrées ailleurs (en cartes) : on ne les répète pas ici. */
+        function lvupFeatBody(f, withOptions) {
+            const paras = lvupFeatText(f).map(p => `<p>${escAb(p)}</p>`).join('');
+            const opts = (withOptions && Array.isArray(f.options) ? f.options : [])
+                .map(o => `<p><i>${escAb(o.name)}.</i> `
+                        + `${escAb((Array.isArray(o.text) ? o.text : [o.text || '']).join(' '))}</p>`).join('');
+            if (!paras && !opts) return '';
+            return `<details class="lvup-feat"><summary>Lire le texte</summary>${paras}${opts}</details>`;
         }
 
-        /** La ligne « Sorts » : le résumé, puis la liste de la classe où l'on
-         *  coche ce qu'on apprend. Reste utilisable en récapitulatif — choisir
-         *  ses sorts est le geste principal du niveau, pas un réglage avancé. */
-        function lvupSpellsMarkup(plan) {
-            const sp = plan.spells;
-            const bits = [];
-            if (sp.cantripsUp) bits.push(spPlural(sp.cantripsUp, 'sort mineur', 'sorts mineurs') + ' de plus');
-            if (sp.need) bits.push(sp.kind === 'book'
-                ? spPlural(sp.need, 'sort à copier', 'sorts à copier') + ' dans le grimoire'
-                : spPlural(sp.need, 'nouveau sort', 'nouveaux sorts'));
-            if (sp.newRank) bits.push(`accès aux sorts de niveau ${sp.newRank}`);
-            const head = bits.length ? bits.join(' · ') : 'De nouveaux emplacements s’ouvrent';
+        // ---------- Étape 1 : récapitulatif ----------
 
-            const manque = [];
-            if (sp.missing0) manque.push(spPlural(sp.missing0, 'sort mineur', 'sorts mineurs'));
-            if (sp.missingN) manque.push(spPlural(sp.missingN, 'sort', 'sorts'));
-            const sub = sp.kind === 'prepared'
-                ? 'Ta classe prépare ses sorts dans toute sa liste : prends ceux que tu veux avoir sous la main.'
-                : (manque.length ? `Il te manque ${manque.join(' et ')} sur la fiche.` : '');
-
-            if (!sp.catalog.length) return lvupRow({
-                key: 'spells', kind: 'info', ico: '📖', title: 'Sorts',
-                detail: escAb(head) + '<br>Aucun sort à te proposer ici — le grimoire s’ouvrira à la fin.'
-            });
-
-            const tabs = sp.ranks.map(r =>
-                `<button type="button" class="lvup-sp-tab" data-rank="${r}">${escAb(spRankLabel(r))}</button>`).join('');
-            const swap = (sp.canSwap && sp.mine.length) ? `
-                    <div class="lvup-sp-swap">
-                        <label><input type="checkbox" class="lvup-sp-swap-on"> Remplacer un sort que je connais</label>
-                        <select class="lvup-sp-swap-pick" aria-label="Sort rendu">
-                            <option value="-1">— lequel ? —</option>
-                            ${sp.mine.map(m => `<option value="${m.i}">${escAb(m.name)} · ${escAb(m.level ? 'niv. ' + m.level : 'mineur')}</option>`).join('')}
-                        </select>
-                    </div>` : '';
-
-            return `<div class="lvup-row lvup-sp">
-                <input type="checkbox" id="lvup-ck-spells" class="lvup-ck" data-ck="spells" checked>
-                <span class="lvup-ico" aria-hidden="true">📖</span>
-                <div class="lvup-txt">
-                    <b>Sorts</b>
-                    <i>${escAb(head)}${sub ? ' — ' + escAb(sub) : ''}</i>
-                    <div class="lvup-sp-pick">
-                        <div class="lvup-sp-tabs">${tabs}</div>
-                        <input type="search" class="lvup-sp-search" placeholder="Chercher un sort…"
-                               aria-label="Chercher un sort">
-                        <div class="lvup-sp-list"></div>${swap}
-                        <div class="lvup-sp-count" role="status"></div>
-                    </div>
-                </div>
-            </div>`;
-        }
-
-        function lvupMarkup(plan) {
+        function lvupRecapHtml(plan) {
             const rows = [];
 
             rows.push(lvupRow({
@@ -2123,7 +2185,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (plan.die) rows.push(lvupRow({
                 key: 'hp', ico: '❤️', title: 'Points de vie maximum',
                 detail: '<span class="lvup-hp-detail"></span>',
-                ctl: `<span class="lvup-ctl lvup-choice-only">
+                ctl: `<span class="lvup-ctl">
                         <select class="lvup-hp-mode" aria-label="Mode de calcul des PV">
                             <option value="average">Moyenne</option>
                             <option value="roll">Dé lancé</option>
@@ -2151,24 +2213,6 @@ document.addEventListener('DOMContentLoaded', () => {
                          : '')
             }));
 
-            if (plan.spells) rows.push(lvupSpellsMarkup(plan));
-
-            plan.features.forEach((f, i) => {
-                const txt = Array.isArray(f.text) ? f.text : (f.text ? [String(f.text)] : []);
-                const body = txt.length
-                    ? `<details class="lvup-feat"><summary>Lire le texte</summary>`
-                      + txt.map(p => `<p>${escAb(p)}</p>`).join('') + `</details>`
-                    : '';
-                rows.push(lvupRow({
-                    key: 'feat' + i, ico: '📜',
-                    title: escAb(f.name) + (f.subclass ? ` <span class="lvup-src">(${escAb(f.from)})</span>` : ''),
-                    detail: 'Ajoutée au module « Capacités »',
-                    extra: body
-                }));
-            });
-
-            if (plan.asi) rows.push(lvupAsiMarkup(plan));
-
             plan.columns.forEach((c, i) => rows.push(lvupRow({
                 key: 'col' + i, kind: 'info', ico: '📈',
                 title: `${escAb(c.label)} : ${escAb(c.from == null ? '—' : c.from)} `
@@ -2180,32 +2224,253 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<div class="lvup-warns">${plan.warnings.map(w => `<p>⚠️ ${escAb(w)}</p>`).join('')}</div>`
                 : '';
 
-            return `<div class="lvup-panel" role="document">
-                <header class="lvup-head">
-                    <div class="lvup-kicker">Montée de niveau</div>
-                    <div class="lvup-big">${plan.to}</div>
-                    <div class="lvup-sub">${plan.className
-                        ? escAb(plan.className) + (plan.subName ? ' · ' + escAb(plan.subName) : '')
-                        : 'Personnage'}</div>
-                </header>
-                <div class="lvup-hint lvup-recap-only">Voici ce que tu gagnes. Rien n’est écrit sur la fiche pour l’instant.</div>
-                <div class="lvup-hint lvup-choice-only">Décoche ce que tu ne veux pas, ajuste, puis valide.</div>
-                ${warn}
-                <div class="lvup-body">${rows.join('')}</div>
-                <div class="lvup-error" role="alert"></div>
+            return `<h3 class="lvup-step-title">Ce que le niveau apporte</h3>${warn}${rows.join('')}`;
+        }
+
+        // ---------- Étape 2 : sous-classe ----------
+
+        function lvupSubclassHtml(plan) {
+            const st = plan.subclass;
+            const chosenId = st.chosen && st.chosen.id;
+            const cards = st.list.map(s => {
+                const feats = (s.features || []).slice()
+                    .sort((a, b) => (Number(a.level) || 0) - (Number(b.level) || 0));
+                // On coupe AVANT d'échapper : tronquer « &amp; » en plein milieu
+                // afficherait le code de l'entité.
+                const raw = String((s.desc || [])[0] || '');
+                const intro = raw.length > 320 ? raw.slice(0, 320).replace(/\s+\S*$/, '') + '…' : raw;
+                return `<button type="button" class="lvup-card lvup-sub-card${s.id === chosenId ? ' is-on' : ''}"
+                                data-sub="${escAb(s.id)}" aria-pressed="${s.id === chosenId}">
+                    <span class="lvup-card-name">${escAb(s.name)}${s.source === 'perso'
+                        ? ' <span class="lvup-perso">perso</span>' : ''}</span>
+                    <span class="lvup-card-text">${escAb(intro)}</span>
+                    ${feats.length ? `<span class="lvup-card-more">
+                        <span class="lvup-card-more-head">Ce qu’elle donne</span>
+                        ${feats.map(f => `<span class="lvup-card-feat"><b>niv. ${escAb(f.level)}</b> ${escAb(f.name)}</span>`).join('')}
+                    </span>` : ''}
+                </button>`;
+            }).join('');
+
+            return `<h3 class="lvup-step-title">${st.late ? 'Ta sous-classe n’est pas renseignée' : 'Choisis ta voie'}</h3>
+                <p class="lvup-step-note">${st.late
+                    ? `Ta classe choisit sa sous-classe au niveau ${st.at} et la fiche n’en porte aucune. `
+                      + `Tu peux la renseigner ici — ou fermer, rien n’est obligatoire.`
+                    : `C’est au niveau ${st.at} que ta classe se spécialise. Le choix s’écrit sur la fiche `
+                      + `et vaut pour toutes les montées suivantes.`}</p>
+                <div class="lvup-cards">${cards}</div>
+                <p class="lvup-step-note lvup-lic">Le SRD 5.1 ne publie qu’une sous-classe par classe :
+                    les autres appartiennent au Manuel des Joueurs et ne sont pas redistribuables.
+                    Crée les tiennes dans <b>Contenu perso</b>, elles apparaîtront ici.</p>`;
+        }
+
+        // ---------- Étape 3 : aptitudes ----------
+
+        function lvupChoiceHtml(f) {
+            const c = f.choice;
+            const left = c.count - c.chosen.size;
+            return `<div class="lvup-choice" data-choice="${escAb(f.ckKey)}">
+                <div class="lvup-choice-head">
+                    <b>${escAb(c.name)}</b>
+                    <span class="lvup-choice-count${left <= 0 ? ' is-done' : ''}">
+                        ${c.chosen.size}/${c.count} choisi${c.count > 1 ? 's' : ''}</span>
+                </div>
+                ${c.required ? '' : '<p class="lvup-step-note">Ces options ne sont peut-être pas un vrai choix : '
+                    + 'prends-en si ta table le veut, rien n’est bloqué.</p>'}
+                <div class="lvup-cards">${c.options.map(o => `
+                    <button type="button" class="lvup-card lvup-opt-card${c.chosen.has(o.id) ? ' is-on' : ''}${o.taken ? ' is-taken' : ''}"
+                            data-opt="${escAb(o.id)}" aria-pressed="${c.chosen.has(o.id)}"
+                            ${o.taken ? 'disabled title="Déjà sur ta fiche"' : ''}>
+                        <span class="lvup-card-name">${escAb(o.name)}${o.taken ? ' <span class="lvup-perso">déjà pris</span>' : ''}</span>
+                        <span class="lvup-card-text">${escAb(o.text)}</span>
+                    </button>`).join('')}</div>
+            </div>`;
+        }
+
+        function lvupFeatsHtml(plan) {
+            plan.features.forEach((f, i) => { f.ckKey = 'feat' + i; });
+            if (!plan.features.length) {
+                return `<h3 class="lvup-step-title">Aptitudes</h3>
+                    <p class="lvup-step-note">Aucune aptitude à ce niveau${plan.subclass && !plan.subclass.chosen
+                        ? ' — choisis d’abord ta sous-classe, elle en apporte peut-être.' : '. Profite de la marge.'}</p>`;
+            }
+            const body = plan.features.map(f => {
+                const row = lvupRow({
+                    key: f.ckKey, ico: f.subclass ? '🜁' : '📜',
+                    title: escAb(f.name) + (f.subclass ? ` <span class="lvup-src">(${escAb(f.from)})</span>` : ''),
+                    detail: 'Ajoutée au module « Capacités »',
+                    extra: lvupFeatBody(f, !f.choice)
+                });
+                return row + (f.choice ? lvupChoiceHtml(f) : '');
+            }).join('');
+            return `<h3 class="lvup-step-title">Ce que tu apprends</h3>${body}`;
+        }
+
+        // ---------- Étape 4 : caractéristique ou don ----------
+
+        function lvupAsiHtml(plan) {
+            const opts = () => '<option value="">— choisir —</option>'
+                + LVUP_ABILITIES.map(([k, n]) =>
+                    `<option value="${k}">${n} (${lvupNum('stat-' + k) || 10})</option>`).join('');
+            return `<h3 class="lvup-step-title">${escAb(plan.asi.name || 'Amélioration de caractéristique')}</h3>
+            <p class="lvup-step-note">Un choix à faire : personne ne peut le deviner à ta place.</p>
+            <div class="lvup-asi">
+                <div class="lvup-asi-modes">
+                    <label><input type="radio" name="lvup-asi-mode" value="two" checked> +1 à deux caractéristiques</label>
+                    <label><input type="radio" name="lvup-asi-mode" value="one"> +2 à une seule</label>
+                    <label><input type="radio" name="lvup-asi-mode" value="feat"> Un don</label>
+                    <label><input type="radio" name="lvup-asi-mode" value="later"> Plus tard</label>
+                </div>
+                <div class="lvup-asi-picks" data-mode="two">
+                    <select class="lvup-asi-a" aria-label="Première caractéristique">${opts()}</select>
+                    <select class="lvup-asi-b" aria-label="Seconde caractéristique">${opts()}</select>
+                    <select class="lvup-asi-one" aria-label="Caractéristique à +2">${opts()}</select>
+                </div>
+                <div class="lvup-feat-pick">
+                    <input type="text" class="lvup-feat-name" placeholder="Nom du don — tape pour chercher"
+                           aria-label="Nom du don">
+                    <textarea class="lvup-feat-desc" rows="3"
+                              placeholder="Ce que le don apporte (rempli tout seul si tu le choisis dans la liste)."
+                              aria-label="Description du don"></textarea>
+                    <div class="lvup-feat-note">Le SRD ne publie qu’un don (Empoigneur). Les autres viennent de ton
+                        contenu perso — ou tape simplement le nom, la saisie libre marche toujours.</div>
+                </div>
+                <div class="lvup-asi-preview" role="status"></div>
+            </div>`;
+        }
+
+        // ---------- Étape 5 : sorts ----------
+
+        function lvupSpellsHtml(plan) {
+            const sp = plan.spells;
+            const bits = [];
+            if (sp.cantripsUp) bits.push(spPlural(sp.cantripsUp, 'sort mineur', 'sorts mineurs') + ' de plus');
+            if (sp.need) bits.push(sp.kind === 'book'
+                ? spPlural(sp.need, 'sort à copier', 'sorts à copier') + ' dans le grimoire'
+                : spPlural(sp.need, 'nouveau sort', 'nouveaux sorts'));
+            if (sp.newRank) bits.push(`accès aux sorts de niveau ${sp.newRank}`);
+            const head = bits.length ? bits.join(' · ') : 'De nouveaux emplacements s’ouvrent';
+            const note = sp.kind === 'prepared'
+                ? 'Ta classe prépare ses sorts dans toute sa liste : prends ceux que tu veux avoir sous la main.'
+                : '';
+
+            if (!sp.catalog.length) {
+                return `<h3 class="lvup-step-title">Sorts</h3>
+                    <p class="lvup-step-note">${escAb(head)}. Aucun sort à te proposer ici —
+                    le grimoire s’ouvrira à la fin.</p>`;
+            }
+
+            const tabs = sp.ranks.map(r =>
+                `<button type="button" class="lvup-sp-tab" data-rank="${r}">${escAb(spRankLabel(r))}</button>`).join('');
+            const swap = (sp.canSwap && sp.mine.length) ? `
+                <div class="lvup-sp-swap">
+                    <label><input type="checkbox" class="lvup-sp-swap-on"> Remplacer un sort que je connais</label>
+                    <select class="lvup-sp-swap-pick" aria-label="Sort rendu">
+                        <option value="-1">— lequel ? —</option>
+                        ${sp.mine.map(m => `<option value="${m.i}">${escAb(m.name)} · ${escAb(m.level ? 'niv. ' + m.level : 'mineur')}</option>`).join('')}
+                    </select>
+                </div>` : '';
+
+            return `<div class="lvup-sp-head">
+                    <h3 class="lvup-step-title">Sorts</h3>
+                    <div class="lvup-sp-count" role="status"></div>
+                </div>
+                <p class="lvup-step-note">${escAb(head)}${note ? ' — ' + escAb(note) : ''}</p>
+                <div class="lvup-sp-tabs">${tabs}</div>
+                <input type="search" class="lvup-sp-search" placeholder="Chercher un sort…"
+                       aria-label="Chercher un sort">
+                <div class="lvup-sp-read" hidden></div>
+                <div class="lvup-sp-grid"></div>
+                ${swap}
+                <label class="lvup-sp-later"><input type="checkbox" class="lvup-sp-later-ck">
+                    Je choisirai plus tard, dans le grimoire</label>`;
+        }
+
+        // ---------- Le livre ----------
+
+        function lvupGainsBoxHtml(fold) {
+            const inner = `<div class="lvup-gains-list"></div>`;
+            return fold
+                ? `<details class="lvup-gains lvup-gains-fold" data-gains>
+                       <summary class="lvup-gains-head">Ce que tu gagnes</summary>${inner}</details>`
+                : `<div class="lvup-gains" data-gains>
+                       <div class="lvup-gains-head">Ce que tu gagnes</div>${inner}</div>`;
+        }
+
+        function lvupMarkup(plan) {
+            const rail = plan.steps.map((id, i) =>
+                `<button type="button" class="lvup-step" data-step="${id}" data-i="${i}">
+                    <span class="lvup-step-mark" aria-hidden="true">○</span>
+                    <span class="lvup-step-name">${escAb(LVUP_STEP_NAMES[id] || id)}</span>
+                 </button>`).join('');
+
+            const panels = plan.steps.map(id =>
+                `<section class="lvup-step-panel" data-panel="${id}"
+                          aria-label="${escAb(LVUP_STEP_NAMES[id] || id)}">${lvupStepHtml(plan, id)}</section>`).join('');
+
+            return `<div class="lvup-book" role="document">
+                <div class="lvup-page lvup-page-l">
+                    <div class="lvup-head">
+                        <div class="lvup-kicker">Montée de niveau</div>
+                        <div class="lvup-big">${plan.to}</div>
+                        <div class="lvup-sub">${plan.className
+                            ? escAb(plan.className) + (plan.subName ? ' · ' + escAb(plan.subName) : '')
+                            : 'Personnage'}</div>
+                    </div>
+                    <div class="lvup-rule" aria-hidden="true">❦</div>
+                    <nav class="lvup-rail" aria-label="Étapes de la montée">${rail}</nav>
+                    <div class="lvup-rule" aria-hidden="true">❦</div>
+                    ${lvupGainsBoxHtml(false)}
+                </div>
+                <div class="lvup-page lvup-page-r">
+                    ${panels}
+                    ${lvupGainsBoxHtml(true)}
+                </div>
                 <footer class="lvup-foot">
                     <button type="button" class="lvup-btn lvup-btn-ghost" data-act="cancel">Annuler</button>
-                    <button type="button" class="lvup-btn lvup-btn-alt lvup-recap-only" data-act="choose">⚙ Choisir moi-même</button>
-                    <button type="button" class="lvup-btn lvup-btn-alt lvup-choice-only" data-act="back">← Récapitulatif</button>
-                    <button type="button" class="lvup-btn lvup-btn-main lvup-recap-only" data-act="all">✦ Tout appliquer</button>
-                    <button type="button" class="lvup-btn lvup-btn-main lvup-choice-only" data-act="confirm">✓ Valider la montée</button>
+                    <span class="lvup-foot-nav">
+                        <button type="button" class="lvup-btn lvup-btn-ghost lvup-arrow-btn"
+                                data-act="prev" aria-label="Étape précédente" title="Étape précédente">←</button>
+                        <button type="button" class="lvup-btn lvup-btn-ghost lvup-arrow-btn"
+                                data-act="next" aria-label="Étape suivante" title="Étape suivante">→</button>
+                    </span>
+                    <span class="lvup-foot-end">
+                        <button type="button" class="lvup-btn lvup-btn-alt" data-act="all">✦ Tout appliquer</button>
+                        <button type="button" class="lvup-btn lvup-btn-main" data-act="confirm">✦ Terminer la montée</button>
+                    </span>
                 </footer>
             </div>`;
         }
 
-        // ---------- Interactions ----------
+        function lvupStepHtml(plan, id) {
+            if (id === 'recap') return lvupRecapHtml(plan);
+            if (id === 'subclass') return lvupSubclassHtml(plan);
+            if (id === 'feats') return lvupFeatsHtml(plan);
+            if (id === 'asi') return lvupAsiHtml(plan);
+            if (id === 'spells') return lvupSpellsHtml(plan);
+            return '';
+        }
 
-        /** Ce qui manque pour pouvoir appliquer, ou '' si tout est décidé. */
+        // ---------- Ce qui manque encore ----------
+
+        /** Ce qui empêche d'appliquer, par étape. Objet vide = tout est décidé. */
+        function lvupIssues(ov, plan) {
+            const out = {};
+            if (plan.subclass && plan.subclass.required && !plan.subclass.chosen) {
+                out.subclass = 'Choisis ta sous-classe : elle décide de tes aptitudes.';
+            }
+            const c = plan.features.map(f => f.choice)
+                .find(x => x && x.required && x.chosen.size < x.count);
+            if (c) {
+                out.feats = `« ${c.name} » : il reste ${spPlural(c.count - c.chosen.size, 'option', 'options')} à choisir.`;
+            }
+            const a = lvupAsiIssue(ov, plan);
+            if (a) out.asi = a;
+            const s = lvupSpellsIssue(ov, plan);
+            if (s) out.spells = s;
+            return out;
+        }
+
+        /** Ce qui manque pour l'amélioration de caractéristique, ou ''. */
         function lvupAsiIssue(ov, plan) {
             if (!plan.asi) return '';
             const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'later';
@@ -2241,20 +2506,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return out;
         }
 
-        // ---------- Sorts : quota, cases à cocher, échange ----------
+        // ---------- Sorts : quota, tuiles, lecture, échange ----------
 
         const spIsCantrip = (sp, id) => (parseInt((sp.byId.get(id) || {}).level, 10) || 0) === 0;
         const spPicked = (sp, cantrips) => [...sp.chosen].filter(id => spIsCantrip(sp, id) === cantrips).length;
         const spSwapOn = (ov) => !!ov.querySelector('.lvup-sp-swap-on')?.checked;
+        const spLater = (ov) => !!ov.querySelector('.lvup-sp-later-ck')?.checked;
         // Rendre un sort connu libère une place : c'est un échange, pas une perte.
         const spNeedN = (sp, ov) => sp.need + (spSwapOn(ov) ? 1 : 0);
 
-        /** Ce qui empêche d'appliquer, ou '' si le compte est bon. */
         function lvupSpellsIssue(ov, plan) {
             const sp = plan.spells;
             if (!sp || !sp.catalog.length) return '';
-            const row = ov.querySelector('.lvup-ck[data-ck="spells"]');
-            if (row && !row.checked) return '';               // ligne décochée : plus tard
+            if (spLater(ov)) return '';
             if (spSwapOn(ov) && !(parseInt(ov.querySelector('.lvup-sp-swap-pick')?.value, 10) >= 0)) {
                 return 'Dis quel sort tu rends avant d’en prendre un autre.';
             }
@@ -2264,10 +2528,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const manque = [];
             if (sp.cantripsUp > lv0) manque.push(spPlural(sp.cantripsUp - lv0, 'sort mineur', 'sorts mineurs'));
             if (need > lvN) manque.push(spPlural(need - lvN, 'sort', 'sorts'));
-            if (manque.length) {
-                return `Il te reste ${manque.join(' et ')} à choisir — ou décoche la ligne « Sorts » `
-                     + `pour t’en occuper plus tard.`;
-            }
+            if (manque.length) return `Il te reste ${manque.join(' et ')} à choisir.`;
             if (sp.cantripsUp && lv0 > sp.cantripsUp) return 'Trop de sorts mineurs choisis.';
             if (need && lvN > need) return 'Trop de sorts choisis.';
             return '';
@@ -2276,8 +2537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         /** Le choix figé au moment de valider : identifiants et sort rendu. */
         function lvupReadSpells(ov, plan) {
             const sp = plan.spells;
-            const row = ov.querySelector('.lvup-ck[data-ck="spells"]');
-            if (!sp || !sp.chosen.size || (row && !row.checked)) return null;
+            if (!sp || !sp.chosen.size) return null;
             const idx = spSwapOn(ov)
                 ? parseInt(ov.querySelector('.lvup-sp-swap-pick').value, 10) : -1;
             return { ids: [...sp.chosen], swap: (idx >= 0 ? idx : -1) };
@@ -2286,13 +2546,14 @@ document.addEventListener('DOMContentLoaded', () => {
         /** Inscrit les sorts choisis dans le grimoire. Le sort rendu part en
          *  premier : son indice vient de la liste d'avant l'ajout. */
         async function lvupWriteSpells(pick) {
-            if (!pick) return { added: 0, removed: '' };
+            if (!pick) return { added: 0, removed: '', names: [] };
             let removed = '';
             if (pick.swap >= 0 && spells[pick.swap]) {
                 removed = spells[pick.swap].name || '';
                 spells.splice(pick.swap, 1);
             }
             let added = 0;
+            const names = [];
             for (const id of pick.ids) {
                 let full = null;
                 try { full = await window.SRD.entry('spells', id); } catch (e) {}
@@ -2301,78 +2562,132 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Un sort déjà inscrit ne l'est pas deux fois.
                 if (spells.some(s => window.SRD.fold(s.name || '') === window.SRD.fold(f.name))) continue;
                 spells.push(Object.assign(f, { prepared: true, pinned: false }));
+                names.push(f.name);
                 added++;
             }
             if (added || removed) { setStore('dnd-spells', spells); renderGrimoire(); }
-            return { added, removed };
+            return { added, removed, names };
         }
 
-        function lvupSpellsSetup(ov, plan, showErr) {
+        /** Une tuile de sort : lisible avant d'être prise. */
+        function lvupTileHtml(sp, s, openId, locked) {
+            const on = sp.chosen.has(s.id);
+            // Quota atteint : la tuile reste LISIBLE, elle n'est plus prenable.
+            const off = !on && !s.known && locked;
+            const marks = [s.concentration ? '<span class="lvup-tile-m" title="Concentration">C</span>' : '',
+                           s.ritual ? '<span class="lvup-tile-m" title="Rituel">R</span>' : ''].join('');
+            return `<button type="button" class="lvup-tile${on ? ' is-on' : ''}${s.known ? ' is-known' : ''}`
+                 + `${off ? ' is-locked' : ''}${s.id === openId ? ' is-open' : ''}" data-sp="${escAb(s.id)}"
+                        aria-pressed="${on}"${s.known ? ' title="Déjà dans ton grimoire"'
+                            : (off ? ' title="Ton quota est atteint — décoche un sort pour en changer"' : '')}>
+                    <span class="lvup-tile-top">
+                        <span class="lvup-tile-school">${escAb(SP_SCHOOL_FR[s.school] || s.school || '')}</span>
+                        <span class="lvup-tile-lv">${s.level ? 'niv. ' + s.level : 'mineur'}</span>
+                    </span>
+                    <span class="lvup-tile-name">${escAb(s.name)}</span>
+                    <span class="lvup-tile-bot">${marks}${s.known
+                        ? '<span class="lvup-tile-known">déjà connu</span>' : ''}</span>
+                </button>`;
+        }
+
+        function lvupSpellsSetup(ov, plan, onChange) {
             const sp = plan.spells;
-            const box = ov.querySelector('.lvup-sp-pick');
-            if (!sp || !box) return;
-            const listEl = box.querySelector('.lvup-sp-list');
-            const countEl = box.querySelector('.lvup-sp-count');
-            const searchEl = box.querySelector('.lvup-sp-search');
-            const swapPick = box.querySelector('.lvup-sp-swap-pick');
+            const step = ov.querySelector('[data-panel="spells"]');
+            if (!sp || !step) return null;
+            const grid = step.querySelector('.lvup-sp-grid');
+            const countEl = step.querySelector('.lvup-sp-count');
+            const searchEl = step.querySelector('.lvup-sp-search');
+            const readEl = step.querySelector('.lvup-sp-read');
+            const swapPick = step.querySelector('.lvup-sp-swap-pick');
+            if (!grid) return null;
 
             // On ouvre sur le rang qui vient de se débloquer : c'est celui que
             // le joueur est venu voir.
             let rank = sp.newRank || (sp.cantripsUp ? 0 : sp.rank);
             if (!sp.ranks.includes(rank)) rank = sp.ranks[sp.ranks.length - 1];
+            let openId = null;
 
             const full = (lv) => {
                 const q = lv === 0 ? sp.cantripsUp : spNeedN(sp, ov);
                 return q > 0 && spPicked(sp, lv === 0) >= q;
             };
 
-            const refresh = () => {
+            const renderRead = () => {
+                const s = openId && sp.byId.get(openId);
+                if (!s) { readEl.hidden = true; readEl.innerHTML = ''; return; }
+                const on = sp.chosen.has(s.id);
+                const act = s.known
+                    ? '<span class="lvup-read-known">Déjà dans ton grimoire</span>'
+                    : `<button type="button" class="lvup-mini lvup-read-take" data-sp="${escAb(s.id)}">`
+                      + `${on ? '✓ Choisi — retirer' : '✦ Apprendre ce sort'}</button>`;
+                readEl.hidden = false;
+                readEl.innerHTML = `<div class="lvup-read-head">
+                        <b>${escAb(s.name)}</b>
+                        <span class="lvup-read-sub">${escAb(spRankLabel(parseInt(s.level, 10) || 0))}
+                            · ${escAb(SP_SCHOOL_FR[s.school] || s.school || '')}</span>
+                        <span class="lvup-read-act">${act}
+                            <button type="button" class="lvup-mini lvup-read-close" aria-label="Fermer la lecture">✕</button>
+                        </span>
+                    </div>
+                    <div class="rw-body lvup-read-body">${window.SRD.renderEntry('spells', s)}</div>`;
+            };
+
+            const render = () => {
                 const q = window.SRD.fold(searchEl.value.trim());
-                // Cocher un sort redessine la liste (les autres peuvent devenir
-                // indisponibles) : on rend sa place au lecteur.
-                const scroll = listEl.scrollTop;
                 const items = sp.catalog.filter(s => (parseInt(s.level, 10) || 0) === rank
                     && (!q || window.SRD.fold(s.name || '').includes(q)));
-                listEl.innerHTML = items.length ? items.map(s => {
-                    const on = sp.chosen.has(s.id);
-                    const off = !on && full(rank);
-                    const meta = [SP_SCHOOL_FR[s.school] || s.school || '',
-                                  s.ritual ? 'rituel' : '', s.concentration ? 'concentration' : '']
-                        .filter(Boolean).join(' · ');
-                    return `<label class="lvup-sp-item${on ? ' is-on' : ''}${off ? ' is-off' : ''}">
-                        <input type="checkbox" data-sp="${escAb(s.id)}"${on ? ' checked' : ''}${off ? ' disabled' : ''}>
-                        <span class="lvup-sp-n">${escAb(s.name)}</span>
-                        <span class="lvup-sp-m">${escAb(meta)}</span>
-                    </label>`;
-                }).join('') : '<p class="lvup-sp-empty">Aucun sort ne correspond.</p>';
-                listEl.scrollTop = scroll;
+                const scroll = grid.scrollTop;
+                const locked = full(rank);
+                grid.innerHTML = items.length
+                    ? items.map(s => lvupTileHtml(sp, s, openId, locked)).join('')
+                    : '<p class="lvup-sp-empty">Aucun sort ne correspond.</p>';
+                grid.scrollTop = scroll;
 
-                box.querySelectorAll('.lvup-sp-tab').forEach(t =>
+                step.querySelectorAll('.lvup-sp-tab').forEach(t =>
                     t.classList.toggle('is-on', (parseInt(t.dataset.rank, 10) || 0) === rank));
 
                 const parts = [];
-                if (sp.cantripsUp) parts.push(`Sorts mineurs ${spPicked(sp, true)}/${sp.cantripsUp}`);
+                if (sp.cantripsUp) parts.push(`Mineurs ${spPicked(sp, true)}/${sp.cantripsUp}`);
                 if (spNeedN(sp, ov)) parts.push(`Sorts ${spPicked(sp, false)}/${spNeedN(sp, ov)}`);
                 if (!parts.length) parts.push(sp.chosen.size
-                    ? `${spPlural(sp.chosen.size, 'sort choisi', 'sorts choisis')} — autant que tu veux`
-                    : 'Choisis autant de sorts que tu veux, ou aucun.');
+                    ? `${spPlural(sp.chosen.size, 'sort choisi', 'sorts choisis')}`
+                    : 'Autant que tu veux, ou aucun');
                 countEl.textContent = parts.join(' · ');
                 countEl.classList.toggle('is-done', !lvupSpellsIssue(ov, plan));
+                renderRead();
             };
 
-            box.addEventListener('click', (e) => {
+            const toggle = (id) => {
+                const s = sp.byId.get(id);
+                if (!s || s.known) return;
+                if (sp.chosen.has(id)) sp.chosen.delete(id);
+                else {
+                    if (full(parseInt(s.level, 10) || 0)) return;
+                    sp.chosen.add(id);
+                }
+                onChange();
+            };
+
+            step.addEventListener('click', (e) => {
                 const tab = e.target.closest('.lvup-sp-tab');
-                if (!tab) return;
-                e.preventDefault();
-                rank = parseInt(tab.dataset.rank, 10) || 0;
-                refresh();
+                if (tab) { e.preventDefault(); rank = parseInt(tab.dataset.rank, 10) || 0; openId = null; render(); return; }
+                if (e.target.closest('.lvup-read-close')) { openId = null; render(); return; }
+                const take = e.target.closest('.lvup-read-take');
+                if (take) { toggle(take.dataset.sp); return; }
+                const tile = e.target.closest('.lvup-tile');
+                if (!tile) return;
+                // Premier clic : on lit. Deuxième clic sur la même tuile : on prend.
+                if (openId !== tile.dataset.sp) {
+                    openId = tile.dataset.sp;
+                    render();
+                    readEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    return;
+                }
+                toggle(tile.dataset.sp);
             });
 
-            box.addEventListener('change', (e) => {
-                const ck = e.target.closest('input[data-sp]');
-                if (ck) {
-                    if (ck.checked) sp.chosen.add(ck.dataset.sp); else sp.chosen.delete(ck.dataset.sp);
-                } else if (e.target.closest('.lvup-sp-swap')) {
+            step.addEventListener('change', (e) => {
+                if (e.target.closest('.lvup-sp-swap')) {
                     if (!spSwapOn(ov) && swapPick) swapPick.value = '-1';
                     // Décocher l'échange reprend la place qu'il donnait.
                     if (sp.need > 0 || spSwapOn(ov)) {
@@ -2383,17 +2698,66 @@ document.addEventListener('DOMContentLoaded', () => {
                             sp.chosen.delete(last);
                         }
                     }
-                } else return;
-                showErr('');
-                refresh();
+                }
+                onChange();
             });
 
-            searchEl.addEventListener('input', refresh);
-            refresh();
+            searchEl.addEventListener('input', render);
+            render();
+            return render;
         }
+
+        // ---------- Ce que tu gagnes : le récapitulatif vivant ----------
+
+        function lvupGains(ov, plan) {
+            const out = [{ ico: '⬆️', label: `Niveau ${plan.to}` }];
+            if (plan.prof.changed) out.push({ ico: '🎯', label: `Maîtrise +${plan.prof.to}` });
+
+            const on = (key) => {
+                const el = ov.querySelector(`.lvup-ck[data-ck="${key}"]`);
+                return !el || el.checked;
+            };
+            if (on('hd')) out.push({ ico: '🎲', label: plan.die ? `${plan.hitDice.to}d${plan.die}` : 'Un dé de vie' });
+            const hpVal = Math.max(0, parseInt(ov.querySelector('.lvup-hp-val')?.value, 10) || 0);
+            if (plan.die && on('hp') && hpVal) out.push({ ico: '❤️', label: `+${hpVal} PV` });
+            plan.slots.forEach(s => { if (on('slot' + s.rank)) out.push({ ico: '✨', label: `${s.to} empl. niv. ${s.rank}` }); });
+            if (plan.pact && on('pact')) out.push({ ico: '🕯️', label: `Pacte : ${plan.pact.to} empl. niv. ${plan.pact.rank}` });
+
+            if (plan.subclass && plan.subclass.chosen) {
+                out.push({ ico: '🜂', label: plan.subclass.chosen.name });
+            }
+            plan.features.forEach(f => {
+                if (!on(f.ckKey)) return;
+                out.push({ ico: f.subclass ? '🜁' : '📜', label: f.name });
+                if (!f.choice) return;
+                f.choice.options.filter(o => f.choice.chosen.has(o.id))
+                    .forEach(o => out.push({ ico: '◆', label: `${f.choice.name} : ${o.name}` }));
+            });
+
+            lvupAsiPicks(ov, plan).forEach(([ab, n]) => {
+                const before = lvupNum('stat-' + ab) || 10;
+                out.push({ ico: '✨', label: `${lvupAbName(ab)} ${before} → ${Math.min(20, before + n)}` });
+            });
+            if (plan.asi && ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value === 'feat') {
+                const fn = ov.querySelector('.lvup-feat-name')?.value.trim();
+                if (fn) out.push({ ico: '⭐', label: `Don : ${fn}` });
+            }
+
+            if (plan.spells) {
+                [...plan.spells.chosen].forEach(id => {
+                    const s = plan.spells.byId.get(id);
+                    if (s) out.push({ ico: '📖', label: s.name });
+                });
+            }
+            return out;
+        }
+
+        // ---------- Ouverture ----------
 
         function openLevelUpScreen(plan) {
             document.getElementById('levelup-plan')?.remove();
+            plan.steps = lvupSteps(plan);
+
             const ov = document.createElement('div');
             ov.id = 'levelup-plan';
             ov.className = 'no-print';
@@ -2403,9 +2767,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ov.innerHTML = lvupMarkup(plan);
             document.body.appendChild(ov);
 
-            const panel = ov.querySelector('.lvup-panel');
-            const errEl = ov.querySelector('.lvup-error');
+            const book = ov.querySelector('.lvup-book');
+            const pageR = ov.querySelector('.lvup-page-r');
+            const btnDone = ov.querySelector('[data-act="confirm"]');
+            const btnAll = ov.querySelector('[data-act="all"]');
             const prevFocus = document.activeElement;
+            let cur = 0;
+            let renderSpells = null;
 
             const close = () => {
                 ov.classList.add('is-closing');
@@ -2418,17 +2786,21 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             document.addEventListener('keydown', onKey, true);
 
-            const showErr = (msg) => {
-                errEl.textContent = msg || '';
-                errEl.classList.toggle('is-on', !!msg);
-                if (msg) { panel.classList.remove('is-shaking'); void panel.offsetWidth; panel.classList.add('is-shaking'); }
+            // --- Navigation ---
+            const goStep = (i) => {
+                cur = Math.max(0, Math.min(plan.steps.length - 1, i));
+                const id = plan.steps[cur];
+                ov.querySelectorAll('.lvup-step-panel').forEach(p =>
+                    p.classList.toggle('is-on', p.dataset.panel === id));
+                pageR.scrollTop = 0;
+                refresh();
             };
 
             // --- Points de vie : moyenne / dé lancé / manuel ---
             const hpMode = ov.querySelector('.lvup-hp-mode');
             const hpVal = ov.querySelector('.lvup-hp-val');
-            const hpRoll = ov.querySelector('.lvup-hp-roll');
             const hpDetail = ov.querySelector('.lvup-hp-detail');
+            const rollHp = () => Math.max(1, (1 + Math.floor(Math.random() * plan.die)) + plan.hp.conMod);
             const refreshHp = () => {
                 if (!hpVal || !hpDetail) return;
                 const v = Math.max(0, parseInt(hpVal.value, 10) || 0);
@@ -2438,30 +2810,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 hpDetail.innerHTML = `+${v} PV (${escAb(src)}) — `
                     + `${plan.hp.current} <span class="lvup-arrow">→</span> ${plan.hp.current + v}`;
             };
-            if (hpMode) {
-                hpMode.addEventListener('change', () => {
-                    hpVal.disabled = (hpMode.value !== 'manual');
-                    if (hpMode.value === 'average') hpVal.value = plan.hp.value;
-                    if (hpMode.value === 'roll') hpVal.value = Math.max(1, (1 + Math.floor(Math.random() * plan.die)) + plan.hp.conMod);
-                    refreshHp();
+
+            // --- Aptitudes : le panneau se refait quand la sous-classe change ---
+            const redrawFeats = () => {
+                const panel = ov.querySelector('[data-panel="feats"]');
+                if (panel) panel.innerHTML = lvupFeatsHtml(plan);
+            };
+
+            // --- Le tour complet : fil d'étapes, gains, boutons ---
+            const refresh = () => {
+                const issues = lvupIssues(ov, plan);
+                plan.steps.forEach((id, i) => {
+                    const btn = ov.querySelector(`.lvup-step[data-step="${id}"]`);
+                    if (!btn) return;
+                    const bad = !!issues[id];
+                    const state = bad ? 'warn' : (i === cur ? 'cur' : (i < cur ? 'done' : 'todo'));
+                    btn.dataset.state = state;
+                    btn.classList.toggle('is-cur', i === cur);
+                    btn.setAttribute('aria-current', i === cur ? 'step' : 'false');
+                    btn.title = bad ? issues[id] : '';
+                    const mark = btn.querySelector('.lvup-step-mark');
+                    if (mark) mark.textContent = bad ? '⚠' : (i === cur ? '◆' : (i < cur ? '✓' : '○'));
                 });
-                hpVal.addEventListener('input', refreshHp);
-                hpRoll.addEventListener('click', () => {
-                    hpMode.value = 'roll';
-                    hpVal.disabled = true;
-                    hpVal.value = Math.max(1, (1 + Math.floor(Math.random() * plan.die)) + plan.hp.conMod);
-                    refreshHp();
+
+                const gains = lvupGains(ov, plan);
+                ov.querySelectorAll('[data-gains] .lvup-gains-list').forEach(box => {
+                    box.innerHTML = gains.map(g =>
+                        `<span class="lvup-gain"><span aria-hidden="true">${g.ico}</span> ${escAb(g.label)}</span>`).join('');
                 });
-                refreshHp();
-            }
+
+                const first = plan.steps.find(id => issues[id]);
+                const blocked = !!first;
+                [btnDone, btnAll].forEach(b => {
+                    if (!b) return;
+                    b.classList.toggle('is-blocked', blocked);
+                    b.setAttribute('aria-disabled', String(blocked));
+                    b.title = blocked ? issues[first] : '';
+                });
+                ov.querySelector('[data-act="prev"]').disabled = (cur === 0);
+                ov.querySelector('[data-act="next"]').disabled = (cur === plan.steps.length - 1);
+            };
 
             // --- Amélioration de caractéristique ---
-            const picks = ov.querySelector('.lvup-asi-picks');
             const asiPrev = ov.querySelector('.lvup-asi-preview');
             const refreshAsi = () => {
                 if (!plan.asi) return;
                 const mode = ov.querySelector('input[name="lvup-asi-mode"]:checked')?.value || 'two';
-                picks.dataset.mode = mode;
+                ov.querySelector('.lvup-asi-picks').dataset.mode = mode;
                 const list = lvupAsiPicks(ov, plan);
                 if (!list.length) {
                     if (mode === 'feat') {
@@ -2485,57 +2880,93 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).join(' · ') + (capped ? ' <b>· plafonné à 20</b>' : '');
                 asiPrev.classList.toggle('is-capped', capped);
             };
-            if (plan.asi) {
-                ov.querySelectorAll('input[name="lvup-asi-mode"]').forEach(r =>
-                    r.addEventListener('change', () => {
-                        showErr(''); refreshAsi();
-                        if (r.checked && r.value === 'feat') ov.querySelector('.lvup-feat-name')?.focus();
-                    }));
-                ov.querySelectorAll('.lvup-asi-picks select').forEach(s =>
-                    s.addEventListener('change', () => { showErr(''); refreshAsi(); }));
 
+            if (plan.asi) {
                 // Le don : même autocomplétion que partout ailleurs. Elle
                 // interroge les dons du SRD ET le contenu perso ; la saisie
                 // libre reste possible pour un don du Manuel des Joueurs.
                 const featName = ov.querySelector('.lvup-feat-name');
                 const featDesc = ov.querySelector('.lvup-feat-desc');
-                featName.addEventListener('input', () => { showErr(''); refreshAsi(); });
-                if (window.SRDAuto) window.SRDAuto.attach(featName, {
+                if (window.SRDAuto && featName) window.SRDAuto.attach(featName, {
                     categories: ['feats'],
                     onPick: (full) => {
                         const t = Array.isArray(full.desc) ? full.desc.join('\n\n')
                                 : (full.desc || (Array.isArray(full.text) ? full.text.join('\n\n') : full.text) || '');
                         featDesc.value = t;
-                        refreshAsi();
+                        refreshAsi(); refresh();
                     }
                 });
-                refreshAsi();
             }
 
-            // --- Sorts ---
-            lvupSpellsSetup(ov, plan, showErr);
+            const onChange = () => { if (renderSpells) renderSpells(); refreshAsi(); refresh(); };
+            renderSpells = lvupSpellsSetup(ov, plan, onChange);
 
-            // --- Boutons ---
+            // --- Un seul écouteur de clic pour tout le livre ---
             ov.addEventListener('click', (e) => {
-                if (e.target === ov) return;                       // le fond ne ferme pas : trop facile à perdre
+                if (e.target === ov) return;            // le fond ne ferme pas : trop facile à perdre
+                // Les renvois du SRD ne quittent pas la montée de niveau.
+                if (e.target.closest('.rw-link')) { e.preventDefault(); return; }
+
+                const step = e.target.closest('.lvup-step');
+                if (step) { goStep(parseInt(step.dataset.i, 10) || 0); return; }
+
+                const subCard = e.target.closest('.lvup-sub-card');
+                if (subCard) {
+                    const sub = plan.subclass.list.find(s => s.id === subCard.dataset.sub);
+                    lvupChooseSubclass(plan, plan.subclass.chosen === sub ? null : sub);
+                    ov.querySelector('[data-panel="subclass"]').innerHTML = lvupSubclassHtml(plan);
+                    ov.querySelector('.lvup-sub').textContent = plan.className
+                        + (plan.subName ? ' · ' + plan.subName : '');
+                    redrawFeats();
+                    refresh();
+                    return;
+                }
+
+                const optCard = e.target.closest('.lvup-opt-card');
+                if (optCard) {
+                    const holder = optCard.closest('[data-choice]');
+                    const f = plan.features.find(x => x.ckKey === holder.dataset.choice);
+                    if (f && f.choice) {
+                        const c = f.choice, id = optCard.dataset.opt;
+                        if (c.chosen.has(id)) c.chosen.delete(id);
+                        else if (c.chosen.size < c.count) c.chosen.add(id);
+                        else if (c.count === 1) { c.chosen.clear(); c.chosen.add(id); }
+                        holder.outerHTML = lvupChoiceHtml(f);
+                    }
+                    refresh();
+                    return;
+                }
+
+                if (e.target.closest('.lvup-hp-roll')) {
+                    hpMode.value = 'roll'; hpVal.disabled = true; hpVal.value = rollHp();
+                    refreshHp(); refresh();
+                    return;
+                }
+
                 const btn = e.target.closest('.lvup-btn');
                 if (!btn) return;
                 const act = btn.dataset.act;
                 if (act === 'cancel') { close(); return; }
-                if (act === 'choose') { panel.classList.add('is-choosing'); showErr(''); return; }
-                if (act === 'back') { panel.classList.remove('is-choosing'); showErr(''); return; }
+                if (act === 'prev') { goStep(cur - 1); return; }
+                if (act === 'next') { goStep(cur + 1); return; }
+
                 if (act === 'all' || act === 'confirm') {
-                    const asiIssue = lvupAsiIssue(ov, plan);
-                    if (asiIssue) {
-                        panel.classList.add('is-choosing');
-                        showErr(asiIssue);
-                        ov.querySelector('.lvup-asi')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                        return;
+                    // « Tout appliquer » prend les valeurs par défaut là où il y
+                    // en a : les sorts peuvent attendre le grimoire, pas l'ASI
+                    // ni la sous-classe, qui n'ont aucun défaut défendable.
+                    if (act === 'all') {
+                        const later = ov.querySelector('.lvup-sp-later-ck');
+                        if (later && !later.checked && lvupSpellsIssue(ov, plan)) {
+                            later.checked = true;
+                            onChange();
+                        }
                     }
-                    const spIssue = lvupSpellsIssue(ov, plan);
-                    if (spIssue) {
-                        showErr(spIssue);
-                        ov.querySelector('.lvup-sp')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    const issues = lvupIssues(ov, plan);
+                    const bad = plan.steps.find(id => issues[id]);
+                    if (bad) {
+                        goStep(plan.steps.indexOf(bad));
+                        const panel = ov.querySelector(`[data-panel="${bad}"]`);
+                        if (panel) { panel.classList.remove('is-shaking'); void panel.offsetWidth; panel.classList.add('is-shaking'); }
                         return;
                     }
                     applyLevelUpPlan(plan, ov);
@@ -2543,7 +2974,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            ov.querySelector('[data-act="all"]')?.focus();
+            // --- Les changements de champs repassent tous par le même point ---
+            ov.addEventListener('change', (e) => {
+                if (e.target === hpMode) {
+                    hpVal.disabled = (hpMode.value !== 'manual');
+                    if (hpMode.value === 'average') hpVal.value = plan.hp.value;
+                    if (hpMode.value === 'roll') hpVal.value = rollHp();
+                    refreshHp();
+                }
+                if (e.target.name === 'lvup-asi-mode' && e.target.value === 'feat') {
+                    ov.querySelector('.lvup-feat-name')?.focus();
+                }
+                onChange();
+            });
+            ov.addEventListener('input', (e) => {
+                if (e.target === hpVal) refreshHp();
+                if (e.target.closest('.lvup-sp-search')) return;   // géré par le pas à pas des sorts
+                onChange();
+            });
+
+            refreshHp();
+            refreshAsi();
+            goStep(0);
+            ov.querySelector('.lvup-step')?.focus();
         }
 
         // ---------- Application (le seul endroit qui écrit sur la fiche) ----------
@@ -2611,11 +3064,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (Object.keys(slotMap).length && window.SheetApi) window.SheetApi.setSpellSlots(slotMap);
 
-            // 6. Aptitudes → module « Capacités ».
-            const kept = plan.features.filter((f, i) => on('feat' + i));
+            // 6. Sous-classe choisie à l'écran. Elle s'écrit sur la fiche, donc
+            //    elle vaut aussi pour toutes les montées suivantes.
+            let subDone = '';
+            if (plan.subclass && plan.subclass.chosen) {
+                const subEl = document.getElementById('char-subclass');
+                const name = plan.subclass.chosen.name || '';
+                if (subEl && name && subEl.value.trim() !== name) {
+                    subEl.value = name;
+                    fire(subEl, ['input', 'change']);
+                    subDone = name;
+                }
+            }
+
+            // 7. Aptitudes → module « Capacités ».
+            const kept = plan.features.filter(f => on(f.ckKey));
             if (kept.length) addFeaturesAsTraits(kept, plan.to);
 
-            // 7. Amélioration de caractéristique.
+            // 8. Les options choisies dans une aptitude : « Style de combat :
+            //    Défense » entre comme une capacité à part entière.
+            const optDone = [];
+            kept.forEach(f => {
+                if (!f.choice) return;
+                f.choice.options.filter(o => f.choice.chosen.has(o.id)).forEach(o => {
+                    const label = `${f.choice.name} : ${o.name}`;
+                    if (window.SheetApi) window.SheetApi.addTraits([{
+                        name: label, type: 'class', level: plan.to, desc: o.text
+                    }]);
+                    optDone.push(label);
+                });
+            });
+
+            // 9. Amélioration de caractéristique.
             const asiDone = [];
             lvupAsiPicks(ov, plan).forEach(([ab, n]) => {
                 const el = document.getElementById('stat-' + ab);
@@ -2629,7 +3109,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             updateStatsAndSkills();
 
-            // 8. Le don, s'il remplace l'amélioration de caractéristique.
+            // 10. Le don, s'il remplace l'amélioration de caractéristique.
             //    Il part dans « Capacités » avec le type « feat », comme s'il
             //    avait été saisi à la main dans le module.
             let featDone = '';
@@ -2644,8 +3124,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // 9. Sorts choisis à l'écran. Le choix est figé MAINTENANT, avant
-            //    toute attente : l'écran se referme pendant l'écriture.
+            // 11. Sorts choisis à l'écran. Le choix est figé MAINTENANT, avant
+            //     toute attente : l'écran se referme pendant l'écriture.
             const spellPick = lvupReadSpells(ov, plan);
 
             // Le champ Niveau pulse en or.
@@ -2656,8 +3136,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Ce qu'il reste à faire à la main.
             const rappels = [];
+            if (subDone) rappels.push(`🜂 Sous-classe : ${subDone}`);
             if (hpAdded) rappels.push(`❤️ PV max +${hpAdded}`);
             else rappels.push('❤️ Augmente tes PV max (dé de vie + mod. de Constitution)');
+            optDone.forEach(o => rappels.push(`◆ ${o}`));
             if (asiDone.length) rappels.push('✨ ' + asiDone.join(' · '));
             else if (featDone) rappels.push(`⭐ Don : ${featDone}`);
             else if (plan.asi) rappels.push('✨ Amélioration de caractéristique ou don : à choisir');
@@ -2702,7 +3184,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 prof: String(plan.prof.to),
                 hitDice: plan.die ? `${plan.hitDice.to}d${plan.die}` : '',
                 todo: rappels,
-                gained: kept.concat(featDone ? [{ name: featDone, from: 'don', subclass: false }] : []),
+                gained: kept
+                    .concat(optDone.map(o => ({ name: o, from: 'choix', subclass: false })))
+                    .concat(spellsDone.names.map(n => ({ name: n, from: 'sort', subclass: false })))
+                    .concat(featDone ? [{ name: featDone, from: 'don', subclass: false }] : []),
                 onAdd: null,
                 spells: spellsFx
             });

@@ -2273,32 +2273,74 @@
      "name": "Métamagie",
      "text": [
       "Au niveau 3, vous apprenez à façonner les sorts que vous lancez. Vous choisissez deux des options de métamagie ci-après. Vous en recevez une autre aux niveaux 10 et 17.",
-      "Vous ne pouvez appliquer qu’une option de métamagie à l’incantation d’un sort, sauf si cette option précise le contraire.",
-      "Sort accéléré",
-      "Lorsque vous lancez un sort dont le temps d’incantation est égal à 1 action, vous pouvez dépenser 2 points de sorcellerie pour réduire son temps d’incantation à 1 action bonus pour la présente incantation.",
-      "Sort ample",
-      "Lorsque vous lancez un sort dont la portée est supérieure ou égale à 1,50 m, vous pouvez dépenser 1 point de sorcellerie pour doubler la portée du sort.",
-      "Si vous lancez un sort dont la portée est « contact » et dépensez 1 point de sorcellerie, sa portée devient 9 m.",
-      "Sort étendu",
-      "Lorsque vous lancez un sort dont la durée est supérieure ou égale à 1 minute, vous pouvez dépenser 1 point de sorcellerie pour doubler sa durée, jusqu’à un maximum de 24 heures.",
-      "Sort intensifié",
-      "Lorsque vous lancez un sort qui contraint une créature à effectuer un jet de sauvegarde pour résister à ses effets, vous pouvez dépenser 3 points de sorcellerie pour imposer le désavantage à une cible du sort lors de son premier jet de sauvegarde contre ce sort.",
-      "Sort jumeau",
-      "Lorsque vous lancez un sort qui ne cible qu’une créature et dont la portée n’est pas « personnelle », vous pouvez dépenser un nombre de points de sorcellerie égal au niveau du sort pour qu’il cible une deuxième créature à portée (1 point de sorcellerie si c’est un sort mineur).",
-      "Pour être éligible, un sort ne doit pas pouvoir cibler plus d’une créature au niveau auquel il est lancé. Les sorts projectile magique et rayon ardent ne sont par exemple pas éligibles, contrairement à rayon de givre.",
-      "Sort prévenant",
-      "Lorsque vous lancez un sort qui contraint d’autres créatures à effectuer un jet de sauvegarde, vous pouvez protéger certaines de ces créatures des pleins effets du sort. À cette fin, vous dépensez 1 point de sorcellerie et désignez des créatures dont le nombre n’excède pas votre modificateur de Charisme (minimum d’une créature). Toute créature ainsi désignée réussit automatiquement son jet de sauvegarde contre ce sort.",
-      "Sort renforcé",
-      "Quand vous déterminez aléatoirement les dégâts d’un sort, vous pouvez dépenser 1 point de sorcellerie afin de relancer un nombre de dés de dégâts égal à votre modificateur de Charisme (minimum d’un dé). Vous devez garder les nouveaux jets.",
-      "Vous pouvez recourir à Sort renforcé même si vous avez déjà utilisé une autre option de métamagie durant l’incantation du sort.",
-      "Sort subtil",
-      "Lorsque vous lancez un sort, vous pouvez dépenser 1 point de sorcellerie pour le lancer sans composantes verbales ni somatiques."
+      "Vous ne pouvez appliquer qu’une option de métamagie à l’incantation d’un sort, sauf si cette option précise le contraire."
      ],
      "id": "metamagie",
      "levels": [
       3,
       10,
       17
+     ],
+     "options": [
+      {
+       "id": "sort-accelere",
+       "name": "Sort accéléré",
+       "text": [
+        "Lorsque vous lancez un sort dont le temps d’incantation est égal à 1 action, vous pouvez dépenser 2 points de sorcellerie pour réduire son temps d’incantation à 1 action bonus pour la présente incantation."
+       ]
+      },
+      {
+       "id": "sort-ample",
+       "name": "Sort ample",
+       "text": [
+        "Lorsque vous lancez un sort dont la portée est supérieure ou égale à 1,50 m, vous pouvez dépenser 1 point de sorcellerie pour doubler la portée du sort.",
+        "Si vous lancez un sort dont la portée est « contact » et dépensez 1 point de sorcellerie, sa portée devient 9 m."
+       ]
+      },
+      {
+       "id": "sort-etendu",
+       "name": "Sort étendu",
+       "text": [
+        "Lorsque vous lancez un sort dont la durée est supérieure ou égale à 1 minute, vous pouvez dépenser 1 point de sorcellerie pour doubler sa durée, jusqu’à un maximum de 24 heures."
+       ]
+      },
+      {
+       "id": "sort-intensifie",
+       "name": "Sort intensifié",
+       "text": [
+        "Lorsque vous lancez un sort qui contraint une créature à effectuer un jet de sauvegarde pour résister à ses effets, vous pouvez dépenser 3 points de sorcellerie pour imposer le désavantage à une cible du sort lors de son premier jet de sauvegarde contre ce sort."
+       ]
+      },
+      {
+       "id": "sort-jumeau",
+       "name": "Sort jumeau",
+       "text": [
+        "Lorsque vous lancez un sort qui ne cible qu’une créature et dont la portée n’est pas « personnelle », vous pouvez dépenser un nombre de points de sorcellerie égal au niveau du sort pour qu’il cible une deuxième créature à portée (1 point de sorcellerie si c’est un sort mineur).",
+        "Pour être éligible, un sort ne doit pas pouvoir cibler plus d’une créature au niveau auquel il est lancé. Les sorts projectile magique et rayon ardent ne sont par exemple pas éligibles, contrairement à rayon de givre."
+       ]
+      },
+      {
+       "id": "sort-prevenant",
+       "name": "Sort prévenant",
+       "text": [
+        "Lorsque vous lancez un sort qui contraint d’autres créatures à effectuer un jet de sauvegarde, vous pouvez protéger certaines de ces créatures des pleins effets du sort. À cette fin, vous dépensez 1 point de sorcellerie et désignez des créatures dont le nombre n’excède pas votre modificateur de Charisme (minimum d’une créature). Toute créature ainsi désignée réussit automatiquement son jet de sauvegarde contre ce sort."
+       ]
+      },
+      {
+       "id": "sort-renforce",
+       "name": "Sort renforcé",
+       "text": [
+        "Quand vous déterminez aléatoirement les dégâts d’un sort, vous pouvez dépenser 1 point de sorcellerie afin de relancer un nombre de dés de dégâts égal à votre modificateur de Charisme (minimum d’un dé). Vous devez garder les nouveaux jets.",
+        "Vous pouvez recourir à Sort renforcé même si vous avez déjà utilisé une autre option de métamagie durant l’incantation du sort."
+       ]
+      },
+      {
+       "id": "sort-subtil",
+       "name": "Sort subtil",
+       "text": [
+        "Lorsque vous lancez un sort, vous pouvez dépenser 1 point de sorcellerie pour le lancer sans composantes verbales ni somatiques."
+       ]
+      }
      ]
     },
     {
@@ -2808,22 +2850,54 @@
     {
      "name": "Style de combat",
      "text": [
-      "Vous choisissez de vous spécialiser dans un style de combat particulier. Choisissez l’une des options suivantes. Vous ne pouvez pas opter plus d’une fois pour un même Style de combat, si vous avez de nouveau la possibilité d’en choisir un.",
-      "Archerie",
-      "Vous recevez un bonus de +2 aux jets d’attaque effectués avec des armes à distance.",
-      "Armes à deux mains",
-      "Lorsque vous obtenez un 1 ou un 2 sur un dé de dégâts d’une attaque effectuée avec une arme de corps à corps que vous tenez à deux mains, vous pouvez relancer ce dé, auquel cas c’est le nouveau jet qui s’applique, même si vous obtenez 1 ou 2. Pour que vous puissiez recevoir ce bénéfice, l’arme doit afficher la propriété « deux mains » ou « polyvalente ».",
-      "Combat à deux armes",
-      "Lorsque vous combattez avec deux armes, vous pouvez ajouter votre modificateur de caractéristique aux dégâts de la seconde attaque.",
-      "Défense",
-      "Tant que vous portez une armure, vous recevez un bonus de +1 en CA.",
-      "Duel",
-      "Lorsque vous maniez une arme de corps à corps dans une main et aucune autre arme, vous recevez un bonus de +2 aux jets de dégâts de cette arme.",
-      "Protection",
-      "Lorsqu’une créature que vous voyez attaque une cible autre que vous située dans un rayon de 1,50 m de vous, vous pouvez jouer votre réaction pour lui imposer le désavantage au jet d’attaque. Vous devez porter un bouclier."
+      "Vous choisissez de vous spécialiser dans un style de combat particulier. Choisissez l’une des options suivantes. Vous ne pouvez pas opter plus d’une fois pour un même Style de combat, si vous avez de nouveau la possibilité d’en choisir un."
      ],
      "id": "style-de-combat",
-     "level": 1
+     "level": 1,
+     "options": [
+      {
+       "id": "archerie",
+       "name": "Archerie",
+       "text": [
+        "Vous recevez un bonus de +2 aux jets d’attaque effectués avec des armes à distance."
+       ]
+      },
+      {
+       "id": "armes-a-deux-mains",
+       "name": "Armes à deux mains",
+       "text": [
+        "Lorsque vous obtenez un 1 ou un 2 sur un dé de dégâts d’une attaque effectuée avec une arme de corps à corps que vous tenez à deux mains, vous pouvez relancer ce dé, auquel cas c’est le nouveau jet qui s’applique, même si vous obtenez 1 ou 2. Pour que vous puissiez recevoir ce bénéfice, l’arme doit afficher la propriété « deux mains » ou « polyvalente »."
+       ]
+      },
+      {
+       "id": "combat-a-deux-armes",
+       "name": "Combat à deux armes",
+       "text": [
+        "Lorsque vous combattez avec deux armes, vous pouvez ajouter votre modificateur de caractéristique aux dégâts de la seconde attaque."
+       ]
+      },
+      {
+       "id": "defense",
+       "name": "Défense",
+       "text": [
+        "Tant que vous portez une armure, vous recevez un bonus de +1 en CA."
+       ]
+      },
+      {
+       "id": "duel",
+       "name": "Duel",
+       "text": [
+        "Lorsque vous maniez une arme de corps à corps dans une main et aucune autre arme, vous recevez un bonus de +2 aux jets de dégâts de cette arme."
+       ]
+      },
+      {
+       "id": "protection",
+       "name": "Protection",
+       "text": [
+        "Lorsqu’une créature que vous voyez attaque une cible autre que vous située dans un rayon de 1,50 m de vous, vous pouvez jouer votre réaction pour lui imposer le désavantage au jet d’attaque. Vous devez porter un bouclier."
+       ]
+      }
+     ]
     },
     {
      "name": "Second souffle",
@@ -4204,21 +4278,38 @@
     {
      "name": "Pacte",
      "text": [
-      "Au niveau 3, votre protecteur d’outre-monde vous octroie une faveur pour services rendus. Vous recevez l’une des aptitudes suivantes au choix.",
-      "Pacte de la chaîne",
-      "Vous apprenez le sort appel de familier que vous pouvez lancer comme rituel. Ce sort n’est pas décompté de vos sorts connus.",
-      "À l’incantation du sort, vous pouvez choisir l’une des formes normales pour votre familier ou l’une des formes spéciales suivantes : diablotin, esprit follet, pseudodragon ou quasit.",
-      "En outre, lorsque vous entreprenez l’action Attaquer, vous pouvez renoncer à l’une de vos attaques pour permettre à votre familier d’effectuer l’une de ses attaques en jouant sa réaction.",
-      "Pacte de la lame",
-      "Vous pouvez consacrer votre action à créer une arme de pacte dans votre main vide. Vous pouvez choisir la forme que prend cette arme de corps à corps chaque fois que vous la créez. Vous en avez la maîtrise tant que vous la portez. Cette arme est considérée comme magique pour ce qui est de surmonter la résistance et l’immunité contre les attaques et les dégâts non magiques.",
-      "Votre arme de pacte disparaît si elle se retrouve à plus de 1,50 m de vous pendant 1 minute ou plus. Elle disparaît également si vous recourez de nouveau à cette aptitude, si vous révoquez l’arme (pas d’action requise) ou si vous mourez.",
-      "Vous pouvez transformer une arme magique en votre arme de pacte en accomplissant un rituel spécial tout en tenant cette arme. Ce rituel dure 1 heure et peut être accompli pendant un repos court. Vous pouvez ensuite révoquer l’arme qui disparaît dans un espace extradimensionnel, pour réapparaître chaque fois que vous créez votre arme de pacte par la suite. Vous ne pouvez pas affecter un artefact ou une arme intelligente de cette manière. L’arme cesse d’être votre arme de pacte si vous mourez, si vous effectuez le même rituel d’une heure sur une arme différente ou si vous accomplissez un rituel d’une heure pour rompre votre lien avec elle. L’arme apparaît à vos pieds si elle se trouve dans l’espace extradimensionnel lorsque le lien se rompt.",
-      "Pacte du grimoire",
-      "Votre protecteur vous fait don d’un grimoire appelé Codex des Ombres. Quand vous recevez cette aptitude, choisissez trois sorts mineurs dans la liste de sorts de n’importe quelle classe (les trois n’appartiennent pas nécessairement à la même liste). Tant que vous portez ce codex sur vous, vous pouvez lancer ces sorts mineurs à volonté. Ils ne sont pas décomptés de vos sorts mineurs connus. S’ils n’apparaissent pas dans la liste des sorts d’occultiste, ce sont malgré tout des sorts d’occultiste en ce qui vous concerne.",
-      "Si vous perdez votre Codex des Ombres, vous pouvez accomplir une cérémonie d’une heure pour recevoir un nouvel exemplaire de la part de votre protecteur. La cérémonie peut s’accomplir pendant un repos court ou long et détruit le codex précédent. Le livre est réduit en cendres si vous mourez."
+      "Au niveau 3, votre protecteur d’outre-monde vous octroie une faveur pour services rendus. Vous recevez l’une des aptitudes suivantes au choix."
      ],
      "id": "pacte",
-     "level": 3
+     "level": 3,
+     "options": [
+      {
+       "id": "pacte-de-la-chaine",
+       "name": "Pacte de la chaîne",
+       "text": [
+        "Vous apprenez le sort appel de familier que vous pouvez lancer comme rituel. Ce sort n’est pas décompté de vos sorts connus.",
+        "À l’incantation du sort, vous pouvez choisir l’une des formes normales pour votre familier ou l’une des formes spéciales suivantes : diablotin, esprit follet, pseudodragon ou quasit.",
+        "En outre, lorsque vous entreprenez l’action Attaquer, vous pouvez renoncer à l’une de vos attaques pour permettre à votre familier d’effectuer l’une de ses attaques en jouant sa réaction."
+       ]
+      },
+      {
+       "id": "pacte-de-la-lame",
+       "name": "Pacte de la lame",
+       "text": [
+        "Vous pouvez consacrer votre action à créer une arme de pacte dans votre main vide. Vous pouvez choisir la forme que prend cette arme de corps à corps chaque fois que vous la créez. Vous en avez la maîtrise tant que vous la portez. Cette arme est considérée comme magique pour ce qui est de surmonter la résistance et l’immunité contre les attaques et les dégâts non magiques.",
+        "Votre arme de pacte disparaît si elle se retrouve à plus de 1,50 m de vous pendant 1 minute ou plus. Elle disparaît également si vous recourez de nouveau à cette aptitude, si vous révoquez l’arme (pas d’action requise) ou si vous mourez.",
+        "Vous pouvez transformer une arme magique en votre arme de pacte en accomplissant un rituel spécial tout en tenant cette arme. Ce rituel dure 1 heure et peut être accompli pendant un repos court. Vous pouvez ensuite révoquer l’arme qui disparaît dans un espace extradimensionnel, pour réapparaître chaque fois que vous créez votre arme de pacte par la suite. Vous ne pouvez pas affecter un artefact ou une arme intelligente de cette manière. L’arme cesse d’être votre arme de pacte si vous mourez, si vous effectuez le même rituel d’une heure sur une arme différente ou si vous accomplissez un rituel d’une heure pour rompre votre lien avec elle. L’arme apparaît à vos pieds si elle se trouve dans l’espace extradimensionnel lorsque le lien se rompt."
+       ]
+      },
+      {
+       "id": "pacte-du-grimoire",
+       "name": "Pacte du grimoire",
+       "text": [
+        "Votre protecteur vous fait don d’un grimoire appelé Codex des Ombres. Quand vous recevez cette aptitude, choisissez trois sorts mineurs dans la liste de sorts de n’importe quelle classe (les trois n’appartiennent pas nécessairement à la même liste). Tant que vous portez ce codex sur vous, vous pouvez lancer ces sorts mineurs à volonté. Ils ne sont pas décomptés de vos sorts mineurs connus. S’ils n’apparaissent pas dans la liste des sorts d’occultiste, ce sont malgré tout des sorts d’occultiste en ce qui vous concerne.",
+        "Si vous perdez votre Codex des Ombres, vous pouvez accomplir une cérémonie d’une heure pour recevoir un nouvel exemplaire de la part de votre protecteur. La cérémonie peut s’accomplir pendant un repos court ou long et détruit le codex précédent. Le livre est réduit en cendres si vous mourez."
+       ]
+      }
+     ]
     },
     {
      "name": "Amélioration de caractéristique",
@@ -4709,18 +4800,40 @@
     {
      "name": "Style de combat",
      "text": [
-      "Au niveau 2, vous décidez de vous spécialiser dans un style de combat particulier. Choisissez l’une des options suivantes. Vous ne pouvez pas opter plus d’une fois pour un même Style de combat, si vous avez de nouveau la possibilité d’en choisir un.",
-      "Armes à deux mains",
-      "Lorsque vous obtenez un 1 ou un 2 sur un dé de dégâts d’une attaque effectuée avec une arme de corps à corps que vous tenez à deux mains, vous pouvez relancer ce dé, auquel cas c’est le nouveau jet qui s’applique. Pour que vous puissiez recevoir ce bénéfice, l’arme doit afficher la propriété « deux mains » ou « polyvalente ».",
-      "Défense",
-      "Tant que vous portez une armure, vous recevez un bonus de +1 en CA.",
-      "Duel",
-      "Lorsque vous maniez une arme de corps à corps dans une main et aucune autre arme, vous recevez un bonus de +2 aux jets de dégâts de cette arme.",
-      "Protection",
-      "Lorsqu’une créature que vous voyez attaque une cible autre que vous située dans un rayon de 1,50 m de vous, vous pouvez jouer votre réaction pour lui imposer le désavantage au jet d’attaque. Vous devez porter un bouclier."
+      "Au niveau 2, vous décidez de vous spécialiser dans un style de combat particulier. Choisissez l’une des options suivantes. Vous ne pouvez pas opter plus d’une fois pour un même Style de combat, si vous avez de nouveau la possibilité d’en choisir un."
      ],
      "id": "style-de-combat",
-     "level": 2
+     "level": 2,
+     "options": [
+      {
+       "id": "armes-a-deux-mains",
+       "name": "Armes à deux mains",
+       "text": [
+        "Lorsque vous obtenez un 1 ou un 2 sur un dé de dégâts d’une attaque effectuée avec une arme de corps à corps que vous tenez à deux mains, vous pouvez relancer ce dé, auquel cas c’est le nouveau jet qui s’applique. Pour que vous puissiez recevoir ce bénéfice, l’arme doit afficher la propriété « deux mains » ou « polyvalente »."
+       ]
+      },
+      {
+       "id": "defense",
+       "name": "Défense",
+       "text": [
+        "Tant que vous portez une armure, vous recevez un bonus de +1 en CA."
+       ]
+      },
+      {
+       "id": "duel",
+       "name": "Duel",
+       "text": [
+        "Lorsque vous maniez une arme de corps à corps dans une main et aucune autre arme, vous recevez un bonus de +2 aux jets de dégâts de cette arme."
+       ]
+      },
+      {
+       "id": "protection",
+       "name": "Protection",
+       "text": [
+        "Lorsqu’une créature que vous voyez attaque une cible autre que vous située dans un rayon de 1,50 m de vous, vous pouvez jouer votre réaction pour lui imposer le désavantage au jet d’attaque. Vous devez porter un bouclier."
+       ]
+      }
+     ]
     },
     {
      "name": "Sorts",
@@ -5234,18 +5347,40 @@
     {
      "name": "Style de combat",
      "text": [
-      "Au niveau 2, vous décidez de vous spécialiser dans un style de combat particulier. Choisissez l’une des options suivantes. Vous ne pouvez pas opter plus d’une fois pour un même Style de combat, si vous avez de nouveau la possibilité d’en choisir un.",
-      "Archerie",
-      "Vous recevez un bonus de +2 aux jets d’attaque effectués avec des armes à distance.",
-      "Combat à deux armes",
-      "Lorsque vous combattez avec deux armes, vous pouvez ajouter votre modificateur de caractéristique aux dégâts de la seconde attaque.",
-      "Défense",
-      "Tant que vous portez une armure, vous recevez un bonus de +1 en CA.",
-      "Duel",
-      "Lorsque vous maniez une arme de corps à corps dans une main et aucune autre arme, vous recevez un bonus de +2 aux jets de dégâts de cette arme."
+      "Au niveau 2, vous décidez de vous spécialiser dans un style de combat particulier. Choisissez l’une des options suivantes. Vous ne pouvez pas opter plus d’une fois pour un même Style de combat, si vous avez de nouveau la possibilité d’en choisir un."
      ],
      "id": "style-de-combat",
-     "level": 2
+     "level": 2,
+     "options": [
+      {
+       "id": "archerie",
+       "name": "Archerie",
+       "text": [
+        "Vous recevez un bonus de +2 aux jets d’attaque effectués avec des armes à distance."
+       ]
+      },
+      {
+       "id": "combat-a-deux-armes",
+       "name": "Combat à deux armes",
+       "text": [
+        "Lorsque vous combattez avec deux armes, vous pouvez ajouter votre modificateur de caractéristique aux dégâts de la seconde attaque."
+       ]
+      },
+      {
+       "id": "defense",
+       "name": "Défense",
+       "text": [
+        "Tant que vous portez une armure, vous recevez un bonus de +1 en CA."
+       ]
+      },
+      {
+       "id": "duel",
+       "name": "Duel",
+       "text": [
+        "Lorsque vous maniez une arme de corps à corps dans une main et aucune autre arme, vous recevez un bonus de +2 aux jets de dégâts de cette arme."
+       ]
+      }
+     ]
     },
     {
      "name": "Sorts",

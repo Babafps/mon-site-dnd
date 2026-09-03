@@ -3506,24 +3506,35 @@ body.theme-dark .home-sort { background: #2a2118; }
 @media print { #levelup-fx { display: none !important; } }
 
 /* ============================================================
-   Écran de montée de niveau (avant application)
-   Suit les jetons du thème : lisible en clair comme en sombre,
-   aucun bouton blanc. Le récapitulatif et le mode « choisir »
-   partagent le même balisage : seule la classe .is-choosing change.
+   Registre de progression — la montée de niveau en double page
+
+   Même métaphore que le grimoire : un livre ouvert. Page de gauche
+   fixe (le niveau, le fil des étapes, ce qu'on gagne), page de droite
+   défilante (l'étape courante, et elle seule). UN SEUL défilement.
+
+   Il n'y a plus de mode « récapitulatif » / « choisir » : tout est
+   actionnable en permanence. Ce qui bloque n'est pas un bandeau rouge
+   mais un ⚠ sur l'étape et un « Terminer » grisé.
+
+   Tout passe par les jetons du thème : lisible en clair comme en
+   sombre, aucun bouton blanc.
    ============================================================ */
 #levelup-plan {
     position: fixed; inset: 0; z-index: 9100;
     display: flex; align-items: center; justify-content: center;
-    padding: 18px;
+    padding: 16px;
     background: radial-gradient(circle at 50% 40%, rgba(60,38,10,0.55), rgba(8,5,3,0.86) 72%);
     backdrop-filter: blur(3px);
     animation: fadeIn .3s ease;
 }
 #levelup-plan.is-closing { animation: fadeIn .22s ease reverse; }
 
-.lvup-panel {
-    display: flex; flex-direction: column;
-    width: 100%; max-width: 580px; max-height: 88vh;
+.lvup-book {
+    display: grid;
+    grid-template-columns: 296px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "left right" "foot foot";
+    width: 100%; max-width: 960px; max-height: 90vh;
     background: var(--surface-1);
     color: var(--text-color);
     border: 1px solid var(--accent-color);
@@ -3532,71 +3543,134 @@ body.theme-dark .home-sort { background: #2a2118; }
     overflow: hidden;
     animation: lvfxRise .45s cubic-bezier(0.2, 0.9, 0.25, 1.35) backwards;
 }
-.lvup-panel.is-shaking { animation: lvupShake .32s ease; }
+
+/* --- Page de gauche : ce qui ne bouge pas --- */
+.lvup-page-l {
+    grid-area: left;
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 16px 16px 14px;
+    overflow-y: auto;
+    background: linear-gradient(150deg, rgba(196,155,53,0.10), transparent 70%), var(--panel-1);
+    /* la reliure : une ombre douce, comme la gouttière du grimoire */
+    box-shadow: inset -14px 0 18px -16px rgba(0,0,0,0.55);
+    border-right: 1px solid var(--soft-border);
+}
+.lvup-head { text-align: center; }
+.lvup-kicker {
+    font-family: 'Cinzel', serif; font-size: 0.66rem; letter-spacing: 0.34em;
+    text-transform: uppercase; color: var(--accent-color); text-indent: 0.34em;
+}
+.lvup-big {
+    font-family: 'Cinzel', serif; font-weight: bold; line-height: 1;
+    font-size: clamp(2.4rem, 7vw, 3.4rem); margin: 2px 0;
+    background: linear-gradient(175deg, #fff3c4 5%, #e8c25a 42%, #b8862a 88%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 14px rgba(196,155,53,0.42));
+}
+.lvup-sub { font-family: 'Lora', serif; font-size: 0.85rem; opacity: 0.85; }
+.lvup-rule {
+    text-align: center; color: var(--accent-color); opacity: 0.55;
+    font-size: 0.8rem; margin: 8px 0 6px; line-height: 1;
+}
+
+/* --- Le fil des étapes --- */
+.lvup-rail { display: flex; flex-direction: column; gap: 2px; }
+.lvup-step {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 7px 9px; border-radius: var(--radius-sm);
+    border: 1px solid transparent; background: transparent; cursor: pointer;
+    color: var(--text-color); text-align: left;
+    font-family: 'Cinzel', serif; font-size: 0.76rem;
+    font-variant: small-caps; letter-spacing: 0.06em;
+    transition: var(--transition-smooth);
+}
+.lvup-step:hover { background: rgba(196,155,53,0.12); }
+.lvup-step-mark { flex: 0 0 auto; width: 1em; text-align: center; opacity: 0.55; }
+.lvup-step-name { flex: 1 1 auto; min-width: 0; opacity: 0.7; }
+.lvup-step[data-state="done"] .lvup-step-mark { color: var(--accent-color); opacity: 1; }
+.lvup-step[data-state="done"] .lvup-step-name { opacity: 0.85; }
+.lvup-step[data-state="cur"] {
+    background: rgba(196,155,53,0.14); border-color: rgba(196,155,53,0.4);
+}
+.lvup-step[data-state="cur"] .lvup-step-mark { color: var(--primary-color); opacity: 1; }
+body.theme-dark .lvup-step[data-state="cur"] .lvup-step-mark { color: var(--accent-color); }
+.lvup-step[data-state="cur"] .lvup-step-name { opacity: 1; font-weight: 600; }
+.lvup-step[data-state="warn"] .lvup-step-mark { color: var(--accent-color); opacity: 1; }
+.lvup-step[data-state="warn"] .lvup-step-name { opacity: 1; }
+.lvup-step[data-state="warn"] { border-color: rgba(196,155,53,0.55); }
+/* Où l'on est se voit toujours, même quand l'étape porte un ⚠. */
+.lvup-step.is-cur { background: rgba(196,155,53,0.14); border-color: rgba(196,155,53,0.45); }
+.lvup-step.is-cur .lvup-step-name { opacity: 1; font-weight: 600; }
+.lvup-step:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+
+/* --- Ce que tu gagnes : le récapitulatif vivant --- */
+.lvup-gains { min-height: 0; overflow-y: auto; }
+.lvup-gains-head {
+    font-family: 'Cinzel', serif; font-size: 0.68rem; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--accent-color);
+    margin-bottom: 7px;
+}
+.lvup-gains-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.lvup-gain {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.38);
+    font-family: 'Lora', serif; font-size: 0.72rem; line-height: 1.35;
+}
+/* Sur écran étroit, le récapitulatif se replie en bas de la page unique.
+   Il coule dans la page — pas de second défilement. */
+.lvup-gains-fold { display: none; overflow: visible; }
+.lvup-gains-fold > summary { cursor: pointer; list-style: none; }
+.lvup-gains-fold > summary::-webkit-details-marker { display: none; }
+.lvup-gains-fold > summary::after { content: ' ▾'; }
+.lvup-gains-fold[open] > summary::after { content: ' ▴'; }
+
+/* --- Page de droite : l'étape courante, seule --- */
+.lvup-page-r {
+    grid-area: right; min-width: 0;
+    overflow-y: auto; padding: 18px 20px 20px;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.lvup-step-panel { display: none; flex-direction: column; gap: 7px; }
+.lvup-step-panel.is-on { display: flex; }
+.lvup-step-panel.is-shaking { animation: lvupShake .32s ease; }
 @keyframes lvupShake {
     0%, 100% { transform: translateX(0); }
     25% { transform: translateX(-7px); }
     75% { transform: translateX(7px); }
 }
-
-/* --- En-tête --- */
-.lvup-head {
-    text-align: center; padding: 16px 20px 12px;
-    background: linear-gradient(170deg, rgba(196,155,53,0.16), transparent 85%);
-    border-bottom: 1px solid var(--soft-border);
+.lvup-step-title {
+    font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+    color: var(--primary-color); margin: 0 0 2px;
 }
-.lvup-kicker {
-    font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.34em;
-    text-transform: uppercase; color: var(--accent-color); text-indent: 0.34em;
+body.theme-dark .lvup-step-title { color: var(--accent-color); }
+.lvup-step-note {
+    font-family: 'Lora', serif; font-size: 0.79rem; line-height: 1.5;
+    opacity: 0.78; margin: 0 0 4px;
 }
-.lvup-big {
-    font-family: 'Cinzel', serif; font-weight: bold; line-height: 1;
-    font-size: clamp(2.6rem, 12vw, 3.6rem); margin: 2px 0;
-    background: linear-gradient(175deg, #ffeeb8 5%, #e0b74e 45%, #a97a22 90%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 0 14px rgba(196,155,53,0.4));
-}
-.lvup-sub { font-family: 'Lora', serif; font-size: 0.88rem; opacity: 0.85; }
-
-.lvup-hint {
-    padding: 9px 20px 0; font-family: 'Lora', serif;
-    font-size: 0.8rem; font-style: italic; opacity: 0.75; text-align: center;
-}
+.lvup-lic { font-size: 0.72rem; opacity: 0.62; margin-top: 6px; }
 .lvup-warns {
-    margin: 10px 18px 0; padding: 9px 12px; border-radius: var(--radius-sm);
+    padding: 9px 12px; border-radius: var(--radius-sm);
     background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.45);
     font-family: 'Lora', serif; font-size: 0.8rem;
 }
 .lvup-warns p + p { margin-top: 5px; }
 
-/* --- Corps : une ligne par gain --- */
-.lvup-body {
-    flex: 1 1 auto; overflow-y: auto; padding: 12px 18px 6px;
-    display: flex; flex-direction: column; gap: 7px;
-}
+/* --- Une ligne de gain --- */
 .lvup-row {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 9px 11px; border-radius: var(--radius-sm);
     background: var(--panel-1); border: 1px solid var(--soft-border);
 }
 .lvup-row.is-info { opacity: 0.82; border-style: dashed; }
-
-.lvup-ck, .lvup-ck-fix {
-    flex: 0 0 auto; margin-top: 2px; width: 17px; text-align: center;
-}
+.lvup-ck, .lvup-ck-fix { flex: 0 0 auto; margin-top: 2px; width: 17px; text-align: center; }
 .lvup-ck { accent-color: var(--accent-color); cursor: pointer; transform: scale(1.15); }
 .lvup-ck-fix { color: var(--accent-color); font-size: 0.9rem; line-height: 1.3; }
 .lvup-ck-fix.is-info { color: var(--primary-color); opacity: 0.7; }
-.lvup-ck-fix.is-choice { color: var(--accent-color); }
-
-/* Récapitulatif : les cases montrent ce qui sera appliqué, sans être
-   manipulables — c'est « Choisir moi-même » qui les déverrouille. */
-.lvup-panel:not(.is-choosing) .lvup-ck { pointer-events: none; opacity: 0.7; }
-
+body.theme-dark .lvup-ck-fix.is-info { color: var(--accent-color); }
 .lvup-ico { flex: 0 0 auto; font-size: 1rem; line-height: 1.35; }
 .lvup-txt { flex: 1 1 auto; min-width: 0; display: block; }
 label.lvup-txt { cursor: pointer; }
-.lvup-panel:not(.is-choosing) label.lvup-txt { cursor: default; }
 .lvup-txt b {
     display: block; font-family: 'Cinzel', serif;
     font-size: 0.87rem; font-weight: 600; line-height: 1.35;
@@ -3607,6 +3681,11 @@ label.lvup-txt { cursor: pointer; }
 }
 .lvup-arrow { color: var(--accent-color); font-weight: bold; padding: 0 2px; }
 .lvup-src { font-size: 0.74rem; font-style: italic; opacity: 0.75; font-weight: normal; }
+.lvup-perso {
+    font-family: 'Lora', serif; font-size: 0.66rem; font-style: italic;
+    padding: 1px 5px; border-radius: 999px; opacity: 0.9;
+    background: rgba(196,155,53,0.2); border: 1px solid rgba(196,155,53,0.4);
+}
 
 .lvup-feat { margin-top: 5px; font-family: 'Lora', serif; font-size: 0.79rem; }
 .lvup-feat > summary {
@@ -3615,12 +3694,6 @@ label.lvup-txt { cursor: pointer; }
 }
 body.theme-dark .lvup-feat > summary { color: var(--accent-color); }
 .lvup-feat p { margin-top: 5px; line-height: 1.45; opacity: 0.88; }
-
-/* --- Réglages visibles seulement en mode « choisir » ---
-   Chaque élément garde son display naturel : on ne fait que masquer
-   la moitié qui ne correspond pas au mode courant. */
-.lvup-panel:not(.is-choosing) .lvup-choice-only { display: none !important; }
-.lvup-panel.is-choosing .lvup-recap-only { display: none !important; }
 
 .lvup-ctl { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; padding-top: 1px; }
 .lvup-ctl select, .lvup-ctl input {
@@ -3631,90 +3704,95 @@ body.theme-dark .lvup-feat > summary { color: var(--accent-color); }
 .lvup-ctl input { width: 48px; text-align: center; }
 .lvup-ctl input:disabled { opacity: 0.6; }
 .lvup-mini {
-    border: 1px solid var(--soft-border); border-radius: 6px; cursor: pointer;
+    border: 1px solid rgba(196,155,53,0.55); border-radius: 6px; cursor: pointer;
     background: rgba(196,155,53,0.3); color: var(--text-color);
-    border-color: rgba(196,155,53,0.55);
-    padding: 3px 6px; font-size: 0.8rem; line-height: 1;
+    padding: 3px 8px; font-size: 0.78rem; line-height: 1.4;
+    font-family: 'Lora', serif;
 }
-.lvup-mini:hover { background: rgba(196,155,53,0.32); }
+.lvup-mini:hover { background: rgba(196,155,53,0.45); }
+
+/* --- Cartes : sous-classes et options d'aptitude --- */
+.lvup-cards {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.lvup-card {
+    display: flex; flex-direction: column; gap: 5px; text-align: left;
+    padding: 11px 12px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--panel-1);
+    color: var(--text-color); transition: var(--transition-smooth);
+}
+.lvup-card:hover { border-color: rgba(196,155,53,0.6); transform: translateY(-1px); }
+.lvup-card.is-on {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.14);
+    box-shadow: var(--glow-gold);
+}
+.lvup-card.is-taken, .lvup-card:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.lvup-card-name {
+    font-family: 'Cinzel', serif; font-size: 0.86rem; font-weight: 600;
+    color: var(--primary-color);
+}
+body.theme-dark .lvup-card-name { color: var(--accent-color); }
+.lvup-card-text {
+    font-family: 'Lora', serif; font-size: 0.76rem; line-height: 1.45; opacity: 0.82;
+}
+.lvup-card-more {
+    display: flex; flex-direction: column; gap: 2px; margin-top: 3px;
+    padding-top: 6px; border-top: 1px dashed var(--soft-border);
+}
+.lvup-card-more-head {
+    font-family: 'Cinzel', serif; font-size: 0.66rem; letter-spacing: 0.14em;
+    text-transform: uppercase; opacity: 0.7;
+}
+.lvup-card-feat { font-family: 'Lora', serif; font-size: 0.73rem; opacity: 0.85; }
+.lvup-card-feat b { color: var(--accent-color); font-weight: 600; margin-right: 4px; }
+
+.lvup-choice {
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(196,155,53,0.45); background: rgba(196,155,53,0.07);
+}
+.lvup-choice-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.lvup-choice-head b { font-family: 'Cinzel', serif; font-size: 0.86rem; }
+.lvup-choice-count {
+    font-family: 'Cinzel', serif; font-size: 0.74rem; color: var(--primary-color);
+}
+body.theme-dark .lvup-choice-count { color: var(--accent-color); }
+.lvup-choice-count.is-done::after { content: ' ✓'; color: #3d7a3d; }
+body.theme-dark .lvup-choice-count.is-done::after { color: #7fc47f; }
 
 /* --- Amélioration de caractéristique --- */
-.lvup-asi { border-color: var(--accent-color); background: rgba(196,155,53,0.09); }
+.lvup-asi {
+    padding: 11px 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(196,155,53,0.45); background: rgba(196,155,53,0.07);
+}
 .lvup-asi-modes {
-    display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 7px;
-    font-family: 'Lora', serif; font-size: 0.78rem;
+    display: flex; flex-wrap: wrap; gap: 5px 16px;
+    font-family: 'Lora', serif; font-size: 0.79rem;
 }
 .lvup-asi-modes label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 .lvup-asi-modes input { accent-color: var(--accent-color); cursor: pointer; }
-.lvup-asi-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.lvup-asi-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .lvup-asi-picks select {
-    font-family: 'Lora', serif; font-size: 0.78rem; padding: 4px 7px;
+    font-family: 'Lora', serif; font-size: 0.78rem; padding: 5px 8px;
     border-radius: 6px; border: 1px solid var(--soft-border);
     background: var(--widget-bg); color: var(--text-color); max-width: 100%;
 }
 .lvup-asi-picks[data-mode="two"] .lvup-asi-one,
 .lvup-asi-picks[data-mode="one"] .lvup-asi-a,
 .lvup-asi-picks[data-mode="one"] .lvup-asi-b,
-.lvup-asi-picks[data-mode="later"] select { display: none; }
+.lvup-asi-picks[data-mode="later"] select,
+.lvup-asi-picks[data-mode="feat"] select { display: none; }
 .lvup-asi-preview {
-    margin-top: 6px; font-family: 'Cinzel', serif; font-size: 0.78rem;
+    margin-top: 8px; font-family: 'Cinzel', serif; font-size: 0.78rem;
     color: var(--primary-color); min-height: 1em;
 }
 body.theme-dark .lvup-asi-preview { color: var(--accent-color); }
 .lvup-asi-preview.is-capped b { color: #b06a1e; }
 body.theme-dark .lvup-asi-preview.is-capped b { color: #e8a94c; }
-
-/* --- Erreur de saisie --- */
-.lvup-error {
-    display: none; margin: 0 18px; padding: 8px 11px; border-radius: var(--radius-sm);
-    background: rgba(192,57,43,0.14); border: 1px solid rgba(192,57,43,0.5);
-    font-family: 'Lora', serif; font-size: 0.79rem; color: #a53024;
-}
-body.theme-dark .lvup-error { color: #ff9c8f; }
-.lvup-error.is-on { display: block; }
-
-/* --- Pied --- */
-.lvup-foot {
-    display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
-    padding: 12px 18px; margin-top: 8px;
-    border-top: 1px solid var(--soft-border);
-    background: var(--panel-1);
-}
-.lvup-btn {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-family: 'Cinzel', serif; font-size: 0.82rem; font-weight: 600;
-    padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer;
-    border: 1px solid transparent; transition: var(--transition-smooth);
-}
-.lvup-btn-main {
-    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
-    box-shadow: 0 3px 12px rgba(0,0,0,0.28);
-}
-.lvup-btn-alt {
-    background: var(--primary-color); color: #fdf6e6;
-    border-color: rgba(0,0,0,0.15);
-}
-.lvup-btn-ghost {
-    background: transparent; color: var(--text-color);
-    border-color: var(--soft-border); opacity: 0.85;
-}
-.lvup-btn:hover { filter: brightness(1.09); }
-.lvup-btn-ghost:hover { background: var(--panel-1); filter: none; opacity: 1; }
-.lvup-btn:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
-
-@media (max-width: 520px) {
-    .lvup-foot { justify-content: stretch; }
-    .lvup-foot .lvup-btn { flex: 1 1 auto; justify-content: center; }
-    .lvup-ctl { flex-basis: 100%; padding-top: 6px; }
-}
-@media (prefers-reduced-motion: reduce) {
-    #levelup-plan, .lvup-panel { animation: none !important; }
-}
-
-/* Don pris à la place de l'amélioration de caractéristique.
-   Visible seulement quand le mode « Un don » est coché. */
-.lvup-feat-pick { display: none; margin-top: 7px; }
-.lvup-asi-picks[data-mode="feat"] select { display: none; }
+.lvup-feat-pick { display: none; margin-top: 9px; }
 .lvup-asi-picks[data-mode="feat"] ~ .lvup-feat-pick { display: block; }
 .lvup-feat-pick input, .lvup-feat-pick textarea {
     width: 100%; font-family: 'Lora', serif; font-size: 0.8rem;
@@ -3728,16 +3806,21 @@ body.theme-dark .lvup-error { color: #ff9c8f; }
     opacity: 0.7; line-height: 1.35;
 }
 
-/* --- Sorts gagnés au niveau ---
-   La liste de la classe s'affiche DANS le panneau : on coche ce qu'on
-   apprend, et les sorts partent au grimoire à la validation. Le compteur
-   dit toujours combien il en reste à prendre. */
-.lvup-sp { border-color: rgba(196,155,53,0.55); }
-.lvup-sp-pick { margin-top: 8px; }
+/* --- Sorts : des tuiles qu'on peut LIRE avant de les prendre --- */
+.lvup-sp-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+}
+.lvup-sp-count {
+    font-family: 'Cinzel', serif; font-size: 0.8rem; color: var(--primary-color);
+}
+body.theme-dark .lvup-sp-count { color: var(--accent-color); }
+.lvup-sp-count.is-done::after { content: ' ✓'; color: #3d7a3d; }
+body.theme-dark .lvup-sp-count.is-done::after { color: #7fc47f; }
 .lvup-sp-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
 .lvup-sp-tab {
     font-family: 'Cinzel', serif; font-size: 0.72rem;
-    padding: 4px 10px; border-radius: 999px; cursor: pointer;
+    padding: 4px 11px; border-radius: 999px; cursor: pointer;
     border: 1px solid var(--soft-border);
     background: var(--widget-bg); color: var(--text-color);
     transition: var(--transition-smooth);
@@ -3748,39 +3831,83 @@ body.theme-dark .lvup-error { color: #ff9c8f; }
     border-color: rgba(196,155,53,0.8); font-weight: 600;
 }
 .lvup-sp-search {
-    width: 100%; margin-top: 7px; padding: 6px 8px;
-    font-family: 'Lora', serif; font-size: 0.78rem;
+    width: 100%; padding: 7px 9px;
+    font-family: 'Lora', serif; font-size: 0.8rem;
     border-radius: 6px; border: 1px solid var(--soft-border);
     background: var(--widget-bg); color: var(--text-color);
 }
-.lvup-sp-list {
-    margin-top: 6px; max-height: 210px; overflow-y: auto;
-    border: 1px solid var(--soft-border); border-radius: var(--radius-sm);
-    background: var(--widget-bg);
+.lvup-sp-grid {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
 }
-.lvup-sp-item {
-    display: flex; align-items: baseline; gap: 8px;
-    padding: 6px 9px; cursor: pointer;
-    border-bottom: 1px solid var(--soft-border);
+.lvup-tile {
+    display: flex; flex-direction: column; gap: 3px; text-align: left;
+    padding: 9px 10px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--panel-1);
+    color: var(--text-color); transition: var(--transition-smooth);
+}
+.lvup-tile:hover { border-color: rgba(196,155,53,0.6); transform: translateY(-1px); }
+.lvup-tile.is-open { border-color: var(--accent-color); }
+.lvup-tile.is-on {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.16);
+    box-shadow: var(--glow-gold);
+}
+.lvup-tile.is-known { opacity: 0.42; cursor: default; }
+.lvup-tile.is-known:hover { transform: none; border-color: var(--soft-border); }
+/* Quota atteint : encore lisible, plus prenable. */
+.lvup-tile.is-locked { opacity: 0.55; }
+.lvup-tile.is-locked:hover { transform: none; }
+.lvup-tile-top, .lvup-tile-bot {
+    display: flex; align-items: center; gap: 5px; justify-content: space-between;
+    font-family: 'Lora', serif; font-size: 0.68rem; opacity: 0.7;
+}
+.lvup-tile-bot { justify-content: flex-start; min-height: 0.9em; }
+.lvup-tile-school { font-style: italic; }
+.lvup-tile-lv { flex: 0 0 auto; }
+.lvup-tile-name {
+    font-family: 'Cinzel', serif; font-size: 0.84rem; font-weight: 600;
+    line-height: 1.3; color: var(--primary-color);
+}
+body.theme-dark .lvup-tile-name { color: var(--accent-color); }
+.lvup-tile-m {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: rgba(196,155,53,0.25); border: 1px solid rgba(196,155,53,0.45);
+    font-family: 'Cinzel', serif; font-size: 0.6rem; font-weight: 700; opacity: 0.95;
+}
+.lvup-tile-known { font-style: italic; }
+.lvup-sp-empty {
+    grid-column: 1 / -1; padding: 14px; text-align: center; opacity: 0.7;
     font-family: 'Lora', serif; font-size: 0.79rem;
 }
-.lvup-sp-item:last-child { border-bottom: none; }
-.lvup-sp-item:hover { background: rgba(196,155,53,0.12); }
-.lvup-sp-item.is-on { background: rgba(196,155,53,0.2); }
-.lvup-sp-item.is-off { opacity: 0.45; cursor: not-allowed; }
-.lvup-sp-item input { flex: 0 0 auto; accent-color: var(--accent-color); cursor: inherit; }
-.lvup-sp-n { flex: 1 1 auto; min-width: 0; }
-.lvup-sp-m { flex: 0 0 auto; font-size: 0.7rem; font-style: italic; opacity: 0.62; }
-.lvup-sp-empty {
-    padding: 12px; text-align: center; opacity: 0.7;
+.lvup-sp-read {
+    padding: 12px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--accent-color); background: var(--panel-1);
+    box-shadow: var(--glow-gold);
+}
+.lvup-sp-read[hidden] { display: none; }
+.lvup-read-head {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    padding-bottom: 7px; margin-bottom: 7px;
+    border-bottom: 1px solid var(--soft-border);
+}
+.lvup-read-head b { font-family: 'Cinzel', serif; font-size: 0.95rem; }
+.lvup-read-sub { font-family: 'Lora', serif; font-size: 0.74rem; font-style: italic; opacity: 0.7; }
+.lvup-read-act { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.lvup-read-known { font-family: 'Lora', serif; font-size: 0.74rem; font-style: italic; opacity: 0.7; }
+.lvup-read-body { font-family: 'Lora', serif; font-size: 0.8rem; line-height: 1.55; }
+.lvup-read-body p { margin: 0 0 6px; }
+.lvup-read-body .rw-link { pointer-events: none; text-decoration: none; color: inherit; }
+
+.lvup-sp-swap {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
     font-family: 'Lora', serif; font-size: 0.78rem;
 }
-.lvup-sp-swap {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px;
-    font-family: 'Lora', serif; font-size: 0.77rem;
+.lvup-sp-swap label, .lvup-sp-later {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: 'Lora', serif; font-size: 0.78rem;
 }
-.lvup-sp-swap label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
-.lvup-sp-swap input { accent-color: var(--accent-color); cursor: pointer; }
+.lvup-sp-swap input, .lvup-sp-later input { accent-color: var(--accent-color); cursor: pointer; }
 .lvup-sp-swap select {
     font-family: 'Lora', serif; font-size: 0.76rem; padding: 4px 6px; max-width: 100%;
     border-radius: 6px; border: 1px solid var(--soft-border);
@@ -3788,13 +3915,76 @@ body.theme-dark .lvup-error { color: #ff9c8f; }
 }
 /* Le sort rendu ne se choisit que si l'échange est demandé. */
 .lvup-sp-swap:not(:has(.lvup-sp-swap-on:checked)) select { display: none; }
-.lvup-sp-count {
-    margin-top: 7px; font-family: 'Cinzel', serif; font-size: 0.76rem;
-    color: var(--primary-color);
+.lvup-sp-later { opacity: 0.75; }
+
+/* --- Pied, à cheval sur les deux pages --- */
+.lvup-foot {
+    grid-area: foot;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 11px 16px;
+    border-top: 1px solid var(--soft-border);
+    background: var(--panel-1);
 }
-body.theme-dark .lvup-sp-count { color: var(--accent-color); }
-.lvup-sp-count.is-done::after { content: ' ✓'; color: #3d7a3d; }
-body.theme-dark .lvup-sp-count.is-done::after { color: #7fc47f; }
+.lvup-foot-nav { display: flex; gap: 5px; }
+.lvup-foot-end { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.lvup-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'Cinzel', serif; font-size: 0.82rem; font-weight: 600;
+    padding: 9px 16px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid transparent; transition: var(--transition-smooth);
+}
+.lvup-btn-main {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.28);
+}
+.lvup-btn-alt { background: var(--primary-color); color: #fdf6e6; border-color: rgba(0,0,0,0.15); }
+.lvup-btn-ghost {
+    background: transparent; color: var(--text-color);
+    border-color: var(--soft-border); opacity: 0.85;
+}
+.lvup-arrow-btn { padding: 9px 12px; }
+.lvup-btn:hover { filter: brightness(1.09); }
+.lvup-btn-ghost:hover { background: var(--widget-bg); filter: none; opacity: 1; }
+.lvup-btn:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.lvup-btn:disabled { opacity: 0.32; cursor: default; filter: none; }
+/* Grisé mais pas mort : cliquer emmène à l'étape qui bloque. */
+.lvup-btn.is-blocked { filter: grayscale(0.75); opacity: 0.55; }
+.lvup-btn.is-blocked:hover { filter: grayscale(0.55); opacity: 0.7; }
+
+/* --- Écran étroit : une seule page --- */
+@media (max-width: 720px) {
+    #levelup-plan { padding: 0; }
+    .lvup-book {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        grid-template-areas: "left" "right" "foot";
+        max-height: 100vh; height: 100%; max-width: none; border-radius: 0;
+        border-left: none; border-right: none;
+    }
+    .lvup-page-l {
+        flex-direction: row; align-items: center; gap: 10px;
+        overflow-x: auto; overflow-y: hidden; padding: 10px 12px;
+        border-right: none; border-bottom: 1px solid var(--soft-border);
+        box-shadow: inset 0 -14px 18px -16px rgba(0,0,0,0.55);
+    }
+    .lvup-page-l .lvup-rule,
+    .lvup-page-l .lvup-gains { display: none; }
+    .lvup-head { display: flex; align-items: baseline; gap: 7px; flex: 0 0 auto; }
+    .lvup-kicker { display: none; }
+    .lvup-big { font-size: 1.9rem; margin: 0; }
+    .lvup-sub { font-size: 0.74rem; white-space: nowrap; }
+    .lvup-rail { flex-direction: row; gap: 4px; flex: 1 1 auto; }
+    .lvup-step { width: auto; white-space: nowrap; }
+    .lvup-gains-fold { display: block; margin-top: 6px; }
+    .lvup-foot { padding: 9px 12px; }
+    .lvup-foot-end { width: 100%; margin-left: 0; }
+    .lvup-foot-end .lvup-btn { flex: 1 1 auto; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #levelup-plan, .lvup-book, .lvup-step-panel { animation: none !important; }
+    .lvup-card, .lvup-tile { transition: none; }
+}
+@media print { #levelup-plan { display: none !important; } }
 
 /* Célébration : quand des sorts restent à choisir, « Continuer l'aventure »
    passe au second plan derrière le bouton qui ouvre le grimoire. */

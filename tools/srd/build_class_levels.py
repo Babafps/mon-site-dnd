@@ -358,6 +358,33 @@ def split_subclass(desc, wanted):
     return rest, feats
 
 
+# ------------------------------------------------- options d'une aptitude
+# « Style de combat », « Pacte », « Métamagie » : le SRD énonce un choix, puis
+# aligne les options en « titre » + paragraphes, comme pour les sous-classes.
+# On ne structure QUE celles-là : ailleurs (« Sorts » du barde, « Le ki » du
+# moine, les tables de Forme sauvage), les titres sont des sous-sections ou des
+# fragments de tableau — les transformer en options serait un mensonge.
+
+CHOICE_RX = re.compile(r"choisis(?:sez|)\s+(?:l[’']\s*)?(?:un|une|deux|trois|quatre|cinq)\b"
+                       r"|l[’'](?:une|un)\s+des"
+                       r"|au choix", re.I)
+
+
+def split_options(text):
+    """text[] -> (intro, options[]) ; (text, []) si ce n'est pas un choix."""
+    heads = [i for i, p in enumerate(text) if is_heading(p)]
+    if len(heads) < 2:
+        return text, []
+    intro = text[:heads[0]]
+    if not CHOICE_RX.search(' '.join(intro)):
+        return text, []
+    opts = []
+    for n, i in enumerate(heads):
+        end = heads[n + 1] if n + 1 < len(heads) else len(text)
+        opts.append({'id': slug(text[i]), 'name': text[i].strip(), 'text': text[i + 1:end]})
+    return intro, opts
+
+
 # --------------------------------------------------------------------- montage
 
 def build_levels(spec, features):
@@ -399,7 +426,8 @@ def build_levels(spec, features):
 
 def main(path):
     data = json.loads(path.read_text(encoding='utf-8'))
-    report = []
+    report = []          # anomalies : font échouer le script
+    notes = []           # simples constats
 
     for entry in data['entries']:
         spec = CLASSES.get(entry['id'])
@@ -434,6 +462,14 @@ def main(path):
         entry['levels'] = build_levels(spec, entry.get('features', []))
         for f in entry.get('features', []):
             f.pop('_levels', None)
+            # Options d'un choix (style de combat, pacte, métamagie).
+            if not f.get('options'):
+                intro, opts = split_options(f.get('text') or [])
+                if opts:
+                    f['text'] = intro
+                    f['options'] = opts
+                    notes.append('   %s : « %s » → %d options'
+                                 % (entry['id'], f['name'], len(opts)))
 
         # Sous-classes.
         for sub in entry.get('subclasses', []):
@@ -459,6 +495,8 @@ def main(path):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding='utf-8')
 
     print('classes.json mis à jour : %d classes' % len(data['entries']))
+    for line in notes:
+        print(line)
     for line in report:
         print(line)
     return 1 if report else 0
