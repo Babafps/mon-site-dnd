@@ -1,0 +1,27 @@
+{
+	"name": "Laiton",
+	"systemName": "laiton",
+	"author": "Bones & Blades",
+	"version": 1,
+	"material": {
+		"type": "color",
+		"diffuseTexture": {
+			"light": "../default/diffuse-light.png",
+			"dark": "../default/diffuse-dark.png"
+		},
+		"diffuseLevel": 0.95,
+		"bumpTexture": "../default/normal.png",
+		"bumpLevel": 0.5,
+		"specularTexture": "../default/specular.jpg",
+		"specularPower": 3.5
+	},
+	"diceAvailable": [
+		"d4",
+		"d6",
+		"d8",
+		"d10",
+		"d12",
+		"d20",
+		"d100"
+	]
+}

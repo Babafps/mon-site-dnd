@@ -136,8 +136,60 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         /** Ouvre une fiche (et recharge, comme partout ailleurs sur le site). */
-        open(charId) { DB.set('dnd-active-char', charId); location.reload(); }
+        open(charId) { DB.set('dnd-active-char', charId); location.reload(); },
+
+        /** TOUT ce que le site sait de l'utilisateur, dans un seul fichier.
+         *  C'est le droit à la portabilité du RGPD (art. 20) : un format
+         *  structuré, courant et lisible par machine. Rien n'est filtré —
+         *  y compris les personnages archivés et les réglages. */
+        async portability() {
+            const out = {
+                format: 'bones-and-blades/portability', version: 1,
+                exported: new Date().toISOString(),
+                account: null, characters: [], homebrew: null, settings: {}
+            };
+            const user = window.SupaAuth?.currentUser;
+            if (user) out.account = { id: user.id, email: user.email, created_at: user.created_at || null };
+
+            // La liste des personnages, de toutes les sources à la fois. Un
+            // export de portabilité doit être EXHAUSTIF : on ne se fie pas à
+            // la seule liste en mémoire, on ramasse aussi tout identifiant qui
+            // porte des clés dans le stockage (personnage archivé, liste
+            // désynchronisée, reste d'un import).
+            const metas = new Map();
+            const add = (c) => { if (c && c.id && !metas.has(c.id)) metas.set(c.id, c); };
+            (charactersList || []).forEach(add);
+            try { (JSON.parse(DB.get('dnd-character-list') || '[]') || []).forEach(add); } catch (e) {}
+            if (user) {
+                try { ((await window.SupaAuth.loadCharacters()) || []).forEach(add); } catch (e) {}
+            }
+            DB.keys().forEach(k => {
+                const i = k.indexOf('_dnd-');
+                if (i > 0) add({ id: k.slice(0, i), name: null, level: null, class: null });
+            });
+
+            for (const c of metas.values()) {
+                const data = await this.dump(c.id);
+                if (!Object.keys(data).length) continue;
+                out.characters.push({
+                    id: c.id,
+                    name: c.name || data['dnd-sheet-char-name'] || 'Sans nom',
+                    level: c.level != null ? c.level : (parseInt(data['dnd-sheet-char-level'], 10) || 1),
+                    class: c.class || data['dnd-sheet-char-class'] || '',
+                    data
+                });
+            }
+
+            // Réglages et bibliothèque perso : globaux, hors personnage.
+            DB.keys().forEach(k => {
+                if (!k.startsWith('dnd-')) return;
+                if (k === 'dnd-homebrew') { out.homebrew = jsonSafe(DB.get(k)); return; }
+                out.settings[k] = DB.get(k);
+            });
+            return out;
+        }
     };
+    function jsonSafe(raw) { try { return JSON.parse(raw); } catch (e) { return raw; } }
 
     // ==========================================
     // EFFETS VISUELS ET ÉTATS
@@ -205,6 +257,10 @@ document.addEventListener('DOMContentLoaded', () => {
             input.value = /^#[0-9a-f]{6}$/i.test(fromStyle) ? fromStyle : fallback;
         });
     }
+    // Le panneau d'apparence (cosmetics.js) écrit les mêmes clés `dnd-theme-*`
+    // et redemande l'application : une seule fonction de vérité pour le thème.
+    window.applyTheme = applyTheme;
+    window.THEME_COLOR_KEYS = THEME_COLORS.map(e => e[0]);
     applyTheme();
 
     // --- Toast applicatif élégant (remplace certains alert) ---
@@ -459,7 +515,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // « fluidité tactile ») qui lit cette variable pour afficher l'image personnalisée.
     function applySavedBackground() { const savedBg = DB.get(CUSTOM_BG_KEY); if(savedBg && savedBg !== 'undefined') { document.body.style.backgroundImage = `url("${savedBg}")`; document.body.style.setProperty('--custom-bg', `url("${savedBg}")`); } else { document.body.style.backgroundImage = ''; document.body.style.removeProperty('--custom-bg'); } }
     applySavedBackground();
-    
+    window.applySavedBackground = applySavedBackground;
+
     const btnChangeBg = document.getElementById('btn-change-bg'); if(btnChangeBg && bgInput) { btnChangeBg.addEventListener('click', () => { bgInput.click(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
     if(bgInput) { bgInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1920; let width = img.width; let height = img.height; if(width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); try { DB.set(CUSTOM_BG_KEY, canvas.toDataURL('image/jpeg', 0.7)); applySavedBackground(); } catch (err) { alert("L'image est toujours trop lourde."); } bgInput.value = ''; }; img.src = event.target.result; }; reader.readAsDataURL(file); }); }
     const btnResetBg = document.getElementById('btn-reset-bg'); if(btnResetBg) { btnResetBg.addEventListener('click', () => { DB.remove(CUSTOM_BG_KEY); applySavedBackground(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
@@ -474,7 +531,22 @@ document.addEventListener('DOMContentLoaded', () => {
             // (l'assistant de création, lancé juste après, permet de le renommer).
             const name = (inputName ? inputName.value.trim() : '') || 'Nouveau personnage';
             let newId, newChar;
-            if(window.SupaAuth?.currentUser) { newChar = await window.SupaAuth.createCharacter(name); if(!newChar) { alert("Erreur lors de la création."); return; } newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
+            if(window.SupaAuth?.currentUser) {
+                newChar = await window.SupaAuth.createCharacter(name);
+                if(!newChar) {
+                    // Le refus le plus probable, c'est le quota de fiches
+                    // synchronisées — refusé par la base, pas par l'écran.
+                    if (window.SupaAuth.lastCreateError === 'quota') {
+                        const q = window.Ent ? window.Ent.characterQuota() : { max: 3 };
+                        if (confirm(`Ton compte synchronise déjà ${q.max} fiches, le maximum sans abonnement.\n\n`
+                            + `Tes fiches LOCALES restent illimitées : déconnecte-toi pour en créer d’autres sur cet appareil.\n\n`
+                            + `Voir les tarifs ?`) && window.Pricing) window.Pricing.open();
+                    } else {
+                        alert("Erreur lors de la création.");
+                    }
+                    return;
+                }
+                newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
             DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId);
             DB.set('dnd-pj-wizard-pending', '1');   // fiche neuve → l'assistant de création se lance après le reload (pj-tutorial.js)
             location.reload();
@@ -1308,9 +1380,51 @@ document.addEventListener('DOMContentLoaded', () => {
         let diceThemeColor = DB.get('dnd-dice-theme-color') || '#7A2828';
         let diceThemeRandom = DB.get('dnd-dice-theme-random') === 'true';
         function currentDiceThemeColor() {
+            const mat = currentDiceMaterial();
+            // Une matière impose sa teinte : c'est elle qu'on a achetée.
+            if (mat.color) return mat.color;
             if (diceThemeRandom) return DICE_THEMES[Math.floor(Math.random() * DICE_THEMES.length)].color;
             return diceThemeColor;
         }
+
+        // --- Matières de dés (lot 5) ---
+        // Le plateau Babylon existe déjà : une matière n'est qu'un jeu de
+        // réglages sur le même maillage et les mêmes chiffres. Chaque matière
+        // vit dans lib/dice-box/assets/themes/<clé>/theme.config.json et pèse
+        // moins d'un kilo-octet — aucune texture n'est dupliquée.
+        const DICE_MATERIALS = [
+            { key: 'standard',  theme: 'default',    name: 'Standard', color: null },
+            { key: 'des-os',         theme: 'os',         name: 'Os',         color: '#E6DCC2' },
+            { key: 'des-obsidienne', theme: 'obsidienne', name: 'Obsidienne', color: '#17141a' },
+            { key: 'des-laiton',     theme: 'laiton',     name: 'Laiton',     color: '#B8862A' },
+            { key: 'des-cristal',    theme: 'cristal',    name: 'Cristal',    color: '#BCE1EF' }
+        ];
+        const DICE_MAT_THEMES = DICE_MATERIALS.filter(m => m.theme !== 'default').map(m => m.theme);
+        let diceMaterialKey = DB.get('dnd-dice-material') || 'standard';
+        // Les thèmes réellement chargés par le moteur. Si un fichier manque ou
+        // que le réseau a hoqueté, on retombe sur le standard plutôt que de
+        // faire planter le lancer.
+        const diceThemesLoaded = new Set(['default']);
+
+        const diceMaterialOwned = (m) => m.key === 'standard'
+            || (window.Ent ? window.Ent.has(m.key) : false);
+
+        /** La matière effectivement utilisée : celle choisie si elle est
+         *  débloquée ET chargée, sinon le standard. */
+        function currentDiceMaterial() {
+            const m = DICE_MATERIALS.find(x => x.key === diceMaterialKey);
+            if (!m || !diceMaterialOwned(m) || !diceThemesLoaded.has(m.theme)) return DICE_MATERIALS[0];
+            return m;
+        }
+        window.setDiceMaterial = (key) => {
+            diceMaterialKey = key;
+            DB.set('dnd-dice-material', key);
+        };
+        window.getDiceMaterials = () => DICE_MATERIALS.map(m => Object.assign({}, m, {
+            owned: diceMaterialOwned(m),
+            active: m.key === diceMaterialKey,
+            ready: diceThemesLoaded.has(m.theme)
+        }));
 
         async function initDiceBox() {
             if (diceBoxInitStarted) return;
@@ -1331,12 +1445,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const box = new DiceBox({
                     container: '#dice-box-overlay',
                     assetPath: new URL('lib/dice-box/assets/', document.baseURI).pathname,
-                    theme: 'default', scale: 7, gravity: 2, throwForce: 6,
+                    theme: 'default', scale: 7, gravity: 2, throwForce: 6
                 });
                 await box.init();
                 diceBox = box;
                 diceBoxReady = true;
                 console.info('🎲 Plateau de dés 3D prêt.');
+
+                // Les matières viennent APRÈS, sans bloquer : le dé standard
+                // doit pouvoir rouler tout de suite. Chacune n'est qu'un petit
+                // fichier de configuration — le maillage et les chiffres sont
+                // ceux du thème standard, rien n'est dupliqué.
+                // (`preloadThemes` du moteur n'est pas attendu par init() : on
+                //  charge nous-mêmes pour savoir ce qui a vraiment abouti.)
+                DICE_MAT_THEMES.forEach(async (t) => {
+                    try {
+                        await box.loadTheme(t);
+                        if (box.themesLoadedData && box.themesLoadedData[t]) diceThemesLoaded.add(t);
+                    } catch (e) {
+                        console.warn(`🎲 Matière « ${t} » indisponible, dés standard utilisés.`, e);
+                    }
+                });
             } catch (e) {
                 console.warn('Plateau 3D indisponible — animation 2D utilisée à la place.', e);
                 diceBoxReady = false;
@@ -1360,7 +1489,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 try { diceBox.clear(); } catch (e) {}
                 const res = await Promise.race([
-                    diceBox.roll(notation, { themeColor: currentDiceThemeColor() }),
+                    diceBox.roll(notation, { theme: currentDiceMaterial().theme,
+                                             themeColor: currentDiceThemeColor() }),
                     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout-3D')), 9000))
                 ]);
                 if (!Array.isArray(res) || !res.length) throw new Error('Résultat 3D vide');

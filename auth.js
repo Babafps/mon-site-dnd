@@ -24,7 +24,7 @@ function genSessionCode() {
 // Tous les écrans plein page sont des .screen-view ; on bascule
 // .hidden. `gm-active` sur <body> permet d'adapter le menu ☰.
 // =====================================================
-const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen', 'homebrew-screen'];
+const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'legal-screen', 'pricing-screen'];
 window.navTo = function (id) {
     APP_SCREENS.forEach(s => {
         const el = document.getElementById(s);
@@ -108,7 +108,19 @@ window.SupaAuth = {
             .from('characters')
             .insert({ user_id: this.currentUser.id, name, level: 1, class: '' })
             .select().single();
-        if (error) { console.warn('createCharacter:', error); return null; }
+        if (error) {
+            console.warn('createCharacter:', error);
+            // 42501 = la RLS a refusé. Sur cette table, la seule raison est le
+            // quota de fiches synchronisées : autant le dire, plutôt que de
+            // laisser croire à une panne.
+            if (error.code === '42501' || /row-level security/i.test(error.message || '')) {
+                this.lastCreateError = 'quota';
+            } else {
+                this.lastCreateError = 'erreur';
+            }
+            return null;
+        }
+        this.lastCreateError = null;
         return data;
     },
 
@@ -569,6 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showScreen('home-screen');
         loadUserDataIntoLocalStorage(user.id);
+        window.Ent?.attach(user);
     } else {
         showScreen('login-screen');
         if (AUTH_LINK_ERROR) authBootMsg('Lien invalide ou expiré. Clique sur « Mot de passe oublié ? » pour en recevoir un nouveau.', 'error');
@@ -590,12 +603,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             // d'écraser des modifications locales non sauvegardées).
             const loginVisible = !document.getElementById('login-screen').classList.contains('hidden');
             const loadingVisible = !document.getElementById('loading-screen').classList.contains('hidden');
+            window.Ent?.attach(session.user);
             if (loginVisible || loadingVisible) {
                 showScreen('home-screen');
                 loadUserDataIntoLocalStorage(session.user.id);
             }
         }
         if (event === 'SIGNED_OUT') {
+            window.Ent?.detach();
             showScreen('login-screen');
         }
     });

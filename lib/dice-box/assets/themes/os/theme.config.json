@@ -1,0 +1,19 @@
+{
+	"name": "Os",
+	"systemName": "os",
+	"author": "Bones & Blades",
+	"version": 1,
+	"material": {
+		"type": "color",
+		"diffuseTexture": {
+			"light": "../default/diffuse-light.png",
+			"dark": "../default/diffuse-dark.png"
+		},
+		"diffuseLevel": 0.9,
+		"bumpTexture": "../default/normal.png",
+		"bumpLevel": 0.95,
+		"specularTexture": "../default/specular.jpg",
+		"specularPower": 0.35
+	},
+	"diceAvailable": ["d4","d6","d8","d10","d12","d20","d100"]
+}
