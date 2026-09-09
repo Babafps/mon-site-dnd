@@ -4442,9 +4442,13 @@ body.theme-dark .hb-chip { background: rgba(255,255,255,0.05); border-color: rgb
 .gear-row.is-pinned { background: linear-gradient(120deg, rgba(196,155,53,0.13), rgba(122,40,40,0.04)); border-color: rgba(196,155,53,0.35); }
 .gear-row.is-equipped { border-left: 3px solid var(--accent-color); }
 
-.gear-line { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: default; }
+.gear-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; row-gap: 5px; padding: 5px 8px; cursor: default; }
 .gear-name {
-    flex: 0 1 auto; min-width: 4ch; font-weight: bold; font-size: 0.89rem;
+    /* `min-width: 4ch` réduisait le nom à « Tri… », « Epe… » : tout le reste de
+       la ligne est en `flex: 0 0 auto`, donc le nom encaissait seul toute la
+       compression. Il lui faut de quoi rester lisible, et c'est aux pastilles
+       de passer à la ligne — d'où le `flex-wrap` sur .gear-line. */
+    flex: 1 1 14ch; min-width: 14ch; font-weight: bold; font-size: 0.89rem;
     color: var(--text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .atk-row .gear-name { font-family: 'Cinzel', serif; font-size: 0.92rem; color: var(--primary-color); }
@@ -6809,3 +6813,117 @@ body.theme-dark .cos-link { color: var(--accent-color); }
    manuelle » et le bloc « jet de sauvegarde » restaient donc affichés en
    permanence, et « Bonus au toucher » apparaissait deux fois. */
 .afs [hidden], #atk-step-full [hidden] { display: none !important; }
+
+/* =====================================================================
+   ARMES MAGIQUES — particules, listes répétables, widget de capacités
+   ===================================================================== */
+
+/* ---------- Listes répétables dans le formulaire ---------- */
+.afs-rep { display: flex; flex-direction: column; gap: 8px; }
+.afs-rep:empty { display: none; }
+.afs-rep-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px; border: 1px solid var(--soft-border); border-radius: 3px;
+    background: var(--sheet-bg-color);
+}
+.afs-rep-row > input[type="text"] {
+    flex: 1 1 6rem; min-width: 0; box-sizing: border-box;
+    font-family: 'Lora', serif; font-size: .92rem; padding: 9px 10px; min-height: 40px;
+    border: 1px solid var(--soft-border); border-radius: 3px;
+    background: var(--glass-bg); color: var(--text-color);
+}
+.afs-rep-row.is-power > .rep-name { flex: 1 1 100%; font-weight: 600; }
+.afs-rep-row .rep-desc {
+    flex: 1 1 100%; box-sizing: border-box; resize: vertical;
+    font-family: 'Lora', serif; font-size: .9rem; line-height: 1.45; padding: 9px 10px;
+    border: 1px solid var(--soft-border); border-radius: 3px;
+    background: var(--glass-bg); color: var(--text-color);
+}
+.afs-rep-charges {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1 1 100%;
+    font-family: 'Courier New', monospace; font-size: .66rem;
+    letter-spacing: .1em; text-transform: uppercase; opacity: .65;
+}
+.afs-rep-charges input { width: 4.5rem; padding: 7px 8px; min-height: 38px; border: 1px solid var(--soft-border); border-radius: 3px; background: var(--glass-bg); color: var(--text-color); }
+.afs-rep-charges select { flex: 1 1 9rem; min-width: 0; padding: 7px 8px; min-height: 38px; border: 1px solid var(--soft-border); border-radius: 3px; background: var(--glass-bg); color: var(--text-color); font-family: 'Lora', serif; font-size: .82rem; text-transform: none; letter-spacing: 0; }
+.afs-del {
+    flex: none; width: 38px; height: 38px; cursor: pointer; border-radius: 3px;
+    border: 1px solid var(--soft-border); background: transparent;
+    color: var(--text-color); opacity: .55; font-size: .9rem;
+}
+.afs-del:hover { opacity: 1; background: var(--glass-hover); }
+.afs-add {
+    align-self: flex-start; margin-top: 4px; cursor: pointer;
+    font-family: 'Lora', serif; font-size: .84rem; font-weight: 500;
+    padding: 10px 14px; min-height: 40px;
+    border: 1px dashed var(--accent-color); border-radius: 3px;
+    background: transparent; color: var(--accent-color);
+}
+.afs-add:hover { background: color-mix(in srgb, var(--accent-color) 12%, transparent); }
+
+/* ---------- Particules : discrètes, et coupées si on préfère le calme ---------- */
+.atk-row.is-magic { position: relative; overflow: hidden; }
+.atk-sparks { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.atk-sparks > i {
+    position: absolute; bottom: -4px; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--accent-color); opacity: 0;
+    animation: atkSpark 7s ease-in-out infinite;
+}
+.atk-sparks > i:nth-child(1) { left: 12%; animation-delay: 0s; }
+.atk-sparks > i:nth-child(2) { left: 31%; animation-delay: 1.6s; }
+.atk-sparks > i:nth-child(3) { left: 54%; animation-delay: 3.1s; }
+.atk-sparks > i:nth-child(4) { left: 72%; animation-delay: 4.4s; }
+.atk-sparks > i:nth-child(5) { left: 89%; animation-delay: 5.8s; }
+@keyframes atkSpark {
+    0%   { transform: translateY(0) scale(.6); opacity: 0; }
+    12%  { opacity: .5; }
+    55%  { opacity: .28; }
+    100% { transform: translateY(-30px) scale(1); opacity: 0; }
+}
+.atk-row.is-magic > .gear-line, .atk-row.is-magic > .gear-detail,
+.atk-row.is-magic > .atk-optbar, .atk-row.is-magic > .atk-powerbox { position: relative; z-index: 1; }
+.atk-row.is-magic .gear-name { color: var(--accent-color); }
+/* Une animation permanente ne s'impose à personne. */
+@media (prefers-reduced-motion: reduce) { .atk-sparks { display: none; } }
+
+/* ---------- Widget d'utilisation des capacités ---------- */
+.atk-powerbox {
+    margin: 4px 8px 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px;
+    border: 1px solid var(--accent-color); border-radius: 4px;
+    background: color-mix(in srgb, var(--accent-color) 9%, transparent);
+}
+.pw-title {
+    font-family: 'Courier New', monospace; font-size: .62rem; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent-color);
+}
+.pw-row {
+    display: flex; flex-direction: column; gap: 6px; padding: 9px 10px;
+    border: 1px solid var(--soft-border); border-radius: 3px; background: var(--glass-bg);
+}
+.pw-row.is-spent { opacity: .55; }
+.pw-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pw-head strong { font-family: 'Cinzel', serif; font-size: .92rem; }
+.pw-ch {
+    font-family: 'Courier New', monospace; font-size: .74rem; font-weight: 700;
+    padding: 3px 7px; border-radius: 2px;
+    border: 1px solid var(--soft-border); color: var(--text-color);
+}
+.pw-ch.is-empty { color: var(--primary-color); border-color: var(--primary-color); }
+.pw-rech { font-size: .74rem; opacity: .55; font-style: italic; }
+.pw-desc { margin: 0; font-size: .84rem; line-height: 1.5; opacity: .8; }
+.pw-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.pw-use {
+    flex: 1 1 auto; cursor: pointer; min-height: 40px; padding: 9px 14px;
+    font-family: 'Lora', serif; font-size: .88rem; font-weight: 600;
+    border-radius: 3px; border: 1px solid var(--primary-hover);
+    background: var(--primary-color); color: #fff;
+}
+.pw-use:hover:not(:disabled) { background: var(--primary-hover); }
+.pw-use:disabled { cursor: not-allowed; background: transparent; color: var(--text-color); opacity: .5; border-color: var(--soft-border); }
+.pw-plus, .pw-full {
+    flex: none; width: 40px; min-height: 40px; cursor: pointer; border-radius: 3px;
+    border: 1px solid var(--soft-border); background: transparent;
+    color: var(--text-color); opacity: .7; font-size: .95rem;
+}
+.pw-plus:hover, .pw-full:hover { opacity: 1; background: var(--glass-hover); }
+.gear-chip.atk-powers { color: var(--accent-color); border-color: var(--accent-color); }

@@ -4684,6 +4684,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const doubleDice = (expr) => String(expr || '').replace(/(\d*)d(\d+)/gi, (_, n, f) => ((parseInt(n || '1', 10) || 1) * 2) + 'd' + f);
         const hasVal = (v) => v !== undefined && v !== null && String(v).trim() !== '';
 
+        // ---------- Dégâts additionnels et capacités, en nombre libre ----------
+        // Une arme ne portait qu'UN type de dégâts bonus (bonusDmg/bonusDmgType).
+        // Elle en porte maintenant autant qu'on veut, dans `damages`. Les armes
+        // enregistrées avant cette version n'ont pas ce tableau : on les lit
+        // comme une liste d'un seul élément, et rien de ce qui existe ne bouge.
+        const extraDamages = (atk) => {
+            if (Array.isArray(atk.damages) && atk.damages.length) {
+                return atk.damages.filter(d => d && hasVal(d.dice));
+            }
+            return hasVal(atk.bonusDmg) ? [{ dice: atk.bonusDmg, type: atk.bonusDmgType || '' }] : [];
+        };
+        /** Les capacités d'un objet magique : nom, effet, et des charges à soi. */
+        const weaponPowers = (atk) => (Array.isArray(atk.abilities) ? atk.abilities : [])
+            .filter(a => a && hasVal(a.name));
+        /** Une arme est « magique » dès qu'elle en a l'un des signes. */
+        const isMagicWeapon = (atk) => hasVal(atk.rarity) || !!atk.reqAttune
+            || weaponPowers(atk).length > 0 || extraDamages(atk).length > 0;
+
         // ---------- Auto-calcul du toucher et des dégâts ----------
         // Le bonus au toucher d'une arme, c'est modificateur de carac + maîtrise,
         // et les dégâts ajoutent le même modificateur. La seule subtilité de la
@@ -4753,7 +4771,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 lines.push({ value: res.total, type: type || '', detail: res.detail });
             };
             add(main, atk.dmgType);
-            add(atk.bonusDmg, atk.bonusDmgType);
+            extraDamages(atk).forEach(d => add(d.dice, d.type));
             return { total, lines };
         }
 
@@ -4799,7 +4817,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (nat >= critThreshold) crit = true;
             }
 
-            const wantDamage = part !== 'hit' && (hasVal(atk.dmg) || hasVal(atk.bonusDmg));
+            const wantDamage = part !== 'hit' && (hasVal(atk.dmg) || extraDamages(atk).length > 0);
             const dmg = wantDamage ? rollWeaponDamage(atk, { crit, versatile: o.versatile }) : null;
 
             // Charges : consommées par un usage effectif, pas par un jet de dégâts seul.
@@ -4873,6 +4891,85 @@ document.addEventListener('DOMContentLoaded', () => {
         const detailRow = (label, value) => value
             ? `<div class="gear-drow"><span>${label}</span><div>${value}</div></div>` : '';
 
+
+        // ==========================================
+        // WIDGET « UTILISER UNE CAPACITÉ »
+        //
+        // Un objet magique porte ses propres capacités, chacune avec ses
+        // charges. Les utiliser ne doit pas obliger à rouvrir le formulaire
+        // d'édition : ce petit panneau se pose sous l'arme, décompte, et
+        // se referme. Il n'écrit que dans l'arme concernée.
+        // ==========================================
+        const RECH_TXT = { none: '', short: 'repos court', long: 'repos long', dawn: 'à l’aube' };
+
+        function fermerPouvoirs() {
+            document.querySelectorAll('.atk-powerbox').forEach(b => b.remove());
+            document.querySelectorAll('.atk-powers[aria-expanded="true"]')
+                .forEach(b => b.setAttribute('aria-expanded', 'false'));
+        }
+
+        function ouvrirPouvoirs(row, index) {
+            const dejaOuvert = row.querySelector('.atk-powerbox');
+            fermerPouvoirs();
+            if (dejaOuvert) return;                       // deuxième clic : on referme
+            const atk = attacks[index]; if (!atk) return;
+            const pouvoirs = weaponPowers(atk);
+            if (!pouvoirs.length) return;
+
+            const html = pouvoirs.map((p, i) => {
+                const illimite = p.chargesMax == null;
+                const reste = parseInt(p.charges, 10) || 0;
+                const vide = !illimite && reste <= 0;
+                const jauge = illimite ? '' :
+                    `<span class="pw-ch${vide ? ' is-empty' : ''}">${reste} / ${p.chargesMax}</span>`;
+                const rech = (!illimite && RECH_TXT[p.recharge]) ? `<em class="pw-rech">recharge ${RECH_TXT[p.recharge]}</em>` : '';
+                return `<div class="pw-row${vide ? ' is-spent' : ''}">
+                    <div class="pw-head"><strong>${escAb(p.name)}</strong>${jauge}${rech}</div>
+                    ${p.desc ? `<p class="pw-desc">${escAb(p.desc)}</p>` : ''}
+                    <div class="pw-acts">
+                        <button class="pw-use" data-pi="${i}"${vide ? ' disabled' : ''}>${vide ? 'Plus de charge' : '✨ Utiliser'}</button>
+                        ${illimite ? '' : `<button class="pw-plus" data-pi="${i}" title="Rendre une charge">＋</button>
+                        <button class="pw-full" data-pi="${i}" title="Tout recharger">⟳</button>`}
+                    </div>
+                </div>`;
+            }).join('');
+
+            row.insertAdjacentHTML('beforeend',
+                `<div class="atk-powerbox"><div class="pw-title">Capacités de ${escAb(atk.name)}</div>${html}</div>`);
+            const b = row.querySelector('.atk-powers'); if (b) b.setAttribute('aria-expanded', 'true');
+        }
+
+        /** Une capacité utilisée : on décompte, on annonce, on garde le panneau ouvert. */
+        function utiliserPouvoir(index, pi) {
+            const atk = attacks[index]; if (!atk) return;
+            const p = weaponPowers(atk)[pi]; if (!p) return;
+            if (p.chargesMax != null) {
+                const reste = parseInt(p.charges, 10) || 0;
+                if (reste <= 0) return;
+                p.charges = reste - 1;
+                setStore('dnd-attacks', attacks);
+            }
+            if (window.showAppToast) {
+                const reste = p.chargesMax == null ? '' : ` — ${p.charges} / ${p.chargesMax}`;
+                window.showAppToast(`✨ ${p.name}${reste}`);
+            }
+            // Une capacité qui décrit des dégâts (« 2d6 de feu ») peut être lancée
+            // directement : on épargne au joueur un aller-retour vers les dés.
+            const des = String(p.desc || '').match(/\b(\d*d\d+(?:\s*[+-]\s*\d+)?)\b/i);
+            if (des && window.rollExpression) {
+                const r = rollExpression(des[1].replace(/\s+/g, ''));
+                if (!r.error && window.showAppToast) window.showAppToast(`🎲 ${des[1]} → ${r.total}`);
+            }
+            majPouvoirs(index);
+        }
+
+        function majPouvoirs(index) {
+            const row = document.querySelector(`.atk-row[data-i="${index}"]`);
+            if (!row || !row.querySelector('.atk-powerbox')) return;
+            row.querySelector('.atk-powerbox').remove();
+            ouvrirPouvoirs(row, index);
+        }
+
         function renderAttacks() {
             const list = document.getElementById('attacks-list'); if(!list) return;
             renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); });
@@ -4919,8 +5016,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     detailRow('Critique', (parseInt(atk.crit, 10) || 20) < 20 ? 'sur un ' + escAb(atk.crit) + ' ou plus' : ''),
                     detailRow('À deux mains', hasVal(atk.dmg2)
                         ? `<button class="gear-chip atk-dmg2" title="Maj+clic pour un critique"><b>${escAb(damageExprOf(atk, true))}</b></button>` : ''),
-                    detailRow('Dégâts bonus', hasVal(atk.bonusDmg)
-                        ? `${escAb(atk.bonusDmg)}${atk.bonusDmgType ? ' ' + escAb(atk.bonusDmgType) : ''} <em>(déjà compris dans le jet)</em>` : ''),
+                    detailRow('Dégâts bonus', extraDamages(atk).length
+                        ? extraDamages(atk).map(d => `${escAb(d.dice)}${d.type ? ' ' + escAb(d.type) : ''}`).join(' · ') + ' <em>(déjà compris dans le jet)</em>' : ''),
+                    detailRow('Capacités', weaponPowers(atk).length
+                        ? weaponPowers(atk).map(a => escAb(a.name)).join(' · ') : ''),
                     detailRow('Recharge', hasVal(atk.chargesMax) ? escAb(rechargeHint(atk)) : ''),
                     detailRow('Note', hasVal(atk.notes) ? escAb(atk.notes) : ''),
                     hasVal(atk.desc) ? `<div class="gear-desc">${escAb(atk.desc).replace(/\n/g, '<br>')}</div>` : ''
@@ -4934,7 +5033,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const grip = hasVal(atk.dmg2)
                     ? `<button class="gear-chip atk-grip${twoH ? ' is-on' : ''}" title="${twoH ? 'Repasser à une main' : 'Passer à deux mains'}">${twoH ? '🙌 2 mains' : '✋ 1 main'}</button>` : '';
 
-                return `<div class="gear-row atk-row${atk.pinned ? ' is-pinned' : ''}${atk.equipped ? ' is-equipped' : ''}${extra ? '' : ' no-detail'}" data-i="${index}">
+                const magique = isMagicWeapon(atk);
+                const pouvoirs = weaponPowers(atk);
+                return `<div class="gear-row atk-row${atk.pinned ? ' is-pinned' : ''}${atk.equipped ? ' is-equipped' : ''}${extra ? '' : ' no-detail'}${magique ? ' is-magic' : ''}" data-i="${index}">
+                    ${magique ? '<span class="atk-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>' : ''}
                     <div class="gear-line">
                         <button class="gear-pin" title="${atk.pinned ? 'Ne plus épingler' : 'Épingler en haut de la liste'}">${atk.pinned ? '📌' : '☆'}</button>
                         <span class="gear-name">${escAb(atk.name)}</span>
@@ -4942,6 +5044,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="gear-spacer"></span>
                         <button class="gear-go atk-roll">${saveMode ? '💥 Dégâts' : '⚔️ Attaquer'}</button>
                         ${saveMode ? '' : `<button class="gear-chip atk-opts" title="Avantage, désavantage, critique" aria-expanded="false">⚙</button>`}
+                        ${pouvoirs.length ? `<button class="gear-chip atk-powers" title="Utiliser une capacité">✨ ${pouvoirs.length}</button>` : ''}
                         ${hit}${dmg}${grip}${res}
                         ${extra ? `<button class="gear-more" title="Voir le détail" aria-expanded="false">▾</button>` : ''}
                         <div class="gear-tools">
@@ -5000,6 +5103,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if(e.target.closest('.gear-more')) { toggleGearDetail(row); return; }
             // La prise à deux mains est mémorisée : on ne la redemande pas à chaque tour.
             if(e.target.closest('.atk-grip')) { a.twoHanded = !a.twoHanded; setStore('dnd-attacks', attacks); renderAttacks(); return; }
+            if(e.target.closest('.atk-powers')) { ouvrirPouvoirs(row, index); return; }
+            const use = e.target.closest('.pw-use');
+            if (use) { utiliserPouvoir(index, parseInt(use.dataset.pi, 10)); return; }
+            const plus = e.target.closest('.pw-plus');
+            if (plus) {
+                const p = weaponPowers(a)[parseInt(plus.dataset.pi, 10)];
+                if (p && p.chargesMax != null) {
+                    p.charges = Math.min(p.chargesMax, (parseInt(p.charges, 10) || 0) + 1);
+                    setStore('dnd-attacks', attacks); majPouvoirs(index);
+                }
+                return;
+            }
+            const full = e.target.closest('.pw-full');
+            if (full) {
+                const p = weaponPowers(a)[parseInt(full.dataset.pi, 10)];
+                if (p && p.chargesMax != null) { p.charges = p.chargesMax; setStore('dnd-attacks', attacks); majPouvoirs(index); }
+                return;
+            }
             if(e.target.closest('.atk-opts')) {
                 const bar = row.querySelector('.atk-optbar'); if(!bar) return;
                 const open = bar.classList.toggle('hidden') === false;
@@ -5048,6 +5169,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cat = atkEl('category'); if (cat) cat.value = activeAtkTab === 'Tout' ? 'Général' : activeAtkTab;
             const auto = atkEl('auto'); if (auto) auto.value = 'auto';
             ['req-attune', 'pinned', 'equipped', 'no-prof'].forEach(k => { const el = atkEl(k); if (el) el.checked = false; });
+            if (typeof AtkRep !== 'undefined') AtkRep.charger(null);
             atkSyncMode();
         }
         // Le bloc « jet de sauvegarde » ne sert qu'en mode sauvegarde, et la
@@ -5090,6 +5212,104 @@ document.addEventListener('DOMContentLoaded', () => {
         // continuent de fonctionner sans être touchés — et le joueur garde le
         // droit d'écrire « vorpale », que personne ne lui propose.
         // ==========================================
+
+        // ==========================================
+        // LISTES RÉPÉTABLES — dégâts et capacités en nombre libre
+        //
+        // Le DOM fait foi : chaque ligne est un petit formulaire, et on relit
+        // les lignes au moment d'enregistrer. Pas d'état parallèle à tenir
+        // synchronisé, donc rien qui puisse diverger de ce qui est affiché.
+        // ==========================================
+        const AtkRep = (function () {
+            const esc = (v) => String(v == null ? '' : v).replace(/"/g, '&quot;');
+
+            function ligneDegat(d) {
+                d = d || {};
+                return `<div class="afs-rep-row" data-kind="damage">
+                    <input type="text" class="rep-dice" placeholder="1d6" value="${esc(d.dice)}" autocomplete="off">
+                    <input type="text" class="rep-type" placeholder="de feu" value="${esc(d.type)}" autocomplete="off" list="afs-dmg-types">
+                    <button type="button" class="afs-del" title="Retirer cette ligne">✕</button>
+                </div>`;
+            }
+            function lignePouvoir(a) {
+                a = a || {};
+                return `<div class="afs-rep-row is-power" data-kind="power">
+                    <input type="text" class="rep-name" placeholder="Nom de la capacité" value="${esc(a.name)}" autocomplete="off">
+                    <button type="button" class="afs-del" title="Retirer cette capacité">✕</button>
+                    <textarea class="rep-desc" rows="2" placeholder="Ce que fait la capacité, son coût, sa durée…">${String(a.desc || '')}</textarea>
+                    <div class="afs-rep-charges">
+                        <span>Charges</span>
+                        <input type="number" class="rep-ch" min="0" placeholder="—" value="${esc(a.charges)}">
+                        <span>/</span>
+                        <input type="number" class="rep-chmax" min="0" placeholder="—" value="${esc(a.chargesMax)}">
+                        <select class="rep-rech">
+                            <option value="none">Pas de recharge</option>
+                            <option value="short">Repos court</option>
+                            <option value="long">Repos long</option>
+                            <option value="dawn">À l'aube</option>
+                        </select>
+                    </div>
+                </div>`;
+            }
+
+            function remplir(id, items, gabarit) {
+                const box = document.getElementById(id); if (!box) return;
+                box.innerHTML = (items || []).map(gabarit).join('');
+                if (id === 'afs-powers') {
+                    box.querySelectorAll('.afs-rep-row').forEach((row, i) => {
+                        const sel = row.querySelector('.rep-rech');
+                        if (sel) sel.value = (items[i] && items[i].recharge) || 'none';
+                    });
+                }
+            }
+
+            return {
+                // Recharge les deux listes depuis une arme (ou les vide).
+                charger(atk) {
+                    remplir('afs-damages', atk ? extraDamages(atk) : [], ligneDegat);
+                    remplir('afs-powers', atk ? weaponPowers(atk) : [], lignePouvoir);
+                },
+                ajouter(kind) {
+                    const box = document.getElementById(kind === 'power' ? 'afs-powers' : 'afs-damages');
+                    if (!box) return;
+                    box.insertAdjacentHTML('beforeend', kind === 'power' ? lignePouvoir({}) : ligneDegat({}));
+                    const dernier = box.lastElementChild;
+                    const premier = dernier && dernier.querySelector('input');
+                    if (premier) premier.focus();
+                },
+                // Relecture du DOM au moment d'enregistrer.
+                lireDegats() {
+                    return [...document.querySelectorAll('#afs-damages .afs-rep-row')].map(r => ({
+                        dice: r.querySelector('.rep-dice').value.trim(),
+                        type: r.querySelector('.rep-type').value.trim()
+                    })).filter(d => d.dice);
+                },
+                lirePouvoirs() {
+                    return [...document.querySelectorAll('#afs-powers .afs-rep-row')].map(r => {
+                        const n = (s) => { const v = r.querySelector(s).value.trim(); return v === '' ? null : (parseInt(v, 10) || 0); };
+                        const p = {
+                            name: r.querySelector('.rep-name').value.trim(),
+                            desc: r.querySelector('.rep-desc').value.trim(),
+                            charges: n('.rep-ch'), chargesMax: n('.rep-chmax'),
+                            recharge: r.querySelector('.rep-rech').value || 'none'
+                        };
+                        // Charges saisies sans total : le total est ce qu'on a.
+                        if (p.chargesMax == null && p.charges != null) p.chargesMax = p.charges;
+                        if (p.charges == null && p.chargesMax != null) p.charges = p.chargesMax;
+                        return p;
+                    }).filter(p => p.name);
+                }
+            };
+        })();
+
+        // Ajout et retrait de lignes
+        document.addEventListener('click', (e) => {
+            const add = e.target.closest('.afs-add');
+            if (add) { e.preventDefault(); AtkRep.ajouter(add.dataset.add); return; }
+            const del = e.target.closest('.afs-rep-row .afs-del');
+            if (del) { e.preventDefault(); del.closest('.afs-rep-row').remove(); }
+        });
+
         (function initFromScratchForm() {
             const box = document.getElementById('afs-props');
             const champ = document.getElementById('new-atk-props');
@@ -5468,7 +5688,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveDC: v('save-dc'), saveAbility: v('save-ability'),
                 range: v('range'), crit: numOrNull('crit') || 20, props: v('props'),
                 dmg: v('dmg'), dmgType: v('dmg-type'), dmg2: v('dmg2'),
-                bonusDmg: v('bonus-dmg'), bonusDmgType: v('bonus-dmg-type'),
+                // Les deux champs figés d'avant ne sont plus dans le formulaire :
+                // on les vide, et la liste `damages` porte désormais tout.
+                bonusDmg: '', bonusDmgType: '',
+                damages: AtkRep.lireDegats(), abilities: AtkRep.lirePouvoirs(),
                 notes: v('notes'), desc: (atkEl('desc') || {}).value || '',
                 reqAttune: !!(atkEl('req-attune') || {}).checked,
                 isAttuned: false,
@@ -5507,7 +5730,7 @@ document.addEventListener('DOMContentLoaded', () => {
             set('save-dc', d.saveDC); set('save-ability', d.saveAbility);
             set('range', d.range); set('crit', d.crit && d.crit !== 20 ? d.crit : ''); set('props', d.props);
             set('dmg', d.dmg); set('dmg-type', d.dmgType); set('dmg2', d.dmg2);
-            set('bonus-dmg', d.bonusDmg); set('bonus-dmg-type', d.bonusDmgType);
+            AtkRep.charger(d);   // dégâts et capacités, ancien format converti au passage
             set('notes', d.notes); set('desc', d.desc);
             set('ammo', d.ammo); set('ammo-max', d.ammoMax);
             set('charges', d.charges); set('charges-max', d.chargesMax);
