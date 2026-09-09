@@ -555,6 +555,174 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const homeScreen = document.getElementById('home-screen'); const appScreen = document.getElementById('app-screen');
 
+
+    // ==========================================
+    // GLISSER-DÉPOSER — un seul moteur pour toutes les listes
+    //
+    // Les flèches ▲▼ restent : elles sont précises, accessibles au clavier,
+    // et certains les préfèrent. Le glissement s'ajoute à côté.
+    //
+    // Pointer Events plutôt que l'API HTML5 drag : celle-ci ne fonctionne pas
+    // au doigt, et une fiche se remplit beaucoup sur téléphone, en pleine
+    // partie. Ici, souris et doigt suivent le même chemin.
+    //
+    // Sur écran tactile on exige un appui maintenu (250 ms) avant de saisir :
+    // sans ça, le moindre défilement de la page arracherait une ligne.
+    // ==========================================
+
+    // ==========================================
+    // COCHER UNE CASE — la petite récompense
+    //
+    // Une case qui bascule ne dit rien : le carré change d'état, c'est tout.
+    // On y ajoute un éclat et quelques étincelles, seulement quand on COCHE
+    // (décocher n'est pas une victoire), et seulement au geste de l'utilisateur.
+    // ==========================================
+    (function initCheckSpark() {
+        const calme = () => window.matchMedia
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function etincelles(cx, cy, n) {
+            if (calme()) return;
+            const couche = document.createElement('span');
+            couche.className = 'chk-burst';
+            couche.style.left = cx + 'px';
+            couche.style.top = cy + 'px';
+            for (let i = 0; i < n; i++) {
+                const p = document.createElement('i');
+                const a = (Math.PI * 2 * i) / n + (Math.random() - .5) * .6;
+                const d = 13 + Math.random() * 15;
+                p.style.setProperty('--dx', Math.cos(a) * d + 'px');
+                p.style.setProperty('--dy', Math.sin(a) * d + 'px');
+                p.style.animationDelay = (Math.random() * 60) + 'ms';
+                couche.appendChild(p);
+            }
+            document.body.appendChild(couche);
+            setTimeout(() => couche.remove(), 850);
+        }
+
+        document.addEventListener('change', (e) => {
+            const c = e.target;
+            if (!c || c.type !== 'checkbox' || !c.checked) return;
+            if (!c.isConnected) return;
+            const r = c.getBoundingClientRect();
+            if (!r.width) return;
+            // L'éclat naît sur la case elle-même…
+            c.classList.remove('chk-pop');
+            void c.offsetWidth;                     // force le redémarrage de l'animation
+            c.classList.add('chk-pop');
+            setTimeout(() => c.classList.remove('chk-pop'), 500);
+            // …et les étincelles partent de son centre.
+            etincelles(r.left + r.width / 2, r.top + r.height / 2, 7);
+        }, true);
+
+        window.__chkSpark = etincelles;
+    })();
+
+    window.DragSort = (function () {
+        const SEUIL = 6;          // px avant qu'un mouvement compte comme un glissement
+        const APPUI_LONG = 250;   // ms d'appui maintenu au doigt
+
+        function enable(conteneur, opt) {
+            if (!conteneur || conteneur.dataset.dragSort) return;
+            conteneur.dataset.dragSort = '1';
+            const itemSel = opt.itemSel;
+            let ligne = null, depart = null, actif = false, minuteur = null;
+            let repere = null, y0 = 0, x0 = 0;
+
+            const items = () => [...conteneur.querySelectorAll(itemSel)];
+
+            function poserRepere(cible, avant) {
+                if (!repere) {
+                    repere = document.createElement('div');
+                    repere.className = 'ds-drop';
+                }
+                cible.parentNode.insertBefore(repere, avant ? cible : cible.nextSibling);
+            }
+            function nettoyer() {
+                clearTimeout(minuteur);
+                if (ligne) ligne.classList.remove('is-dragging');
+                conteneur.classList.remove('ds-active');
+                if (repere && repere.parentNode) repere.parentNode.removeChild(repere);
+                repere = null; ligne = null; depart = null; actif = false;
+                document.body.classList.remove('ds-grabbing');
+            }
+
+            function demarrer() {
+                if (!ligne) return;
+                actif = true;
+                ligne.classList.add('is-dragging');
+                conteneur.classList.add('ds-active');
+                document.body.classList.add('ds-grabbing');
+                if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+            }
+
+            conteneur.addEventListener('pointerdown', (e) => {
+                if (e.button != null && e.button !== 0) return;
+                // Un clic sur un bouton reste un clic : on ne saisit que le fond
+                // de la ligne, ou la poignée si le module en déclare une.
+                if (e.target.closest('button, input, select, textarea, a, label')) return;
+                const l = e.target.closest(itemSel);
+                if (!l || !conteneur.contains(l)) return;
+                if (opt.handleSel && !e.target.closest(opt.handleSel)) return;
+
+                ligne = l; depart = items().indexOf(l); y0 = e.clientY; x0 = e.clientX;
+                // Sans capture, les déplacements cessent d'être suivis dès que le
+                // curseur sort de la ligne saisie : le repère ne se posait jamais.
+                try { conteneur.setPointerCapture(e.pointerId); } catch (err) {}
+                if (e.pointerType === 'touch') minuteur = setTimeout(demarrer, APPUI_LONG);
+            });
+
+            conteneur.addEventListener('pointermove', (e) => {
+                if (!ligne) return;
+                if (!actif) {
+                    const d = Math.abs(e.clientY - y0);
+                    // Au doigt, un mouvement avant l'appui long = défilement : on lâche.
+                    if (e.pointerType === 'touch') { if (d > SEUIL) nettoyer(); return; }
+                    if (d < SEUIL && Math.abs(e.clientX - x0) < SEUIL) return;
+                    demarrer();
+                }
+                e.preventDefault();
+                const sous = document.elementFromPoint(e.clientX, e.clientY);
+                const cible = sous && sous.closest(itemSel);
+                if (!cible || cible === ligne || !conteneur.contains(cible)) return;
+                const r = cible.getBoundingClientRect();
+                poserRepere(cible, e.clientY < r.top + r.height / 2);
+            }, { passive: false });
+
+            const lacher = (e) => {
+                if (!ligne) return;
+                if (!actif) { nettoyer(); return; }
+                let arrivee = -1;
+                if (repere && repere.parentNode) {
+                    const apres = items().filter(x => x !== ligne);
+                    const suivant = repere.nextElementSibling;
+                    const i = suivant ? apres.indexOf(suivant) : -1;
+                    arrivee = i < 0 ? apres.length : i;
+                }
+                const d = depart;
+                try { conteneur.releasePointerCapture(e.pointerId); } catch (err) {}
+                nettoyer();
+                if (arrivee >= 0 && d >= 0 && arrivee !== d) opt.onDrop(d, arrivee);
+            };
+            conteneur.addEventListener('pointerup', lacher);
+            conteneur.addEventListener('pointercancel', nettoyer);
+            window.addEventListener('blur', nettoyer);
+        }
+
+        /** Déplace un élément d'un tableau, de `de` vers `vers`.
+         *  `vers` est un rang mesuré APRÈS retrait de l'élément — c'est ce que
+         *  renvoie le lâcher. Le corriger une seconde fois annulait purement et
+         *  simplement le déplacement d'un cran vers le bas. */
+        function move(arr, de, vers) {
+            if (de < 0 || de >= arr.length) return arr;
+            const [x] = arr.splice(de, 1);
+            arr.splice(Math.max(0, Math.min(vers, arr.length)), 0, x);
+            return arr;
+        }
+
+        return { enable, move };
+    })();
+
     if(!ACTIVE_CHAR_ID) { 
         if(homeScreen) homeScreen.classList.remove('hidden'); if(appScreen) appScreen.classList.add('hidden'); 
         // ===== ACCUEIL : liste des personnages (archivage, duplication, tri) =====
@@ -687,6 +855,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     : "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>";
                 return;
             }
+            // Glisser une fiche la range : on fige l'ordre affiché puis on
+            // réécrit les rangs. Comme les flèches, ça bascule en mode
+            // « personnalisé », sinon le tri d'origine reprendrait la main.
+            if (window.DragSort) window.DragSort.enable(listDiv, {
+                itemSel: '.char-card',
+                onDrop(de, vers) {
+                    const ordre = sortedCharacters(DB.get(CHAR_SORT_KEY) || 'created')
+                        .filter(c => showArchivedChars() || !metaOf(c.id).archived);
+                    window.DragSort.move(ordre, de, vers);
+                    seedCustomOrder(ordre);
+                    ordre.forEach(c => syncCharMetaCloud(c.id));
+                    const sel = document.getElementById('char-sort-select');
+                    if (sel) sel.value = 'custom';
+                    DB.set(CHAR_SORT_KEY, 'custom');
+                    renderCharacterList();
+                    if (window.showAppToast) window.showAppToast('↕️ Ordre des personnages enregistré');
+                }
+            });
+
             visible.forEach((c, idx) => {
                 const archived = !!metaOf(c.id).archived;
                 const card = document.createElement('div');
@@ -1816,6 +2003,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <textarea data-nf="body" class="auto-expand" placeholder="${opt.bodyPlaceholder}">${escAb(n.body)}</textarea>
                 </div>`).join('');
                 list.querySelectorAll('.auto-expand').forEach(t => adjustHeight(t));
+                // Ces trois listes n'avaient AUCUN réordonnancement, pas même de
+                // flèches : le glissement est ici la seule façon de les ranger.
+                // La poignée est l'en-tête, pour ne pas gêner la saisie du corps.
+                if (window.DragSort) window.DragSort.enable(list, {
+                    itemSel: '.qnote-card', handleSel: '.qnote-head',
+                    onDrop(de, vers) { window.DragSort.move(items, de, vers); save(); render(); }
+                });
             }
 
             const list = document.getElementById(opt.listId);
@@ -5090,12 +5284,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 { key: 'thrown', label: 'Lancer',        icon: '🎯' }
             ];
             const used = GROUPS.filter(g => entries.some(e => weaponType(e.atk) === g.key));
-            if (used.length < 2) { list.innerHTML = entries.map(rowHtml).join(''); return; }
+            if (used.length < 2) { list.innerHTML = entries.map(rowHtml).join(''); brancherGlisser(); return; }
             list.innerHTML = used.map(g => {
                 const rows = entries.filter(e => weaponType(e.atk) === g.key);
                 return `<div class="atk-group"><div class="atk-group-head">${g.icon} ${g.label}
                     <span>${rows.length}</span></div>${rows.map(rowHtml).join('')}</div>`;
             }).join('');
+            brancherGlisser();
+        }
+
+        // Le glissement travaille sur les indices RÉELS du tableau, pas sur la
+        // position visible : la liste peut être filtrée par onglet, groupée par
+        // type et triée (épinglées puis dégainées). On lit donc data-i.
+        function brancherGlisser() {
+            const list = document.getElementById('attacks-list'); if (!list || !window.DragSort) return;
+            list.querySelectorAll('.atk-group').forEach(g => cablerZone(g));
+            cablerZone(list);
+        }
+        function cablerZone(zone) {
+            window.DragSort.enable(zone, {
+                itemSel: '.atk-row',
+                onDrop(de, vers) {
+                    const lignes = [...zone.querySelectorAll('.atk-row')];
+                    const iSrc = parseInt(lignes[de].dataset.i, 10);
+                    const apres = lignes.filter((_, k) => k !== de);
+                    const voisin = apres[vers];
+                    const iDest = voisin ? parseInt(voisin.dataset.i, 10) : null;
+                    const arr = attacks;
+                    const [x] = arr.splice(iSrc, 1);
+                    let pos = iDest == null ? arr.length : arr.indexOf(attacks.find(a => a === attacks[iDest]));
+                    if (iDest != null) {
+                        // iDest était un indice d'AVANT le retrait : on le corrige.
+                        pos = iDest > iSrc ? iDest - 1 : iDest;
+                    } else pos = arr.length;
+                    arr.splice(pos, 0, x);
+                    // Réordonner à la main désactive l'épinglage automatique en tête,
+                    // sinon la ligne déplacée resauterait à sa place d'avant.
+                    setStore('dnd-attacks', attacks); renderAttacks();
+                    if (window.showAppToast) window.showAppToast('↕️ « ' + (x.name || 'arme') + ' » déplacée');
+                }
+            });
         }
 
         const atkListContainer = document.getElementById('attacks-list');
@@ -5968,6 +6196,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const weightDisplay = document.getElementById('inv-total-weight');
             if(weightDisplay) weightDisplay.textContent = `${(totalWeight % 1 !== 0) ? totalWeight.toFixed(2) : totalWeight} kg • ${inventory.length} objet${inventory.length > 1 ? 's' : ''}`
                 + (attunedCount ? ` • ${attunedCount} lié${attunedCount > 1 ? 's' : ''} sur 3` : '');
+
+            // Comme pour les armes : le glissement lit les indices réels (data-i)
+            // parce que la liste affichée est filtrée par onglet.
+            if (window.DragSort) window.DragSort.enable(listEl, {
+                itemSel: '.gear-row',
+                onDrop(de, vers) {
+                    const lignes = [...listEl.querySelectorAll('.gear-row')];
+                    const iSrc = parseInt(lignes[de].dataset.i, 10);
+                    const apres = lignes.filter((_, k) => k !== de);
+                    const voisin = apres[vers];
+                    const iDest = voisin ? parseInt(voisin.dataset.i, 10) : null;
+                    if (isNaN(iSrc)) return;
+                    const [x] = inventory.splice(iSrc, 1);
+                    const pos = iDest == null ? inventory.length : (iDest > iSrc ? iDest - 1 : iDest);
+                    inventory.splice(pos, 0, x);
+                    setStore('dnd-inventory', inventory); renderInventory();
+                    if (window.showAppToast) window.showAppToast('↕️ « ' + (x.name || 'objet') + ' » déplacé');
+                }
+            });
         }
 
         // Réordonne un objet dans l'ordre affiché (sans franchir la frontière favoris/non-favoris)

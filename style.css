@@ -7495,3 +7495,123 @@ input[type="password"]:focus, select:focus, textarea:focus {
 @media (prefers-reduced-motion: reduce) {
     .coin-box:hover, .qnote-card:hover, .macro-pill:hover, .item-card:hover { transform: none; }
 }
+
+/* =====================================================================
+   BOUTONS RAFFINÉS · GLISSER-DÉPOSER · COCHES ANIMÉES
+   ===================================================================== */
+
+/* ---------- 1. Un rouge plus bordeaux ----------
+   #7A2828 tirait sur la brique. #6B2436 descend vers le bordeaux : moins
+   d'orangé, un soupçon de violet. Le survol reste plus clair pour que le
+   relief du bouton se lise toujours. */
+:root {
+    --primary-color: #6B2436;
+    --primary-hover: #8A3049;
+}
+
+/* ---------- 2. Boutons : plus petits, plus fins, moins bombés ----------
+   L'ancien bouton était haut (10/18), gras et fortement ombré. On resserre
+   la géométrie, on passe la graisse de `bold` à 600, et on remplace la
+   grosse ombre bombée par un simple reflet haut. */
+.btn {
+    padding: 8px 15px;
+    font-weight: 600;
+    font-size: .88rem;
+    letter-spacing: .035em;
+    border-color: color-mix(in srgb, var(--accent-color) 38%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 1px 4px rgba(0,0,0,.16);
+}
+.btn:hover {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.2),
+                0 0 15px color-mix(in srgb, var(--accent-color) 28%, transparent);
+}
+.btn-small {
+    padding: 6px 12px; font-weight: 600; font-size: .8rem; letter-spacing: .02em;
+}
+.btn-icon {
+    padding: 6px 11px; font-weight: 600; font-size: .8rem;
+}
+.gear-go {
+    padding: 6px 12px; font-weight: 600; font-size: .8rem; letter-spacing: .02em;
+}
+/* Les grands boutons d'action gardent de la présence, sans redevenir massifs. */
+.atkq-btn.is-primary, .auth-btn-primary { padding: 12px 20px; font-weight: 600; }
+
+/* ---------- 3. Glisser-déposer ---------- */
+body.ds-grabbing { cursor: grabbing; user-select: none; }
+body.ds-grabbing * { cursor: grabbing !important; }
+
+/* La zone en cours de tri s'assombrit très légèrement : on sait où on joue. */
+.ds-active { position: relative; }
+.ds-active > *:not(.is-dragging):not(.ds-drop) { opacity: .72; transition: opacity .15s ease; }
+
+/* La ligne saisie : soulevée, inclinée d'un cheveu, bordée d'or. */
+.is-dragging {
+    opacity: .96 !important;
+    transform: scale(1.015) rotate(.35deg);
+    box-shadow: 0 16px 38px rgba(0,0,0,.34),
+                0 0 0 1px color-mix(in srgb, var(--accent-color) 55%, transparent),
+                0 0 26px color-mix(in srgb, var(--accent-color) 30%, transparent) !important;
+    position: relative; z-index: 30;
+    transition: transform .12s ease, box-shadow .12s ease;
+    pointer-events: none;
+}
+
+/* Le trait doré qui dit où la ligne va tomber. */
+.ds-drop {
+    height: 3px; margin: 3px 0; border-radius: 3px; pointer-events: none;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        var(--accent-color) 18%,
+        color-mix(in srgb, var(--accent-color) 100%, #fff 35%) 50%,
+        var(--accent-color) 82%,
+        transparent 100%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent-color) 75%, transparent);
+    animation: dsDrop .18s ease-out;
+}
+@keyframes dsDrop { from { transform: scaleX(.4); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+
+/* Une prise se signale : le curseur change sur ce qui se saisit. */
+.atk-row, .gear-row, .char-card, .qnote-head { cursor: grab; }
+.atk-row button, .gear-row button, .char-card button, .qnote-head input,
+.qnote-head button { cursor: pointer; }
+@media (hover: none) { .atk-row, .gear-row, .char-card, .qnote-head { cursor: default; } }
+
+/* ---------- 4. Cases à cocher : l'éclat ---------- */
+input[type="checkbox"] {
+    accent-color: var(--primary-color);
+    transition: transform .12s ease;
+}
+input[type="checkbox"]:active { transform: scale(.88); }
+.chk-pop { animation: chkPop .42s cubic-bezier(.2,1.4,.4,1); }
+@keyframes chkPop {
+    0%   { transform: scale(1);   box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-color) 70%, transparent); }
+    35%  { transform: scale(1.32); }
+    100% { transform: scale(1);   box-shadow: 0 0 0 12px transparent; }
+}
+
+/* ---------- 5. Les étincelles ---------- */
+.chk-burst {
+    position: fixed; z-index: 9999; width: 0; height: 0; pointer-events: none;
+}
+.chk-burst > i {
+    position: absolute; left: 0; top: 0;
+    width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%;
+    background: var(--accent-color);
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent-color) 80%, transparent);
+    animation: chkSpark .62s cubic-bezier(.15,.75,.35,1) forwards;
+}
+.chk-burst > i:nth-child(even) { background: var(--primary-hover); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--primary-hover) 70%, transparent); }
+@keyframes chkSpark {
+    0%   { transform: translate(0,0) scale(1);   opacity: 1; }
+    70%  { opacity: .85; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .is-dragging { transform: none; }
+    .ds-drop { animation: none; }
+    .chk-pop { animation: none; }
+    .chk-burst { display: none; }
+}
+@media print { .ds-drop, .chk-burst { display: none !important; } }
