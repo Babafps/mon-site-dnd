@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!conteneur || conteneur.dataset.dragSort) return;
             conteneur.dataset.dragSort = '1';
             const itemSel = opt.itemSel;
-            let ligne = null, depart = null, actif = false, minuteur = null;
+            let ligne = null, depart = null, actif = false, minuteur = null, pointeur = null;
             let repere = null, y0 = 0, x0 = 0;
 
             const items = () => [...conteneur.querySelectorAll(itemSel)];
@@ -643,13 +643,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (ligne) ligne.classList.remove('is-dragging');
                 conteneur.classList.remove('ds-active');
                 if (repere && repere.parentNode) repere.parentNode.removeChild(repere);
-                repere = null; ligne = null; depart = null; actif = false;
+                repere = null; ligne = null; depart = null; actif = false; pointeur = null;
                 document.body.classList.remove('ds-grabbing');
             }
 
             function demarrer() {
                 if (!ligne) return;
                 actif = true;
+                try { if (pointeur != null) conteneur.setPointerCapture(pointeur); } catch (err) {}
                 ligne.classList.add('is-dragging');
                 conteneur.classList.add('ds-active');
                 document.body.classList.add('ds-grabbing');
@@ -666,9 +667,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (opt.handleSel && !e.target.closest(opt.handleSel)) return;
 
                 ligne = l; depart = items().indexOf(l); y0 = e.clientY; x0 = e.clientX;
-                // Sans capture, les déplacements cessent d'être suivis dès que le
-                // curseur sort de la ligne saisie : le repère ne se posait jamais.
-                try { conteneur.setPointerCapture(e.pointerId); } catch (err) {}
+                pointeur = e.pointerId;
+                // On NE capture PAS ici. Un pointeur capturé fait retomber le
+                // `click` sur le conteneur au lieu de la ligne : les cartes de
+                // personnage cessaient de s'ouvrir. La capture attend donc que
+                // le glissement soit réellement engagé (voir demarrer()).
                 if (e.pointerType === 'touch') minuteur = setTimeout(demarrer, APPUI_LONG);
             });
 
@@ -700,7 +703,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     arrivee = i < 0 ? apres.length : i;
                 }
                 const d = depart;
-                try { conteneur.releasePointerCapture(e.pointerId); } catch (err) {}
+                try { if (pointeur != null) conteneur.releasePointerCapture(pointeur); } catch (err) {}
+                // Un glissement ne doit pas se terminer par un clic : sinon lâcher
+                // une arme sur sa liste déclencherait aussi son bouton.
+                const avaler = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+                conteneur.addEventListener('click', avaler, { capture: true, once: true });
+                setTimeout(() => conteneur.removeEventListener('click', avaler, true), 0);
                 nettoyer();
                 if (arrivee >= 0 && d >= 0 && arrivee !== d) opt.onDrop(d, arrivee);
             };
