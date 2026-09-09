@@ -5086,6 +5086,10 @@ document.addEventListener('DOMContentLoaded', () => {
         function weaponAbility(atk) {
             const mode = atk.autoAbility || 'manual';
             if (mode === 'str' || mode === 'dex') return mode;
+            // « La meilleure des deux » : le choix de la finesse, mais imposé
+            // quelle que soit l'arme — pratique pour un moine ou une aptitude
+            // maison qui l'autorise sur une arme qui n'a pas la propriété.
+            if (mode === 'best') return statMod('dex') >= statMod('str') ? 'dex' : 'str';
             if (mode !== 'auto') return null;
             if (hasProp(atk, /finesse/i)) return statMod('dex') >= statMod('str') ? 'dex' : 'str';
             return weaponType(atk) === 'ranged' ? 'dex' : 'str';
@@ -6131,14 +6135,56 @@ document.addEventListener('DOMContentLoaded', () => {
                     setStore('dnd-attacks', attacks); renderAttacks();
                 }
             });
-            // « Saisir à la main » / « Tout modifier à la main » : on reporte
-            // d'abord les commandes rapides, sinon le formulaire s'ouvrirait
-            // sans le bonus magique qu'on vient de régler.
+            // « Saisir à la main » : on tape SUR PLACE. Envoyer le joueur dans
+            // le formulaire à 21 champs pour écrire un nombre était une punition
+            // déguisée. « Tout modifier à la main », lui, ouvre bien le formulaire.
             stepReady.addEventListener('click', (e) => {
-                if (!e.target.closest('[data-atkq-manual]')) return;
-                applyMagic();
-                show(stepFull);
+                const lien = e.target.closest('[data-atkq-manual]');
+                if (!lien) return;
+                const carte = lien.closest('.atkq-card');
+                if (!carte) { applyMagic(); show(stepFull); return; }   // « Tout modifier »
+                saisirSurPlace(carte);
             });
+
+            /** Remplace le grand nombre d'une carte par un champ, et écrit
+             *  directement dans le formulaire complet — seule source de vérité. */
+            function saisirSurPlace(carte) {
+                if (carte.querySelector('.atkq-manual-in')) return;
+                const estToucher = carte.id === 'atkq-card-hit';
+                const cible = atkEl(estToucher ? 'bonus' : 'dmg');
+                const gros = carte.querySelector('.atkq-big');
+
+                if (estToucher) { const a = atkEl('auto'); if (a) { a.value = 'manual'; atkSyncMode(); } }
+
+                const champ = document.createElement('input');
+                champ.type = 'text';
+                champ.className = 'atkq-manual-in';
+                champ.value = cible ? (cible.value || '') : '';
+                champ.placeholder = estToucher ? '+7' : '1d8+3';
+                champ.setAttribute('aria-label', estToucher ? 'Bonus au toucher' : 'Dés de dégâts');
+                // On MASQUE le nombre, on ne le supprime pas : refresh() écrit
+                // dans ces nœuds à chaque frappe, et les détruire le faisait
+                // planter sur un élément absent.
+                [...gros.children].forEach(el => { el.dataset.cache = '1'; el.hidden = true; });
+                gros.appendChild(champ);
+                champ.focus(); champ.select();
+
+                const ecrire = () => { if (cible) { cible.value = champ.value.trim(); cible.dispatchEvent(new Event('input', { bubbles: true })); } };
+                champ.addEventListener('input', ecrire);
+                champ.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') { ev.preventDefault(); champ.blur(); }
+                    if (ev.key === 'Escape') {
+                        champ.value = ''; ecrire();
+                        champ.remove();
+                        [...gros.children].forEach(el => { if (el.dataset.cache) { el.hidden = false; delete el.dataset.cache; } });
+                        if (estToucher) { const a = atkEl('auto'); if (a) { a.value = 'auto'; atkSyncMode(); } }
+                        carte.querySelector('.atkq-auto').textContent = 'Auto';
+                        refresh();
+                    }
+                });
+                champ.addEventListener('blur', () => { ecrire(); refresh(); });
+                carte.querySelector('.atkq-auto').textContent = 'À la main';
+            }
             q('atkq-magic').addEventListener('click', (ev) => {
                 const on = !isOn(q('atkq-magic'));
                 setSwitch(q('atkq-magic'), on);
