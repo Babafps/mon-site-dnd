@@ -312,14 +312,27 @@
     function mountMenu() {
         const menu = document.getElementById('settings-dropdown');
         if (!menu || menu.querySelector('.pr-menu-cat')) return;
+        // Les tarifs ne méritent pas une rubrique à eux seuls : ils relèvent du
+        // compte, avec la déconnexion. On s'y range plutôt que d'ajouter une
+        // huitième catégorie à un menu qui en avait déjà trop.
+        const compte = [...menu.querySelectorAll('.menu-cat')]
+            .find(d => /Compte/.test(d.querySelector('summary')?.textContent || ''));
+        const hote = compte && compte.querySelector('.menu-cat-body');
+        if (hote) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn-menu-item pr-menu-cat';
+            b.dataset.pricingOpen = '1';
+            b.textContent = '✨ Voir les tarifs';
+            hote.insertBefore(b, hote.firstChild);
+            return;
+        }
         const cat = document.createElement('details');
         cat.className = 'menu-cat pr-menu-cat';
         cat.innerHTML = `<summary>✨ Tarifs</summary>
             <div class="menu-cat-body">
-                <p class="menu-hint">Ce qui reste gratuit, et ce qui ne l’est pas.</p>
                 <button type="button" class="btn-menu-item" data-pricing-open="1">✨ Voir les tarifs</button>
             </div>`;
-        // Juste avant les informations légales : les deux vont ensemble.
         const legal = menu.querySelector('.legal-menu-cat');
         if (legal) menu.insertBefore(cat, legal); else menu.appendChild(cat);
     }

@@ -5404,9 +5404,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const annuler = document.getElementById('afs-cancel');
             if (annuler) annuler.addEventListener('click', () => atkModal.classList.add('hidden'));
 
+            // ---------- L'éveil magique dans « créer de zéro » ----------
+            // Le repli « Objet magique » est l'endroit où une arme le devient :
+            // l'ouvrir doit produire le même éveil que l'interrupteur du
+            // parcours rapide, sinon les deux chemins ne racontent pas la
+            // même chose.
+            const replis = [...document.querySelectorAll('#atk-step-full details.afs-d')];
+            const replisMagie = replis.find(d => /Objet magique/.test(d.querySelector('summary')?.textContent || ''));
+            function majEnchant(ev) {
+                if (!replisMagie) return;
+                const on = replisMagie.open;
+                replisMagie.classList.toggle('is-enchanted', on);
+                if (window.__atkEnchanter) window.__atkEnchanter(on, ev);
+            }
+            if (replisMagie) {
+                replisMagie.addEventListener('toggle', () => majEnchant());
+                const som = replisMagie.querySelector('summary');
+                if (som) som.addEventListener('click', (ev) => {
+                    // `toggle` arrive après le clic : on garde le point cliqué
+                    // pour que l'onde parte bien de là.
+                    if (!replisMagie.open) setTimeout(() => majEnchant(ev), 0);
+                });
+            }
+
             // À chaque ouverture du formulaire, l'aperçu et les pastilles
             // doivent refléter l'état réel — sinon ils gardent l'arme d'avant.
-            const maj = () => { refletPastilles(); apercu(); };
+            const maj = () => { refletPastilles(); apercu(); majEnchant(); };
             window.__afsSync = maj;
             maj();
         })();
@@ -5514,11 +5537,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 // pastille affichait +0 pendant que l'arme partait en +3.
                 curBonus = 0;
                 setPill(0);
+                enchanter(false);
                 refresh();
                 show(stepReady);
             }
 
             function setSwitch(el, on) { if (el) el.setAttribute('aria-checked', on ? 'true' : 'false'); }
+
+            /** L'objet devient magique : la modale s'éveille, et une onde part
+             *  du point cliqué. Purement visuel — aucune donnée n'en dépend. */
+            function enchanter(on, ev) {
+                atkModal.classList.toggle('is-enchanted', !!on);
+                q('atkq-card-hit').classList.toggle('is-magic', !!on);
+                q('atkq-card-dmg').classList.toggle('is-magic', !!on);
+                if (!on || !ev) return;
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                const boite = atkModal.querySelector('.modal-box'); if (!boite) return;
+                const r = boite.getBoundingClientRect();
+                const onde = document.createElement('span');
+                onde.className = 'atkq-burst';
+                onde.style.left = ((ev.clientX || r.left + r.width / 2) - r.left) + 'px';
+                onde.style.top = ((ev.clientY || r.top + r.height / 2) - r.top) + 'px';
+                boite.appendChild(onde);
+                setTimeout(() => onde.remove(), 900);
+            }
+            window.__atkEnchanter = enchanter;
             function isOn(el) { return el && el.getAttribute('aria-checked') === 'true'; }
             function setPill(b) {
                 q('atkq-pills').querySelectorAll('.atkq-pill').forEach(p => p.classList.toggle('is-on', p.dataset.b === String(b)));
@@ -5582,8 +5625,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     oldHit.hidden = false; oldHit.textContent = (hit - b >= 0 ? '+' : '') + (hit - b);
                     oldDmg.hidden = false; oldDmg.textContent = damageExprOf(Object.assign({}, d, { dmgExtra: '' }), vers) || '';
                 } else { oldHit.hidden = true; oldDmg.hidden = true; }
-                q('atkq-card-hit').classList.toggle('is-magic', b > 0);
-                q('atkq-card-dmg').classList.toggle('is-magic', b > 0);
+                q('atkq-card-hit').classList.toggle('is-magic', magic);
+                q('atkq-card-dmg').classList.toggle('is-magic', magic);
 
                 // Polyvalente : proposée seulement si l'arme l'est
                 const vrow = q('atkq-vers-row');
@@ -5664,10 +5707,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 applyMagic();
                 show(stepFull);
             });
-            q('atkq-magic').addEventListener('click', () => {
+            q('atkq-magic').addEventListener('click', (ev) => {
                 const on = !isOn(q('atkq-magic'));
                 setSwitch(q('atkq-magic'), on);
                 q('atkq-magic-box').classList.toggle('hidden', !on);
+                enchanter(on, ev);
                 applyMagic();
             });
             q('atkq-vers').addEventListener('click', () => { setSwitch(q('atkq-vers'), !isOn(q('atkq-vers'))); refresh(); });
