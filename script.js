@@ -5080,6 +5080,91 @@ document.addEventListener('DOMContentLoaded', () => {
         // formulaire complet, et l'enregistrement passe par #btn-save-atk.
         // Une seule source de vérité, donc aucun risque de divergence.
         // ==========================================
+
+        // ==========================================
+        // FORMULAIRE « CRÉER DE ZÉRO » — pastilles, aperçu, navigation
+        //
+        // Les pastilles de propriétés ne stockent RIEN : elles écrivent dans
+        // #new-atk-props, le champ texte d'origine. Une seule source de vérité,
+        // donc l'enregistrement, l'édition et la regex « finesse » du calcul
+        // continuent de fonctionner sans être touchés — et le joueur garde le
+        // droit d'écrire « vorpale », que personne ne lui propose.
+        // ==========================================
+        (function initFromScratchForm() {
+            const box = document.getElementById('afs-props');
+            const champ = document.getElementById('new-atk-props');
+            if (!box || !champ) return;
+
+            const listeDe = (s) => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+            const fold = (s) => (window.SRD && window.SRD.fold) ? window.SRD.fold(s) : String(s).toLowerCase();
+
+            // Le champ fait foi : les pastilles ne font que refléter son contenu.
+            function refletPastilles() {
+                const presentes = listeDe(champ.value).map(fold);
+                box.querySelectorAll('.afs-pill').forEach(p => {
+                    p.classList.toggle('is-on', presentes.includes(fold(p.dataset.p)));
+                    p.setAttribute('aria-pressed', p.classList.contains('is-on') ? 'true' : 'false');
+                });
+            }
+
+            box.addEventListener('click', (e) => {
+                const p = e.target.closest('.afs-pill'); if (!p) return;
+                const mot = p.dataset.p;
+                const actuelles = listeDe(champ.value);
+                const i = actuelles.findIndex(x => fold(x) === fold(mot));
+                if (i >= 0) actuelles.splice(i, 1); else actuelles.push(mot);
+                champ.value = actuelles.join(', ');
+                champ.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            champ.addEventListener('input', () => { refletPastilles(); apercu(); });
+
+            // ---------- Aperçu vivant ----------
+            // Il relit le formulaire à chaque frappe et passe par les mêmes
+            // fonctions de calcul que la fiche : ce qu'on lit ici est ce qui
+            // sera joué, pas une approximation.
+            const pv = { nom: document.getElementById('afs-pv-name'), hit: document.getElementById('afs-pv-hit'), dmg: document.getElementById('afs-pv-dmg') };
+            function apercu() {
+                if (!pv.nom) return;
+                const v = (k) => { const el = atkEl(k); return el ? el.value.trim() : ''; };
+                const brouillon = {
+                    props: v('props'), wtype: v('wtype'), dmg: v('dmg'), dmg2: v('dmg2'),
+                    autoAbility: v('auto') || 'manual', hitExtra: v('hit-extra'), dmgExtra: v('dmg-extra'),
+                    noProf: !!(atkEl('no-prof') || {}).checked, bonus: v('bonus')
+                };
+                pv.nom.textContent = v('name') || 'Arme personnalisée';
+                if (v('mode') === 'save') {
+                    const dd = v('save-dc');
+                    pv.hit.textContent = dd ? 'DD ' + dd : '—';
+                } else {
+                    pv.hit.textContent = hitBonusOf(brouillon) || '—';
+                }
+                pv.dmg.textContent = damageExprOf(brouillon, false) || '—';
+            }
+            window.__afsApercu = apercu;
+
+            // Chaque champ qui pèse sur le résultat rafraîchit l'aperçu.
+            ['name', 'dmg', 'dmg2', 'dmg-type', 'auto', 'wtype', 'hit-extra', 'dmg-extra', 'bonus', 'mode', 'save-dc']
+                .forEach(k => { const el = atkEl(k); if (el) { el.addEventListener('input', apercu); el.addEventListener('change', apercu); } });
+            const np = atkEl('no-prof'); if (np) np.addEventListener('change', apercu);
+
+            // ---------- Navigation ----------
+            const retour = document.getElementById('afs-back');
+            if (retour) retour.addEventListener('click', () => {
+                // En édition, revenir à la recherche n'aurait pas de sens :
+                // on ferme, comme le faisait la croix.
+                if (editingAttackIndex >= 0) { atkModal.classList.add('hidden'); return; }
+                if (window.__atkQuickOpen) window.__atkQuickOpen();
+            });
+            const annuler = document.getElementById('afs-cancel');
+            if (annuler) annuler.addEventListener('click', () => atkModal.classList.add('hidden'));
+
+            // À chaque ouverture du formulaire, l'aperçu et les pastilles
+            // doivent refléter l'état réel — sinon ils gardent l'arme d'avant.
+            const maj = () => { refletPastilles(); apercu(); };
+            window.__afsSync = maj;
+            maj();
+        })();
+
         (function initQuickWeapon() {
             const q = (id) => document.getElementById(id);
             const stepSearch = q('atk-step-search'), stepReady = q('atk-step-ready'), stepFull = q('atk-step-full');
@@ -5101,6 +5186,9 @@ document.addEventListener('DOMContentLoaded', () => {
             function show(step) {
                 [stepSearch, stepReady, stepFull].forEach(el => el.classList.add('hidden'));
                 step.classList.remove('hidden');
+                // Pastilles et aperçu reflètent le formulaire : sans ça ils
+                // garderaient l'état de l'arme précédente.
+                if (step === stepFull && window.__afsSync) window.__afsSync();
                 const t = q('atk-modal-title');
                 if (t) t.textContent = step === stepSearch ? 'Ajouter une arme'
                     : step === stepReady ? 'Arme prête'

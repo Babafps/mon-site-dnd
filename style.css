@@ -6675,3 +6675,137 @@ body.theme-dark .cos-link { color: var(--accent-color); }
     .atkq-actions-r { margin-left: 0; }
     .atkq-actions-r .atkq-btn { flex: 1; text-align: center; }
 }
+
+/* =====================================================================
+   CRÉATION D'ARME DE ZÉRO — les 21 champs, rangés
+   Maquette Claude Design, planche E, en UNE colonne : la modale fait
+   600 px, deux colonnes y donneraient 280 px chacune — et une seule
+   colonne rend l'ordre de tabulation conforme à la numérotation.
+   ===================================================================== */
+.afs { display: flex; flex-direction: column; gap: 18px; }
+.afs-top { display: flex; flex-direction: column; gap: 4px; }
+.afs-lede { margin: 2px 0 0; font-size: .84rem; font-style: italic; opacity: .58; }
+
+/* ---------- Groupes numérotés ---------- */
+.afs-g {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 16px; border: 1px solid var(--soft-border); border-radius: 4px;
+    background: var(--glass-bg);
+}
+.afs-h {
+    display: flex; align-items: center; gap: 10px; margin: 0;
+    font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+    letter-spacing: .02em;
+}
+.afs-n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; flex: none; border-radius: 50%;
+    background: var(--primary-color); color: #fff;
+    font-family: 'Courier New', monospace; font-size: .78rem; font-weight: 700;
+}
+
+/* ---------- Un champ = une étiquette VISIBLE + son entrée ----------
+   L'ancien formulaire n'avait que des placeholders : dès qu'on tapait,
+   l'intitulé disparaissait et plus rien ne disait ce qu'on remplissait. */
+.afs-f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.afs-f > label {
+    font-family: 'Courier New', monospace; font-size: .66rem; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; opacity: .6;
+}
+.afs-f input[type="text"], .afs-f input[type="number"], .afs-f select, .afs-f textarea {
+    width: 100%; min-width: 0; box-sizing: border-box;
+    font-family: 'Lora', serif; font-size: .95rem;
+    padding: 11px 12px; min-height: 44px;
+    border: 1px solid var(--soft-border); border-radius: 3px;
+    background: var(--sheet-bg-color); color: var(--text-color);
+}
+.afs-f textarea { min-height: 90px; resize: vertical; line-height: 1.5; }
+.afs-f input:focus, .afs-f select:focus, .afs-f textarea:focus {
+    outline: 0; border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+.afs-f input::placeholder, .afs-f textarea::placeholder { opacity: .4; }
+.afs-2 { display: flex; gap: 12px; flex-wrap: wrap; }
+.afs-2 > * { flex: 1 1 180px; min-width: 0; }
+.afs-row { display: flex; gap: 8px; align-items: stretch; }
+.afs-row > input { flex: 1; min-width: 0; }
+.afs-row > .btn-small { flex: none; min-height: 44px; padding: 0 14px; }
+.afs-hint { display: block; font-size: .78rem; line-height: 1.5; opacity: .55; font-style: italic; }
+.afs-check {
+    display: flex; align-items: center; gap: 9px; cursor: pointer;
+    font-size: .9rem; padding: 6px 0; min-height: 32px;
+}
+
+/* ---------- Replis, avec le prix annoncé ----------
+   « Objet magique · 6 champs » dit d'avance ce que coûte l'ouverture,
+   ce qu'un chevron nu ne dit pas. */
+.afs-d { border: 1px solid var(--soft-border); border-radius: 3px; overflow: hidden; }
+.afs-d > summary {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    padding: 12px 14px; min-height: 44px; list-style: none;
+    font-family: 'Lora', serif; font-size: .9rem; font-weight: 500;
+}
+.afs-d > summary::-webkit-details-marker { display: none; }
+.afs-d > summary::before {
+    content: '▸'; flex: none; opacity: .55;
+    transition: transform .15s ease; display: inline-block;
+}
+.afs-d[open] > summary::before { transform: rotate(90deg); }
+.afs-d > summary:hover { background: var(--glass-hover); }
+.afs-c {
+    margin-left: auto; flex: none;
+    font-family: 'Courier New', monospace; font-size: .68rem;
+    letter-spacing: .06em; opacity: .5;
+    border: 1px solid var(--soft-border); border-radius: 2px; padding: 4px 7px;
+}
+.afs-d[open] > summary { border-bottom: 1px solid var(--soft-border); }
+.afs-d > *:not(summary) { margin: 12px 14px; }
+.afs-d > *:not(summary):last-child { margin-bottom: 14px; }
+
+/* ---------- Propriétés : pastilles + saisie libre ----------
+   Les pastilles n'écrivent que dans #new-atk-props. Une seule source de
+   vérité : l'enregistrement, l'édition et le calcul ne changent pas. */
+.afs-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.afs-pill {
+    font-family: 'Lora', serif; font-size: .8rem; font-weight: 500;
+    padding: 9px 12px; min-height: 38px; cursor: pointer;
+    border: 1px solid var(--soft-border); border-radius: 999px;
+    background: transparent; color: var(--text-color); opacity: .75;
+}
+.afs-pill:hover { background: var(--glass-hover); opacity: 1; }
+.afs-pill.is-on {
+    background: var(--primary-color); border-color: var(--primary-hover);
+    color: #fff; opacity: 1;
+}
+.afs-pill.is-on::after { content: ' ✓'; }
+
+/* ---------- Aperçu vivant ---------- */
+.afs-preview {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 16px; border-radius: 4px;
+    border: 1px solid var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+}
+.afs-pv-l {
+    font-family: 'Courier New', monospace; font-size: .62rem; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent-color);
+}
+.afs-preview strong { font-family: 'Cinzel', serif; font-size: 1.05rem; }
+.afs-pv-n { display: flex; gap: 16px; margin-left: auto; font-size: .9rem; }
+.afs-pv-n b { font-family: 'Courier New', monospace; font-size: 1.05rem; }
+
+.afs-flags { display: flex; flex-direction: column; gap: 2px; }
+.afs-note { font-size: .8rem; opacity: .55; font-style: italic; }
+
+@media (max-width: 560px) {
+    .afs-g { padding: 13px; }
+    .afs-2 { flex-direction: column; gap: 12px; }
+    .afs-pv-n { margin-left: 0; width: 100%; }
+    .afs-preview { gap: 8px; }
+}
+
+/* `atkSyncMode` masque les lignes inutiles avec l'attribut `hidden`. Mes
+   `display:flex` ci-dessus le battaient en spécificité : le bloc « saisie
+   manuelle » et le bloc « jet de sauvegarde » restaient donc affichés en
+   permanence, et « Bonus au toucher » apparaissait deux fois. */
+.afs [hidden], #atk-step-full [hidden] { display: none !important; }
