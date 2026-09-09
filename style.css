@@ -6927,3 +6927,124 @@ body.theme-dark .cos-link { color: var(--accent-color); }
 }
 .pw-plus:hover, .pw-full:hover { opacity: 1; background: var(--glass-hover); }
 .gear-chip.atk-powers { color: var(--accent-color); border-color: var(--accent-color); }
+
+/* =====================================================================
+   ARMES MAGIQUES — version accentuée
+   Ces règles viennent APRÈS le premier bloc et le remplacent là où elles
+   se recouvrent : particules plus nombreuses et plus vives, voile de
+   lueur qui balaie la ligne, halo sur le nom et sur le cadre.
+   ===================================================================== */
+
+/* ---------- Cadre et fond ---------- */
+.atk-row.is-magic {
+    position: relative; overflow: hidden;
+    border-color: color-mix(in srgb, var(--accent-color) 45%, var(--soft-border));
+    background:
+        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-color) 13%, transparent) 0%, transparent 58%),
+        radial-gradient(120% 140% at 100% 100%, color-mix(in srgb, var(--primary-color) 11%, transparent) 0%, transparent 58%);
+    box-shadow: inset 0 0 22px color-mix(in srgb, var(--accent-color) 12%, transparent);
+}
+
+/* ---------- Voile de lueur, lent, qui traverse la ligne ---------- */
+.atk-shimmer {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+}
+.atk-shimmer::before {
+    content: ''; position: absolute; top: 0; bottom: 0; width: 45%;
+    background: linear-gradient(100deg,
+        transparent 0%,
+        color-mix(in srgb, var(--accent-color) 26%, transparent) 45%,
+        color-mix(in srgb, var(--accent-color) 34%, transparent) 55%,
+        transparent 100%);
+    filter: blur(6px);
+    animation: atkShimmer 6.5s ease-in-out infinite;
+}
+@keyframes atkShimmer {
+    0%, 100% { transform: translateX(-140%); opacity: 0; }
+    35%      { opacity: .85; }
+    65%      { opacity: .85; }
+    100%     { transform: translateX(320%); }
+}
+
+/* ---------- Particules : plus nombreuses, plus vives, tailles variées ---------- */
+.atk-sparks > i {
+    position: absolute; bottom: -5px; border-radius: 50%;
+    width: 4px; height: 4px;
+    background: var(--accent-color);
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent-color) 75%, transparent);
+    opacity: 0;
+    animation: atkSpark 5s ease-in-out infinite;
+}
+.atk-sparks > i:nth-child(1) { left:  7%; animation-delay: 0s;    animation-duration: 5.2s; }
+.atk-sparks > i:nth-child(2) { left: 18%; animation-delay: .7s;   width: 3px; height: 3px; animation-duration: 4.4s; }
+.atk-sparks > i:nth-child(3) { left: 29%; animation-delay: 1.5s;  width: 5px; height: 5px; animation-duration: 6.1s; }
+.atk-sparks > i:nth-child(4) { left: 41%; animation-delay: 2.2s;  animation-duration: 4.8s; }
+.atk-sparks > i:nth-child(5) { left: 53%; animation-delay: 3s;    width: 3px; height: 3px; animation-duration: 5.6s; }
+.atk-sparks > i:nth-child(6) { left: 66%; animation-delay: 3.7s;  width: 5px; height: 5px; animation-duration: 4.6s; }
+.atk-sparks > i:nth-child(7) { left: 77%; animation-delay: 1.1s;  animation-duration: 5.9s; }
+.atk-sparks > i:nth-child(8) { left: 87%; animation-delay: 2.6s;  width: 3px; height: 3px; animation-duration: 4.2s; }
+.atk-sparks > i:nth-child(9) { left: 95%; animation-delay: 4.3s;  animation-duration: 5.4s; }
+@keyframes atkSpark {
+    0%   { transform: translateY(0) translateX(0) scale(.4); opacity: 0; }
+    10%  { opacity: .95; }
+    50%  { transform: translateY(-22px) translateX(5px) scale(1); opacity: .8; }
+    100% { transform: translateY(-46px) translateX(-4px) scale(.35); opacity: 0; }
+}
+
+/* ---------- Le nom porte le halo ---------- */
+.atk-row.is-magic .gear-name {
+    color: var(--accent-color);
+    text-shadow: 0 0 9px color-mix(in srgb, var(--accent-color) 55%, transparent);
+    animation: atkNameGlow 4.5s ease-in-out infinite;
+}
+@keyframes atkNameGlow {
+    0%, 100% { text-shadow: 0 0 7px color-mix(in srgb, var(--accent-color) 38%, transparent); }
+    50%      { text-shadow: 0 0 14px color-mix(in srgb, var(--accent-color) 78%, transparent); }
+}
+.atk-row.is-magic .gear-chip.atk-powers {
+    border-color: var(--accent-color); color: var(--accent-color);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent-color) 35%, transparent);
+    animation: atkNameGlow 4.5s ease-in-out infinite;
+}
+
+/* Rien de tout cela ne s'impose à qui préfère le calme. */
+@media (prefers-reduced-motion: reduce) {
+    .atk-sparks, .atk-shimmer { display: none; }
+    .atk-row.is-magic .gear-name, .atk-row.is-magic .gear-chip.atk-powers { animation: none; }
+}
+
+/* =====================================================================
+   MENU ⚙ — rangé en groupes étiquetés
+   ===================================================================== */
+.atk-optbar {
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+    padding: 10px 12px 12px 34px;
+    border-top: 1px dashed var(--soft-border);
+}
+.atk-optgrp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.atk-optlbl {
+    flex: 0 0 4.6rem; font-family: 'Courier New', monospace;
+    font-size: .62rem; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; opacity: .55; color: var(--text-color);
+}
+body.theme-dark .atk-optlbl { color: var(--text-color); }
+.atk-optrow { display: flex; gap: 6px; flex-wrap: wrap; flex: 1 1 auto; }
+.atk-opt {
+    padding: 8px 12px; min-height: 38px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--glass-bg);
+    font-family: 'Lora', serif; font-size: .8rem; color: var(--text-color);
+    transition: border-color .12s, background .12s, transform .12s;
+}
+.atk-opt em { font-style: normal; font-family: 'Courier New', monospace; font-size: .74rem; opacity: .65; margin-left: 4px; }
+.atk-opt:hover { border-color: var(--accent-color); background: var(--glass-hover); }
+.atk-opt:active { transform: scale(.96); }
+.atk-opt.is-on {
+    border-color: var(--primary-hover); background: var(--primary-color); color: #fff;
+}
+.atk-opt.is-on em { opacity: .85; }
+
+@media (max-width: 560px) {
+    .atk-optbar { padding-left: 12px; }
+    .atk-optgrp { align-items: flex-start; }
+    .atk-optlbl { flex: 1 1 100%; }
+}

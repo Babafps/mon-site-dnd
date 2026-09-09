@@ -5036,7 +5036,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const magique = isMagicWeapon(atk);
                 const pouvoirs = weaponPowers(atk);
                 return `<div class="gear-row atk-row${atk.pinned ? ' is-pinned' : ''}${atk.equipped ? ' is-equipped' : ''}${extra ? '' : ' no-detail'}${magique ? ' is-magic' : ''}" data-i="${index}">
-                    ${magique ? '<span class="atk-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>' : ''}
+                    ${magique ? '<span class="atk-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="atk-shimmer" aria-hidden="true"></span>' : ''}
                     <div class="gear-line">
                         <button class="gear-pin" title="${atk.pinned ? 'Ne plus épingler' : 'Épingler en haut de la liste'}">${atk.pinned ? '📌' : '☆'}</button>
                         <span class="gear-name">${escAb(atk.name)}</span>
@@ -5054,10 +5054,28 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     ${saveMode ? '' : `<div class="atk-optbar hidden">
-                        <span class="atk-optlbl">Lancer avec :</span>
-                        <button class="atk-opt" data-adv="adv">◑ Avantage</button>
-                        <button class="atk-opt" data-adv="dis">◐ Désavantage</button>
-                        <button class="atk-opt" data-crit="1">💥 Critique</button>
+                        <div class="atk-optgrp">
+                            <span class="atk-optlbl">Jet</span>
+                            <div class="atk-optrow">
+                                <button class="atk-opt" data-adv="normal">⚀ Normal</button>
+                                <button class="atk-opt" data-adv="adv">◑ Avantage</button>
+                                <button class="atk-opt" data-adv="dis">◐ Désavantage</button>
+                            </div>
+                        </div>
+                        <div class="atk-optgrp">
+                            <span class="atk-optlbl">Dégâts</span>
+                            <div class="atk-optrow">
+                                <button class="atk-opt" data-crit="1">💥 Critique</button>
+                                <button class="atk-opt" data-part="dmg">🎲 Dégâts seuls</button>
+                            </div>
+                        </div>
+                        ${hasVal(atk.dmg2) ? `<div class="atk-optgrp">
+                            <span class="atk-optlbl">Prise</span>
+                            <div class="atk-optrow">
+                                <button class="atk-opt atk-setgrip${twoH ? '' : ' is-on'}" data-grip="1">✋ Une main</button>
+                                <button class="atk-opt atk-setgrip${twoH ? ' is-on' : ''}" data-grip="2">🙌 Deux mains <em>${escAb(atk.dmg2)}</em></button>
+                            </div>
+                        </div>` : ''}
                     </div>`}
                     ${extra ? `<div class="gear-detail">${extra}</div>` : ''}
                 </div>`;
@@ -5129,7 +5147,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const opt = e.target.closest('.atk-opt');
             if(opt) {
-                rollAttackEntry(index, 'full', {
+                // La prise se règle sans lancer : c'est un état de l'arme.
+                if (opt.dataset.grip) {
+                    a.twoHanded = opt.dataset.grip === '2';
+                    setStore('dnd-attacks', attacks); renderAttacks();
+                    const r2 = document.querySelector(`.atk-row[data-i="${index}"] .atk-optbar`);
+                    if (r2) r2.classList.remove('hidden');
+                    return;
+                }
+                rollAttackEntry(index, opt.dataset.part === 'dmg' ? 'dmg' : 'full', {
                     advMode: opt.dataset.adv || undefined,
                     crit: opt.dataset.crit === '1',
                     versatile: !!a.twoHanded
