@@ -478,19 +478,60 @@ window.SyncQueue = {
         toast.textContent = '⏳ Sauvegarde...';
         toast.style.opacity = '1';
 
-        try { 
-            await window.SupaAuth.saveKeys(this.charId, entries); 
+        const ok = () => {
             toast.style.background = '#27ae60';
             toast.textContent = '✅ Sauvegardé';
             setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+        };
+        const rlsRefus = (e) => e && (e.code === '42501' || /row-level security/i.test(e.message || ''));
+        // Clés dont l'écriture peut être refusée pour cause de quota (lot 5b).
+        const AVEC_QUOTA = ['dnd-avatar'];
+
+        try {
+            await window.SupaAuth.saveKeys(this.charId, entries);
+            ok();
         }
-        catch (e) { 
-            console.error('Erreur Supabase:', e); 
+        catch (e) {
+            // Un portrait trop lourd ne doit PAS emporter le reste de la fiche
+            // avec lui : la base refuse le lot entier, on renvoie donc le lot
+            // sans l'image. Le portrait, lui, reste affiché en local.
+            const image = entries.filter(x => AVEC_QUOTA.includes(x.key));
+            const reste = entries.filter(x => !AVEC_QUOTA.includes(x.key));
+            if (rlsRefus(e) && image.length && reste.length) {
+                try {
+                    await window.SupaAuth.saveKeys(this.charId, reste);
+                    ok();
+                    avertirQuotaImage();
+                    return;
+                } catch (e2) { e = e2; }
+            } else if (rlsRefus(e) && image.length) {
+                avertirQuotaImage();
+                toast.style.opacity = '0';
+                return;
+            }
+            console.error('Erreur Supabase:', e);
             toast.style.background = '#c0392b';
             toast.textContent = '❌ Erreur de sauvegarde';
         }
     }
 };
+
+// Le refus du quota d'images est une information, pas une panne : la fiche est
+// sauvegardée, seul le portrait n'a pas pu monter sur le compte. Il reste
+// visible sur cet appareil.
+let _quotaImageDit = false;
+function avertirQuotaImage() {
+    if (_quotaImageDit) return;
+    _quotaImageDit = true;
+    const abonne = window.Ent ? window.Ent.has('abonnement') : false;
+    const msg = abonne
+        ? 'Ce portrait dépasse la taille maximale (2 Mo). Il reste affiché ici, mais il ne sera pas synchronisé.'
+        : 'Ce portrait dépasse le quota d’images du compte gratuit. Il reste affiché sur cet appareil, '
+          + 'mais il ne sera pas synchronisé. Un portrait plus léger, ou l’abonnement, lèvent la limite.';
+    if (window.showAppToast) window.showAppToast('🖼️ ' + msg, '#8a6320');
+    else console.warn(msg);
+    setTimeout(() => { _quotaImageDit = false; }, 60000);
+}
 
 // =====================================================
 // CHARGEMENT DES DONNÉES EN CACHE LOCAL

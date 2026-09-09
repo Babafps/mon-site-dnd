@@ -6457,3 +6457,13 @@ body.theme-dark .cos-link { color: var(--accent-color); }
     .cos-card, .cos-tab { transition: none; }
 }
 @media print { #cosmetics { display: none !important; } }
+
+/* Étiquette d'état de la synchronisation du contenu perso (homebrew-sync.js).
+   La phrase du pied de l'écran « Mon contenu » doit dire la vérité : local
+   seul, ou local plus compte. */
+.hb-sync { display: block; margin-bottom: 4px; font-weight: 600; }
+.hb-sync.is-local { opacity: 0.8; }
+.hb-sync.is-ok { color: #2e7d4f; }
+body.theme-dark .hb-sync.is-ok { color: #7fc47f; }
+.hb-sync.is-warn { color: #a06a1e; }
+body.theme-dark .hb-sync.is-warn { color: #e8a94c; }
