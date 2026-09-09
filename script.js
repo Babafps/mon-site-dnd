@@ -5001,6 +5001,48 @@ document.addEventListener('DOMContentLoaded', () => {
         const doubleDice = (expr) => String(expr || '').replace(/(\d*)d(\d+)/gi, (_, n, f) => ((parseInt(n || '1', 10) || 1) * 2) + 'd' + f);
         const hasVal = (v) => v !== undefined && v !== null && String(v).trim() !== '';
 
+
+        // ==========================================
+        // BOTTES D'ARMES (règles 2024)
+        //
+        // Chaque arme du manuel 2024 porte UNE botte. Elle ne s'applique que si
+        // le personnage a une aptitude qui la lui ouvre — c'est pourquoi elle
+        // n'est jamais cochée d'office : on la propose, le joueur décide.
+        //
+        // Les noms français suivent ceux d'AideDD. Le tableau `masteries` en
+        // accepte plusieurs : le manuel n'en donne qu'une par arme, mais une
+        // arme magique ou maison peut en cumuler.
+        // ==========================================
+        const BOTTES = {
+            coup_double:    { nom: 'Coup double',    en: 'Nick',   effet: "L'attaque supplémentaire de la propriété Légère se fait dans la même action d'Attaque." },
+            ecorchure:      { nom: 'Écorchure',      en: 'Graze',  effet: "Si l'attaque rate, la cible subit quand même des dégâts égaux au modificateur de caractéristique." },
+            enchainement:   { nom: 'Enchaînement',   en: 'Cleave', effet: "Après un coup réussi, attaque une seconde créature à portée." },
+            ouverture:      { nom: 'Ouverture',      en: 'Vex',    effet: "Après un coup réussi, avantage au prochain jet d'attaque contre cette créature." },
+            poussee:        { nom: 'Poussée',        en: 'Push',   effet: "Repousse la créature touchée jusqu'à 3 mètres en ligne droite." },
+            ralentissement: { nom: 'Ralentissement', en: 'Slow',   effet: "Réduit la Vitesse de la créature touchée de 3 mètres." },
+            renversement:   { nom: 'Renversement',   en: 'Topple', effet: "La créature touchée fait un jet de sauvegarde ou tombe à terre." },
+            sape:           { nom: 'Sape',           en: 'Sap',    effet: "La créature touchée a un désavantage à son prochain jet d'attaque." }
+        };
+
+        // Correspondance arme du SRD → botte du manuel 2024, par identifiant.
+        const BOTTE_PAR_ARME = {
+            club: 'ralentissement', dagger: 'coup_double', greatclub: 'poussee',
+            handaxe: 'ouverture', javelin: 'ralentissement', 'light-hammer': 'coup_double',
+            mace: 'sape', quarterstaff: 'renversement', sickle: 'coup_double', spear: 'sape',
+            dart: 'ouverture', 'crossbow-light': 'ralentissement', shortbow: 'ouverture', sling: 'ralentissement',
+            battleaxe: 'renversement', flail: 'sape', glaive: 'ecorchure', greataxe: 'enchainement',
+            greatsword: 'ecorchure', halberd: 'enchainement', lance: 'renversement', longsword: 'sape',
+            maul: 'renversement', morningstar: 'sape', pike: 'poussee', rapier: 'ouverture',
+            scimitar: 'coup_double', shortsword: 'ouverture', trident: 'renversement',
+            'war-pick': 'sape', warhammer: 'poussee', whip: 'ralentissement',
+            blowgun: 'ouverture', 'crossbow-hand': 'ouverture', 'crossbow-heavy': 'poussee', longbow: 'ralentissement'
+        };
+
+        /** Les bottes portées par une arme, filtrées de ce qui n'existe pas. */
+        const bottesDe = (atk) => (Array.isArray(atk && atk.masteries) ? atk.masteries : []).filter(k => BOTTES[k]);
+        /** La botte que le manuel 2024 attribue à cette arme du SRD, ou null. */
+        const botteDuSrd = (w) => (w && BOTTE_PAR_ARME[w.id]) || null;
+
         // ---------- Dégâts additionnels et capacités, en nombre libre ----------
         // Une arme ne portait qu'UN type de dégâts bonus (bonusDmg/bonusDmgType).
         // Elle en porte maintenant autant qu'on veut, dans `damages`. Les armes
@@ -5362,6 +5404,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="gear-go atk-roll">${saveMode ? '💥 Dégâts' : '⚔️ Attaquer'}</button>
                         ${saveMode ? '' : `<button class="gear-chip atk-opts" title="Avantage, désavantage, critique" aria-expanded="false">⚙</button>`}
                         ${pouvoirs.length ? `<button class="gear-chip atk-powers" title="Utiliser une capacité">✨ ${pouvoirs.length}</button>` : ''}
+                        ${bottesDe(atk).map(k => `<span class="gear-tag is-botte" title="${escAb(BOTTES[k].effet)}">⚔ ${escAb(BOTTES[k].nom)}</span>`).join('')}
                         ${hit}${dmg}${grip}${res}
                         ${extra ? `<button class="gear-more" title="Voir le détail" aria-expanded="false">▾</button>` : ''}
                         <div class="gear-tools">
@@ -5547,6 +5590,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const auto = atkEl('auto'); if (auto) auto.value = 'auto';
             ['req-attune', 'pinned', 'equipped', 'no-prof'].forEach(k => { const el = atkEl(k); if (el) el.checked = false; });
             if (typeof AtkRep !== 'undefined') AtkRep.charger(null);
+            if (window.__afsBottes) window.__afsBottes(null);
             atkSyncMode();
         }
         // Le bloc « jet de sauvegarde » ne sert qu'en mode sauvegarde, et la
@@ -5755,6 +5799,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const annuler = document.getElementById('afs-cancel');
             if (annuler) annuler.addEventListener('click', () => atkModal.classList.add('hidden'));
 
+            // ---------- Les bottes d'armes, en pastilles ----------
+            const boiteBottes = document.getElementById('afs-bottes');
+            if (boiteBottes && !boiteBottes.children.length) {
+                boiteBottes.innerHTML = Object.entries(BOTTES).map(([k, b]) =>
+                    `<button type="button" class="afs-botte" data-b="${k}" title="${window.SRD.esc(b.effet)}">
+                        <b>${b.nom}</b><em>${b.en}</em>
+                    </button>`).join('');
+                boiteBottes.addEventListener('click', (e) => {
+                    const p = e.target.closest('.afs-botte'); if (!p) return;
+                    p.classList.toggle('is-on');
+                    p.setAttribute('aria-pressed', p.classList.contains('is-on') ? 'true' : 'false');
+                });
+            }
+            /** Reflète les bottes d'une arme sur les pastilles (édition, ou remise à zéro). */
+            function refletBottes(atk) {
+                if (!boiteBottes) return;
+                const on = bottesDe(atk);
+                boiteBottes.querySelectorAll('.afs-botte').forEach(p => {
+                    const actif = on.includes(p.dataset.b);
+                    p.classList.toggle('is-on', actif);
+                    p.setAttribute('aria-pressed', actif ? 'true' : 'false');
+                });
+            }
+            window.__afsBottes = refletBottes;
+
             // ---------- L'éveil magique dans « créer de zéro » ----------
             // Le repli « Objet magique » est l'endroit où une arme le devient :
             // l'ouvrir doit produire le même éveil que l'interrupteur du
@@ -5889,6 +5958,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 curBonus = 0;
                 setPill(0);
                 enchanter(false);
+                // La botte du manuel 2024 est PROPOSÉE, pas imposée : elle ne
+                // s'applique qu'avec l'aptitude qui l'ouvre, et tout le monde
+                // ne joue pas en 2024.
+                const b = botteDuSrd(w);
+                const rang = q('atkq-botte-row');
+                if (b && rang) {
+                    rang.classList.remove('hidden');
+                    q('atkq-botte-nom').textContent = 'Botte : ' + BOTTES[b].nom;
+                    q('atkq-botte-eff').textContent = BOTTES[b].effet;
+                    setSwitch(q('atkq-botte'), false);
+                    rang.dataset.botte = b;
+                } else if (rang) { rang.classList.add('hidden'); rang.dataset.botte = ''; }
                 refresh();
                 show(stepReady);
             }
@@ -6066,6 +6147,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 applyMagic();
             });
             q('atkq-vers').addEventListener('click', () => { setSwitch(q('atkq-vers'), !isOn(q('atkq-vers'))); refresh(); });
+            q('atkq-botte').addEventListener('click', () => {
+                const on = !isOn(q('atkq-botte'));
+                setSwitch(q('atkq-botte'), on);
+                const b = q('atkq-botte-row').dataset.botte;
+                // On coche la pastille correspondante dans le formulaire complet :
+                // c'est lui qui est relu à l'enregistrement, une seule source.
+                const p = document.querySelector('#afs-bottes .afs-botte[data-b="' + b + '"]');
+                if (p) { p.classList.toggle('is-on', on); p.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+            });
             q('atkq-pills').addEventListener('click', (e) => {
                 const p = e.target.closest('.atkq-pill'); if (!p) return;
                 if (p.dataset.b === 'sep') { applyMagic(); show(stepFull); return; }
@@ -6113,6 +6203,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // on les vide, et la liste `damages` porte désormais tout.
                 bonusDmg: '', bonusDmgType: '',
                 damages: AtkRep.lireDegats(), abilities: AtkRep.lirePouvoirs(),
+                masteries: [...document.querySelectorAll('#afs-bottes .afs-botte.is-on')].map(b => b.dataset.b),
                 notes: v('notes'), desc: (atkEl('desc') || {}).value || '',
                 reqAttune: !!(atkEl('req-attune') || {}).checked,
                 isAttuned: false,
@@ -6152,6 +6243,7 @@ document.addEventListener('DOMContentLoaded', () => {
             set('range', d.range); set('crit', d.crit && d.crit !== 20 ? d.crit : ''); set('props', d.props);
             set('dmg', d.dmg); set('dmg-type', d.dmgType); set('dmg2', d.dmg2);
             AtkRep.charger(d);   // dégâts et capacités, ancien format converti au passage
+            if (window.__afsBottes) window.__afsBottes(d);
             set('notes', d.notes); set('desc', d.desc);
             set('ammo', d.ammo); set('ammo-max', d.ammoMax);
             set('charges', d.charges); set('charges-max', d.chargesMax);
