@@ -7615,3 +7615,151 @@ input[type="checkbox"]:active { transform: scale(.88); }
     .chk-burst { display: none; }
 }
 @media print { .ds-drop, .chk-burst { display: none !important; } }
+
+/* =====================================================================
+   JOURNAL · CAPACITÉS LIMITÉES · CAPACITÉS & DONS
+   Les trois modules restés sur l'ancien modèle.
+   ===================================================================== */
+
+/* ---------- JOURNAL — recherche ---------- */
+.jr-search {
+    display: flex; align-items: center; gap: 9px;
+    margin: 0 0 14px; padding: 0 13px; height: 44px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 40%, var(--soft-border));
+    border-radius: var(--radius-sm);
+    background: var(--glass-bg);
+}
+.jr-search-i { opacity: .5; font-size: 1rem; }
+.jr-search input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+    font-family: 'Lora', serif; font-size: .92rem; color: var(--text-color);
+}
+.jr-search input::placeholder { opacity: .45; font-style: italic; }
+.jr-clear {
+    border: 0; background: transparent; cursor: pointer; opacity: .5;
+    color: var(--text-color); font-size: .9rem; padding: 4px 6px;
+}
+.jr-clear:hover { opacity: 1; }
+
+/* ---------- JOURNAL — sommaire ---------- */
+.toc-item {
+    position: relative; padding: 9px 10px; border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    transition: border-color .16s ease, background .16s ease;
+}
+.toc-item:hover {
+    border-color: color-mix(in srgb, var(--accent-color) 38%, transparent);
+    background: color-mix(in srgb, var(--accent-color) 6%, transparent);
+}
+.jr-excerpt {
+    margin-top: 3px; font-size: .78rem; font-style: italic; opacity: .55;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jr-del {
+    border: 0; background: transparent; cursor: pointer;
+    opacity: 0; transition: opacity .16s ease; font-size: .82rem; padding: 4px 6px;
+}
+.toc-item:hover .jr-del, .toc-item:focus-within .jr-del { opacity: .65; }
+.jr-del:hover { opacity: 1; }
+.jr-empty {
+    padding: 22px 10px; text-align: center; font-style: italic; opacity: .6; line-height: 1.7;
+}
+
+/* ---------- JOURNAL — lecture et édition ----------
+   L'éditeur avait `background: white; color: black` en dur : il restait un
+   rectangle blanc en mode nuit et ignorait les 11 thèmes. Tout passe
+   désormais par les variables, Quill compris. */
+.jr-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; margin-top: 20px;
+}
+.jr-head .note-view-title { margin-top: 0; }
+.jr-edit { background: var(--primary-color); }
+.jr-editor {
+    margin-top: 20px; padding-top: 15px;
+    border-top: 2px dashed color-mix(in srgb, var(--accent-color) 40%, var(--soft-border));
+}
+.jr-editor.hidden { display: none; }
+.jr-editor-title {
+    font-family: 'Cinzel', serif; color: var(--primary-color); margin-bottom: 10px;
+}
+.jr-title-input {
+    width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 9px 11px;
+    font-weight: 700; font-size: 1.05rem; font-family: 'Lora', serif;
+    color: var(--text-color); background: var(--glass-bg);
+    border: 1px solid var(--soft-border); border-radius: var(--radius-sm);
+}
+.jr-quill {
+    min-height: 200px; border-radius: var(--radius-sm); overflow: hidden;
+    background: var(--sheet-bg-color); color: var(--text-color);
+}
+.jr-quill .ql-editor { min-height: 200px; color: var(--text-color); font-family: 'Lora', serif; }
+.jr-quill .ql-editor.ql-blank::before { color: var(--text-color); opacity: .4; }
+.ql-toolbar.ql-snow, .ql-container.ql-snow { border-color: var(--soft-border) !important; }
+.ql-toolbar.ql-snow { background: var(--glass-bg); }
+body.theme-dark .ql-snow .ql-stroke { stroke: var(--text-color); }
+body.theme-dark .ql-snow .ql-fill { fill: var(--text-color); }
+body.theme-dark .ql-snow .ql-picker-label { color: var(--text-color); }
+.jr-editor-actions { display: flex; gap: 10px; margin-top: 10px; }
+.jr-ok { background: #2e7d4f; }
+.jr-cancel { background: transparent; color: var(--text-color); border: 1px solid var(--soft-border); }
+.jr-cancel:hover { background: var(--glass-hover); }
+
+/* ---------- CAPACITÉS LIMITÉES ----------
+   Le module empruntait le balisage des emplacements de sorts. Il a
+   maintenant sa propre forme : un nom, un compteur, des jetons. */
+.abil-row {
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 11px 13px; margin-bottom: 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--soft-border));
+    background: var(--glass-bg);
+    transition: border-color .18s ease, opacity .18s ease;
+}
+.abil-row:hover { border-color: color-mix(in srgb, var(--accent-color) 48%, transparent); }
+.abil-row.is-spent { opacity: .58; }
+.abil-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.abil-name { font-family: 'Cinzel', serif; font-size: .92rem; font-weight: 600; }
+.abil-count {
+    flex: none; font-family: 'Courier New', monospace; font-size: .76rem; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px;
+    border: 1px solid var(--soft-border); color: var(--text-color);
+}
+.abil-count.is-empty { color: var(--primary-color); border-color: var(--primary-color); }
+.abil-pips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Les jetons : pleins tant qu'ils sont disponibles, creux une fois dépensés. */
+.abil-pips .ability-charge-check {
+    appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer;
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid var(--accent-color);
+    background: var(--accent-color);
+    box-shadow: 0 0 7px color-mix(in srgb, var(--accent-color) 45%, transparent);
+    transition: background .16s ease, box-shadow .16s ease, transform .12s ease;
+}
+.abil-pips .ability-charge-check:checked {
+    background: transparent; box-shadow: none;
+    border-color: color-mix(in srgb, var(--text-color) 35%, transparent);
+}
+.abil-pips .ability-charge-check:hover { transform: scale(1.12); }
+.abil-regen {
+    font-family: 'Courier New', monospace; font-size: .66rem;
+    letter-spacing: .08em; text-transform: uppercase; opacity: .55;
+}
+
+/* ---------- CAPACITÉS & DONS ---------- */
+.trait-row {
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    transition: border-color .16s ease, background .16s ease;
+}
+.trait-row:hover {
+    border-color: color-mix(in srgb, var(--accent-color) 34%, transparent);
+    background: color-mix(in srgb, var(--accent-color) 5%, transparent);
+}
+.trait-row-head { cursor: grab; }
+.trait-row-head .item-controls button { cursor: pointer; }
+.trait-pin { opacity: .9; }
+
+@media (prefers-reduced-motion: reduce) {
+    .abil-pips .ability-charge-check:hover { transform: none; }
+}

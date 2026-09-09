@@ -685,6 +685,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     demarrer();
                 }
                 e.preventDefault();
+                // Défilement automatique près des bords : sans lui, on ne peut
+                // pas sortir une ligne d'une liste plus haute que l'écran.
+                const marge = 70, vitesse = 14;
+                if (e.clientY < marge) window.scrollBy(0, -vitesse);
+                else if (e.clientY > window.innerHeight - marge) window.scrollBy(0, vitesse);
                 const sous = document.elementFromPoint(e.clientX, e.clientY);
                 const cible = sous && sous.closest(itemSel);
                 if (!cible || cible === ligne || !conteneur.contains(cible)) return;
@@ -4807,34 +4812,144 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             flipObserver.observe(journalPage, { childList: true });
         }
-        window.renderJournalTOC = () => { if(!journalPage) return; let html = `<h2 class="toc-title">Sommaire</h2><div class="toc-list">`; if(journal.length === 0) html += `<p style="text-align:center;">Aucune note dans le journal. Écris un chapitre !</p>`; journal.forEach((entry, i) => { html += `<div class="toc-item"><div class="toc-link" onclick="openJournalEntry(${i})"><span class="toc-title-text">${entry.title}</span><div class="toc-dots"></div></div><div class="toc-controls"><span title="Déchirer la page" onclick="deleteJournalEntry(${i})">❌</span></div></div>`; }); html += `</div>`; journalPage.innerHTML = html; };
-        
-        window.openJournalEntry = (index) => { 
-            const entry = journal[index]; 
-            journalPage.innerHTML = `<div class="bookmark-return" onclick="renderJournalTOC()" title="Retour au sommaire">🔖</div><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:20px;"><h2 class="note-view-title" style="margin-top:0;">${entry.title}</h2><button class="btn-small no-print" style="background:var(--primary-color);" onclick="editJournalForm(${index})">✎ Modifier</button></div><div class="note-view-content ql-editor" id="view-journal-content">${entry.content}</div><div id="journal-edit-container" class="hidden" style="margin-top: 20px; border-top: 2px dashed rgba(138,28,28,0.25); padding-top: 15px;"><h3 style="font-family:'Cinzel'; color:var(--primary-color); margin-bottom:10px;">Modifier le chapitre</h3><input type="text" id="edit-journal-title" style="width:100%; margin-bottom:10px; font-weight:bold; font-size:1.1rem; border:1px solid rgba(138,28,28,0.25); padding:8px;"><div id="edit-journal-content" style="background: white; color: black; min-height: 200px; border-radius: 4px;"></div><div style="display:flex; gap:10px; margin-top:10px;"><button id="btn-confirm-edit-journal" class="btn-small" style="background:#27ae60;">Sauvegarder</button><button id="btn-cancel-edit-journal" class="btn-small" style="background:#e74c3c;">Annuler</button></div></div>`; 
-        };
+        // ==========================================
+        // JOURNAL DE CAMPAGNE
+        //
+        // Le module était resté sur l'ancien modèle : couleurs en dur (il
+        // ignorait les 11 thèmes et restait blanc en mode nuit), gestionnaires
+        // en attribut `onclick`, titres injectés sans échappement, et une
+        // suppression par `confirm()` sans retour possible — le seul endroit du
+        // site où l'on pouvait perdre un texte long sans filet.
+        // ==========================================
+        let journalFiltre = '';
 
-        window.editJournalForm = (index) => { 
-            const entry = journal[index]; 
-            document.getElementById('view-journal-content').classList.add('hidden'); 
-            document.getElementById('journal-edit-container').classList.remove('hidden'); 
-            document.getElementById('edit-journal-title').value = entry.title; 
-            
-            if(!quillEditJournal) {
-                quillEditJournal = new Quill('#edit-journal-content', { theme: 'snow' });
+        window.renderJournalTOC = () => {
+            if (!journalPage) return;
+            const f = window.SRD && window.SRD.fold ? window.SRD.fold(journalFiltre) : journalFiltre.toLowerCase();
+            const vus = journal.map((e, i) => ({ e, i })).filter(({ e }) => {
+                if (!f) return true;
+                const dans = (t) => (window.SRD && window.SRD.fold ? window.SRD.fold(t || '') : String(t || '').toLowerCase()).includes(f);
+                // On cherche dans le titre ET dans le corps : un journal de
+                // campagne se fouille par ce qui s'y est passé, pas par ses titres.
+                return dans(e.title) || dans(String(e.content || '').replace(/<[^>]+>/g, ' '));
+            });
+
+            let html = `<h2 class="toc-title">Sommaire</h2>`;
+            if (journal.length > 2) {
+                html += `<div class="jr-search">
+                    <span class="jr-search-i">⌕</span>
+                    <input type="text" id="jr-q" placeholder="Chercher un chapitre, un nom, un lieu…"
+                           value="${escAb(journalFiltre)}" autocomplete="off">
+                    ${journalFiltre ? '<button type="button" class="jr-clear" title="Effacer">✕</button>' : ''}
+                </div>`;
             }
-            quillEditJournal.root.innerHTML = entry.content; 
-            
-            document.getElementById('btn-confirm-edit-journal').onclick = () => { 
-                journal[index].title = document.getElementById('edit-journal-title').value.trim(); 
-                journal[index].content = quillEditJournal.root.innerHTML; 
-                setStore('dnd-journal', journal); 
-                openJournalEntry(index); 
-            }; 
-            document.getElementById('btn-cancel-edit-journal').onclick = () => { openJournalEntry(index); }; 
+            html += `<div class="toc-list" id="jr-toc">`;
+            if (!journal.length) {
+                html += `<p class="jr-empty">Aucune note dans le journal.<br><small>Écris ton premier chapitre ci-dessous.</small></p>`;
+            } else if (!vus.length) {
+                html += `<p class="jr-empty">Aucun chapitre ne correspond à « ${escAb(journalFiltre)} ».</p>`;
+            } else {
+                vus.forEach(({ e, i }) => {
+                    const extrait = String(e.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70);
+                    html += `<div class="toc-item" data-ji="${i}">
+                        <div class="toc-link" data-jr-open="${i}">
+                            <span class="toc-title-text">${escAb(e.title)}</span>
+                            <div class="toc-dots"></div>
+                        </div>
+                        ${extrait ? `<div class="jr-excerpt">${escAb(extrait)}${extrait.length >= 70 ? '…' : ''}</div>` : ''}
+                        <div class="toc-controls">
+                            <button type="button" class="jr-del" data-jr-del="${i}" title="Déchirer la page">❌</button>
+                        </div>
+                    </div>`;
+                });
+            }
+            html += `</div>`;
+            journalPage.innerHTML = html;
+
+            const champ = document.getElementById('jr-q');
+            if (champ) {
+                champ.addEventListener('input', () => {
+                    journalFiltre = champ.value;
+                    const pos = champ.selectionStart;
+                    renderJournalTOC();
+                    const neuf = document.getElementById('jr-q');
+                    if (neuf) { neuf.focus(); try { neuf.setSelectionRange(pos, pos); } catch (e) {} }
+                });
+            }
+            // Réordonner le sommaire : seulement quand rien n'est filtré, sinon
+            // les rangs affichés ne correspondent plus aux rangs réels.
+            const toc = document.getElementById('jr-toc');
+            if (toc && !journalFiltre && window.DragSort) {
+                window.DragSort.enable(toc, {
+                    itemSel: '.toc-item',
+                    onDrop(de, vers) {
+                        window.DragSort.move(journal, de, vers);
+                        setStore('dnd-journal', journal);
+                        renderJournalTOC();
+                    }
+                });
+            }
         };
 
-        window.deleteJournalEntry = (index) => { if(confirm("Déchirer cette page définitivement ?")) { journal.splice(index, 1); setStore('dnd-journal', journal); renderJournalTOC(); } };
+        // Un seul aiguillage de clics, à la place des `onclick` en attribut.
+        if (journalPage) journalPage.addEventListener('click', (ev) => {
+            const ouvrir = ev.target.closest('[data-jr-open]');
+            if (ouvrir) { openJournalEntry(parseInt(ouvrir.dataset.jrOpen, 10)); return; }
+            const suppr = ev.target.closest('[data-jr-del]');
+            if (suppr) {
+                const i = parseInt(suppr.dataset.jrDel, 10);
+                // Comme partout ailleurs sur la fiche : un bandeau « annuler »,
+                // pas une boîte de dialogue sans retour.
+                window.deleteWithUndo(journal, i, journal[i] && journal[i].title || 'ce chapitre',
+                    () => setStore('dnd-journal', journal), renderJournalTOC);
+                return;
+            }
+            if (ev.target.closest('.jr-clear')) { journalFiltre = ''; renderJournalTOC(); return; }
+            if (ev.target.closest('.bookmark-return')) { renderJournalTOC(); return; }
+            const modif = ev.target.closest('[data-jr-edit]');
+            if (modif) { editJournalForm(parseInt(modif.dataset.jrEdit, 10)); return; }
+        });
+
+        window.openJournalEntry = (index) => {
+            const entry = journal[index]; if (!entry) return;
+            journalPage.innerHTML = `
+                <div class="bookmark-return" title="Retour au sommaire">🔖</div>
+                <div class="jr-head">
+                    <h2 class="note-view-title">${escAb(entry.title)}</h2>
+                    <button type="button" class="btn-small jr-edit no-print" data-jr-edit="${index}">✎ Modifier</button>
+                </div>
+                <div class="note-view-content ql-editor" id="view-journal-content">${entry.content || ''}</div>
+                <div id="journal-edit-container" class="jr-editor hidden">
+                    <h3 class="jr-editor-title">Modifier le chapitre</h3>
+                    <input type="text" id="edit-journal-title" class="jr-title-input" placeholder="Titre du chapitre">
+                    <div id="edit-journal-content" class="jr-quill"></div>
+                    <div class="jr-editor-actions">
+                        <button type="button" id="btn-confirm-edit-journal" class="btn-small jr-ok">Sauvegarder</button>
+                        <button type="button" id="btn-cancel-edit-journal" class="btn-small jr-cancel">Annuler</button>
+                    </div>
+                </div>`;
+        };
+
+        window.editJournalForm = (index) => {
+            const entry = journal[index]; if (!entry) return;
+            document.getElementById('view-journal-content').classList.add('hidden');
+            document.getElementById('journal-edit-container').classList.remove('hidden');
+            document.getElementById('edit-journal-title').value = entry.title;
+
+            // Quill se réinstancie à chaque ouverture : le conteneur est recréé
+            // par openJournalEntry, l'ancienne instance pointait dans le vide.
+            quillEditJournal = new Quill('#edit-journal-content', { theme: 'snow' });
+            quillEditJournal.root.innerHTML = entry.content || '';
+
+            document.getElementById('btn-confirm-edit-journal').onclick = () => {
+                journal[index].title = document.getElementById('edit-journal-title').value.trim() || 'Sans titre';
+                journal[index].content = quillEditJournal.root.innerHTML;
+                setStore('dnd-journal', journal);
+                if (window.showAppToast) window.showAppToast('📕 Chapitre mis à jour');
+                openJournalEntry(index);
+            };
+            document.getElementById('btn-cancel-edit-journal').onclick = () => openJournalEntry(index);
+        };
         if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; window.showAppToast("📕 Chapitre enregistré dans le journal", '#27ae60'); } }); }
         function clearBookFlames() { const bc = document.getElementById('book-container'); const f = bc && bc.querySelector('.book-flames'); if(f) f.remove(); }
 
@@ -6420,8 +6535,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 let isExpandedClass = trait.pinned ? 'expanded' : '';
                 let caret = trait.pinned ? '' : '<span class="trait-caret">▸</span>';
                 let metaHtml = trait.level ? `<span class="trait-meta">Niv.${trait.level}</span>` : '';
-                let html = `<div class="trait-row"><div class="trait-row-head" onclick="toggleTraitDesc(event, ${index})">${caret}${metaHtml}<span class="trait-name">${trait.name}</span>${trait.pinned ? '<span class="trait-pin">📌</span>' : ''}${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`;
+                let html = `<div class="trait-row" data-ti="${index}"><div class="trait-row-head" onclick="toggleTraitDesc(event, ${index})">${caret}${metaHtml}<span class="trait-name">${trait.name}</span>${trait.pinned ? '<span class="trait-pin">📌</span>' : ''}${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`;
                 if(trait.type === 'class') listClass.innerHTML += html; else if(trait.type === 'race') listRace.innerHTML += html; else listFeat.innerHTML += html;
+            });
+            // Glisser-déposer sur les trois colonnes. Les lignes portent leur
+            // indice réel (data-ti) : les traits sont répartis par type, donc la
+            // position visible ne dit rien du rang dans le tableau.
+            if (window.DragSort) [listClass, listRace, listFeat].forEach(zone => {
+                window.DragSort.enable(zone, {
+                    itemSel: '.trait-row',
+                    onDrop(de, vers) {
+                        const lignes = [...zone.querySelectorAll('.trait-row')];
+                        const iSrc = parseInt(lignes[de].dataset.ti, 10);
+                        const apres = lignes.filter((_, k) => k !== de);
+                        const voisin = apres[vers];
+                        const iDest = voisin ? parseInt(voisin.dataset.ti, 10) : null;
+                        if (isNaN(iSrc)) return;
+                        const [x] = traits.splice(iSrc, 1);
+                        traits.splice(iDest == null ? traits.length : (iDest > iSrc ? iDest - 1 : iDest), 0, x);
+                        setStore('dnd-traits', traits); renderTraits();
+                    }
+                });
             });
             if(listClass.innerHTML === '') listClass.innerHTML = `<div class="compact-empty">Aucune capacité.</div>`;
             if(listRace.innerHTML === '') listRace.innerHTML = `<div class="compact-empty">Aucun trait.</div>`;
@@ -6454,23 +6588,35 @@ document.addEventListener('DOMContentLoaded', () => {
         function escAb(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
         // Texte de récupération — identique à celui des emplacements de sorts.
         function getAbilityRegenText(ab) {
-            const fmt = (t, a) => t === 'all' ? 'Tout' : `+${a}`;
+            // Une capacité enregistrée avant que ces champs existent n'a ni type
+            // ni montant : sans garde, la ligne affichait « Long: +undefined ».
+            const fmt = (t, a) => (t === 'all' || a == null || a === '') ? 'Tout' : `+${a}`;
             const m = ab.regenMode || 'long';
             if(m === 'none') return 'Aucune régénération';
             if(m === 'short') return `Court: ${fmt(ab.shortType, ab.shortAmount)}`;
             if(m === 'short_long') return `Court: ${fmt(ab.shortType, ab.shortAmount)} | Long: ${fmt(ab.longType, ab.longAmount)}`;
             return `Long: ${fmt(ab.longType, ab.longAmount)}`;
         }
-        // Affichage calqué sur la grille des emplacements de sorts (cases à cocher + info dispo).
+        // Chaque capacité : son nom, son compteur, et un jeton par usage.
         function renderAbilities() {
             const list = document.getElementById('abilities-list'); if(!list) return;
-            if(abilities.length === 0) { list.innerHTML = `<div class="spell-slot-empty">Aucune capacité configurée. Clique sur ⚙️ Gérer pour en ajouter.</div>`; return; }
+            if(abilities.length === 0) { list.innerHTML = `<div class="compact-empty">Aucune capacité configurée.<br><small>Clique sur ⚙️ Gérer pour en ajouter.</small></div>`; return; }
             list.innerHTML = abilities.map((ab, index) => {
                 const usedCount = ab.used ? ab.used.filter(Boolean).length : 0;
                 const available = Math.max(0, ab.max - usedCount);
                 let cbHtml = '';
                 for(let i = 0; i < ab.max; i++) cbHtml += `<input type="checkbox" class="slot-check ability-charge-check" data-idx="${index}" data-index="${i}" ${ab.used && ab.used[i] ? 'checked' : ''} title="Dépensé">`;
-                return `<div class="spell-slot-row"><div class="slot-lvl-label">${escAb(ab.name)}</div><div class="slot-main-content"><div class="slot-checkboxes">${cbHtml}</div><div class="slot-info">${available}/${ab.max} dispos • ${getAbilityRegenText(ab)}</div></div></div>`;
+                // Classes propres : ce module empruntait le balisage des
+                // emplacements de sorts, si bien qu'une rage de barbare
+                // s'affichait comme un emplacement de niveau 3.
+                return `<div class="abil-row${available === 0 ? ' is-spent' : ''}">
+                    <div class="abil-head">
+                        <span class="abil-name">${escAb(ab.name)}</span>
+                        <span class="abil-count${available === 0 ? ' is-empty' : ''}">${available} / ${ab.max}</span>
+                    </div>
+                    <div class="abil-pips">${cbHtml}</div>
+                    <div class="abil-regen">${getAbilityRegenText(ab)}</div>
+                </div>`;
             }).join('');
             document.querySelectorAll('.ability-charge-check').forEach(cb => {
                 cb.addEventListener('change', (e) => {
