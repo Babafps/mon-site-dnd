@@ -184,9 +184,8 @@
                     <article id="hb-editor" class="rules-detail hb-editor"></article>
                 </div>
                 <footer class="rules-foot hb-foot">
-                    <span id="hb-sync" class="hb-sync"></span>
-                    Ce contenu n'est ni publié ni distribué par le site : n'y recopie que ce que tu as
-                    le droit d'utiliser à ta table.
+                    Ce contenu reste dans ton navigateur et ton compte. Il n'est ni publié ni distribué
+                    par le site : n'y recopie que ce que tu as le droit d'utiliser à ta table.
                 </footer>
             </div>`;
         document.body.appendChild(scr);

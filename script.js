@@ -5066,12 +5066,308 @@ document.addEventListener('DOMContentLoaded', () => {
         if (atkEl('mode')) atkEl('mode').addEventListener('change', atkSyncMode);
         if (atkEl('auto')) atkEl('auto').addEventListener('change', atkSyncMode);
 
+
+        // ==========================================
+        // PARCOURS RAPIDE DE CRÉATION D'ARME
+        //
+        // Le formulaire complet (21 champs) n'a pas bougé : il vit dans
+        // #atk-step-full et reste la seule chose qu'on ouvre à l'ÉDITION.
+        // Ce qui change, c'est la porte d'entrée d'une arme NEUVE : on
+        // arrive sur la recherche, on clique l'épée longue, on ajoute.
+        // Deux gestes. Le formulaire devient l'échappatoire, plus le péage.
+        //
+        // Rien n'est stocké ici : chaque choix écrit dans les champs du
+        // formulaire complet, et l'enregistrement passe par #btn-save-atk.
+        // Une seule source de vérité, donc aucun risque de divergence.
+        // ==========================================
+        (function initQuickWeapon() {
+            const q = (id) => document.getElementById(id);
+            const stepSearch = q('atk-step-search'), stepReady = q('atk-step-ready'), stepFull = q('atk-step-full');
+            const list = q('atkq-list'), input = q('atkq-q');
+            if (!stepSearch || !stepReady || !stepFull || !list || !window.SRD) return;
+
+            let weapons = null;      // catalogue SRD, chargé une fois
+            let picked = null;       // l'arme SRD choisie
+            let filter = 'all';
+            let cursor = -1;         // index clavier dans la liste affichée
+            let shown = [];
+            let curBonus = 0;        // pastille +0…+3 de l'arme magique
+
+            const esc = (s) => window.SRD.esc(s);
+            const isMartial = (w) => /martial|guerre/i.test(String(w.weapon_category || ''));
+            const isRanged = (w) => /ranged|distance/i.test(String(w.weapon_range || ''));
+            const groupOf = (w) => (isMartial(w) ? 'Martiales' : 'Simples') + (isRanged(w) ? ' · distance' : ' · corps à corps');
+
+            function show(step) {
+                [stepSearch, stepReady, stepFull].forEach(el => el.classList.add('hidden'));
+                step.classList.remove('hidden');
+                const t = q('atk-modal-title');
+                if (t) t.textContent = step === stepSearch ? 'Ajouter une arme'
+                    : step === stepReady ? 'Arme prête'
+                    : (editingAttackIndex >= 0 ? 'Modifier l’arme' : 'Forger une arme / attaque');
+            }
+            // Utilisé par l'ouverture « + » et par l'édition (voir plus bas).
+            window.__atkQuickShow = show;
+            window.__atkQuickSteps = { search: stepSearch, ready: stepReady, full: stepFull };
+
+            // Le catalogue est mis en cache, donc une arme que le joueur vient
+            // d'écrire dans « Mon contenu » resterait invisible ici. Le site
+            // émet cet événement pour ça : on jette le cache, il se refera.
+            document.addEventListener('srd-homebrew-change', () => { weapons = null; });
+
+            async function load() {
+                if (weapons) return weapons;
+                const all = await window.SRD.category('equipment');
+                weapons = (all || []).filter(w => w.weapon_category && w.damage);
+                weapons.sort((a, b) => groupOf(a).localeCompare(groupOf(b)) || a.name.localeCompare(b.name));
+                return weapons;
+            }
+
+            function matches(w) {
+                if (filter === 'simple' && isMartial(w)) return false;
+                if (filter === 'martial' && !isMartial(w)) return false;
+                if (filter === 'melee' && isRanged(w)) return false;
+                if (filter === 'ranged' && !isRanged(w)) return false;
+                const f = window.SRD.fold(input ? input.value : '');
+                return !f || window.SRD.fold(w.name).includes(f);
+            }
+
+            function draw() {
+                shown = (weapons || []).filter(matches);
+                cursor = -1;
+                if (!shown.length) {
+                    list.innerHTML = '<p class="atkq-empty">Aucune arme ne correspond.</p>';
+                    return;
+                }
+                let last = '', html = '';
+                shown.forEach((w, i) => {
+                    const g = groupOf(w);
+                    if (g !== last) {
+                        const n = shown.filter(x => groupOf(x) === g).length;
+                        html += '<div class="atkq-head"><span>' + esc(g) + '</span><i></i><span class="n">' + n + '</span></div>';
+                        last = g;
+                    }
+                    const props = (w.properties || [])
+                        .map(p => (window.SRDAuto && window.SRDAuto.PROP_FR[p]) || p).join(', ');
+                    const type = (window.SRDAuto && window.SRDAuto.DMG_FR[w.damage.type]) || w.damage.type;
+                    html += '<button type="button" class="atkq-item" data-i="' + i + '">'
+                        + '<b>' + esc(w.name) + '</b>'
+                        + '<span class="d">' + esc(w.damage.dice) + '</span>'
+                        + '<span class="t">' + esc(type) + '</span>'
+                        + '<span class="p">' + esc(props) + '</span></button>';
+                });
+                list.innerHTML = html;
+            }
+
+            // ---------- Choix d'une arme : on remplit le formulaire complet ----------
+            function pick(w) {
+                picked = w;
+                editingAttackIndex = -1;
+                atkFormReset();
+                const nameEl = atkEl('name'); if (nameEl) nameEl.value = w.name;
+                if (window.fillAttackFromSrd) window.fillAttackFromSrd(w);
+                const auto = atkEl('auto'); if (auto) auto.value = 'auto';
+                atkSyncMode();
+                // Remise à zéro des commandes rapides
+                setSwitch(q('atkq-magic'), false);
+                setSwitch(q('atkq-vers'), false);
+                q('atkq-magic-box').classList.add('hidden');
+                ['atkq-rarity', 'atkq-bdmg', 'atkq-bdmg-type', 'atkq-charges', 'atkq-charges-max'].forEach(id => { const el = q(id); if (el) el.value = ''; });
+                const rech = q('atkq-recharge'); if (rech) rech.value = 'none';
+                const att = q('atkq-attune'); if (att) att.checked = false;
+                // curBonus AVANT setPill : la pastille n'est qu'un reflet. L'oublier
+                // laissait une arme neuve hériter du bonus de la précédente — la
+                // pastille affichait +0 pendant que l'arme partait en +3.
+                curBonus = 0;
+                setPill(0);
+                refresh();
+                show(stepReady);
+            }
+
+            function setSwitch(el, on) { if (el) el.setAttribute('aria-checked', on ? 'true' : 'false'); }
+            function isOn(el) { return el && el.getAttribute('aria-checked') === 'true'; }
+            function setPill(b) {
+                q('atkq-pills').querySelectorAll('.atkq-pill').forEach(p => p.classList.toggle('is-on', p.dataset.b === String(b)));
+            }
+
+            // ---------- Aperçu : on relit le formulaire, jamais un état parallèle ----------
+            function draftFromForm() {
+                const v = (k) => { const el = atkEl(k); return el ? el.value.trim() : ''; };
+                return {
+                    props: v('props'), wtype: v('wtype'), dmg: v('dmg'), dmg2: v('dmg2'),
+                    autoAbility: v('auto') || 'auto', hitExtra: v('hit-extra'), dmgExtra: v('dmg-extra'),
+                    noProf: !!(atkEl('no-prof') || {}).checked, bonus: v('bonus')
+                };
+            }
+
+            function refresh() {
+                if (!picked) return;
+                const d = draftFromForm();
+                const magic = isOn(q('atkq-magic'));
+                const vers = isOn(q('atkq-vers'));
+
+                q('atkq-name').textContent = picked.name + (magic && curBonus > 0 ? ' +' + curBonus : '');
+                const bits = [isMartial(picked) ? 'Martiale' : 'Simple', isRanged(picked) ? 'distance' : 'corps à corps'];
+                if (picked.weight) bits.push(picked.weight);
+                if (picked.cost) bits.push(picked.cost);
+                if (magic && q('atkq-attune').checked) bits.push('nécessite une liaison');
+                q('atkq-meta').textContent = bits.join(' · ');
+
+                // Toucher — la dérivation en clair, pour que l'automatisme se vérifie
+                const ab = weaponAbility(d);
+                const hit = autoHitBonus(d);
+                q('atkq-hit').textContent = hit === null ? (d.bonus || '—') : (hit >= 0 ? '+' + hit : String(hit));
+                if (ab) {
+                    const score = parseInt((document.getElementById('stat-' + ab) || {}).value, 10) || 10;
+                    const m = statMod(ab), p = d.noProf ? 0 : profBonus();
+                    const sg = (n) => (n >= 0 ? '+' + n : String(n));
+                    let txt = (ab === 'dex' ? 'Dextérité ' : 'Force ') + sg(m) + ' (' + score + ')';
+                    if (!d.noProf) txt += ' + maîtrise ' + sg(p);
+                    const ex = parseMod(d.hitExtra || 0);
+                    if (ex) txt += ' + arme ' + sg(ex);
+                    q('atkq-hit-d').textContent = txt;
+                } else {
+                    q('atkq-hit-d').textContent = 'Saisie manuelle';
+                }
+
+                // Dégâts
+                const expr = damageExprOf(d, vers);
+                q('atkq-dmg').textContent = expr || '—';
+                const bd = q('atkq-bdmg').value.trim(), bdt = q('atkq-bdmg-type').value.trim();
+                q('atkq-dmg-extra').textContent = (magic && bd) ? ('+ ' + bd + (bdt ? ' ' + bdt : '')) : '';
+                const dtype = (window.SRDAuto && window.SRDAuto.DMG_FR[picked.damage.type]) || picked.damage.type;
+                const mod = autoDmgMod(d);
+                let dtxt = (vers && picked.versatile_damage ? picked.versatile_damage : picked.damage.dice) + ' ' + dtype;
+                if (mod !== null && mod !== 0) dtxt += ' + carac ' + (mod > 0 ? '+' + mod : mod);
+                q('atkq-dmg-d').textContent = dtxt;
+
+                // Valeur d'avant, barrée : on montre ce que l'objet magique change
+                const oldHit = q('atkq-hit-old'), oldDmg = q('atkq-dmg-old');
+                const b = magic ? curBonus : 0;
+                if (b > 0 && hit !== null) {
+                    oldHit.hidden = false; oldHit.textContent = (hit - b >= 0 ? '+' : '') + (hit - b);
+                    oldDmg.hidden = false; oldDmg.textContent = damageExprOf(Object.assign({}, d, { dmgExtra: '' }), vers) || '';
+                } else { oldHit.hidden = true; oldDmg.hidden = true; }
+                q('atkq-card-hit').classList.toggle('is-magic', b > 0);
+                q('atkq-card-dmg').classList.toggle('is-magic', b > 0);
+
+                // Polyvalente : proposée seulement si l'arme l'est
+                const vrow = q('atkq-vers-row');
+                if (picked.versatile_damage) {
+                    vrow.classList.remove('hidden');
+                    q('atkq-vers-txt').textContent = 'Les dégâts passent à ' + (damageExprOf(d, true) || picked.versatile_damage);
+                } else vrow.classList.add('hidden');
+            }
+
+
+            // ---------- Écritures dans le formulaire complet ----------
+            function applyMagic() {
+                const on = isOn(q('atkq-magic'));
+                const set = (k, val) => { const el = atkEl(k); if (el) el.value = val; };
+                // Le nom porte le bonus : une « Épée longue +1 » doit s'appeler
+                // ainsi sur la fiche, pas « Épée longue ».
+                if (picked) set('name', picked.name + (on && curBonus > 0 ? ' +' + curBonus : ''));
+                set('rarity', on ? q('atkq-rarity').value : '');
+                set('hit-extra', on && curBonus ? '+' + curBonus : '');
+                set('dmg-extra', on && curBonus ? '+' + curBonus : '');
+                set('bonus-dmg', on ? q('atkq-bdmg').value.trim() : '');
+                set('bonus-dmg-type', on ? q('atkq-bdmg-type').value.trim() : '');
+                set('charges', on ? q('atkq-charges').value : '');
+                set('charges-max', on ? q('atkq-charges-max').value : '');
+                set('recharge', on ? q('atkq-recharge').value : 'none');
+                const att = atkEl('req-attune'); if (att) att.checked = on && q('atkq-attune').checked;
+                refresh();
+            }
+
+            // ---------- Câblage ----------
+            if (input) {
+                input.addEventListener('input', draw);
+                input.addEventListener('keydown', (e) => {
+                    if (!shown.length) return;
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        cursor = Math.max(0, Math.min(shown.length - 1, cursor + (e.key === 'ArrowDown' ? 1 : -1)));
+                        list.querySelectorAll('.atkq-item').forEach(el => el.classList.toggle('is-cursor', +el.dataset.i === cursor));
+                        const el = list.querySelector('.atkq-item.is-cursor');
+                        if (el) el.scrollIntoView({ block: 'nearest' });
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        pick(shown[cursor >= 0 ? cursor : 0]);
+                    }
+                });
+            }
+            q('atkq-chips').addEventListener('click', (e) => {
+                const c = e.target.closest('.atkq-chip'); if (!c) return;
+                filter = c.dataset.f;
+                q('atkq-chips').querySelectorAll('.atkq-chip').forEach(x => x.classList.toggle('is-on', x === c));
+                draw();
+            });
+            list.addEventListener('click', (e) => {
+                const it = e.target.closest('.atkq-item'); if (!it) return;
+                pick(shown[+it.dataset.i]);
+            });
+            q('atkq-scratch').addEventListener('click', () => { editingAttackIndex = -1; atkFormReset(); atkSyncMode(); show(stepFull); });
+            q('atkq-back').addEventListener('click', () => { show(stepSearch); if (input) input.focus(); });
+            q('atkq-cancel').addEventListener('click', () => atkModal.classList.add('hidden'));
+            q('atkq-add').addEventListener('click', () => {
+                const vers = isOn(q('atkq-vers'));
+                const avant = attacks.length;
+                const btn = document.getElementById('btn-save-atk');
+                if (btn) btn.click();                       // une seule voie d'enregistrement
+                // On ne marque la prise à deux mains QUE si une arme a bien été
+                // ajoutée : un enregistrement refusé (nom vide) laissait sinon la
+                // marque sur l'arme précédente.
+                if (vers && attacks.length > avant) {
+                    attacks[attacks.length - 1].twoHanded = true;
+                    setStore('dnd-attacks', attacks); renderAttacks();
+                }
+            });
+            // « Saisir à la main » / « Tout modifier à la main » : on reporte
+            // d'abord les commandes rapides, sinon le formulaire s'ouvrirait
+            // sans le bonus magique qu'on vient de régler.
+            stepReady.addEventListener('click', (e) => {
+                if (!e.target.closest('[data-atkq-manual]')) return;
+                applyMagic();
+                show(stepFull);
+            });
+            q('atkq-magic').addEventListener('click', () => {
+                const on = !isOn(q('atkq-magic'));
+                setSwitch(q('atkq-magic'), on);
+                q('atkq-magic-box').classList.toggle('hidden', !on);
+                applyMagic();
+            });
+            q('atkq-vers').addEventListener('click', () => { setSwitch(q('atkq-vers'), !isOn(q('atkq-vers'))); refresh(); });
+            q('atkq-pills').addEventListener('click', (e) => {
+                const p = e.target.closest('.atkq-pill'); if (!p) return;
+                if (p.dataset.b === 'sep') { applyMagic(); show(stepFull); return; }
+                curBonus = parseInt(p.dataset.b, 10) || 0;
+                setPill(curBonus);
+                applyMagic();
+            });
+            ['atkq-rarity', 'atkq-bdmg', 'atkq-bdmg-type', 'atkq-charges', 'atkq-charges-max', 'atkq-recharge', 'atkq-attune']
+                .forEach(id => { const el = q(id); if (el) el.addEventListener('input', applyMagic); });
+
+            // Ouverture depuis le « + » : on entre par la recherche.
+            window.__atkQuickOpen = async () => {
+                picked = null; curBonus = 0; filter = 'all';
+                if (input) input.value = '';
+                q('atkq-chips').querySelectorAll('.atkq-chip').forEach((x, i) => x.classList.toggle('is-on', i === 0));
+                show(stepSearch);
+                list.innerHTML = '<p class="atkq-empty">Chargement…</p>';
+                await load(); draw();
+                if (input) input.focus();
+            };
+        })();
+
         document.body.addEventListener('click', (e) => {
             if(e.target.id === 'btn-open-attack-modal') {
                 editingAttackIndex = -1;
                 atkFormReset();
-                const t = document.getElementById('atk-modal-title'); if (t) t.textContent = 'Forger une arme / attaque';
                 atkModal.classList.remove('hidden');
+                // Porte d'entrée : la recherche d'arme. Le formulaire complet
+                // reste atteignable par « Créer de zéro ».
+                if (window.__atkQuickOpen) window.__atkQuickOpen();
+                else { const t = document.getElementById('atk-modal-title'); if (t) t.textContent = 'Forger une arme / attaque'; }
             }
         });
 
@@ -5136,6 +5432,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chk('req-attune', d.reqAttune); chk('pinned', d.pinned); chk('equipped', d.equipped); chk('no-prof', d.noProf);
             atkSyncMode();
             editingAttackIndex = index;
+            if (window.__atkQuickShow && window.__atkQuickSteps) window.__atkQuickShow(window.__atkQuickSteps.full);
             const t = document.getElementById('atk-modal-title'); if (t) t.textContent = 'Modifier l’arme';
             atkModal.classList.remove('hidden');
         };

@@ -6458,12 +6458,220 @@ body.theme-dark .cos-link { color: var(--accent-color); }
 }
 @media print { #cosmetics { display: none !important; } }
 
-/* Étiquette d'état de la synchronisation du contenu perso (homebrew-sync.js).
-   La phrase du pied de l'écran « Mon contenu » doit dire la vérité : local
-   seul, ou local plus compte. */
-.hb-sync { display: block; margin-bottom: 4px; font-weight: 600; }
-.hb-sync.is-local { opacity: 0.8; }
-.hb-sync.is-ok { color: #2e7d4f; }
-body.theme-dark .hb-sync.is-ok { color: #7fc47f; }
-.hb-sync.is-warn { color: #a06a1e; }
-body.theme-dark .hb-sync.is-warn { color: #e8a94c; }
+/* =====================================================================
+   CRÉATION D'ARME — parcours rapide (recherche → arme prête → fiche)
+   Maquette Claude Design, variante « modale » (1d).
+   Rien n'est peint en dur : tout passe par les variables de thème, pour
+   que l'écran tienne dans les 11 thèmes du site.
+   ===================================================================== */
+.atk-step.hidden { display: none; }
+
+.atkq-sub {
+    margin: 0 0 14px; font-size: .82rem; font-style: italic;
+    color: var(--text-color); opacity: .6;
+}
+
+/* ---------- Recherche ---------- */
+.atkq-search {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; height: 56px;
+    border: 2px solid var(--primary-color); border-radius: 4px;
+    background: var(--glass-bg);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 22%, transparent);
+}
+.atkq-search .atkq-ico { font-size: 1.05rem; opacity: .5; }
+.atkq-search input {
+    flex: 1; border: 0; outline: 0; background: transparent;
+    font-family: 'Lora', serif; font-size: 1.05rem; color: var(--text-color);
+    padding: 0; min-width: 0;
+}
+.atkq-search input::placeholder { color: var(--text-color); opacity: .42; }
+.atkq-kbd {
+    font-family: 'Courier New', monospace; font-size: .68rem; letter-spacing: .06em;
+    opacity: .45; border: 1px solid var(--soft-border); border-radius: 3px; padding: 6px 8px;
+    white-space: nowrap;
+}
+
+.atkq-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.atkq-chip {
+    font-family: 'Lora', serif; font-size: .82rem; font-weight: 500;
+    padding: 11px 14px; min-height: 44px; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--soft-border); background: var(--glass-bg);
+    color: var(--text-color); opacity: .8;
+}
+.atkq-chip:hover { background: var(--glass-hover); }
+.atkq-chip.is-on {
+    border-color: var(--primary-color); background: var(--primary-color);
+    color: #fff; opacity: 1;
+}
+
+.atkq-list {
+    margin-top: 14px; max-height: 46vh; overflow-y: auto;
+    border-top: 1px solid var(--soft-border);
+}
+.atkq-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 4px 9px; background: var(--glass-bg);
+    font-family: 'Courier New', monospace; font-size: .68rem; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent-color);
+}
+.atkq-head i { flex: 1; height: 1px; background: var(--soft-border); }
+.atkq-head .n { opacity: .5; font-weight: 400; }
+.atkq-item {
+    display: flex; align-items: center; gap: 16px; width: 100%;
+    padding: 11px 6px; min-height: 52px; cursor: pointer; text-align: left;
+    border: 0; border-top: 1px solid var(--soft-border); background: transparent;
+    color: var(--text-color); font-family: 'Lora', serif;
+}
+.atkq-item:hover, .atkq-item.is-cursor { background: var(--glass-hover); }
+.atkq-item b { flex: 1; font-size: 1.02rem; font-weight: 500; }
+.atkq-item .d { font-family: 'Courier New', monospace; font-weight: 700; font-size: .9rem; }
+.atkq-item .t { width: 8.5rem; font-size: .82rem; opacity: .58; }
+.atkq-item .p { width: 8rem; font-size: .76rem; opacity: .45; }
+.atkq-empty { padding: 26px 6px; text-align: center; opacity: .55; font-style: italic; }
+
+.atkq-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    flex-wrap: wrap; padding: 16px 0 0; margin-top: 8px;
+    border-top: 1px solid var(--soft-border); font-size: .84rem;
+}
+.atkq-foot > span { opacity: .6; }
+.atkq-ghost {
+    font-family: 'Lora', serif; font-size: .86rem; font-weight: 500;
+    padding: 14px 18px; min-height: 44px; white-space: nowrap; cursor: pointer;
+    border: 1px solid var(--accent-color); border-radius: 3px;
+    background: transparent; color: var(--accent-color);
+}
+.atkq-ghost:hover { background: color-mix(in srgb, var(--accent-color) 12%, transparent); }
+
+/* ---------- Arme prête ---------- */
+.atkq-back {
+    font-family: 'Courier New', monospace; font-size: .7rem; letter-spacing: .12em;
+    text-transform: uppercase; opacity: .5; cursor: pointer;
+    border: 0; background: transparent; color: var(--text-color); padding: 4px 0;
+}
+.atkq-back:hover { opacity: .85; }
+.atkq-name { margin: 6px 0 4px; font-family: 'Cinzel', serif; font-size: 1.7rem; }
+.atkq-meta { margin: 0 0 18px; font-size: .84rem; opacity: .6; }
+
+.atkq-cards { display: flex; gap: 14px; flex-wrap: wrap; }
+.atkq-card {
+    flex: 1 1 210px; display: flex; flex-direction: column; gap: 9px; padding: 16px;
+    border: 1px solid var(--soft-border); border-radius: 4px; background: var(--glass-bg);
+}
+.atkq-card.is-magic { border-color: var(--accent-color); }
+.atkq-card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.atkq-card-h > span:first-child {
+    font-family: 'Courier New', monospace; font-size: .66rem; font-weight: 700;
+    letter-spacing: .14em; text-transform: uppercase; opacity: .55;
+}
+.atkq-auto {
+    font-family: 'Courier New', monospace; font-size: .6rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent-color); padding: 4px 6px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+    border-radius: 2px; white-space: nowrap;
+}
+/* 32 px et non 46 px : sur un portable de 768 px de haut, les chiffres de la
+   maquette poussaient l'interrupteur magique sous la ligne de flottaison. */
+.atkq-big {
+    font-family: 'Courier New', monospace; font-weight: 700; font-size: 2rem;
+    line-height: 1; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.atkq-big s { font-size: 1.15rem; opacity: .38; }
+.atkq-big em { font-style: normal; font-size: .82rem; opacity: .6; }
+.atkq-derive { font-size: .82rem; line-height: 1.5; opacity: .62; }
+.atkq-link {
+    font-family: 'Lora', serif; font-size: .82rem; color: var(--accent-color);
+    text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+    border: 0; background: transparent; padding: 6px 0; text-align: left;
+}
+.atkq-link.sm { align-self: flex-start; }
+
+.atkq-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    margin-top: 14px; padding: 14px 16px;
+    border: 1px solid var(--soft-border); border-radius: 4px;
+}
+.atkq-row strong { display: block; font-family: 'Lora', serif; font-size: .98rem; }
+.atkq-row small { display: block; margin-top: 4px; font-size: .8rem; opacity: .55; }
+.atkq-sw {
+    width: 56px; height: 30px; flex: none; padding: 3px; cursor: pointer;
+    border-radius: 15px; border: 1px solid var(--soft-border);
+    background: var(--glass-hover); display: inline-flex; align-items: center;
+}
+.atkq-sw > span {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: color-mix(in srgb, var(--text-color) 45%, transparent);
+    transition: transform .16s ease;
+}
+.atkq-sw[aria-checked="true"] { background: var(--primary-color); border-color: var(--primary-hover); }
+.atkq-sw[aria-checked="true"] > span { transform: translateX(26px); background: #fff; }
+
+/* ---------- Bloc magique ---------- */
+.atkq-magic {
+    margin-top: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px;
+    border: 1px solid var(--accent-color); border-radius: 4px;
+    background: color-mix(in srgb, var(--accent-color) 7%, transparent);
+}
+.atkq-magic.hidden { display: none; }
+.atkq-mgrid { display: flex; gap: 14px; flex-wrap: wrap; }
+.atkq-mgrid > * { flex: 1 1 190px; }
+.atkq-f { display: flex; flex-direction: column; gap: 7px; }
+.atkq-f > span {
+    font-family: 'Courier New', monospace; font-size: .66rem; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase; opacity: .55;
+}
+.atkq-f select, .atkq-f input {
+    font-family: 'Lora', serif; font-size: .92rem; padding: 10px 12px; min-height: 44px;
+    border: 1px solid var(--soft-border); border-radius: 3px;
+    background: var(--glass-bg); color: var(--text-color);
+}
+.atkq-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.atkq-inline input { flex: 1 1 6rem; min-width: 0; }
+.atkq-sep { opacity: .5; }
+.atkq-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.atkq-pill {
+    font-family: 'Courier New', monospace; font-size: .88rem; font-weight: 700;
+    min-width: 48px; min-height: 44px; padding: 10px 12px; cursor: pointer;
+    border: 1px solid var(--soft-border); border-radius: 3px;
+    background: var(--glass-bg); color: var(--text-color);
+}
+.atkq-pill:hover { background: var(--glass-hover); }
+.atkq-pill.is-on { background: var(--accent-color); border-color: var(--accent-color); color: #1d1712; }
+.atkq-pill.is-alt { font-family: 'Lora', serif; font-size: .78rem; font-weight: 500; opacity: .75; }
+.atkq-check { display: flex; align-items: center; gap: 9px; font-size: .9rem; cursor: pointer; }
+
+/* ---------- Pied d'actions ---------- */
+.atkq-actions {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    flex-wrap: wrap; margin-top: 20px; padding-top: 18px;
+    border-top: 1px solid var(--soft-border);
+}
+.atkq-actions-r { display: flex; gap: 10px; margin-left: auto; }
+.atkq-btn {
+    font-family: 'Lora', serif; font-size: .95rem; font-weight: 500;
+    padding: 15px 20px; min-height: 48px; cursor: pointer; border-radius: 3px;
+    border: 1px solid var(--soft-border); background: transparent; color: var(--text-color);
+}
+.atkq-btn:hover { background: var(--glass-hover); }
+.atkq-btn.is-primary {
+    font-weight: 700; padding: 15px 24px;
+    background: var(--primary-color); border-color: var(--primary-hover); color: #fff;
+}
+.atkq-btn.is-primary:hover { background: var(--primary-hover); }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 560px) {
+    .atkq-search { height: 50px; padding: 0 12px; }
+    .atkq-search input { font-size: .98rem; }
+    .atkq-kbd { display: none; }
+    .atkq-item .t, .atkq-item .p { display: none; }
+    .atkq-cards { flex-direction: column; }
+    .atkq-big { font-size: 1.75rem; }
+    .atkq-name { font-size: 1.4rem; }
+    .atkq-foot { flex-direction: column; align-items: stretch; }
+    .atkq-ghost { width: 100%; }
+    .atkq-actions { flex-direction: column; align-items: stretch; }
+    .atkq-actions-r { margin-left: 0; }
+    .atkq-actions-r .atkq-btn { flex: 1; text-align: center; }
+}
