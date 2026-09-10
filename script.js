@@ -1393,6 +1393,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hist.length > 40) hist = hist.slice(0, 40);
             setStore('dnd-roll-history', hist);
             renderRollHistory();
+            // Tout jet de d20 passe par ici avec son dé naturel : c'est donc d'ici que
+            // partent la pluie d'or d'un 20, la secousse d'un 1 et le suivi des 20
+            // d'affilée (effets.js). Un jet sans d20 (dégâts, expression) n'y touche pas.
+            if (typeof nat === 'number' && window.RollFX && window.RollFX.jet) window.RollFX.jet(nat);
         }
         function renderRollHistory() {
             const list = document.getElementById('roll-history-list'); if (!list) return;
@@ -1471,7 +1475,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnCropCancel = document.getElementById('btn-avatar-crop-cancel'); if(btnCropCancel) btnCropCancel.addEventListener('click', closeAvatarCrop);
         // Conserve l'image source (rognée à 512px max) pour pouvoir re-recadrer plus tard sans réimporter.
         function storeAvatarSource(img) { try { const S = 512; const sc = Math.min(1, S / Math.max(img.width, img.height)); const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.width * sc)); cv.height = Math.max(1, Math.round(img.height * sc)); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); setStore('dnd-avatar-src', cv.toDataURL('image/jpeg', 0.82), false); } catch(e) {} }
-        const btnCropConfirm = document.getElementById('btn-avatar-crop-confirm'); if(btnCropConfirm) btnCropConfirm.addEventListener('click', () => { if(!cropState || !cropCanvas) return; if(cropState.newSource) storeAvatarSource(cropState.img); try { saveAvatarDataUrl(cropCanvas.toDataURL('image/jpeg', 0.85)); } catch(err) { alert("Impossible d'enregistrer l'image."); } closeAvatarCrop(); });
+        // Le recadrage se règle dans un canvas de 250 px, mais s'enregistre plus
+        // grand : jusqu'à 640 px, la taille du portrait sur la carte de héros.
+        // Jamais plus que les pixels réellement présents dans la zone choisie —
+        // agrandir une petite image alourdirait la sauvegarde sans rien gagner.
+        function cropEnHauteDefinition() {
+            const S = cropCanvas.width;
+            const T = Math.round(Math.max(S, Math.min(640, S / (cropState.base * cropState.scale))));
+            const k = T / S, d = cropEffDims();
+            const out = document.createElement('canvas'); out.width = out.height = T;
+            const ctx = out.getContext('2d');
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.fillStyle = '#1a1410'; ctx.fillRect(0, 0, T, T);
+            ctx.translate((S / 2 + cropState.ox) * k, (S / 2 + cropState.oy) * k);
+            ctx.rotate((cropState.rot || 0) * Math.PI / 180);
+            ctx.drawImage(cropState.img, -d.w / 2 * k, -d.h / 2 * k, d.w * k, d.h * k);
+            return out;
+        }
+        const btnCropConfirm = document.getElementById('btn-avatar-crop-confirm'); if(btnCropConfirm) btnCropConfirm.addEventListener('click', () => { if(!cropState || !cropCanvas) return; if(cropState.newSource) storeAvatarSource(cropState.img); try { saveAvatarDataUrl(cropEnHauteDefinition().toDataURL('image/jpeg', 0.85)); } catch(err) { alert("Impossible d'enregistrer l'image."); } closeAvatarCrop(); });
         loadAvatar();
 
         const cbConcentration = document.getElementById('is-concentrating'); const concentrationGlow = document.getElementById('concentration-glow');
@@ -1717,12 +1738,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
             consignerPoolRoll(poolSnapshot, poolTotal, finalScores);
         }
-        // Consigne un lancer du PLATEAU DE DÉS dans l'historique, et célèbre un d20 naturel seul.
-        // Point de passage UNIQUE des deux chemins (3D et repli 2D) → aussi le hook de l'historique.
+        // Consigne un lancer du PLATEAU DE DÉS dans l'historique. Un d20 lancé seul y
+        // compte comme un d20 naturel : l'historique en tire les effets (20, 1, série).
+        // Point de passage UNIQUE des deux chemins (3D et repli 2D).
         function consignerPoolRoll(poolSnapshot, poolTotal, scores) {
             const nat = (poolSnapshot.length === 1 && poolSnapshot[0] === 20) ? scores[0] : null;
             const label = poolSnapshot.map(f => 'd' + f).join(' + ');
-            if (window.RollFX && nat) { if (nat === 20) window.RollFX.crit(); else if (nat === 1) window.RollFX.fumble(); }
             pushRollHistory('🎲 ' + label, poolTotal, scores.join(' + '), nat);
         }
 
@@ -1841,9 +1862,8 @@ document.addEventListener('DOMContentLoaded', () => {
             quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`;
             quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
             clearTimeout(quickToast._t); quickToast._t = setTimeout(() => { quickToast.classList.add('hidden'); }, 4000);
-            // Célébration d'un 20 ou d'un 1 naturel, puis historique
+            // Historique — c'est lui qui célèbre un 20 ou un 1 naturel
             const advTxt = advMode === 'adv' ? ' (avantage)' : (advMode === 'dis' ? ' (désavantage)' : '');
-            if (window.RollFX) { if (finalRoll === 20) window.RollFX.crit(); else if (finalRoll === 1) window.RollFX.fumble(); }
             pushRollHistory(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
         }
 
@@ -5171,7 +5191,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (r.dmg) parts.push(`dégâts ${r.dmg.total}${r.crit ? ' (critique)' : ''}`);
             const total = r.hitTotal != null ? r.hitTotal : (r.dmg ? r.dmg.total : 0);
             pushRollHistory(label, total, parts.join(' · '), r.nat);
-            if (window.RollFX) { if (r.nat === 20) window.RollFX.crit(); else if (r.nat === 1) window.RollFX.fumble(); }
         }
 
         // Une ligne d'équipement ne montre que ce qui est rempli. Une corde de

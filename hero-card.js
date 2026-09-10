@@ -4,8 +4,10 @@
 // Un bouton, une image : le portrait dans son cadre, le nom, la classe, le
 // niveau, les caractéristiques, l'arme fétiche. Tout est dessiné dans un
 // <canvas>, sur l'appareil — aucun serveur, aucune requête. L'image sort en
-// PNG 1080 × 1350, le format portrait qui passe partout (Discord, Instagram,
-// WhatsApp).
+// 2160 × 2700 : le format portrait 4:5 qui passe partout (Discord, Instagram,
+// WhatsApp), en double définition pour rester nette sur un écran de téléphone
+// comme à l'impression. En JPEG (moins d'1 Mo) : en PNG, les dégradés et le
+// grain pesaient plus de 9 Mo, au ras de la limite d'envoi de Discord.
 //
 // La carte se nourrit de la fiche OUVERTE : identité et combat se lisent dans
 // le DOM, et les armes arrivent déjà calculées par window.HeroCardArmes(),
@@ -14,11 +16,20 @@
 //
 // Le cadre de portrait choisi dans « Apparence » s'applique à la carte : c'est
 // ce qui fait de chaque image partagée une vitrine des cadres.
+//
+// Un troisième style, « Légende », reste caché : il se débloque pour un
+// personnage quand il enchaîne trois 20 naturels (effets.js écrit alors la clé
+// `dnd-legende`). Noir et or, lauriers, et la date de l'exploit gravée au pied.
 // =====================================================
 (function () {
     'use strict';
 
+    // La mise en page se pense en 1080 × 1350 ; le canvas compte deux fois plus
+    // de pixels dans chaque sens (setTransform au début du dessin). Seul le flou
+    // des ombres échappe à la transformation du contexte : il passe par flou().
     const W = 1080, H = 1350, M = 80;
+    const ECHELLE = 2;
+    const flou = (n) => n * ECHELLE;
     const CINZEL = 'Cinzel, Georgia, serif';
     const LORA = 'Lora, Georgia, serif';
 
@@ -63,6 +74,15 @@
         const cs = getComputedStyle(document.documentElement);
         const primaire = versRgb(cs.getPropertyValue('--primary-color'), [107, 36, 54]);
         const or = versRgb(cs.getPropertyValue('--accent-color'), [196, 155, 53]);
+        if (style === 'legende') {
+            // Hors thème, volontairement : une Légende se reconnaît d'une fiche à l'autre.
+            const orL = [232, 193, 106];
+            return {
+                nuit: true, legende: true, primaire: [96, 64, 20], or: orL, encre: [250, 241, 220],
+                fondA: [44, 31, 13], fondB: [6, 5, 4],
+                carte: css(orL, 0.06), trait: css(orL, 0.3)
+            };
+        }
         if (style === 'parchemin') {
             return {
                 nuit: false, primaire, or: melange(or, [90, 60, 20], 0.25), encre: [43, 29, 20],
@@ -102,7 +122,7 @@
         ctx.restore();
     }
     function etoile(ctx, x, y, r, couleur) {
-        ctx.save(); ctx.fillStyle = couleur; ctx.shadowColor = couleur; ctx.shadowBlur = r * 2;
+        ctx.save(); ctx.fillStyle = couleur; ctx.shadowColor = couleur; ctx.shadowBlur = flou(r * 2);
         ctx.beginPath();
         for (let i = 0; i < 8; i++) {
             const a = (Math.PI / 4) * i, rr = i % 2 ? r * 0.28 : r;
@@ -172,11 +192,14 @@
 
     let grainCanvas = null;
     function motifGrain(ctx) {
+        // Le grain se tisse au pixel réel de l'image : un motif agrandi par la
+        // transformation du contexte donnerait des grains doubles, grossiers.
+        const T = 160 * ECHELLE;
         if (!grainCanvas) {
             grainCanvas = document.createElement('canvas');
-            grainCanvas.width = grainCanvas.height = 160;
+            grainCanvas.width = grainCanvas.height = T;
             const g = grainCanvas.getContext('2d');
-            const img = g.createImageData(160, 160);
+            const img = g.createImageData(T, T);
             for (let i = 0; i < img.data.length; i += 4) {
                 const v = Math.random() * 255;
                 img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
@@ -184,7 +207,9 @@
             }
             g.putImageData(img, 0, 0);
         }
-        return ctx.createPattern(grainCanvas, 'repeat');
+        const motif = ctx.createPattern(grainCanvas, 'repeat');
+        if (motif && motif.setTransform && window.DOMMatrix) motif.setTransform(new DOMMatrix([1 / ECHELLE, 0, 0, 1 / ECHELLE, 0, 0]));
+        return motif;
     }
 
     // =====================================================
@@ -259,6 +284,90 @@
     }
 
     // =====================================================
+    // LÉGENDE — le style secret des trois 20 naturels
+    // =====================================================
+    /** Un dégradé d'or battu : sombre, éclat, sombre. */
+    function dorure(ctx, x0, y0, x1, y1) {
+        const g = ctx.createLinearGradient(x0, y0, x1, y1);
+        g.addColorStop(0, '#8a6420'); g.addColorStop(0.28, '#f3d27a'); g.addColorStop(0.46, '#fff4cc');
+        g.addColorStop(0.64, '#c8962f'); g.addColorStop(0.82, '#f0cd72'); g.addColorStop(1, '#8a6420');
+        return g;
+    }
+
+    /** Une gloire : des rayons d'or qui partent du portrait et s'éteignent en chemin. */
+    function rayons(ctx, x, y, p) {
+        const R = 900;
+        const g = ctx.createRadialGradient(x, y, 30, x, y, R);
+        g.addColorStop(0, css(p.or, 1)); g.addColorStop(0.55, css(p.or, 0.25)); g.addColorStop(1, css(p.or, 0));
+        ctx.save();
+        ctx.fillStyle = g;
+        for (let i = 0; i < 44; i++) {
+            const a = (Math.PI * 2 * i) / 44, demi = i % 2 ? 0.01 : 0.026;
+            ctx.globalAlpha = i % 2 ? 0.08 : 0.15;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, R, a - demi, a + demi); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function cadreLegende(ctx, p) {
+        ctx.save();
+        ctx.lineWidth = 8; ctx.strokeStyle = dorure(ctx, 0, 0, W, H);
+        rrect(ctx, 30, 30, W - 60, H - 60, 28); ctx.stroke();
+        ctx.lineWidth = 2; ctx.strokeStyle = css(p.or, 0.5);
+        rrect(ctx, 46, 46, W - 92, H - 92, 22); ctx.stroke();
+        ctx.lineWidth = 1; ctx.strokeStyle = css(p.or, 0.25);
+        rrect(ctx, 56, 56, W - 112, H - 112, 18); ctx.stroke();
+        ctx.restore();
+        // Une agrafe étoilée posée sur chaque arrondi du cadre
+        [[38, 38], [W - 38, 38], [38, H - 38], [W - 38, H - 38]].forEach(([x, y]) => {
+            etoile(ctx, x, y, 18, css([255, 240, 196]));
+            losange(ctx, x, y, 5, css(p.or));
+        });
+    }
+
+    /** Deux branches de laurier autour du portrait, ouvertes en bas pour laisser respirer le nom. */
+    function laurier(ctx, x, y, R, p) {
+        const debut = 52 * Math.PI / 180, fin = -50 * Math.PI / 180, N = 10;
+        ctx.save();
+        ctx.lineCap = 'round';
+        [1, -1].forEach(cote => {
+            const pt = (a) => [x + cote * Math.cos(a) * R, y + Math.sin(a) * R];
+            ctx.strokeStyle = css(p.or, 0.7); ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            for (let i = 0; i <= 48; i++) { const [px, py] = pt(debut + (fin - debut) * i / 48); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+            ctx.stroke();
+            // Les feuilles, par paires, de plus en plus petites vers la pointe
+            for (let i = 0; i <= N; i++) {
+                const t = i / N, a = debut + (fin - debut) * t;
+                const [bx, by] = pt(a);
+                const pousse = Math.atan2(-Math.cos(a), cote * Math.sin(a));
+                const taille = 20 - t * 8;
+                (i === N ? [0] : [1, -1]).forEach(s => {
+                    const ang = pousse + s * cote * 0.6;
+                    ctx.save();
+                    ctx.translate(bx + Math.cos(ang) * taille * 0.9, by + Math.sin(ang) * taille * 0.9);
+                    ctx.rotate(ang);
+                    ctx.fillStyle = s >= 0 ? dorure(ctx, -taille, 0, taille, 0) : css(p.or, 0.82);
+                    ctx.beginPath(); ctx.ellipse(0, 0, taille, taille * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                });
+            }
+        });
+        ctx.restore();
+    }
+
+    function anneauLegende(ctx, x, y, r, p) {
+        ctx.save();
+        ctx.lineWidth = 9; ctx.strokeStyle = dorure(ctx, x - r, y - r, x + r, y + r);
+        ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1.8; ctx.strokeStyle = css(p.or, 0.55);
+        ctx.beginPath(); ctx.arc(x, y, r + 17, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        laurier(ctx, x, y, r + 50, p);
+        etoile(ctx, x, y - r - 17, 12, css([255, 244, 205]));
+    }
+
+    // =====================================================
     // LES DONNÉES DE LA FICHE
     // =====================================================
     function donnees() {
@@ -294,9 +403,13 @@
     // =====================================================
     function dessiner(cv, d, reg, res) {
         const ctx = cv.getContext('2d');
+        ctx.setTransform(ECHELLE, 0, 0, ECHELLE, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
         const p = palette(reg.style);
         const nuit = p.nuit;
         const alea = graine(d.nom + '|' + d.classe);
+        const PX = W / 2, PY = 300, PR = 160;
         ctx.clearRect(0, 0, W, H);
         ctx.textBaseline = 'alphabetic';
 
@@ -306,16 +419,18 @@
         ctx.fillStyle = fond; ctx.fillRect(0, 0, W, H);
         halo(ctx, W / 2, 300, 520, css(p.or, nuit ? 0.2 : 0.16));
         halo(ctx, W / 2, H + 80, 760, css(p.primaire, nuit ? 0.3 : 0.1));
+        if (p.legende) { rayons(ctx, PX, PY, p); halo(ctx, PX, PY, 420, css(p.or, 0.22)); }
         if (!nuit) for (let i = 0; i < 7; i++) halo(ctx, alea() * W, alea() * H, 120 + alea() * 220, css([120, 80, 30], 0.05 + alea() * 0.05));
         for (let i = 0; i < (nuit ? 54 : 26); i++) {
             const x = alea() * W, y = alea() * H, r = 0.8 + alea() * 2.6;
             ctx.save();
             ctx.globalAlpha = (nuit ? 0.18 : 0.12) + alea() * 0.45;
             ctx.fillStyle = css(nuit ? p.or : p.primaire);
-            if (nuit) { ctx.shadowColor = css(p.or, 0.9); ctx.shadowBlur = 10; }
+            if (nuit) { ctx.shadowColor = css(p.or, 0.9); ctx.shadowBlur = flou(10); }
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
         }
+        if (p.legende) for (let i = 0; i < 16; i++) etoile(ctx, M + alea() * (W - 2 * M), M + alea() * (H - 2 * M), 3 + alea() * 6, css(p.or, 0.35 + alea() * 0.5));
         ctx.save();
         ctx.globalAlpha = nuit ? 0.08 : 0.13;
         ctx.globalCompositeOperation = nuit ? 'overlay' : 'multiply';
@@ -326,12 +441,13 @@
         vignette.addColorStop(1, nuit ? 'rgba(0,0,0,.55)' : 'rgba(80,50,20,.28)');
         ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
 
-        cadre(ctx, p, d.cadre);
+        if (p.legende) cadreLegende(ctx, p); else cadre(ctx, p, d.cadre);
 
         // --- En-tête ---
+        const entete = p.legende ? 'ÉLU DES DIEUX' : 'BONES & BLADES';
         ctx.fillStyle = css(p.or); ctx.font = `600 24px ${CINZEL}`; ctx.textAlign = 'center';
-        texteEspace(ctx, 'BONES & BLADES', W / 2, 104, 8, true);
-        const lt = largeurEspacee(ctx, 'BONES & BLADES', 8);
+        texteEspace(ctx, entete, W / 2, 104, 8, true);
+        const lt = largeurEspacee(ctx, entete, 8);
         ctx.save(); ctx.strokeStyle = css(p.or, 0.55); ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(W / 2 - lt / 2 - 26, 96); ctx.lineTo(W / 2 - lt / 2 - 130, 96);
@@ -341,9 +457,8 @@
         losange(ctx, W / 2 + lt / 2 + 15, 96, 4, css(p.or));
 
         // --- Portrait ---
-        const PX = W / 2, PY = 300, PR = 160;
         ctx.save();
-        ctx.shadowColor = css(p.or, nuit ? 0.55 : 0.35); ctx.shadowBlur = 50;
+        ctx.shadowColor = css(p.or, p.legende ? 0.8 : nuit ? 0.55 : 0.35); ctx.shadowBlur = flou(p.legende ? 70 : 50);
         ctx.fillStyle = css(p.fondB); ctx.beginPath(); ctx.arc(PX, PY, PR, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
         ctx.save();
@@ -359,14 +474,19 @@
             ctx.textBaseline = 'alphabetic';
         }
         ctx.restore();
-        anneau(ctx, PX, PY, PR, p, d.cadre);
+        if (p.legende) anneauLegende(ctx, PX, PY, PR, p); else anneau(ctx, PX, PY, PR, p, d.cadre);
 
         // --- Nom et identité ---
         ctx.textAlign = 'center';
         const tn = ajuster(ctx, d.nom, '700', CINZEL, 84, 44, W - 2 * M - 40);
         ctx.save();
         ctx.font = `700 ${tn}px ${CINZEL}`;
-        if (nuit) { ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = 26; ctx.fillStyle = css(p.encre); }
+        if (p.legende) {
+            const ln = ctx.measureText(d.nom).width;
+            ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = flou(30);
+            ctx.fillStyle = dorure(ctx, W / 2 - ln / 2, 0, W / 2 + ln / 2, 0);
+        }
+        else if (nuit) { ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = flou(26); ctx.fillStyle = css(p.encre); }
         else ctx.fillStyle = css(p.primaire);
         ctx.fillText(d.nom, W / 2, 560);
         ctx.restore();
@@ -388,7 +508,7 @@
             const lignes = couper(ctx, '« ' + devise + ' »', W - 2 * M - 60, 2);
             ctx.save();
             ctx.fillStyle = css(p.or);
-            if (nuit) { ctx.shadowColor = css(p.or, 0.35); ctx.shadowBlur = 12; }
+            if (nuit) { ctx.shadowColor = css(p.or, 0.35); ctx.shadowBlur = flou(12); }
             lignes.forEach((ln, i) => ctx.fillText(ln, W / 2, y + 44 + i * 42));
             ctx.restore();
             y += 44 + (lignes.length - 1) * 42 + 10;
@@ -403,7 +523,8 @@
         const infos = [['CA', d.ca], ['PV', d.pv], ['INIT', bonus(d.init)], ['VITESSE', metres(d.vitesse)], ['MAÎTRISE', bonus(d.maitrise)]].filter(([, v]) => v);
         // Le bloc du bas se centre dans la place qui reste au-dessus du pied.
         const bloc = 150 + (infos.length ? 20 + 84 : 0) + (arme ? 22 + 118 : 0);
-        const reste = 1190 - (y + bloc);
+        // En Légende, le sceau de l'exploit prend place juste au-dessus du pied.
+        const reste = (p.legende ? 1166 : 1190) - (y + bloc);
         if (reste > 0) y += reste / 2;
 
         // --- Caractéristiques ---
@@ -416,7 +537,7 @@
             if (top) marquee = true;
             ctx.save();
             rrect(ctx, x, y, cw, ch, 20); ctx.fillStyle = p.carte; ctx.fill();
-            if (top) { ctx.shadowColor = css(p.or, 0.6); ctx.shadowBlur = 22; ctx.strokeStyle = css(p.or); ctx.lineWidth = 2.6; }
+            if (top) { ctx.shadowColor = css(p.or, 0.6); ctx.shadowBlur = flou(22); ctx.strokeStyle = css(p.or); ctx.lineWidth = 2.6; }
             else { ctx.strokeStyle = p.trait; ctx.lineWidth = 1.5; }
             rrect(ctx, x, y, cw, ch, 20); ctx.stroke();
             ctx.restore();
@@ -457,7 +578,7 @@
             ctx.save();
             rrect(ctx, M, y, W - 2 * M, ah, 24);
             ctx.fillStyle = arme.magique ? css(p.or, nuit ? 0.08 : 0.12) : p.carte; ctx.fill();
-            if (arme.magique) { ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = 24; ctx.strokeStyle = css(p.or); ctx.lineWidth = 2.4; }
+            if (arme.magique) { ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = flou(24); ctx.strokeStyle = css(p.or); ctx.lineWidth = 2.4; }
             else { ctx.strokeStyle = p.trait; ctx.lineWidth = 1.5; }
             rrect(ctx, M, y, W - 2 * M, ah, 24); ctx.stroke();
             ctx.restore();
@@ -483,7 +604,7 @@
             ctx.save();
             ctx.font = `700 ${taille}px ${CINZEL}`;
             ctx.fillStyle = arme.magique ? css(p.or) : css(p.encre);
-            if (arme.magique && nuit) { ctx.shadowColor = css(p.or, 0.7); ctx.shadowBlur = 18; }
+            if (arme.magique && nuit) { ctx.shadowColor = css(p.or, 0.7); ctx.shadowBlur = flou(18); }
             ctx.fillText(arme.nom, gx, y + 78);
             const larg = ctx.measureText(arme.nom).width;
             ctx.restore();
@@ -499,6 +620,23 @@
             ctx.textAlign = 'right';
             if (toucherTxt) { ctx.fillStyle = css(p.encre); ctx.font = `700 30px ${CINZEL}`; ctx.fillText(toucherTxt, dx, y + 56); }
             if (dg) { ctx.fillStyle = css(p.encre, 0.68); ctx.font = `italic 400 ${tDg}px ${LORA}`; ctx.fillText(dg, dx, y + 92); }
+        }
+
+        // --- Le sceau de l'exploit (Légende) ---
+        if (p.legende && reg.legende) {
+            let quand = '';
+            try { quand = new Date(reg.legende.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {}
+            const sceau = ['Trois 20 naturels d’affilée', quand, reg.legende.fois > 1 ? '×' + reg.legende.fois : ''].filter(Boolean).join('  ·  ');
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.font = `italic 400 ${ajuster(ctx, sceau, 'italic 400', LORA, 23, 15, W - 2 * M - 90)}px ${LORA}`;
+            ctx.fillStyle = css(p.or, 0.92);
+            ctx.shadowColor = css(p.or, 0.35); ctx.shadowBlur = flou(10);
+            ctx.fillText(sceau, W / 2, 1210);
+            const ls = ctx.measureText(sceau).width;
+            ctx.restore();
+            etoile(ctx, W / 2 - ls / 2 - 22, 1202, 7, css(p.or));
+            etoile(ctx, W / 2 + ls / 2 + 22, 1202, 7, css(p.or));
         }
 
         // --- Pied : logo, nom du site, adresse réelle quand il est en ligne ---
@@ -545,10 +683,10 @@
         modal.innerHTML = `<div class="modal-box hc-box" role="dialog" aria-labelledby="hc-titre">
             <div class="modal-header"><h2 id="hc-titre">🃏 Carte de héros</h2><button type="button" class="btn-close-modal" data-hc="fermer" aria-label="Fermer">✕</button></div>
             <div class="hc-grid">
-                <div class="hc-apercu"><canvas id="hc-canvas" width="${W}" height="${H}" role="img" aria-label="Carte de héros"></canvas></div>
+                <div class="hc-apercu"><canvas id="hc-canvas" width="${W * ECHELLE}" height="${H * ECHELLE}" role="img" aria-label="Carte de héros"></canvas></div>
                 <div class="hc-reglages">
                     <div class="hc-f"><label>Style</label>
-                        <div class="hc-seg"><button type="button" data-hc-style="nuit">🌙 Nuit</button><button type="button" data-hc-style="parchemin">📜 Parchemin</button></div>
+                        <div class="hc-seg"><button type="button" data-hc-style="nuit">🌙 Nuit</button><button type="button" data-hc-style="parchemin">📜 Parchemin</button><button type="button" data-hc-style="legende" hidden>👑 Légende</button></div>
                     </div>
                     <div class="hc-f"><label for="hc-devise">Devise <span>facultative</span></label>
                         <input type="text" id="hc-devise" maxlength="90" placeholder="Je ne recule jamais." autocomplete="off">
@@ -600,17 +738,28 @@
         });
     }
 
-    async function ouvrir() {
+    /** Le trophée des trois 20 naturels de CE personnage, ou null. */
+    function legendeDuPerso() {
+        try { const e = JSON.parse(lire('dnd-legende') || 'null'); return e && e.date ? e : null; } catch (err) { return null; }
+    }
+
+    /** `opts.style` impose un style : la bannière de effets.js ouvre sur « legende ». */
+    async function ouvrir(opts) {
         const app = $('app-screen');
         if (!app || app.classList.contains('hidden') || !idPerso()) { toast('Ouvre une fiche pour créer la carte de ton héros.'); return; }
         const menu = $('settings-dropdown'); if (menu) menu.classList.add('hidden');
         construire();
         d = donnees();
+        const legende = legendeDuPerso();
+        let style = (opts && opts.style) || lire('dnd-hero-style');
+        if (!['nuit', 'parchemin', 'legende'].includes(style) || (style === 'legende' && !legende)) style = 'nuit';
+        if (opts && opts.style) noter('dnd-hero-style', style);
         reglages = {
-            style: lire('dnd-hero-style') === 'parchemin' ? 'parchemin' : 'nuit',
+            style, legende,
             devise: lire('dnd-hero-devise') || '',
             arme: lire('dnd-hero-arme') || 'auto'
         };
+        modal.querySelector('[data-hc-style="legende"]').hidden = !legende;
         modal.querySelector('#hc-devise').value = reglages.devise;
         const sel = modal.querySelector('#hc-arme');
         sel.innerHTML = '<option value="auto">Choisie pour moi</option>'
@@ -621,7 +770,7 @@
         majSegments();
 
         let peutPartager = false;
-        try { peutPartager = !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'carte.png', { type: 'image/png' })] })); } catch (e) {}
+        try { peutPartager = !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'carte.jpg', { type: 'image/jpeg' })] })); } catch (e) {}
         modal.querySelector('[data-hc="partager"]').hidden = !peutPartager;
         modal.querySelector('[data-hc="copier"]').hidden = !(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem);
 
@@ -636,7 +785,7 @@
         modal.classList.add('is-busy');
         const res = await preparer(d);
         const arme = reglages.arme === 'auto' ? 'auto' : reglages.arme === 'aucune' ? 'aucune' : parseInt(reglages.arme, 10);
-        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme }, res);
+        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme, legende: reglages.legende }, res);
         cv.setAttribute('aria-label', `Carte de héros de ${d.nom}, ${d.classe || 'aventurier'} de niveau ${d.niveau}`);
         modal.classList.remove('is-busy');
     }
@@ -645,8 +794,19 @@
     // SORTIE DE L'IMAGE
     // =====================================================
     const nomFichier = () => 'heros-' + (d.nom || 'sans-nom').normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png';
-    const enBlob = () => new Promise(ok => cv.toBlob(b => ok(b), 'image/png'));
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.jpg';
+    const enBlob = () => new Promise(ok => cv.toBlob(b => ok(b), 'image/jpeg', 0.95));
+    // Le presse-papiers n'accepte que le PNG : on y copie la carte en 1080 × 1350,
+    // largement assez pour une conversation, et bien plus léger qu'en pleine définition.
+    function enPngReduit() {
+        const petit = document.createElement('canvas');
+        petit.width = W; petit.height = H;
+        const c = petit.getContext('2d');
+        c.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in c) c.imageSmoothingQuality = 'high';
+        c.drawImage(cv, 0, 0, W, H);
+        return new Promise(ok => petit.toBlob(b => ok(b), 'image/png'));
+    }
 
     async function telecharger() {
         const b = await enBlob(); if (!b) return;
@@ -654,18 +814,18 @@
         a.href = URL.createObjectURL(b); a.download = nomFichier();
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-        toast('🃏 Carte enregistrée');
+        toast(`🃏 Carte enregistrée — ${cv.width} × ${cv.height} px`);
     }
     async function partager() {
         const b = await enBlob(); if (!b) return;
-        const f = new File([b], nomFichier(), { type: 'image/png' });
+        const f = new File([b], nomFichier(), { type: 'image/jpeg' });
         try { await navigator.share({ files: [f], title: d.nom, text: d.nom + ' — Bones & Blades' }); }
         catch (e) { if (e && e.name !== 'AbortError') toast('Le partage a échoué — télécharge l’image à la place.'); }
     }
     async function copier() {
         // La promesse est confiée telle quelle à ClipboardItem : attendre le blob
         // avant faisait perdre le « geste utilisateur » sur Safari.
-        try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': enBlob() })]); toast('📋 Image copiée — colle-la dans Discord'); }
+        try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPngReduit() })]); toast('📋 Image copiée — colle-la dans Discord'); }
         catch (e) { toast('Copie impossible ici — télécharge l’image à la place.'); }
     }
 

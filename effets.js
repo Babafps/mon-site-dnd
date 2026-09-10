@@ -2,7 +2,8 @@
 // effets.js — les effets visuels de la fiche
 //
 // Deux familles, toutes deux déclenchées par TA fiche, sans réseau :
-//   · RollFX : la pluie d'étincelles d'un 20 naturel, la secousse d'un 1 ;
+//   · RollFX : la pluie d'étincelles d'un 20 naturel, la secousse d'un 1, et le
+//     secret des trois 20 naturels d'affilée ;
 //   · les voiles d'état plein écran — empoisonné, aveuglé, effrayé, en feu,
 //     étourdi, à terre — qui suivent les conditions cochées sur la fiche.
 //
@@ -61,7 +62,140 @@
         setTimeout(() => { voile.remove(); document.body.classList.remove('rfx-shake'); }, 1200);
     }
 
-    window.RollFX = { crit, fumble };
+    // ---------- Chaque d20 naturel passe par ici ----------
+    // Appelé par l'historique des jets de la fiche (script.js, pushRollHistory)
+    // pour TOUT jet de d20 : caractéristique, sauvegarde, attaque, sort, d20
+    // lancé seul sur le plateau. Un jet sans d20 (dégâts, expression) n'y vient pas.
+    //
+    // Le secret du site vit ici : trois 20 naturels d'affilée sur le même
+    // personnage — une chance sur 8 000. Un autre d20 entre deux, et la série
+    // repart de zéro. Elle vit dans sessionStorage : elle survit à un
+    // rechargement de la page, pas à la fermeture de l'onglet, et ne quitte
+    // jamais l'appareil.
+    const SERIE = 'dnd-serie-20';
+    const idPerso = () => { try { return localStorage.getItem('dnd-active-char') || ''; } catch (e) { return ''; } };
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    function serieEnCours() {
+        try {
+            const s = JSON.parse(sessionStorage.getItem(SERIE) || 'null');
+            return s && s.id === idPerso() ? (s.n || 0) : 0;
+        } catch (e) { return 0; }
+    }
+    function noterSerie(n) { try { sessionStorage.setItem(SERIE, JSON.stringify({ id: idPerso(), n })); } catch (e) {} }
+
+    function jet(nat) {
+        const n = nat === 20 ? serieEnCours() + 1 : 0;
+        if (n >= 3) { noterSerie(0); legende(); return; }
+        noterSerie(n);
+        if (nat === 20) crit(); else if (nat === 1) fumble();
+    }
+
+    // ---------- Trois 20 naturels : les dieux te regardent ----------
+    // La récompense : une triple pluie d'or, une bannière, et le style « Légende »
+    // de la carte de héros, débloqué pour CE personnage. La clé `dnd-legende`
+    // garde la date du premier exploit et le nombre de fois.
+    function legende() {
+        const id = idPerso();
+        if (!id) return;
+        const cle = id + '_dnd-legende';
+        let avant = null;
+        try { avant = JSON.parse(localStorage.getItem(cle) || 'null'); } catch (e) {}
+        const etat = { date: (avant && avant.date) || Date.now(), fois: ((avant && avant.fois) || 0) + 1 };
+        const val = JSON.stringify(etat);
+        try { localStorage.setItem(cle, val); } catch (e) {}
+        // Même règle que les écritures de la fiche (DB.set dans script.js) : le
+        // trophée suit le personnage dans le cloud, jusque sur ses autres appareils.
+        try { if (window.SupaAuth && window.SupaAuth.currentUser && window.SyncQueue) window.SyncQueue.push(id, 'dnd-legende', val); } catch (e) {}
+
+        if (!calme()) { crit(); setTimeout(crit, 420); setTimeout(crit, 840); }
+        banniere(etat);
+    }
+
+    let legendeStyles = false;
+    function stylesLegende() {
+        if (legendeStyles) return; legendeStyles = true;
+        // Sous la pluie d'or (100050) : les paillettes tombent PAR-DESSUS la bannière.
+        injecter(`
+        .rfx-legende { position: fixed; inset: 0; z-index: 100040; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden;
+            background: radial-gradient(ellipse at 50% 45%, rgba(34,24,8,.86), rgba(0,0,0,.93) 72%); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: rfxLegIn .45s ease-out both; }
+        .rfx-legende.sort { animation: rfxLegOut .34s ease-in forwards; }
+        @keyframes rfxLegIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes rfxLegOut { from { opacity: 1; } to { opacity: 0; } }
+        .rfx-leg-rayons { position: absolute; left: 50%; top: 46%; width: 170vmax; height: 170vmax; pointer-events: none; transform: translate(-50%, -50%);
+            background: repeating-conic-gradient(rgba(255,214,120,.2) 0deg 3deg, rgba(255,214,120,0) 3deg 12deg);
+            -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0,0,0,.55) 16%, transparent 46%); mask-image: radial-gradient(circle, #000 0%, rgba(0,0,0,.55) 16%, transparent 46%);
+            animation: rfxLegRays 40s linear infinite; }
+        @keyframes rfxLegRays { to { transform: translate(-50%, -50%) rotate(360deg); } }
+        .rfx-legende .rfx-leg-boite { position: relative; max-width: 660px; text-align: center; color: #f6ead0; animation: rfxLegPop .9s cubic-bezier(.2,.9,.25,1.12) .12s both; }
+        @keyframes rfxLegPop { from { opacity: 0; transform: scale(.8) translateY(16px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+        .rfx-legende .rfx-leg-surtitre { font-family: 'Cinzel', Georgia, serif; font-size: .78rem; font-weight: 600; letter-spacing: .3em; text-transform: uppercase; color: #e8c16a; }
+        .rfx-legende .rfx-leg-titre { margin: .3em 0 .35em; padding: 0; border: 0; font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: clamp(2.1rem, 7.2vw, 4.6rem); line-height: 1.04; letter-spacing: .01em; text-transform: none;
+            background: linear-gradient(100deg, #8a6420 0%, #f3d27a 26%, #fff4cc 44%, #c8962f 62%, #f0cd72 80%, #8a6420 100%); background-size: 240% 100%;
+            -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 22px rgba(255,196,90,.45)); animation: rfxLegOr 3.6s ease-in-out infinite; }
+        @keyframes rfxLegOr { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+        .rfx-legende .rfx-leg-phrase { margin: 0 auto 1.5em; max-width: 32em; font-family: 'Lora', Georgia, serif; font-style: italic; font-size: 1.06rem; line-height: 1.6; color: rgba(246,234,208,.86); }
+        .rfx-legende .rfx-leg-phrase b { font-style: normal; color: #f3d27a; }
+        .rfx-legende .rfx-leg-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .rfx-legende .rfx-leg-actions button { min-height: 44px; padding: 10px 22px; border-radius: 999px; cursor: pointer; font-family: 'Cinzel', Georgia, serif; font-size: .9rem; font-weight: 600; letter-spacing: .04em; text-transform: none; }
+        .rfx-legende .rfx-leg-carte { color: #2a1c06; background: linear-gradient(180deg, #f6dc8c, #c8962f); border: 1px solid #f9e7b0; box-shadow: 0 0 24px rgba(255,200,90,.45); }
+        .rfx-legende .rfx-leg-carte:hover { filter: brightness(1.08); }
+        .rfx-legende .rfx-leg-fermer { color: #f6ead0; background: rgba(255,255,255,.06); border: 1px solid rgba(246,234,208,.32); box-shadow: none; }
+        .rfx-legende .rfx-leg-fermer:hover { background: rgba(255,255,255,.12); }
+        .rfx-legende button:focus-visible { outline: 2px solid #f6dc8c; outline-offset: 3px; }
+        @media (prefers-reduced-motion: reduce) { .rfx-legende, .rfx-legende .rfx-leg-boite, .rfx-leg-rayons, .rfx-legende .rfx-leg-titre { animation: none !important; } }`);
+    }
+
+    // La bannière reste lisible sans animation : avec « moins d'animations »,
+    // pas de pluie ni de rayons qui tournent, mais le déblocage s'annonce quand même.
+    function banniere(etat) {
+        stylesLegende();
+        const deja = document.getElementById('rfx-legende'); if (deja) deja.remove();
+        const nom = String((document.getElementById('char-name') || {}).value || '').trim() || 'Ton héros';
+        const phrase = etat.fois > 1
+            ? `Encore ! ${esc(nom)} a remis ça : ${etat.fois} fois à ce jour. Les dieux n’en reviennent pas.`
+            : `${esc(nom)} entre dans la légende. Le style <b>Légende</b> de la carte de héros est débloqué.`;
+        const el = document.createElement('div');
+        el.id = 'rfx-legende'; el.className = 'rfx-legende no-print';
+        el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'rfx-leg-titre');
+        el.innerHTML = `<div class="rfx-leg-rayons" aria-hidden="true"></div>
+            <div class="rfx-leg-boite">
+                <div class="rfx-leg-surtitre">✦ Trois 20 naturels d’affilée ✦</div>
+                <h2 id="rfx-leg-titre" class="rfx-leg-titre">Les dieux te regardent</h2>
+                <p class="rfx-leg-phrase">${phrase}</p>
+                <div class="rfx-leg-actions">
+                    <button type="button" class="rfx-leg-carte">🃏 Voir ma carte Légende</button>
+                    <button type="button" class="rfx-leg-fermer">Continuer</button>
+                </div>
+            </div>`;
+        document.body.appendChild(el);
+
+        const boite = el.querySelector('.rfx-leg-boite');
+        let minuteur = null;
+        const armer = () => { clearTimeout(minuteur); minuteur = setTimeout(fermer, 15000); };
+        const surTouche = (e) => { if (e.key === 'Escape') fermer(); };
+        function fermer() {
+            if (el.classList.contains('sort')) return;
+            clearTimeout(minuteur);
+            document.removeEventListener('keydown', surTouche);
+            el.classList.add('sort');
+            setTimeout(() => el.remove(), calme() ? 0 : 340);
+        }
+        document.addEventListener('keydown', surTouche);
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.rfx-leg-carte')) { fermer(); if (window.HeroCard) window.HeroCard.open({ style: 'legende' }); return; }
+            if (e.target.closest('.rfx-leg-fermer') || !boite.contains(e.target)) fermer();
+        });
+        // Elle se retire seule si on l'ignore, mais jamais sous le pointeur.
+        boite.addEventListener('pointerenter', () => clearTimeout(minuteur));
+        boite.addEventListener('pointerleave', armer);
+        armer();
+        const principal = el.querySelector('.rfx-leg-carte');
+        if (principal) try { principal.focus({ preventScroll: true }); } catch (e) {}
+    }
+
+    window.RollFX = { crit, fumble, jet };
 
     // ---------- Voiles d'état plein écran ----------
     const CLE = 'dnd-fx-fullscreen';

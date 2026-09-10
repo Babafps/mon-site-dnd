@@ -7888,6 +7888,13 @@ body.theme-dark .ql-snow .ql-picker-label { color: var(--text-color); }
     color: #fff; background: var(--primary-color); border-color: var(--primary-hover);
     box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 35%, transparent);
 }
+.hc-seg [hidden] { display: none !important; }
+/* Le style secret : absent tant qu'il n'est pas débloqué, puis en or. */
+.hc-seg button[data-hc-style="legende"] { color: #b8872e; border-color: color-mix(in srgb, #e8c16a 55%, transparent); }
+.hc-seg button[data-hc-style="legende"].is-on {
+    color: #2a1c06; background: linear-gradient(180deg, #f6dc8c, #c8962f); border-color: #f3d27a;
+    box-shadow: 0 0 14px rgba(232, 193, 106, .5);
+}
 .hc-note { margin: 0; font-size: .8rem; line-height: 1.5; font-style: italic; opacity: .6; }
 .hc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .hc-actions .hc-go { flex: 1 1 auto; }
