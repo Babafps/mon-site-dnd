@@ -74,7 +74,18 @@
         @keyframes sxOeil { 0% { opacity: 0; transform: translateY(10px); } 8%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
         @keyframes sxOeilMot { 0%, 60% { opacity: 0; } 68%, 88% { opacity: 1; } 100% { opacity: 0; } }
 
+        body.sx-liche { --primary-color: #1f4a33; --primary-hover: #2b6346; --accent-color: #7dffa8; }
+        #sx-liche-voile { position: fixed; inset: 0; z-index: 9950; pointer-events: none; box-shadow: inset 0 0 200px 70px rgba(40,200,110,.3);
+            background: radial-gradient(ellipse at 50% 120%, rgba(60,255,140,.12), transparent 60%); animation: sxLiche 5s ease-in-out infinite; }
+        @keyframes sxLiche { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+        .sx-rire { animation: sxRire .09s linear 10; }
+        @keyframes sxRire { 0%, 100% { transform: none; } 50% { transform: translateY(-4px) rotate(-3deg); } }
+        .sx-bulle-crane { position: fixed; z-index: 100020; padding: 8px 14px; border-radius: 16px; background: #fffaf0; color: #2b1d14; pointer-events: none; transform: translate(-50%, -100%);
+            font-family: 'Lora', Georgia, serif; font-style: italic; font-size: .95rem; box-shadow: 0 6px 18px rgba(0,0,0,.25); animation: sxIn .25s ease both; }
+        .sx-bulle-crane::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-top-color: #fffaf0; border-bottom: 0; }
+
         @media (prefers-reduced-motion: reduce) {
+            .sx-rire, #sx-liche-voile { animation: none !important; }
             .sx-faille, .sx-faille::before, .sx-faille::after, .sx-gelee, .sx-bulle, .sx-oeil, .sx-oeil * { animation: none !important; }
             .sx-paupiere { display: none; } .sx-oeil em { opacity: 1; }
             .sx-generique { overflow-y: auto; } .sx-gen-defile { position: static; animation: none; padding-top: 60px; }
@@ -104,11 +115,11 @@
 
     function faille() {
         if (!UI()) return;
-        debloquer('astral');
+        const r = window.Exploits ? window.Exploits.debloquer('astral', { silencieux: true }) : { nouveau: false };
         styles();
         const suite = () => UI().banniere({
             theme: 'astral', rayons: false, surtitre: '✦ Faille astrale ✦', titre: 'Un sac dans un sac ?!',
-            phrase: 'Selon les règles, ranger un Sac sans fond dans un autre espace extradimensionnel détruit les deux objets et ouvre un portail vers le plan Astral, qui aspire tout ce qui se trouve à 3 mètres. Ici, on te les laisse. <b>Pour cette fois.</b>',
+            phrase: 'Selon les règles, ranger un Sac sans fond dans un autre espace extradimensionnel détruit les deux objets et ouvre un portail vers le plan Astral, qui aspire tout ce qui se trouve à 3 mètres. Ici, on te les laisse. <b>Pour cette fois.</b>' + (r.nouveau ? ' Le style <b>Astral</b> de la carte de héros est débloqué pour tous tes personnages.' : ''),
             actions: [{ label: 'Ouf. Continuer', principal: true }]
         });
         if (calme()) { suite(); return; }
@@ -169,7 +180,6 @@
 
     function generique() {
         if (!UI() || document.querySelector('.sx-generique')) return;
-        debloquer('generique');
         styles();
         const menu = document.getElementById('settings-dropdown'); if (menu) menu.classList.add('hidden');
         const esc = UI().esc;
@@ -200,6 +210,7 @@
         const touche = (e) => { if (e.key === 'Escape') fermer(); };
         function fermer() {
             if (el.classList.contains('sort')) return;
+            debloquer('generique');
             document.removeEventListener('keydown', touche);
             el.classList.add('sort');
             setTimeout(() => el.remove(), 400);
@@ -271,4 +282,53 @@
         hote.appendChild(el);
         setTimeout(() => el.remove(), calme() ? 3000 : 4800);
     }
+    // =====================================================
+    // LE CODE KONAMI — le mode Liche, le temps d'une séance
+    // =====================================================
+    const KONAMI = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
+    let saisie = [];
+    document.addEventListener('keydown', (e) => {
+        const t = e.target;
+        if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ''))) return;
+        saisie.push(String(e.key || '').toLowerCase());
+        saisie = saisie.slice(-KONAMI.length);
+        if (saisie.join() === KONAMI.join()) { saisie = []; liche(); }
+    });
+    function liche() {
+        styles();
+        const actif = document.body.classList.toggle('sx-liche');
+        let voile = document.getElementById('sx-liche-voile');
+        if (actif && !voile) {
+            voile = document.createElement('div');
+            voile.id = 'sx-liche-voile'; voile.className = 'no-print'; voile.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(voile);
+        }
+        if (!actif && voile) voile.remove();
+        if (window.showAppToast) window.showAppToast(actif ? '☠️ Mode Liche. Refais le code pour revenir parmi les vivants.' : '🌅 Retour parmi les vivants.');
+        if (actif) setTimeout(() => debloquer('konami'), 2600);
+    }
+
+    // =====================================================
+    // LE CRÂNE CHATOUILLEUX — sept clics sur le logo de l'accueil
+    // =====================================================
+    let clicsCrane = [];
+    document.addEventListener('click', (e) => {
+        const logo = e.target && e.target.closest && e.target.closest('.brand-logo');
+        if (!logo) return;
+        const t = Date.now();
+        clicsCrane = clicsCrane.filter(x => t - x < 4000);
+        clicsCrane.push(t);
+        if (clicsCrane.length < 7) return;
+        clicsCrane = [];
+        styles();
+        logo.classList.remove('sx-rire'); void logo.offsetWidth; logo.classList.add('sx-rire');
+        const r = logo.getBoundingClientRect();
+        const bulle = document.createElement('div');
+        bulle.className = 'sx-bulle-crane no-print'; bulle.setAttribute('role', 'status');
+        bulle.textContent = 'Arrête, ça chatouille !';
+        bulle.style.left = (r.left + r.width / 2) + 'px'; bulle.style.top = Math.max(40, r.top - 8) + 'px';
+        document.body.appendChild(bulle);
+        setTimeout(() => { bulle.remove(); logo.classList.remove('sx-rire'); }, 2400);
+        debloquer('crane7');
+    });
 })();

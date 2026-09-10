@@ -22,7 +22,7 @@ inertes.
 
 | Dossier | Contenu |
 |---|---|
-| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` (carte de héros à partager), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `secrets.js` + `secrets-monde.js` (trophées du compte et petits secrets)… |
+| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` (trophées du compte et petits secrets)… |
 | `data/srd/` | La base de règles générée — sorts, monstres, objets, équipement, classes, races, états. Voir son `README.md`. |
 | `tools/srd/` | Les scripts Python qui régénèrent `data/srd/` depuis le PDF officiel. |
 | `docs/` | Migration Supabase et cahier des charges en cours. |

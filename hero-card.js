@@ -59,12 +59,21 @@
     const STYLES = [
         { id: 'nuit', nom: '🌙 Nuit' },
         { id: 'parchemin', nom: '📜 Parchemin' },
-        { id: 'legende', nom: '👑 Légende', exploit: 'triple20', entete: 'ÉLU DES DIEUX', sceau: 'Trois 20 naturels d’affilée' },
-        { id: 'maudit', nom: '☠️ Maudit', exploit: 'triple1', entete: 'MAUDIT PAR LES DÉS', sceau: 'Trois 1 naturels d’affilée' }
+        { id: 'legende', nom: '👑 Légende', exploit: 'triple20', entete: 'ÉLU DES DIEUX', sceau: 'Trois 20 naturels d’affilée', indice: 'Les dieux aiment les séries.' },
+        { id: 'maudit', nom: '☠️ Maudit', exploit: 'triple1', entete: 'MAUDIT PAR LES DÉS', sceau: 'Trois 1 naturels d’affilée', indice: 'Les dés, eux aussi, savent haïr.' }
     ];
     const styleParId = (id) => STYLES.find(x => x.id === id) || STYLES[0];
     const exploitDe = (st) => (st.exploit && window.Exploits ? window.Exploits.info(st.exploit) : null);
     const disponible = (st) => !st.exploit || !!exploitDe(st);
+    /**
+     * hero-card-styles.js déclare ici ses styles. Un style porte : id, nom, exploit,
+     * indice, entete, sceau, palette { nuit, fondA, fondB, or, encre, primaire },
+     * et des crochets de dessin facultatifs, qui reçoivent (ctx, T) — T étant la
+     * boîte à outils de la carte : fond, cadre, portrait, anneau, nomDuHeros, devant.
+     */
+    function ajouterStyles(liste) {
+        (liste || []).forEach(x => { if (x && x.id && !STYLES.some(y => y.id === x.id)) STYLES.push(x); });
+    }
 
     // =====================================================
     // COULEURS — tirées du thème actif, pour que la carte ressemble à SA fiche
@@ -88,6 +97,15 @@
         const cs = getComputedStyle(document.documentElement);
         const primaire = versRgb(cs.getPropertyValue('--primary-color'), [107, 36, 54]);
         const or = versRgb(cs.getPropertyValue('--accent-color'), [196, 155, 53]);
+        const decrit = STYLES.find(x => x.id === style);
+        if (decrit && decrit.palette) {
+            const x = decrit.palette, clair = x.nuit === false;
+            return {
+                nuit: !clair, primaire: x.primaire || x.or, or: x.or, encre: x.encre, fondA: x.fondA, fondB: x.fondB,
+                carte: x.carte || (clair ? css([255, 250, 238], 0.5) : css(x.or, 0.06)),
+                trait: x.trait || (clair ? css(x.encre, 0.22) : css(x.or, 0.28))
+            };
+        }
         if (style === 'legende') {
             // Hors thème, volontairement : une Légende se reconnaît d'une fiche à l'autre.
             const orL = [232, 193, 106];
@@ -542,6 +560,8 @@
         const nuit = p.nuit;
         const alea = graine(d.nom + '|' + d.classe);
         const PX = W / 2, PY = 300, PR = 160;
+        // La boîte à outils prêtée aux styles de hero-card-styles.js
+        const T = { p, alea, W, H, M, PX, PY, PR, css, melange, rrect, halo, etoile, losange, feuille, flou, dorure, texteEspace, largeurEspacee, CINZEL, LORA };
         ctx.clearRect(0, 0, W, H);
         ctx.textBaseline = 'alphabetic';
 
@@ -553,6 +573,7 @@
         halo(ctx, W / 2, H + 80, 760, css(p.primaire, nuit ? 0.3 : 0.1));
         if (p.legende) { rayons(ctx, PX, PY, p); halo(ctx, PX, PY, 420, css(p.or, 0.22)); }
         if (p.maudit) halo(ctx, W / 2, H - 40, 720, css(p.or, 0.13));
+        if (st.fond) { ctx.save(); st.fond(ctx, T); ctx.restore(); }
         if (!nuit) for (let i = 0; i < 7; i++) halo(ctx, alea() * W, alea() * H, 120 + alea() * 220, css([120, 80, 30], 0.05 + alea() * 0.05));
         for (let i = 0; i < (nuit ? 54 : 26); i++) {
             const x = alea() * W, y = alea() * H, r = 0.8 + alea() * 2.6;
@@ -575,7 +596,10 @@
         vignette.addColorStop(1, nuit ? 'rgba(0,0,0,.55)' : 'rgba(80,50,20,.28)');
         ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
 
-        if (p.legende) cadreLegende(ctx, p); else if (p.maudit) cadreMaudit(ctx, p, alea); else cadre(ctx, p, d.cadre);
+        if (p.legende) cadreLegende(ctx, p);
+        else if (p.maudit) cadreMaudit(ctx, p, alea);
+        else if (st.cadre) { ctx.save(); st.cadre(ctx, T); ctx.restore(); }
+        else cadre(ctx, p, d.cadre);
 
         // --- En-tête ---
         const entete = st.entete || 'BONES & BLADES';
@@ -608,9 +632,11 @@
             ctx.textBaseline = 'alphabetic';
         }
         if (p.maudit) teinteMaudite(ctx, PX, PY, PR);
+        if (st.portrait) { ctx.save(); st.portrait(ctx, T); ctx.restore(); }
         ctx.restore();
         if (p.legende) anneauLegende(ctx, PX, PY, PR, p);
         else if (p.maudit) anneauMaudit(ctx, PX, PY, PR, p, alea);
+        else if (st.anneau) { ctx.save(); st.anneau(ctx, T); ctx.restore(); }
         else anneau(ctx, PX, PY, PR, p, d.cadre);
         if ((parseInt(d.niveau, 10) || 0) >= 20) ruban(ctx, PX, PY + PR + 4, 'HÉROS ÉPIQUE', p);
 
@@ -624,6 +650,7 @@
             ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = flou(30);
             ctx.fillStyle = dorure(ctx, W / 2 - ln / 2, 0, W / 2 + ln / 2, 0);
         }
+        else if (typeof st.nomDuHeros === 'function') { st.nomDuHeros(ctx, T, ctx.measureText(d.nom).width); }
         else if (nuit) { ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = flou(26); ctx.fillStyle = css(p.encre); }
         else ctx.fillStyle = css(p.primaire);
         ctx.fillText(d.nom, W / 2, 560);
@@ -760,6 +787,8 @@
             if (dg) { ctx.fillStyle = css(p.encre, 0.68); ctx.font = `italic 400 ${tDg}px ${LORA}`; ctx.fillText(dg, dx, y + 92); }
         }
 
+        if (st.devant) { ctx.save(); st.devant(ctx, T); ctx.restore(); }
+
         // --- Le sceau de l'exploit (styles gagnés) ---
         if (sceauInfo) {
             let quand = '';
@@ -823,8 +852,9 @@
             <div class="hc-grid">
                 <div class="hc-apercu"><canvas id="hc-canvas" width="${W * ECHELLE}" height="${H * ECHELLE}" role="img" aria-label="Carte de héros"></canvas></div>
                 <div class="hc-reglages">
-                    <div class="hc-f"><label>Style</label>
-                        <div class="hc-seg">${STYLES.map(x => `<button type="button" data-hc-style="${x.id}"${x.exploit ? ' hidden' : ''}>${x.nom}</button>`).join('')}</div>
+                    <div class="hc-f"><label>Style <span id="hc-compte"></span></label>
+                        <div class="hc-seg hc-vitrine">${STYLES.map(x => `<button type="button" data-hc-style="${x.id}">${x.nom}</button>`).join('')}</div>
+                        <p class="hc-indice" id="hc-indice" hidden></p>
                     </div>
                     <div class="hc-f"><label for="hc-devise">Devise <span>facultative</span></label>
                         <input type="text" id="hc-devise" maxlength="90" placeholder="Je ne recule jamais." autocomplete="off">
@@ -845,7 +875,13 @@
         modal.addEventListener('click', (e) => {
             if (e.target === modal || e.target.closest('[data-hc="fermer"]')) { fermer(); return; }
             const st = e.target.closest('[data-hc-style]');
-            if (st) { reglages.style = st.dataset.hcStyle; noter('dnd-hero-style', reglages.style); majSegments(); rendre(); return; }
+            if (st) {
+                const indice = modal.querySelector('#hc-indice');
+                // Un style verrouillé ne se choisit pas : il livre seulement son indice.
+                if (st.classList.contains('is-verrou')) { indice.hidden = false; indice.textContent = '🔒 Indice : ' + (st.dataset.indice || 'mystère.'); return; }
+                indice.hidden = true;
+                reglages.style = st.dataset.hcStyle; noter('dnd-hero-style', reglages.style); majSegments(); rendre(); return;
+            }
             const act = e.target.closest('[data-hc]');
             if (!act) return;
             if (act.dataset.hc === 'telecharger') telecharger();
@@ -891,7 +927,17 @@
             devise: lire('dnd-hero-devise') || '',
             arme: lire('dnd-hero-arme') || 'auto'
         };
-        STYLES.forEach(x => { const b = modal.querySelector(`[data-hc-style="${x.id}"]`); if (b) b.hidden = !disponible(x); });
+        let gagnes = 0;
+        STYLES.forEach(x => {
+            const b = modal.querySelector(`[data-hc-style="${x.id}"]`); if (!b) return;
+            const libre = disponible(x); if (libre) gagnes++;
+            b.classList.toggle('is-verrou', !libre);
+            b.textContent = libre ? x.nom : '🔒 ???';
+            b.dataset.indice = x.indice || '';
+            b.title = libre ? x.nom : 'Style verrouillé — clique pour un indice';
+        });
+        modal.querySelector('#hc-compte').textContent = `${gagnes} / ${STYLES.length}`;
+        modal.querySelector('#hc-indice').hidden = true;
         modal.querySelector('#hc-devise').value = reglages.devise;
         const sel = modal.querySelector('#hc-arme');
         sel.innerHTML = '<option value="auto">Choisie pour moi</option>'
@@ -967,6 +1013,7 @@
 
     window.HeroCard = {
         open: ouvrir,
+        ajouterStyles,
         /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */
         styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; }
     };

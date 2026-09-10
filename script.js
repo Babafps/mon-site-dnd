@@ -55,6 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
         DB.set(`${ACTIVE_CHAR_ID}_${key}`, isJson ? JSON.stringify(val) : val);
         // Le sac prévient les secrets (secrets-monde.js : le sac sans fond).
         if (key === 'dnd-inventory') document.dispatchEvent(new CustomEvent('fiche:inventaire'));
+        // Toute écriture de la fiche : les exploits constatent l'état (exploits-suivi.js).
+        document.dispatchEvent(new CustomEvent('fiche:ecrite', { detail: { key } }));
     }
 
     // ==========================================
@@ -1399,6 +1401,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // partent la pluie d'or d'un 20, la secousse d'un 1 et le suivi des 20
             // d'affilée (effets.js). Un jet sans d20 (dégâts, expression) n'y touche pas.
             if (typeof nat === 'number' && window.RollFX && window.RollFX.jet) window.RollFX.jet(nat);
+            // Les exploits au long cours comptent les jets (exploits-suivi.js).
+            document.dispatchEvent(new CustomEvent('jet:consigne', { detail: { nat } }));
         }
         function renderRollHistory() {
             const list = document.getElementById('roll-history-list'); if (!list) return;
@@ -1869,6 +1873,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(quickToast._t); quickToast._t = setTimeout(() => { quickToast.classList.add('hidden'); }, 4000);
             // Historique — c'est lui qui célèbre un 20 ou un 1 naturel
             const advTxt = advMode === 'adv' ? ' (avantage)' : (advMode === 'dis' ? ' (désavantage)' : '');
+            if (advMode !== 'normal' && roll2 != null) document.dispatchEvent(new CustomEvent('jet:paire', { detail: { r1: roll1, r2: roll2, mode: advMode } }));
             pushRollHistory(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
         }
 
@@ -4225,6 +4230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sp = spells[index]; if (!sp) return;
             const o = opts || {};
             if (!claimConcentration(index)) return;
+            document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau: spLvl(sp), part } }));
 
             const bits = [];
             let total = 0, nat = null;
@@ -5117,6 +5123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let nat = roll1;
             if (advMode === 'adv') nat = Math.max(roll1, roll2);
             else if (advMode === 'dis') nat = Math.min(roll1, roll2);
+            if (advMode !== 'normal') document.dispatchEvent(new CustomEvent('jet:paire', { detail: { r1: roll1, r2: roll2, mode: advMode } }));
             return { roll1, roll2, nat };
         }
 

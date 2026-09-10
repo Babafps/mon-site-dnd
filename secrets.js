@@ -182,11 +182,11 @@
         const cle = 'dnd-epique-vu-' + idPerso();
         try { if (sessionStorage.getItem(cle)) return; sessionStorage.setItem(cle, '1'); } catch (e) {}
         if (!UI()) return;
-        debloquer('epique');
+        const r = debloquer('epique', { silencieux: true });
         if (window.RollFX) { window.RollFX.crit(); setTimeout(window.RollFX.crit, 520); }
         UI().banniere({
             theme: 'epique', surtitre: '✦ Niveau 20 ✦', titre: 'Héros épique',
-            phrase: `${UI().esc(nom())} a atteint le sommet. Les bardes écriront des chansons : des mauvaises, mais des chansons. Sa carte de héros porte désormais la mention <b>Héros épique</b>.`,
+            phrase: `${UI().esc(nom())} a atteint le sommet. Les bardes écriront des chansons : des mauvaises, mais des chansons. Sa carte de héros porte désormais la mention <b>Héros épique</b>.${r.nouveau ? ' Et le style <b>Épique</b> est débloqué pour tous tes personnages.' : ''}`,
             actions: [
                 { label: '🃏 Voir ma carte', principal: true, faire: (b) => { b.fermer(); ouvrirCarte(); } },
                 { label: 'Continuer' }
