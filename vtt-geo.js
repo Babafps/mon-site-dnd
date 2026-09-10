@@ -1,0 +1,471 @@
+// =====================================================
+// vtt-geo.js — Géométrie partagée MJ / joueur pour la
+// carte tactique : murs, portes, ligne de vue (obscurité).
+//   • Les murs sont stockés en FRACTIONS (0..1) de la carte :
+//     { id, x1, y1, x2, y2, door:bool, open:bool }
+//   • Un mur (ou une porte fermée) bloque le déplacement
+//     des jetons joueurs ET la ligne de vue dans le noir.
+// Utilisé par gm-screen.js (édition) et session.js (rendu joueur).
+// =====================================================
+(function () {
+    'use strict';
+
+    // Sens de rotation du triplet (a,b,c) : >0 anti-horaire, <0 horaire, 0 aligné
+    function orient(ax, ay, bx, by, cx, cy) {
+        return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    }
+    // Vrai si les segments [a,b] et [c,d] se croisent (contact inclus)
+    function segCross(ax, ay, bx, by, cx, cy, dx, dy) {
+        const o1 = orient(ax, ay, bx, by, cx, cy);
+        const o2 = orient(ax, ay, bx, by, dx, dy);
+        const o3 = orient(cx, cy, dx, dy, ax, ay);
+        const o4 = orient(cx, cy, dx, dy, bx, by);
+        if (((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) && ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))) return true;
+        // Cas colinéaires / extrémités posées pile sur le segment
+        const on = (px, py, qx, qy, rx, ry) => Math.min(px, qx) - 1e-9 <= rx && rx <= Math.max(px, qx) + 1e-9 && Math.min(py, qy) - 1e-9 <= ry && ry <= Math.max(py, qy) + 1e-9;
+        if (Math.abs(o1) < 1e-12 && on(ax, ay, bx, by, cx, cy)) return true;
+        if (Math.abs(o2) < 1e-12 && on(ax, ay, bx, by, dx, dy)) return true;
+        if (Math.abs(o3) < 1e-12 && on(cx, cy, dx, dy, ax, ay)) return true;
+        if (Math.abs(o4) < 1e-12 && on(cx, cy, dx, dy, bx, by)) return true;
+        return false;
+    }
+
+    // Murs qui bloquent physiquement / visuellement : murs pleins + portes FERMÉES
+    function blockingWalls(walls) {
+        return (walls || []).filter(w => w && !(w.door && w.open));
+    }
+
+    // Le trajet (x1,y1)→(x2,y2) traverse-t-il un mur ? (fractions : le croisement
+    // est conservé par la mise à l'échelle, pas besoin de convertir en pixels)
+    function moveBlocked(walls, x1, y1, x2, y2) {
+        const bs = blockingWalls(walls);
+        for (let i = 0; i < bs.length; i++) {
+            const w = bs[i];
+            if (segCross(x1, y1, x2, y2, w.x1, w.y1, w.x2, w.y2)) return true;
+        }
+        return false;
+    }
+
+    // Distance d'un point à un segment (même unité que les entrées)
+    function distToSegment(px, py, ax, ay, bx, by) {
+        const dx = bx - ax, dy = by - ay;
+        const l2 = dx * dx + dy * dy;
+        if (l2 <= 1e-12) return Math.hypot(px - ax, py - ay);
+        let t = ((px - ax) * dx + (py - ay) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+    }
+
+    // Intersection rayon (origine o, direction d unitaire) / segment [a,b].
+    // Renvoie la distance t (>0) ou Infinity.
+    function rayHit(ox, oy, dx, dy, ax, ay, bx, by) {
+        const ex = bx - ax, ey = by - ay;
+        const den = dx * ey - dy * ex;
+        if (Math.abs(den) < 1e-12) return Infinity;          // parallèles
+        const t = ((ax - ox) * ey - (ay - oy) * ex) / den;   // le long du rayon
+        const u = ((ax - ox) * dy - (ay - oy) * dx) / den;   // le long du segment
+        if (t > 1e-6 && u >= -1e-6 && u <= 1 + 1e-6) return t;
+        return Infinity;
+    }
+
+    // Polygone de visibilité depuis (cx,cy) EN PIXELS, limité au rayon R.
+    // segs = murs bloquants convertis en pixels [{x1,y1,x2,y2}].
+    // Retourne une liste ordonnée de points {x,y} (à tracer puis remplir).
+    function visionPolygon(cx, cy, segs, R) {
+        const angles = [];
+        const N = 128;                                       // rayons uniformes (lisse le cercle, moins d'accrocs)
+        for (let i = 0; i < N; i++) angles.push((i / N) * Math.PI * 2);
+        // Rayons vers CHAQUE extrémité de mur (± epsilon pour « glisser » derrière les coins) :
+        // on ne cule plus par distance — un mur à peine plus loin que R laissait fuiter la lumière.
+        // 5 rayons par extrémité (±0.0006 ET ±0.003) : sous des angles rasants, 3 rayons ne
+        // suffisaient pas et le polygone « coupait » un coin → on voyait à travers. (Lot 26)
+        (segs || []).forEach(s => {
+            [[s.x1, s.y1], [s.x2, s.y2]].forEach(pt => {
+                const a = Math.atan2(pt[1] - cy, pt[0] - cx);
+                angles.push(a - 0.003, a - 0.0006, a, a + 0.0006, a + 0.003);
+            });
+        });
+        angles.sort((a, b) => a - b);
+        const pts = [];
+        let lastA = null;
+        for (let i = 0; i < angles.length; i++) {
+            const a = angles[i];
+            if (lastA !== null && Math.abs(a - lastA) < 1e-6) continue;  // doublons
+            lastA = a;
+            const dx = Math.cos(a), dy = Math.sin(a);
+            let best = R;
+            for (let j = 0; j < segs.length; j++) {
+                const s = segs[j];
+                const t = rayHit(cx, cy, dx, dy, s.x1, s.y1, s.x2, s.y2);
+                if (t < best) best = t;
+            }
+            pts.push({ x: cx + dx * best, y: cy + dy * best });
+        }
+        return pts;
+    }
+
+    // Convertit les murs bloquants (fractions) en segments pixels pour un canvas w×h.
+    // Chaque segment est légèrement PROLONGÉ (~1.5 px) à ses deux bouts : deux murs qui
+    // se touchent « presque » (tracés à la souris) laissaient fuir la lumière dans le
+    // micro-interstice sous certains angles — on soude les jonctions. (bugfix Lot 26)
+    function wallsToPx(walls, w, h) {
+        const EXT = 1.5;
+        return blockingWalls(walls).map(s => {
+            let x1 = s.x1 * w, y1 = s.y1 * h, x2 = s.x2 * w, y2 = s.y2 * h;
+            const d = Math.hypot(x2 - x1, y2 - y1);
+            if (d > 0.001) {
+                const ux = (x2 - x1) / d, uy = (y2 - y1) / d;
+                x1 -= ux * EXT; y1 -= uy * EXT;
+                x2 += ux * EXT; y2 += uy * EXT;
+            }
+            return { x1: x1, y1: y1, x2: x2, y2: y2 };
+        });
+    }
+
+    // Dessine la « lumière » d'un jeton dans un ctx en mode effacement :
+    // clip sur le polygone de visibilité. ctx doit être en 'destination-out'.
+    //   hard = true  → bord NET (aucun fondu) : la zone vue est dévoilée d'un bloc,
+    //                  ce qui donne des lignes propres et un aperçu MJ = vue joueur.
+    //   hard = false → léger fondu radial en bord de portée (ancien rendu doux).
+    function eraseVision(ctx, cx, cy, segs, R, hard) {
+        const poly = visionPolygon(cx, cy, segs, R);
+        if (!poly.length) return;
+        ctx.save();
+        ctx.beginPath();
+        poly.forEach((p, i) => { i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+        ctx.clip();
+        if (hard !== false) {                    // NET par défaut (demande MJ : pas de fondu)
+            ctx.fillStyle = 'rgba(0,0,0,1)';
+            ctx.fillRect(cx - R - 2, cy - R - 2, R * 2 + 4, R * 2 + 4);
+        } else {
+            const g = ctx.createRadialGradient(cx, cy, Math.max(1, R * 0.78), cx, cy, R);
+            g.addColorStop(0, 'rgba(0,0,0,1)');  // alpha 1 = zone totalement dévoilée
+            g.addColorStop(1, 'rgba(0,0,0,0)');  // fondu en bord de portée
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(cx, cy, R, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // Variante « jolie » de eraseVision (Lot 24) : la zone vue reste NETTE le long
+    // des murs (clip sur le polygone → aucune fuite de lumière), mais s'estompe en
+    // douceur en LIMITE DE PORTÉE (au-delà de innerFrac × R), comme une torche qui
+    // faiblit. ctx doit être en 'destination-out'.
+    function eraseVisionSoft(ctx, cx, cy, segs, R, innerFrac) {
+        const poly = visionPolygon(cx, cy, segs, R);
+        if (!poly.length) return;
+        ctx.save();
+        ctx.beginPath();
+        poly.forEach((p, i) => { i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+        ctx.clip();
+        const f = Math.max(0.5, Math.min(0.98, Number(innerFrac) || 0.82));
+        const g = ctx.createRadialGradient(cx, cy, Math.max(1, R * f), cx, cy, Math.max(2, R));
+        g.addColorStop(0, 'rgba(0,0,0,1)');   // pleinement dévoilé jusqu'à f × R
+        g.addColorStop(1, 'rgba(0,0,0,0)');   // fondu doux jusqu'à la limite de portée
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(2, R), 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+
+    // '#rrggbb' → 'rgba(r,g,b,a)' (teinte de lumière personnalisable)
+    function hexToRgba(hex, a) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+        if (!m) return 'rgba(255,190,110,' + a + ')';
+        const n = parseInt(m[1], 16);
+        return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Teinte chaude « lueur de torche » dans la zone dévoilée : à dessiner APRÈS les
+    // effacements, en 'destination-over' → ne colore que là où l'obscurité est devenue
+    // transparente, donc AUCUNE fuite à travers les murs. origins = [{x,y,R,c?}] en px.
+    function paintLightTint(ctx, origins) {
+        if (!origins || !origins.length) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        origins.forEach(o => {
+            const R = Math.max(2, o.R);
+            const g = ctx.createRadialGradient(o.x, o.y, 1, o.x, o.y, R);
+            g.addColorStop(0, hexToRgba(o.c, 0.16));
+            g.addColorStop(0.7, hexToRgba(o.c, 0.07));
+            g.addColorStop(1, hexToRgba(o.c, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(o.x, o.y, R, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.restore();
+    }
+
+    // Un point (fraction 0..1) est-il visible depuis un jeton porteur de vision ?
+    // Sert côté joueur à ne montrer une porte QUE si elle est réellement en vue.
+    // origins = [{x,y,R}] en px (jetons + lumières) ; segs = murs bloquants en px.
+    function pointVisible(px, py, origins, segs) {
+        for (let i = 0; i < origins.length; i++) {
+            const o = origins[i];
+            const d = Math.hypot(px - o.x, py - o.y);
+            if (d > o.R) continue;
+            if (!moveBlockedPx(o.x, o.y, px, py, segs)) return true;
+        }
+        return false;
+    }
+    // Version pixels de moveBlocked (segments déjà en px)
+    function moveBlockedPx(x1, y1, x2, y2, segs) {
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            if (segCross(x1, y1, x2, y2, s.x1, s.y1, s.x2, s.y2)) return true;
+        }
+        return false;
+    }
+
+    // Portée de vision d'un jeton en PIXELS : t.vision (m) sinon portée globale.
+    // 1 case de grille = 1,5 m (5 pieds).
+    function visionRadiusPx(token, dark, gridSize) {
+        const meters = Number(token && token.vision) || Number(dark && dark.range) || 9;
+        const cell = Number(dark && dark.cellM) || 1.5;
+        return Math.max(8, (meters / cell) * (gridSize || 48));
+    }
+
+    // =====================================================
+    // GABARITS DE SORTS (AoE) — dessin partagé MJ / joueur.
+    // t = { kind:'circle'|'cone'|'line'|'cube', x,y (origine), x2,y2 (extrémité), color }
+    // gridPx = taille d'une case en px du canvas ; cellM = mètres par case.
+    // =====================================================
+    function drawTemplates(ctx, w, h, templates, gridPx, cellM) {
+        (templates || []).forEach(t => {
+            const x1 = t.x * w, y1 = t.y * h, x2 = (t.x2 != null ? t.x2 : t.x) * w, y2 = (t.y2 != null ? t.y2 : t.y) * h;
+            const dx = x2 - x1, dy = y2 - y1, dist = Math.hypot(dx, dy);
+            if (dist < 2) return;
+            const col = t.color || '#e67e22';
+            ctx.save();
+            ctx.globalAlpha = 0.28; ctx.fillStyle = col;
+            ctx.beginPath();
+            if (t.kind === 'cone') {
+                // Cône (5e) : longueur = largeur à l'extrémité → demi-angle atan(0.5)
+                const a = Math.atan2(dy, dx), half = Math.atan(0.5);
+                ctx.moveTo(x1, y1);
+                ctx.arc(x1, y1, dist, a - half, a + half);
+                ctx.closePath();
+            } else if (t.kind === 'line') {
+                const a = Math.atan2(dy, dx), lw = Math.max(6, gridPx * 0.5);
+                const px = Math.sin(a) * lw / 2, py = -Math.cos(a) * lw / 2;
+                ctx.moveTo(x1 + px, y1 + py); ctx.lineTo(x2 + px, y2 + py);
+                ctx.lineTo(x2 - px, y2 - py); ctx.lineTo(x1 - px, y1 - py);
+                ctx.closePath();
+            } else if (t.kind === 'cube') {
+                const side = Math.max(Math.abs(dx), Math.abs(dy));
+                ctx.rect(x1, y1, side * (dx < 0 ? -1 : 1), side * (dy < 0 ? -1 : 1));
+            } else {           // circle (sphère)
+                ctx.arc(x1, y1, dist, 0, Math.PI * 2);
+            }
+            ctx.fill();
+            ctx.globalAlpha = 0.9; ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+            ctx.stroke(); ctx.setLineDash([]);
+            // Point d'origine + étiquette de taille en mètres
+            ctx.beginPath(); ctx.arc(x1, y1, 4, 0, Math.PI * 2); ctx.fillStyle = col; ctx.globalAlpha = 1; ctx.fill();
+            const meters = Math.round((dist / Math.max(1, gridPx)) * (cellM || 1.5) * 10) / 10;
+            const label = meters.toLocaleString('fr-FR') + ' m';
+            ctx.font = 'bold 12px Lora, serif';
+            const tw = ctx.measureText(label).width;
+            const lx = Math.max(2, Math.min(w - tw - 12, (x1 + x2) / 2 - tw / 2 - 5)), ly = Math.max(14, (y1 + y2) / 2 - 8);
+            ctx.fillStyle = 'rgba(20,14,8,0.82)';
+            ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, ly - 11, tw + 10, 16, 5) : ctx.rect(lx, ly - 11, tw + 10, 16); ctx.fill();
+            ctx.fillStyle = '#f3e3bb'; ctx.fillText(label, lx + 5, ly + 1);
+            ctx.restore();
+        });
+    }
+
+    // Teste si un point (px,py en px du canvas) est DANS un gabarit de sort.
+    // Géométrie STRICTEMENT alignée sur drawTemplates ci-dessus (sinon un jeton
+    // dessiné hors de la zone serait compté, ou l'inverse).
+    // t = même modèle que drawTemplates ; w,h = dimensions du canvas ; gridPx = taille d'une case en px.
+    function pointInTemplate(t, px, py, w, h, gridPx) {
+        if (!t) return false;
+        const x1 = t.x * w, y1 = t.y * h, x2 = (t.x2 != null ? t.x2 : t.x) * w, y2 = (t.y2 != null ? t.y2 : t.y) * h;
+        const dx = x2 - x1, dy = y2 - y1, dist = Math.hypot(dx, dy);
+        if (dist < 2) return false;
+        const rx = px - x1, ry = py - y1;
+        if (t.kind === 'cone') {
+            const r = Math.hypot(rx, ry);
+            if (r > dist) return false;
+            const a = Math.atan2(dy, dx), half = Math.atan(0.5);   // même demi-angle que le dessin
+            let da = Math.atan2(ry, rx) - a;
+            while (da > Math.PI) da -= 2 * Math.PI;
+            while (da < -Math.PI) da += 2 * Math.PI;
+            return Math.abs(da) <= half;
+        }
+        if (t.kind === 'line') {
+            const lw = Math.max(6, (gridPx || 24) * 0.5);          // même largeur que le dessin
+            const ux = dx / dist, uy = dy / dist;
+            const along = rx * ux + ry * uy;
+            if (along < 0 || along > dist) return false;
+            const perp = Math.abs(rx * (-uy) + ry * ux);
+            return perp <= lw / 2;
+        }
+        if (t.kind === 'cube') {
+            const side = Math.max(Math.abs(dx), Math.abs(dy));
+            const ex = x1 + side * (dx < 0 ? -1 : 1), ey = y1 + side * (dy < 0 ? -1 : 1);
+            return px >= Math.min(x1, ex) && px <= Math.max(x1, ex) && py >= Math.min(y1, ey) && py <= Math.max(y1, ey);
+        }
+        return Math.hypot(rx, ry) <= dist;                          // circle (sphère)
+    }
+
+    window.VTTGeo = { segCross, moveBlocked, moveBlockedPx, distToSegment, visionPolygon, wallsToPx, eraseVision, eraseVisionSoft, paintLightTint, visionRadiusPx, blockingWalls, drawTemplates, pointInTemplate, pointVisible };
+})();
+
+// =====================================================
+// VTTWeather — effets de météo animés sur un canvas
+// (pluie / neige / brume / braises), partagé MJ / joueur.
+// Boucle rAF par canvas, s'arrête seule si le canvas sort
+// du DOM, si l'effet passe à '' ou si l'onglet est caché.
+// =====================================================
+(function () {
+    'use strict';
+    function makeParticles(kind, w, h) {
+        const n = Math.round((w * h) / (kind === 'fog' ? 90000 : (kind === 'embers' ? 22000 : 9000)));
+        const ps = [];
+        for (let i = 0; i < Math.max(6, n); i++) {
+            ps.push({
+                x: Math.random() * w, y: Math.random() * h,
+                v: 0.5 + Math.random() * 1.5, s: Math.random(),
+                drift: (Math.random() - 0.5) * 0.6
+            });
+        }
+        return ps;
+    }
+    function step(canvas) {
+        const fx = canvas.__wfx;
+        if (!fx || !canvas.isConnected || !fx.kind) { if (fx) fx.running = false; return; }
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        const k = fx.kind;
+        fx.t = (fx.t || 0) + 1;
+        fx.ps.forEach(p => {
+            if (k === 'rain') {
+                ctx.strokeStyle = 'rgba(160,190,230,0.45)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 2, p.y + 9 + p.v * 4); ctx.stroke();
+                p.y += 6 + p.v * 5; p.x += 1.2;
+                if (p.y > h) { p.y = -10; p.x = Math.random() * w; }
+            } else if (k === 'snow') {
+                ctx.fillStyle = 'rgba(240,244,250,0.7)';
+                ctx.beginPath(); ctx.arc(p.x, p.y, 1 + p.s * 2, 0, Math.PI * 2); ctx.fill();
+                p.y += 0.5 + p.v * 0.7; p.x += Math.sin((fx.t + p.s * 100) / 40) * 0.6 + p.drift;
+                if (p.y > h) { p.y = -4; p.x = Math.random() * w; }
+                if (p.x < -4) p.x = w + 4; if (p.x > w + 4) p.x = -4;
+            } else if (k === 'fog') {
+                const r = 60 + p.s * 140;
+                const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+                g.addColorStop(0, 'rgba(200,200,210,0.10)'); g.addColorStop(1, 'rgba(200,200,210,0)');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+                p.x += 0.25 + p.drift * 0.4;
+                if (p.x - r > w) p.x = -r;
+            } else if (k === 'embers') {
+                ctx.fillStyle = 'rgba(255,' + Math.round(120 + p.s * 90) + ',40,' + (0.35 + p.s * 0.5) + ')';
+                ctx.beginPath(); ctx.arc(p.x, p.y, 1 + p.s * 1.6, 0, Math.PI * 2); ctx.fill();
+                p.y -= 0.4 + p.v * 0.8; p.x += Math.sin((fx.t + p.s * 60) / 25) * 0.5;
+                if (p.y < -4) { p.y = h + 4; p.x = Math.random() * w; }
+            }
+        });
+        if (fx.running) requestAnimationFrame(() => step(canvas));
+    }
+    window.VTTWeather = {
+        // Applique (ou coupe) un effet sur un canvas. Relance la boucle si besoin.
+        apply(canvas, kind, w, h) {
+            if (!canvas) return;
+            if (canvas.width !== w) canvas.width = w;
+            if (canvas.height !== h) canvas.height = h;
+            let fx = canvas.__wfx;
+            if (!kind) {
+                if (fx) fx.kind = '';
+                const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+                canvas.style.display = 'none';
+                return;
+            }
+            canvas.style.display = 'block';
+            if (!fx || fx.kind !== kind || fx.w !== w || fx.h !== h) {
+                fx = canvas.__wfx = { kind, w, h, ps: makeParticles(kind, w, h), running: false, t: 0 };
+            }
+            if (!fx.running) { fx.running = true; requestAnimationFrame(() => step(canvas)); }
+        }
+    };
+})();
+
+// =====================================================
+// VTTHazards — zones de danger animées (lave / poison / feu),
+// posées sur la carte, partagées MJ / joueur. Boucle rAF par
+// canvas, s'arrête si le canvas sort du DOM ou si la liste est vide.
+// Chaque danger = { id, kind:'lava'|'poison'|'fire', x, y, r } en fractions.
+// =====================================================
+(function () {
+    'use strict';
+    function drawHazard(ctx, z, w, h, t) {
+        const cx = z.x * w, cy = z.y * h, R = Math.max(6, (z.r || 0.08) * w);
+        ctx.save();
+        if (z.kind === 'poison') {
+            ctx.globalAlpha = 0.55;
+            for (let i = 0; i < 4; i++) {
+                const a = t / 60 + i * 1.6;
+                const ox = Math.cos(a) * R * 0.22, oy = Math.sin(a * 1.2) * R * 0.22;
+                const g = ctx.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, R * 0.92);
+                g.addColorStop(0, 'rgba(130,225,70,0.35)'); g.addColorStop(0.7, 'rgba(80,170,45,0.22)'); g.addColorStop(1, 'rgba(60,140,40,0)');
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx + ox, cy + oy, R * 0.92, 0, Math.PI * 2); ctx.fill();
+            }
+        } else if (z.kind === 'fire') {
+            const flick = 0.6 + 0.3 * Math.sin(t / 6) + 0.15 * Math.sin(t / 3.3);
+            const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
+            g.addColorStop(0, 'rgba(255,240,150,' + (0.8 * flick).toFixed(2) + ')');
+            g.addColorStop(0.4, 'rgba(255,130,25,0.6)'); g.addColorStop(1, 'rgba(120,20,0,0)');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+            for (let i = 0; i < 7; i++) {
+                const ph = ((t / 55) + i / 7) % 1;
+                const ex = cx + Math.sin(t / 18 + i * 1.7) * R * 0.35;
+                const ey = cy - ph * R * 1.15 + R * 0.35;
+                ctx.fillStyle = 'rgba(255,' + (150 + ((i * 37) % 70)) + ',40,' + (0.55 * (1 - ph)).toFixed(2) + ')';
+                ctx.beginPath(); ctx.arc(ex, ey, R * 0.045, 0, Math.PI * 2); ctx.fill();
+            }
+        } else { // lava (défaut)
+            const pulse = 0.5 + 0.5 * Math.sin(t / 26);
+            const g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R);
+            g.addColorStop(0, 'rgba(255,' + Math.round(120 + 70 * pulse) + ',30,0.78)');
+            g.addColorStop(0.6, 'rgba(200,55,12,0.5)'); g.addColorStop(1, 'rgba(70,10,0,0)');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+            for (let i = 0; i < 5; i++) {
+                const ph = ((i * 0.2) + (t / 90)) % 1;
+                const a = t / 45 + i * 1.3, rr = R * (0.15 + 0.55 * ph);
+                const bx = cx + Math.cos(a) * rr, by = cy + Math.sin(a * 1.3) * rr;
+                ctx.fillStyle = 'rgba(255,205,70,' + (0.45 * (1 - ph)).toFixed(2) + ')';
+                ctx.beginPath(); ctx.arc(bx, by, R * 0.07, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+    function hzStep(canvas) {
+        const fx = canvas.__hz;
+        if (!fx || !canvas.isConnected || !fx.list || !fx.list.length) { if (fx) fx.running = false; return; }
+        const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        fx.t += 1;
+        fx.list.forEach(z => drawHazard(ctx, z, w, h, fx.t));
+        if (fx.running) requestAnimationFrame(() => hzStep(canvas));
+    }
+    window.VTTHazards = {
+        apply(canvas, hazards, w, h) {
+            if (!canvas) return;
+            if (canvas.width !== w) canvas.width = w;
+            if (canvas.height !== h) canvas.height = h;
+            let fx = canvas.__hz;
+            if (!hazards || !hazards.length) {
+                if (fx) fx.list = [];
+                const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, w, h);
+                canvas.style.display = 'none';
+                return;
+            }
+            canvas.style.display = 'block';
+            if (!fx) fx = canvas.__hz = { list: hazards, w, h, t: 0, running: false };
+            else { fx.list = hazards; fx.w = w; fx.h = h; }
+            if (!fx.running) { fx.running = true; requestAnimationFrame(() => hzStep(canvas)); }
+        }
+    };
+})();
