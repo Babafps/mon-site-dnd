@@ -70,8 +70,9 @@
                 { p: 'Le code, la mise en page, les illustrations et les textes propres au site sont '
                    + 'protégés par le droit d’auteur. Toute reproduction sans autorisation est interdite, '
                    + 'à l’exception de ce que la loi permet (courte citation, copie privée).' },
-                { p: 'Les règles du jeu affichées proviennent du System Reference Document 5.1, publié '
-                   + 'par Wizards of the Coast sous licence Creative Commons Attribution 4.0 '
+                { p: 'Les règles du jeu affichées proviennent du System Reference Document 5.1 '
+                   + '(édition 2014) et du System Reference Document 5.2.1 (édition 2024), publiés en '
+                   + 'version française par Wizards of the Coast sous licence Creative Commons Attribution 4.0 '
                    + '(CC BY 4.0). Cette licence autorise l’usage, la modification et la '
                    + 'redistribution, y compris commerciale, à condition de citer la source — ce que '
                    + 'fait le pied de la page Règles.' },

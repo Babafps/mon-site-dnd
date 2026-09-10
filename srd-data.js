@@ -6,8 +6,9 @@
 // monstres) qu'à la première consultation de sa catégorie. Tout ce qui a été
 // chargé une fois reste disponible hors connexion via l'API Cache.
 //
-// Données : SRD 5.1 — version française officielle (Wizards of the Coast),
-// sous licence CC-BY-4.0. Voir data/srd/README.md.
+// Données : SRD 5.1 (édition 2014) et SRD 5.2.1 (édition 2024), versions
+// françaises officielles de Wizards of the Coast, sous licence CC-BY-4.0.
+// La 2024 est régénérée par tools/srd/build_2024.py.
 //
 // Le CONTENU PERSONNEL (§ « Contenu personnel » plus bas) se greffe ici, et
 // nulle part ailleurs : index(), category() et entry() renvoient les entrées
@@ -21,7 +22,17 @@
     const memory = new Map();          // url -> données déjà analysées
     const inflight = new Map();        // url -> promesse en cours (évite les doublons)
 
-    let edition = '2014';
+    // L'édition choisie sur la page Règles vaut pour tout le site (loupe de la
+    // fiche, autocomplétion, montée de niveau) : on la relit dès le chargement,
+    // sinon ces écrans garderaient l'édition par défaut tant que la page Règles
+    // n'est pas ouverte. Par défaut : 2024, les règles de la fiche imprimable et
+    // des bottes d'arme. Un joueur qui a choisi 2014 le garde.
+    const EDITIONS = ['2014', '2024'];
+    let edition = '2024';
+    try {
+        const saved = localStorage.getItem('dnd-srd-edition');
+        if (EDITIONS.includes(saved)) edition = saved;
+    } catch (e) {}
     let lang = 'fr';
     const base = () => `data/srd/${edition}/${lang}/`;
 
@@ -93,6 +104,10 @@
         { id: 'feats',       label: 'Dons',            icon: '⭐' }
     ];
     const CAT_BY_ID = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+    // La 2024 parle d'« espèces » là où la 2014 parlait de « races ».
+    const LABEL_2024 = { races: 'Espèces' };
+    const categoryLabel = (id) => (edition === '2024' && LABEL_2024[id])
+        || (CAT_BY_ID[id] || {}).label || id;
 
     // =====================================================
     // Contenu personnel (« homebrew »)
@@ -326,7 +341,7 @@
 
     function decorate(e) {
         const c = CAT_BY_ID[e.c] || { label: e.c, icon: '📄' };
-        return { id: e.i, name: e.n, category: e.c, categoryLabel: c.label,
+        return { id: e.i, name: e.n, category: e.c, categoryLabel: categoryLabel(e.c) || c.label,
                  icon: c.icon, subtitle: e.s || '', snippet: e.t || '',
                  perso: !!e.p };
     }
@@ -558,6 +573,24 @@
 
     const P = (arr) => (Array.isArray(arr) ? arr : (arr ? [arr] : []))
         .map(t => `<p>${txt(t)}</p>`).join('');
+    // Règles 2024 : paragraphes et tableaux ({table: {title, headers, rows}}).
+    // Une ligne d'un seul élément est un intertitre de groupe (« Armures légères »).
+    const TABLE = (t) => {
+        const heads = t.headers || [];
+        const width = Math.max(heads.length, ...(t.rows || []).map(r => r.length), 1);
+        return `<div class="rw-scroll"><table class="rw-table">`
+            + (t.title ? `<caption>${esc(t.title)}</caption>` : '')
+            + (heads.length ? `<thead><tr>${heads.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>` : '')
+            + `<tbody>${(t.rows || []).map(r => (r.length === 1 && width > 1)
+                ? `<tr><td class="rw-tgroup" colspan="${width}">${txt(r[0])}</td></tr>`
+                : `<tr>${r.map(c => `<td>${txt(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    };
+    const BLOCKS = (arr) => (Array.isArray(arr) ? arr : (arr ? [arr] : []))
+        .map(b => (b && typeof b === 'object' && b.table) ? TABLE(b.table) : `<p>${txt(b)}</p>`).join('');
+    // Les données gardent les identifiants anglais ; l'affichage est français.
+    const dmgFr = (t) => (window.SRDAuto && window.SRDAuto.DMG_FR[t]) || t;
+    const propFr = (p) => (window.SRDAuto && window.SRDAuto.PROP_FR[p]) || p;
+    const meters = (n) => String(n).replace('.', ',') + ' m';
     // Les lignes de caractéristiques restent du texte brut : « vision dans le
     // noir 18 m » est un sens, pas le sort du même nom.
     const KV = (label, val) => val ? `<p><b>${label} :</b> ${esc(val)}</p>` : '';
@@ -612,7 +645,8 @@
         const sk = p.skills;
         const cast = { full: 'lanceur de sorts complet', half: 'demi-lanceur de sorts',
                        pact: 'magie de pacte', third: 'tiers-lanceur de sorts' }[(e.spellcasting || {}).type];
-        return (e.hit_die ? KV('Dé de vie', 'd' + e.hit_die + (e.hp && e.hp.level1 ? ` · PV au niveau 1 : ${e.hp.level1}` : '')) : '')
+        return KV('Caractéristique principale', e.primary_ability)
+             + (e.hit_die ? KV('Dé de vie', 'd' + e.hit_die + (e.hp && e.hp.level1 ? ` · PV au niveau 1 : ${e.hp.level1}` : '')) : '')
              + (p.saves && p.saves.length ? KV('Jets de sauvegarde', p.saves.join(', ')) : '')
              + KV('Armures', p.armor) + KV('Armes', p.weapons) + KV('Outils', p.tools)
              + (sk ? KV('Compétences', sk.text || (sk.from || []).join(', ')) : '')
@@ -646,14 +680,18 @@
             const stats = ['str', 'dex', 'con', 'int', 'wis', 'cha'].map((k, i) =>
                 `<span class="rw-ab"><b>${['FOR','DEX','CON','INT','SAG','CHA'][i]}</b>${m(ab[k] || 10)}</span>`).join('');
             return KV('Classe d’armure', e.ac + (e.ac_desc ? ` (${e.ac_desc})` : ''))
+                 + KV('Initiative', e.initiative)
                  + KV('Points de vie', `${e.hp}${e.hp_roll ? ` (${e.hp_roll})` : ''}`) + KV('Vitesse', e.speed)
                  + `<div class="rw-abs">${stats}</div>`
                  + KV('Jets de sauvegarde', e.saves) + KV('Compétences', e.skills)
                  + KV('Vulnérabilités', e.vulnerabilities) + KV('Résistances', e.resistances)
                  + KV('Immunités', e.immunities) + KV('Immunités (états)', e.condition_immunities)
+                 + KV('Équipement', e.gear)
                  + KV('Sens', e.senses) + KV('Langues', e.languages)
-                 + KV('Facteur de puissance', `${e.cr_display || e.cr}${e.xp ? ` (${e.xp} PX)` : ''}`)
-                 + NAMED(e.traits, '') + NAMED(e.actions, 'Actions')
+                 // 2024 : « 13 (10 000 PX, ou 11 500 dans son antre ; BM +5) », tel quel.
+                 + KV('Facteur de puissance', e.cr_text || `${e.cr_display || e.cr}${e.xp ? ` (${e.xp} PX)` : ''}`)
+                 + NAMED(e.traits, e.cr_text ? 'Traits' : '') + NAMED(e.actions, 'Actions')
+                 + NAMED(e.bonus_actions, 'Actions bonus')
                  + NAMED(e.reactions, 'Réactions')
                  + (e.legendary_intro ? `<h4 class="rw-h">Actions légendaires</h4><p>${txt(e.legendary_intro)}</p>` : '')
                  + NAMED(e.legendary_actions, e.legendary_intro ? '' : 'Actions légendaires');
@@ -664,21 +702,26 @@
                  + '<hr class="rw-sep">' + P(e.desc);
         }
         if (cat === 'equipment') {
-            return KV('Prix', e.cost) + (e.weight_kg != null ? KV('Poids', e.weight_kg + ' kg') : '')
-                 + (e.damage ? KV('Dégâts', `${e.damage.dice} ${e.damage.type}`) : '')
+            return KV('Prix', e.cost) + (e.weight_kg != null ? KV('Poids', String(e.weight_kg).replace('.', ',') + ' kg') : '')
+                 + (e.damage ? KV('Dégâts', `${e.damage.dice} ${dmgFr(e.damage.type)}`) : '')
                  + (e.versatile_damage ? KV('Polyvalente', e.versatile_damage) : '')
-                 + (e.armor_class ? KV('CA', e.armor_class.base + (e.armor_class.dex_bonus ? ' + mod. Dex' : '')) : '')
+                 + (e.armor_class ? KV('CA', e.armor_class_text
+                     || e.armor_class.base + (e.armor_class.dex_bonus ? ' + mod. Dex' : '')) : '')
                  + (e.str_minimum ? KV('Force minimale', e.str_minimum) : '')
                  + (e.stealth_disadvantage ? '<p><b>Désavantage en Discrétion</b></p>' : '')
-                 + (e.range_m ? KV('Portée', `${e.range_m.normal} m${e.range_m.long ? ' / ' + e.range_m.long + ' m' : ''}`) : '')
-                 + (e.properties ? KV('Propriétés', e.properties.join(', ')) : '')
+                 + (e.range_m ? KV('Portée', meters(e.range_m.normal) + (e.range_m.long ? ' / ' + meters(e.range_m.long) : '')) : '')
+                 + (e.properties_text ? KV('Propriétés', e.properties_text)
+                     : (e.properties && e.properties.length ? KV('Propriétés', e.properties.map(propFr).join(', ')) : ''))
+                 + KV('Botte d’arme', e.mastery_name)
+                 + KV('Capacité de charge', e.capacity) + KV('Vitesse', e.speed)
                  + P(e.desc);
         }
         if (cat === 'races' || cat === 'classes') {
             const subs = e.subraces || e.subclasses || [];
             return P(e.desc)
                  + (cat === 'classes' ? classHeader(e) : '')
-                 + (cat === 'races' ? KV('Vitesse', e.speed) + KV('Taille', e.size)
+                 + (cat === 'races' ? KV('Type de créature', e.creature_type)
+                                    + KV('Vitesse', e.speed) + KV('Taille', e.size)
                                     + KV('Langues', e.languages)
                                     + KV('Bonus de caractéristiques', abilityBonusText(e)) : '')
                  + (cat === 'classes' ? levelTable(e) : '')
@@ -689,7 +732,7 @@
                          + `${s.source === 'perso' ? ' ' + PERSO_BADGE : ''}</p>`).join('') : '');
         }
         if (cat === 'rules') {
-            return P(e.content)
+            return BLOCKS(e.content)
                  + ((e.children || []).length ? '<h4 class="rw-h">Sections</h4>'
                      + e.children.map(c => `<p><a href="#" class="rw-link" data-cat="rules" data-id="${esc(c.id)}">${esc(c.name)}</a></p>`).join('') : '');
         }
@@ -722,6 +765,9 @@
         setLang: (l) => { lang = l; memory.clear(); lastIndex = null; linkRx = undefined; },
         getEdition: () => edition,
         getLang: () => lang,
-        attribution: 'SRD 5.1 (Wizards of the Coast) — CC-BY-4.0'
+        categoryLabel,
+        get attribution() {
+            return `SRD ${edition === '2024' ? '5.2.1' : '5.1'} (Wizards of the Coast) — CC-BY-4.0`;
+        }
     };
 })();

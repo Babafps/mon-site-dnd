@@ -72,7 +72,10 @@
         ],
         'magic-items': [
             { k: 'kind', label: 'Type', get: e => String(e.type || '').split(' (')[0] },
-            { k: 'rarity', label: 'Rareté', get: e => e.rarity }
+            // « peu courant » (anneau) et « peu courante » (arme) : une seule rareté.
+            { k: 'rarity', label: 'Rareté',
+              get: e => String(e.rarity || '').toLowerCase().replace(/\bcourante\b/g, 'courant'),
+              label_of: (v, e) => capital(e ? e.rarity : v) }
         ],
         equipment: [
             { k: 'category', label: 'Catégorie', get: e => e.category || e.type,
@@ -140,8 +143,7 @@
         document.body.appendChild(scr);
 
         // Catégories
-        $('rules-cats').innerHTML = window.SRD.CATEGORIES.map(c =>
-            `<button type="button" class="rules-cat" data-cat="${c.id}">${c.icon} ${esc(c.label)}</button>`).join('');
+        renderCats();
         $('rules-cats').addEventListener('click', (e) => {
             const b = e.target.closest('.rules-cat'); if (!b) return;
             $('rules-search').value = '';
@@ -190,8 +192,20 @@
             if (currentCat) openCategory(currentCat);
         });
 
+        renderFoot();
+    }
+
+    // Les libellés (« Races » / « Espèces ») et la licence dépendent de l'édition.
+    function renderCats() {
+        $('rules-cats').innerHTML = window.SRD.CATEGORIES.map(c =>
+            `<button type="button" class="rules-cat${c.id === currentCat ? ' is-on' : ''}" data-cat="${c.id}">`
+            + `${c.icon} ${esc(window.SRD.categoryLabel(c.id))}</button>`).join('');
+    }
+
+    function renderFoot() {
+        const doc = window.SRD.getEdition() === '2024' ? '5.2.1' : '5.1';
         $('rules-foot').innerHTML =
-            `Contenu du <b>System Reference Document 5.1</b> (version française officielle) — `
+            `Contenu du <b>System Reference Document ${doc}</b> (version française officielle) — `
             + `Wizards of the Coast, sous licence <a href="https://creativecommons.org/licenses/by/4.0/deed.fr" target="_blank" rel="noopener">CC-BY-4.0</a>. `
             + `Compatible avec la 5<sup>e</sup> édition ; ce site n'est pas un produit officiel D&amp;D.`;
     }
@@ -203,15 +217,14 @@
     }
 
     // ---------- Choix de l'édition ----------
-    // Le SRD 5.2 (règles 2024) n'existe officiellement qu'en anglais : tant qu'il
-    // n'est pas traduit, on ne prétend pas l'avoir. Le sélecteur teste la présence
-    // réelle des données et le dit franchement plutôt que d'ouvrir une page vide.
+    // 2014 = SRD 5.1, 2024 = SRD 5.2.1 : Wizards publie les deux en version
+    // française officielle, extraites de leur PDF par tools/srd/.
     // Éditions déclarées, pas sondées : une requête vers un fichier absent
-    // remplirait la console de 404 à chaque ouverture. Passer `available` à true
-    // le jour où data/srd/2024/fr/ existe.
+    // remplirait la console de 404 à chaque ouverture. Une édition sans données
+    // se déclare `available: false` et le sélecteur le dit franchement.
     const EDITIONS = [
         { id: '2014', label: '5e (2014)', available: true },
-        { id: '2024', label: '5.5e (2024)', available: false }
+        { id: '2024', label: '5.5e (2024)', available: true }
     ];
     const EDITION_KEY = 'dnd-srd-edition';
     const editionAvailable = (ed) => !!(EDITIONS.find(e => e.id === ed) || {}).available;
@@ -221,9 +234,10 @@
         if (!sel) return;
         sel.innerHTML = EDITIONS.map(e =>
             `<option value="${e.id}">${e.label}</option>`).join('');
-        const saved = localStorage.getItem(EDITION_KEY) || '2014';
+        let saved = window.SRD.getEdition();
+        if (!editionAvailable(saved)) saved = EDITIONS.find(e => e.available).id;
         sel.value = saved;
-        window.SRD.setEdition(saved);
+        if (saved !== window.SRD.getEdition()) window.SRD.setEdition(saved);
 
         EDITIONS.filter(e => !e.available).forEach(e => {
             const opt = sel.querySelector(`option[value="${e.id}"]`);
@@ -239,9 +253,11 @@
                     + `Le SRD officiel de cette édition n'est publié qu'en anglais : il doit être traduit avant d'être intégré.</div>`;
                 return;
             }
-            localStorage.setItem(EDITION_KEY, ed);
+            try { localStorage.setItem(EDITION_KEY, ed); } catch (e) {}
             window.SRD.setEdition(ed);
             currentCat = null; metaCat = null; meta = {};
+            renderCats();
+            renderFoot();
             $('rules-search').value = '';
             $('rules-detail').innerHTML = '<div class="rules-empty">Choisis une catégorie, puis une entrée.</div>';
             openCategory('spells');

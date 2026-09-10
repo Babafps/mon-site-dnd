@@ -4257,6 +4257,9 @@ body.theme-dark .srd-auto-sub { color: #b6a484; }
 .rw-levels .rw-col-feat { white-space: normal; min-width: 20ch; }
 .rw-levels tbody tr:nth-child(even) { background: var(--panel-1); }
 .rw-levels .rw-slots-head { text-align: center; font-size: 0.72rem; }
+/* Tableaux des règles 2024 : titre et intertitres de groupe (« Armures légères ») */
+.rw-table caption { caption-side: top; text-align: left; padding: 0 0 4px; font-family: 'Cinzel', serif; font-weight: 600; color: var(--primary-color); }
+.rw-table .rw-tgroup { font-style: italic; color: var(--ink-muted); background: var(--panel-1); }
 
 /* =====================================================
    Éditeur de contenu personnel (#homebrew-screen)

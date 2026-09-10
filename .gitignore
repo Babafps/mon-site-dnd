@@ -10,6 +10,9 @@ tools/srd/srd51fr-raw.txt
 # PDF officiel (5 Mo) — retéléchargé automatiquement par les scripts
 # depuis media.wizards.com. Inutile de le stocker.
 tools/srd/*.pdf
+# SRD 5.2.1 FR (règles 2024), téléchargé par build_2024.py
+tools/srd/cache/
+tools/srd/__pycache__/
 
 # Données anglaises de référence (5,7 Mo) — retéléchargées depuis
 # github.com/5e-bits/5e-database par les scripts de construction.

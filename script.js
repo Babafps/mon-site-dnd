@@ -2590,7 +2590,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : `C’est au niveau ${st.at} que ta classe se spécialise. Le choix s’écrit sur la fiche `
                       + `et vaut pour toutes les montées suivantes.`}</p>
                 <div class="lvup-cards">${cards}</div>
-                <p class="lvup-step-note lvup-lic">Le SRD 5.1 ne publie qu’une sous-classe par classe :
+                <p class="lvup-step-note lvup-lic">Le SRD ne publie qu’une sous-classe par classe :
                     les autres appartiennent au Manuel des Joueurs et ne sont pas redistribuables.
                     Crée les tiennes dans <b>Contenu perso</b>, elles apparaîtront ici.</p>`;
         }
@@ -5018,8 +5018,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         /** Les bottes portées par une arme, filtrées de ce qui n'existe pas. */
         const bottesDe = (atk) => (Array.isArray(atk && atk.masteries) ? atk.masteries : []).filter(k => BOTTES[k]);
-        /** La botte que le manuel 2024 attribue à cette arme du SRD, ou null. */
-        const botteDuSrd = (w) => (w && BOTTE_PAR_ARME[w.id]) || null;
+        /** La botte que le manuel 2024 attribue à cette arme du SRD, ou null.
+         *  Les armes du SRD 2024 la portent elles-mêmes (`mastery`) ; la table
+         *  ci-dessus ne sert qu'aux armes 2014, qui n'en ont pas. */
+        const botteDuSrd = (w) => (w && ((BOTTES[w.mastery] && w.mastery) || BOTTE_PAR_ARME[w.id])) || null;
 
         // ---------- Dégâts additionnels et capacités, en nombre libre ----------
         // Une arme ne portait qu'UN type de dégâts bonus (bonusDmg/bonusDmgType).
