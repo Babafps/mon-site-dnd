@@ -1213,11 +1213,291 @@
     });
 
     // =====================================================
+    // LA TROISIÈME VAGUE — formes utiles à ces styles
+    // =====================================================
+    function tombe(ctx, x, y, w, h, c) {
+        ctx.fillStyle = c; ctx.beginPath();
+        ctx.moveTo(x - w / 2, y); ctx.lineTo(x - w / 2, y - h + w / 2); ctx.arc(x, y - h + w / 2, w / 2, Math.PI, 0); ctx.lineTo(x + w / 2, y);
+        ctx.closePath(); ctx.fill();
+    }
+    function argenture(ctx, x0, y0, x1, y1) {
+        const g = ctx.createLinearGradient(x0, y0, x1, y1);
+        g.addColorStop(0, '#7d8594'); g.addColorStop(0.3, '#e9eef6'); g.addColorStop(0.5, '#ffffff'); g.addColorStop(0.7, '#9aa3b2'); g.addColorStop(1, '#6d7482');
+        return g;
+    }
+    function livreOuvert(ctx, x, y, s, c, dos) {
+        ctx.save(); ctx.translate(x, y);
+        [-1, 1].forEach(k => {
+            ctx.fillStyle = c; ctx.beginPath();
+            ctx.moveTo(0, -s * 0.1); ctx.quadraticCurveTo(k * s * 0.5, -s * 0.35, k * s, -s * 0.2); ctx.lineTo(k * s, s * 0.45); ctx.quadraticCurveTo(k * s * 0.5, s * 0.3, 0, s * 0.55);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = dos; ctx.lineWidth = 1.2;
+            for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(k * s * 0.15, -s * 0.05 + i * s * 0.13); ctx.quadraticCurveTo(k * s * 0.5, -s * 0.2 + i * s * 0.13, k * s * 0.85, -s * 0.1 + i * s * 0.13); ctx.stroke(); }
+        });
+        ctx.restore();
+    }
+    function feuDArtifice(ctx, T, x, y, r, c) {
+        ctx.save(); lueur(ctx, T, c, 10);
+        for (let i = 0; i < 26; i++) {
+            const a = TAU * i / 26;
+            for (let k = 1; k <= 4; k++) disque(ctx, x + Math.cos(a) * r * k / 4, y + Math.sin(a) * r * k / 4 + k * k * 1.6, 1.2 + (4 - k) * 0.7, c);
+        }
+        ctx.restore();
+    }
+    function coeur(ctx, x, y, s, c) {
+        ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x, y + s * 0.35);
+        ctx.bezierCurveTo(x - s * 0.9, y - s * 0.25, x - s * 0.35, y - s * 0.85, x, y - s * 0.35);
+        ctx.bezierCurveTo(x + s * 0.35, y - s * 0.85, x + s * 0.9, y - s * 0.25, x, y + s * 0.35);
+        ctx.fill();
+    }
+    function enveloppe(ctx, x, y, s, a, fond, trait) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+        ctx.fillStyle = fond; ctx.fillRect(-s / 2, -s * 0.33, s, s * 0.66);
+        ctx.strokeStyle = trait; ctx.lineWidth = Math.max(1, s * 0.04); ctx.strokeRect(-s / 2, -s * 0.33, s, s * 0.66);
+        ctx.beginPath(); ctx.moveTo(-s / 2, -s * 0.33); ctx.lineTo(0, s * 0.05); ctx.lineTo(s / 2, -s * 0.33); ctx.stroke();
+        disque(ctx, 0, s * 0.05, s * 0.09, '#a8262e');
+        ctx.restore();
+    }
+    function chaine(ctx, x0, x1, y, t, c) {
+        ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = t * 0.28;
+        for (let x = x0, i = 0; x < x1; x += t * 1.3, i++) { ctx.beginPath(); if (i % 2) ctx.ellipse(x, y, t * 0.3, t * 0.6, Math.PI / 2, 0, TAU); else ctx.ellipse(x, y, t * 0.8, t * 0.45, 0, 0, TAU); ctx.stroke(); }
+        ctx.restore();
+    }
+    function pousse(ctx, x, y, s, c) {
+        ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = s * 0.08; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + s * 0.1, y - s * 0.5, x, y - s); ctx.stroke();
+        [[-1, 0.6], [1, 0.8]].forEach(([k, h]) => { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x + k * s * 0.28, y - s * h, s * 0.3, s * 0.13, k * -0.5, 0, TAU); ctx.fill(); });
+        ctx.restore();
+    }
+
+    // =====================================================
+    // LA TROISIÈME VAGUE — les styles
+    // =====================================================
+    STYLES.push({
+        id: 'spectre', nom: '👻 Spectre', exploit: 'spectre', entete: 'PASSÉ DE L’AUTRE CÔTÉ', sceau: 'Trois jets contre la mort ratés', indice: 'Rater… trois fois de suite.',
+        palette: { fondA: [30, 44, 56], fondB: [4, 8, 12], or: [170, 230, 230], encre: [230, 250, 250], primaire: [60, 110, 120] },
+        fond(ctx, T) {
+            const { W, H, alea } = T;
+            for (let i = 0; i < 7; i++) { ctx.fillStyle = `rgba(170,230,230,${0.04 + alea() * 0.05})`; ctx.beginPath(); ctx.ellipse(alea() * W, 300 + alea() * (H - 300), 260 + alea() * 200, 40 + alea() * 50, 0, 0, TAU); ctx.fill(); }
+            [[110, 90, 130], [230, 70, 100], [W - 120, 90, 140], [W - 250, 64, 96]].forEach(([x, w, h]) => tombe(ctx, x, H - 36, w, h, 'rgba(4,10,14,.85)'));
+            ctx.strokeStyle = 'rgba(170,230,230,.12)'; ctx.lineWidth = 3;
+            semis(T, 6, (x, y, k) => { ctx.beginPath(); ctx.moveTo(x, y + 90); ctx.bezierCurveTo(x - 50, y + 30, x + 50 * k, y - 20, x - 10, y - 110); ctx.stroke(); });
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(170,230,230,.55)', 2.5, 'rgba(170,230,230,.25)', [3, 9]); },
+        portrait(ctx, T) {
+            const { PX, PY, PR } = T;
+            ctx.globalCompositeOperation = 'saturation'; ctx.fillStyle = '#808080'; ctx.fillRect(PX - PR, PY - PR, PR * 2, PR * 2);
+            ctx.globalCompositeOperation = 'color'; ctx.fillStyle = 'rgba(120,210,210,.45)'; ctx.fillRect(PX - PR, PY - PR, PR * 2, PR * 2);
+        },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(190,240,240,.9)', 3, 'rgba(170,230,230,.3)'); },
+        nomDuHeros(ctx, T) { ctx.shadowColor = 'rgba(170,240,240,.9)'; ctx.shadowBlur = T.flou(30); ctx.fillStyle = 'rgba(235,252,252,.85)'; }
+    });
+
+    STYLES.push({
+        id: 'inspire', nom: '💡 Inspiré', exploit: 'inspire', entete: 'L’ÉTINCELLE', sceau: 'Vingt inspirations héroïques', indice: 'Être inspiré, encore et encore.',
+        palette: { fondA: [60, 40, 10], fondB: [12, 8, 2], or: [255, 214, 110], encre: [255, 246, 222], primaire: [170, 110, 20] },
+        fond(ctx, T) {
+            const { PX, PY } = T;
+            T.halo(ctx, PX, PY, 520, 'rgba(255,214,110,.28)');
+            ctx.strokeStyle = 'rgba(255,214,110,.14)'; ctx.lineWidth = 2;
+            for (let i = 0; i < 72; i++) { const a = TAU * i / 72, r1 = 200 + (i % 3) * 30; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * r1, PY + Math.sin(a) * r1); ctx.lineTo(PX + Math.cos(a) * 1100, PY + Math.sin(a) * 1100); ctx.stroke(); }
+            semis(T, 24, (x, y, k) => T.etoile(ctx, x, y, 3 + k * 7, `rgba(255,236,170,${0.35 + k * 0.5})`));
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 5, 'rgba(255,214,110,.4)'); coins(ctx, T, c => T.etoile(c, 0, 0, 14, 'rgba(255,240,190,.95)')); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, 'rgba(255,220,120,1)', 5);
+            ctx.strokeStyle = 'rgba(255,220,120,.85)'; ctx.lineCap = 'round';
+            for (let i = 0; i < 24; i++) { const a = TAU * i / 24, l = i % 2 ? 10 : 20; ctx.lineWidth = i % 2 ? 2 : 3.5; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * (PR + 14), PY + Math.sin(a) * (PR + 14)); ctx.lineTo(PX + Math.cos(a) * (PR + 14 + l), PY + Math.sin(a) * (PR + 14 + l)); ctx.stroke(); }
+        }
+    });
+
+    STYLES.push({
+        id: 'platine', nom: '💠 Platine', exploit: 'platine', entete: 'FORTUNE DE PLATINE', sceau: 'Cent pièces de platine', indice: 'Une monnaie plus rare que l’or.',
+        palette: { fondA: [62, 68, 80], fondB: [12, 14, 18], or: [226, 232, 244], encre: [248, 250, 255], primaire: [120, 130, 150] },
+        fond(ctx, T) {
+            const { W, H } = T;
+            ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = '#ffffff';
+            for (let x = -H; x < W; x += 140) { ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x + 50, H); ctx.lineTo(x + 50 + H, 0); ctx.lineTo(x + H, 0); ctx.closePath(); ctx.fill(); }
+            ctx.restore();
+            const tas = (x, y, k) => piece(ctx, x, y, 12 + k * 16, '#ffffff', '#7d8594');
+            semis(T, 10, tas, [80, 1170, 300, 1300]); semis(T, 10, tas, [780, 1170, 1000, 1300]);
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, argenture(ctx, 0, 0, T.W, T.H), 8, 'rgba(226,232,244,.45)'); coins(ctx, T, c => piece(c, 0, 0, 15, '#ffffff', '#7d8594')); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; ctx.lineWidth = 9; ctx.strokeStyle = argenture(ctx, PX - PR, PY - PR, PX + PR, PY + PR); ctx.beginPath(); ctx.arc(PX, PY, PR + 5, 0, TAU); ctx.stroke(); cercle(ctx, PX, PY, PR + 18, 'rgba(226,232,244,.4)', 1.6); },
+        nomDuHeros(ctx, T, l) {
+            // Un argent clair et une ombre sombre : sur le fond gris, l'argenture « métal » ne se lisait plus.
+            const g = ctx.createLinearGradient(T.W / 2 - l / 2, 0, T.W / 2 + l / 2, 0);
+            g.addColorStop(0, '#d4dae4'); g.addColorStop(0.35, '#ffffff'); g.addColorStop(0.6, '#e3e8f0'); g.addColorStop(0.8, '#ffffff'); g.addColorStop(1, '#c6cdd8');
+            ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = T.flou(14); ctx.fillStyle = g;
+        }
+    });
+
+    STYLES.push({
+        id: 'grimoire', nom: '📖 Grimoire', exploit: 'grimoire', entete: 'GRIMOIRE VIVANT', sceau: 'Cinquante sorts dans le grimoire', indice: 'Remplir son livre de sorts, page après page.',
+        palette: { fondA: [48, 20, 60], fondB: [8, 3, 12], or: [236, 190, 255], encre: [250, 240, 255], primaire: [120, 50, 150] },
+        fond(ctx, T) {
+            const { W, LORA } = T;
+            T.halo(ctx, T.PX, T.PY, 480, 'rgba(200,140,255,.2)');
+            [[170, 300, 70, -0.2], [W - 170, 320, 64, 0.25], [150, 1030, 58, 0.1], [W - 160, 1060, 62, -0.15]].forEach(([x, y, s, a]) => { ctx.save(); ctx.translate(x, y); ctx.rotate(a); lueur(ctx, T, 'rgba(236,190,255,.6)', 16); livreOuvert(ctx, 0, 0, s, 'rgba(250,240,255,.8)', 'rgba(120,50,150,.5)'); ctx.restore(); });
+            ctx.fillStyle = 'rgba(236,190,255,.3)'; ctx.textAlign = 'center';
+            semis(T, 22, (x, y, k, i) => { ctx.font = `${Math.round(16 + k * 22)}px ${LORA}`; ctx.fillText(['✶', '☽', '✧', '⚝', '♄', '☿'][i % 6], x, y); });
+        },
+        cadre(ctx, T) {
+            const { W, H } = T;
+            doubleCadre(ctx, T, 'rgba(236,190,255,.75)', 3, 'rgba(236,190,255,.3)');
+            ctx.fillStyle = 'rgba(236,190,255,.35)';
+            [[30, 30, 1, 1], [W - 30, 30, -1, 1], [30, H - 30, 1, -1], [W - 30, H - 30, -1, -1]].forEach(([x, y, sx, sy]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sx * 60, y); ctx.lineTo(x, y + sy * 60); ctx.closePath(); ctx.fill(); });
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR, LORA } = T;
+            anneauBrillant(ctx, T, 'rgba(236,190,255,.95)', 4, 'rgba(236,190,255,.35)');
+            ctx.fillStyle = 'rgba(250,235,255,.85)'; ctx.font = `22px ${LORA}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            for (let i = 0; i < 8; i++) { const a = TAU * i / 8 + 0.2; ctx.fillText(['✶', '☽', '✧', '⚝'][i % 4], PX + Math.cos(a) * (PR + 30), PY + Math.sin(a) * (PR + 30)); }
+            ctx.textBaseline = 'alphabetic';
+        }
+    });
+
+    STYLES.push({
+        id: 'menagerie', nom: '🦜 Ménagerie', exploit: 'menagerie', entete: 'MAÎTRE DE MÉNAGERIE', sceau: 'Trois compagnons', indice: 'Plus on est de bêtes, plus on rit.',
+        palette: { fondA: [36, 50, 30], fondB: [8, 12, 6], or: [226, 206, 120], encre: [246, 244, 226], primaire: [110, 120, 60] },
+        fond(ctx, T) {
+            T.halo(ctx, T.PX, T.PY, 460, 'rgba(226,206,120,.14)');
+            semis(T, 10, (x, y, k) => patte(ctx, x, y, 12 + k * 8, k * TAU, 'rgba(226,206,120,.16)'));
+            semis(T, 8, (x, y, k) => plume(ctx, x, y, 70 + k * 50, k * TAU, `rgba(${k > 0.5 ? '120,190,200' : '220,120,80'},.35)`));
+            semis(T, 12, (x, y, k) => T.feuille(ctx, x, y, 10 + k * 12, k * TAU, 'rgba(120,170,80,.25)'));
+        },
+        cadre(ctx, T) { const { W, H } = T; doubleCadre(ctx, T, 'rgba(226,206,120,.7)', 3, 'rgba(226,206,120,.3)'); [[140, 34, 0.3], [W - 140, 34, -0.3], [140, H - 34, 2.8], [W - 140, H - 34, -2.8]].forEach(([x, y, a]) => plume(ctx, x, y, 90, a + Math.PI / 2, 'rgba(226,150,90,.85)')); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; cercle(ctx, PX, PY, PR + 4, 'rgba(226,206,120,.9)', 5); [-2.4, -Math.PI / 2, -0.74].forEach(a => patte(ctx, PX + Math.cos(a) * (PR + 26), PY + Math.sin(a) * (PR + 26), 14, a + Math.PI / 2, 'rgba(246,244,226,.9)')); }
+    });
+
+    STYLES.push({
+        id: 'artificier', nom: '🔧 Artificier', exploit: 'artificier', entete: 'ARTIFICIER', sceau: 'Dix macros forgées', indice: 'Automatiser jusqu’au moindre jet.',
+        palette: { fondA: [22, 48, 60], fondB: [4, 12, 16], or: [120, 224, 214], encre: [236, 250, 250], primaire: [50, 120, 130] },
+        fond(ctx, T) {
+            const { W, H, PX, PY } = T;
+            ctx.lineWidth = 1;
+            for (let x = 0; x < W; x += 30) { ctx.strokeStyle = `rgba(120,224,214,${x % 150 ? 0.06 : 0.14})`; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+            for (let y = 0; y < H; y += 30) { ctx.strokeStyle = `rgba(120,224,214,${y % 150 ? 0.06 : 0.14})`; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+            engrenage(ctx, 150, 280, 90, 10, 'rgba(120,224,214,.35)', 3); engrenage(ctx, 245, 370, 50, 7, 'rgba(120,224,214,.3)', 3);
+            engrenage(ctx, W - 160, 1060, 110, 12, 'rgba(120,224,214,.3)', 3);
+            ctx.strokeStyle = 'rgba(120,224,214,.3)'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(PX, PY, 230, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        },
+        cadre(ctx, T) {
+            const { W, H } = T;
+            doubleCadre(ctx, T, 'rgba(120,224,214,.75)', 2.5, 'rgba(120,224,214,.3)');
+            ctx.strokeStyle = 'rgba(120,224,214,.6)'; ctx.lineWidth = 1.5;
+            for (let x = 80; x < W - 60; x += 40) { ctx.beginPath(); ctx.moveTo(x, 30); ctx.lineTo(x, x % 200 ? 38 : 46); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, H - 30); ctx.lineTo(x, H - (x % 200 ? 38 : 46)); ctx.stroke(); }
+        },
+        anneau(ctx, T) { const { PX, PY, PR } = T; engrenage(ctx, PX, PY, PR + 12, 20, 'rgba(120,224,214,.9)', 4); }
+    });
+
+    STYLES.push({
+        id: 'apprenti', nom: '🌱 Apprenti', exploit: 'apprenti', entete: 'PREMIER PAS', sceau: 'Un premier niveau gagné', indice: 'Tout héros commence quelque part.',
+        palette: { nuit: false, fondA: [242, 238, 222], fondB: [214, 206, 178], or: [90, 130, 64], encre: [40, 48, 30], primaire: [70, 110, 50] },
+        fond(ctx, T) {
+            const { W, H, alea } = T;
+            T.halo(ctx, T.PX, T.PY, 460, 'rgba(255,255,230,.6)');
+            for (let x = 70; x < W - 40; x += 55) pousse(ctx, x + alea() * 20, H - 40, 40 + alea() * 50, 'rgba(90,130,64,.35)');
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(90,130,64,.75)', 3, 'rgba(90,130,64,.3)'); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; cercle(ctx, PX, PY, PR + 4, 'rgba(90,130,64,.9)', 4); T.feuille(ctx, PX - 20, PY - PR - 14, 18, -0.4, 'rgba(90,150,64,.9)'); T.feuille(ctx, PX + 20, PY - PR - 14, 18, 0.4, 'rgba(90,150,64,.9)'); }
+    });
+
+    STYLES.push({
+        id: 'messager', nom: '🕊️ Messager', exploit: 'messager', entete: 'PORTE-PAROLE', sceau: 'Une carte partagée', indice: 'Montrer sa carte au monde.',
+        palette: { fondA: [40, 58, 84], fondB: [8, 12, 20], or: [236, 220, 170], encre: [246, 246, 240], primaire: [80, 110, 150] },
+        fond(ctx, T) {
+            const { W } = T;
+            ctx.strokeStyle = 'rgba(236,220,170,.14)'; ctx.lineWidth = 3;
+            for (let i = 0; i < 7; i++) { const y = 180 + i * 150; ctx.beginPath(); ctx.moveTo(40, y); ctx.bezierCurveTo(W * 0.3, y - 40, W * 0.6, y + 40, W - 40, y - 10); ctx.stroke(); }
+            semis(T, 9, (x, y, k) => enveloppe(ctx, x, y, 40 + k * 40, (k - 0.5) * 0.9, 'rgba(246,238,214,.5)', 'rgba(120,90,50,.6)'));
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(236,220,170,.75)', 3, 'rgba(236,220,170,.3)'); coins(ctx, T, c => { disque(c, 0, 0, 16, '#9a1f28'); cercle(c, 0, 0, 10, 'rgba(255,200,190,.5)', 2); }); },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(236,220,170,.95)', 4, 'rgba(236,220,170,.35)'); }
+    });
+
+    STYLES.push({
+        id: 'bagnard', nom: '⛓️ Bagnard', exploit: 'bagnard', entete: 'PEINE PURGÉE', sceau: 'Un d20 sorti de prison', indice: 'Envoyer un dé en prison… et attendre sa sortie.',
+        palette: { fondA: [50, 50, 54], fondB: [10, 10, 12], or: [220, 200, 150], encre: [240, 238, 232], primaire: [110, 110, 120] },
+        fond(ctx, T) {
+            const { W, H } = T;
+            for (let y = 0, i = 0; y < H; y += 60, i++) { ctx.fillStyle = i % 2 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.06)'; ctx.fillRect(0, y, W, 60); }
+            for (let x = 60; x < W; x += 120) { const g = ctx.createLinearGradient(x - 8, 0, x + 8, 0); g.addColorStop(0, 'rgba(40,42,46,.4)'); g.addColorStop(0.5, 'rgba(170,176,186,.3)'); g.addColorStop(1, 'rgba(40,42,46,.4)'); ctx.fillStyle = g; ctx.fillRect(x - 8, 0, 16, H); }
+            chaine(ctx, 60, W - 40, H - 60, 22, 'rgba(180,184,192,.55)');
+        },
+        cadre(ctx, T) { const { W, H, rrect } = T; ctx.strokeStyle = 'rgba(28,28,32,.95)'; ctx.lineWidth = 14; rrect(ctx, 34, 34, W - 68, H - 68, 8); ctx.stroke(); for (let x = 90; x < W - 60; x += 110) { rivet(ctx, x, 34, 6, '#a0a4ac'); rivet(ctx, x, H - 34, 6, '#a0a4ac'); } },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            ctx.strokeStyle = 'rgba(190,194,202,.95)'; ctx.lineWidth = 5;
+            for (let i = 0; i < 26; i++) { const a = TAU * i / 26; ctx.save(); ctx.translate(PX + Math.cos(a) * (PR + 12), PY + Math.sin(a) * (PR + 12)); ctx.rotate(a + (i % 2 ? 0 : Math.PI / 2)); ctx.beginPath(); ctx.ellipse(0, 0, 14, 8, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+        }
+    });
+
+    STYLES.push({
+        id: 'ascete', nom: '☯️ Ascète', exploit: 'ascete', entete: 'RIEN NE ME RETIENT', sceau: 'Niveau 5, sac vide', indice: 'Voyager léger. Très léger.',
+        palette: { nuit: false, fondA: [244, 238, 226], fondB: [220, 208, 186], or: [60, 50, 40], encre: [40, 34, 28], primaire: [150, 40, 30] },
+        fond(ctx, T) {
+            const { PX, PY, W, alea, CINZEL } = T;
+            // L'ensō : un cercle tracé d'un seul coup de pinceau
+            ctx.lineCap = 'round';
+            for (let k = 0; k < 14; k++) { ctx.strokeStyle = `rgba(30,24,20,${0.05 + alea() * 0.05})`; ctx.lineWidth = 26 + alea() * 20; const r = 240 + (alea() - 0.5) * 16; ctx.beginPath(); ctx.arc(PX + (alea() - 0.5) * 6, PY + (alea() - 0.5) * 6, r, -0.95 + alea() * 0.08, 4.08 - alea() * 0.12); ctx.stroke(); }
+            ctx.fillStyle = 'rgba(160,40,30,.85)'; ctx.fillRect(W - 160, 1226, 56, 56);
+            ctx.fillStyle = 'rgba(244,238,226,.95)'; ctx.font = `700 30px ${CINZEL}`; ctx.textAlign = 'center'; ctx.fillText('B', W - 132, 1265);
+        },
+        cadre(ctx, T) { const { W, H } = T; ctx.strokeStyle = 'rgba(40,34,28,.6)'; ctx.lineWidth = 1.5; ctx.strokeRect(46, 46, W - 92, H - 92); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(30,24,20,.8)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(PX, PY, PR + 6, -1.6, 4.3); ctx.stroke(); }
+    });
+
+    STYLES.push({
+        id: 'nouvelan', nom: '🎆 Nouvel an', exploit: 'nouvelan', entete: 'BONNE ANNÉE', sceau: 'Présent un 1er janvier', indice: 'Minuit a sonné.',
+        palette: { fondA: [16, 18, 48], fondB: [2, 2, 10], or: [255, 214, 120], encre: [248, 244, 255], primaire: [80, 70, 160] },
+        fond(ctx, T) {
+            const { W } = T;
+            semis(T, 70, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.2, `rgba(255,255,255,${0.2 + k * 0.4})`));
+            [[190, 230, 130, 'rgba(255,120,160,.8)'], [W - 200, 190, 150, 'rgba(120,220,255,.8)'], [180, 1040, 110, 'rgba(255,214,120,.8)'], [W - 170, 1000, 120, 'rgba(170,255,140,.8)']].forEach(([x, y, r, c]) => feuDArtifice(ctx, T, x, y, r, c));
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 4, 'rgba(255,214,120,.35)'); coins(ctx, T, c => T.etoile(c, 0, 0, 13, 'rgba(255,240,200,.95)')); },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(255,220,130,1)', 4, 'rgba(255,214,120,.35)'); }
+    });
+
+    STYLES.push({
+        id: 'valentin', nom: '💘 Valentin', exploit: 'valentin', entete: 'CŒUR VAILLANT', sceau: 'Présent un 14 février', indice: 'Une date pour les cœurs tendres.',
+        palette: { fondA: [72, 16, 42], fondB: [14, 2, 8], or: [255, 156, 196], encre: [255, 236, 244], primaire: [170, 40, 90] },
+        fond(ctx, T) {
+            T.halo(ctx, T.PX, T.PY, 480, 'rgba(255,120,170,.2)');
+            semis(T, 26, (x, y, k) => coeur(ctx, x, y, 12 + k * 30, `rgba(255,${120 + Math.round(k * 80)},170,${0.12 + k * 0.25})`));
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(255,156,196,.8)', 3, 'rgba(255,156,196,.3)'); coins(ctx, T, c => coeur(c, 0, 0, 22, 'rgba(255,120,170,.95)')); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; anneauBrillant(ctx, T, 'rgba(255,170,205,.95)', 4); coeur(ctx, PX, PY - PR - 14, 24, 'rgba(255,90,150,.95)'); }
+    });
+
+    STYLES.push({
+        id: 'musique', nom: '🎶 Fête des bardes', exploit: 'musique', entete: 'FÊTE DES BARDES', sceau: 'Présent un 21 juin', indice: 'Le jour le plus long, et le plus bruyant.',
+        palette: { fondA: [54, 32, 14], fondB: [10, 6, 2], or: [255, 198, 96], encre: [255, 244, 224], primaire: [150, 80, 20] },
+        fond(ctx, T) {
+            const { W, H, LORA } = T;
+            // Une portée qui ondule d'un bord à l'autre
+            for (let k = 0; k < 5; k++) { ctx.strokeStyle = 'rgba(255,198,96,.14)'; ctx.lineWidth = 2; ctx.beginPath(); for (let x = 0; x <= W; x += 20) { const y = 980 + k * 18 + Math.sin(x / 120) * 40; if (x) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.stroke(); }
+            ctx.textAlign = 'center';
+            semis(T, 26, (x, y, k, i) => { ctx.fillStyle = `rgba(255,214,140,${0.2 + k * 0.45})`; ctx.font = `${Math.round(24 + k * 40)}px ${LORA}`; ctx.fillText(['♪', '♫', '♬', '♩'][i % 4], x, y); }, [60, 120, W - 60, H - 100]);
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(255,198,96,.8)', 3, 'rgba(255,198,96,.3)'); },
+        anneau(ctx, T) {
+            const { PX, PY, PR, LORA } = T;
+            anneauBrillant(ctx, T, 'rgba(255,205,110,.95)', 4, 'rgba(255,198,96,.3)');
+            ctx.fillStyle = 'rgba(255,230,170,.95)'; ctx.font = `30px ${LORA}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            [-2.5, -Math.PI / 2, -0.64].forEach((a, i) => ctx.fillText(['♪', '♫', '♬'][i], PX + Math.cos(a) * (PR + 30), PY + Math.sin(a) * (PR + 30)));
+            ctx.textBaseline = 'alphabetic';
+        }
+    });
+
+    // =====================================================
     // LA RARETÉ — affichée dans la vitrine de la carte
     // =====================================================
     const RARETES = {
-        legendaire: ['epique', 'chanceux', 'chatnoir', 'jumeaux', 'veteran', 'archimage', 'coupfatal', 'surcharge', 'pyromane', 'horloger'],
-        epique: ['astral', 'revenant', 'tresor', 'liche', 'forteresse', 'sommet', 'mendiant', 'armurier', 'chroniqueur', 'fidele', 'soigneur', 'increvable', 'dormeur', 'feudecamp', 'erudit', 'bestiaire', 'demenageur', 'lycan']
+        legendaire: ['epique', 'chanceux', 'chatnoir', 'jumeaux', 'veteran', 'archimage', 'coupfatal', 'surcharge', 'pyromane', 'horloger', 'grimoire'],
+        epique: ['astral', 'revenant', 'tresor', 'liche', 'forteresse', 'sommet', 'mendiant', 'armurier', 'chroniqueur', 'fidele', 'soigneur', 'increvable', 'dormeur', 'feudecamp', 'erudit', 'bestiaire', 'demenageur', 'lycan', 'inspire', 'bagnard', 'platine', 'artificier']
     };
     STYLES.forEach(s => { s.rarete = Object.keys(RARETES).find(r => RARETES[r].includes(s.id)) || 'rare'; });
 

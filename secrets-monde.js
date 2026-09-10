@@ -226,17 +226,17 @@
     // =====================================================
     const SEUIL = 10000;
     function fortune() {
-        const v = (k) => parseFloat(String((document.getElementById('coin-' + k) || {}).value || '0').replace(',', '.')) || 0;
+        const v = (k) => parseFloat(String((document.getElementById('coin-' + k) || {}).value || '0').replace(/\s/g, '').replace(',', '.')) || 0;
         return v('pp') * 10 + v('po') + v('pe') * 0.5 + v('pa') * 0.1 + v('pc') * 0.01;
     }
     let richeAvant = null, guetteur = null;
     // Filet : une fiche déjà ouverte au chargement n'annonce pas toujours son écran.
     window.addEventListener('load', () => setTimeout(() => {
         if (sacAvant == null) sacAvant = sacDansSac();
-        if (richeAvant == null) richeAvant = fortune() > SEUIL;
+        if (richeAvant == null) richeAvant = fortune() >= SEUIL;
     }, 900));
     surFiche(() => {
-        richeAvant = fortune() > SEUIL;
+        richeAvant = fortune() >= SEUIL;
         // Une fiche déjà riche : l'œil s'ouvre une fois par session, quand la Bourse passe à l'écran.
         if (!('IntersectionObserver' in window)) return;
         const w = document.getElementById('widget-currency'); if (!w) return;
@@ -244,15 +244,21 @@
         guetteur = new IntersectionObserver((entrees) => {
             if (!entrees.some(x => x.isIntersecting)) return;
             guetteur.disconnect();
-            if (fortune() > SEUIL) setTimeout(oeil, 700);
+            if (fortune() >= SEUIL) setTimeout(oeil, 700);
         }, { threshold: 0.6 });
         guetteur.observe(w);
     }, 500);
-    document.addEventListener('input', (e) => {
-        if (!e.target || !/^coin-(pc|pa|pe|po|pp)$/.test(e.target.id)) return;
-        const riche = fortune() > SEUIL;
-        if (richeAvant === false && riche) oeil(true);
-        richeAvant = riche;
+    // Toute écriture de la Bourse compte : la saisie, mais aussi « Payer » et la conversion,
+    // qui passent par setStore sans événement de saisie. On attend la fin de la frappe.
+    let minuteurBourse = null;
+    document.addEventListener('fiche:ecrite', (e) => {
+        if (!e.detail || !/^dnd-sheet-coin-/.test(e.detail.key || '')) return;
+        clearTimeout(minuteurBourse);
+        minuteurBourse = setTimeout(() => {
+            const riche = fortune() >= SEUIL;
+            if (richeAvant !== true && riche) oeil(true);
+            richeAvant = riche;
+        }, 350);
     });
 
     function oeil(force) {
@@ -263,6 +269,8 @@
         debloquer('dragon');
         styles();
         if (getComputedStyle(hote).position === 'static') hote.style.position = 'relative';
+        // La Bourse n'est pas toujours à l'écran : un murmure prévient aussi.
+        if (UI().murmure) UI().murmure({ icone: '🐉', titre: 'Tant d’or…', texte: 'Quelque chose, dans l’ombre, lorgne ta bourse.' });
         const ancien = hote.querySelector('.sx-oeil'); if (ancien) ancien.remove();
         const el = document.createElement('div');
         el.className = 'sx-oeil no-print'; el.setAttribute('aria-hidden', 'true');
@@ -304,7 +312,10 @@
             document.body.appendChild(voile);
         }
         if (!actif && voile) voile.remove();
-        if (window.showAppToast) window.showAppToast(actif ? '☠️ Mode Liche. Refais le code pour revenir parmi les vivants.' : '🌅 Retour parmi les vivants.');
+        const u = UI();
+        if (u && u.murmure) u.murmure(actif
+            ? { icone: '☠️', titre: 'Code ancien', texte: 'Mode Liche. Refais le code pour revenir parmi les vivants.' }
+            : { icone: '🌅', titre: 'Code ancien', texte: 'Retour parmi les vivants.' });
         if (actif) setTimeout(() => debloquer('konami'), 2600);
     }
 

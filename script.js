@@ -1358,7 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!clean) return { error: 'Entre une expression (ex : 2d6+3).' };
             if (!/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(clean)) return { error: 'Expression invalide (ex : 2d6+3).' };
             const parts = clean.match(/[+-]?(?:\d*d\d+|\d+)/g) || [];
-            let total = 0; const bits = [];
+            let total = 0, des = 0; const bits = [];
             for (const part of parts) {
                 const sign = part.startsWith('-') ? -1 : 1;
                 const body = part.replace(/^[+-]/, '');
@@ -1368,6 +1368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const faces = parseInt(fRaw, 10);
                     if (!faces || faces < 2 || faces > 1000) return { error: 'Dé invalide : d' + fRaw };
                     const rolls = Array.from({ length: n }, () => Math.floor(Math.random() * faces) + 1);
+                    des += n;
                     total += sign * rolls.reduce((a, b) => a + b, 0);
                     bits.push((sign < 0 ? '−' : '') + n + 'd' + faces + ' [' + rolls.join(', ') + ']');
                 } else {
@@ -1376,6 +1377,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     bits.push((sign < 0 ? '−' : '+') + v);
                 }
             }
+            // Les secrets aiment les grosses poignées de dés (secrets-plus.js : l'averse).
+            if (des) document.dispatchEvent(new CustomEvent('des:lances', { detail: { nombre: des } }));
             return { total, detail: bits.join(' ') };
         }
         function runExpression(expr) {
@@ -1684,6 +1687,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const poolSnapshot = [...dicePool];
             dicePool = [];
             renderDicePool();
+            // Les secrets réagissent dès le lancer (secrets-plus.js : l'averse), sans attendre
+            // la fin d'un lancer 3D qui peut durer avec une grosse poignée de dés.
+            document.dispatchEvent(new CustomEvent('des:lances', { detail: { nombre: poolSnapshot.length } }));
 
             let done = false;
             if (diceBoxReady && diceBox) {

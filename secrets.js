@@ -114,7 +114,12 @@
             if (r.restants > 0) { localStorage.setItem(RELAIS, JSON.stringify(r)); return; }
             localStorage.removeItem(RELAIS);
         } catch (e) { return; }
-        setTimeout(() => { if (window.showAppToast) window.showAppToast('⚖️ Ton ancien d20 a purgé sa peine. Il reprend du service, repenti.'); }, 1800);
+        setTimeout(() => {
+            const u = UI();
+            if (u && u.murmure) u.murmure({ icone: '⚖️', titre: 'Prison des dés', texte: 'Ton ancien d20 a purgé sa peine. Il reprend du service, repenti.' });
+            else if (window.showAppToast) window.showAppToast('⚖️ Ton ancien d20 a purgé sa peine.');
+            document.dispatchEvent(new CustomEvent('exploit:peine'));
+        }, 1800);
     }
     function emprisonner() {
         let actuelle = '';

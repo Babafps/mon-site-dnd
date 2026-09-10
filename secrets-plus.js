@@ -14,7 +14,12 @@
 
     const UI = () => window.SecretsUI;
     const debloquer = (id, o) => (window.Exploits ? window.Exploits.debloquer(id, o) : null);
-    const toast = (m) => { if (window.showAppToast) window.showAppToast(m); };
+    // Les secrets parlent en murmures (exploits.js) : un parchemin à leur couleur, pas une notification.
+    const toast = (m, o) => {
+        const u = UI(), mm = String(m).match(/^(\S+)\s+([\s\S]*)$/);
+        if (u && u.murmure) u.murmure(Object.assign({ icone: mm ? mm[1] : '✦', texte: mm ? mm[2] : String(m) }, o || {}));
+        else if (window.showAppToast) window.showAppToast(m);
+    };
     const idPerso = () => { try { return localStorage.getItem('dnd-active-char') || ''; } catch (e) { return ''; } };
     const calme = () => !!(UI() && UI().calme());
     const normal = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -110,11 +115,11 @@
         // La pleine lune, à un jour près, le soir venu
         if (Math.abs(phaseLune(t) - 14.77) < 1 && (h >= 19 || h < 5) && uneFoisParJour('lune')) {
             debloquer('pleine-lune');
-            setTimeout(() => toast('🌕 La lune est pleine ce soir. Les lycanthropes du groupe sont nerveux.'), 2600);
+            setTimeout(() => toast('🌕 La lune est pleine ce soir. Les lycanthropes du groupe sont nerveux.', { titre: 'Nuit de pleine lune' }), 2600);
         }
         if (t.getDay() === 5 && j === 13 && uneFoisParJour('treize')) {
             debloquer('vendredi13');
-            setTimeout(() => toast('🪞 Vendredi 13. Tes dés tremblent un peu.'), 2600);
+            setTimeout(() => toast('🪞 Vendredi 13. Tes dés tremblent un peu.', { titre: 'Vendredi 13' }), 2600);
         }
     }
     function poisson() {
@@ -197,18 +202,27 @@
     });
 
     // ---------- Le plateau de dés (script.js prévient à chaque lancer) ----------
+    // L'averse part dès le lancer : le plateau (executeRoll), les expressions et les
+    // macros (rollExpression) préviennent avec le nombre de dés. La fin du lancer
+    // du plateau ne sert plus qu'au 100 du d100.
+    let derniereAverse = 0;
+    function averse(nombre) {
+        if (nombre < 20 || Date.now() - derniereAverse < 1500) return;
+        derniereAverse = Date.now();
+        pluie(nombre);
+    }
+    document.addEventListener('des:lances', (e) => averse(parseInt(e.detail && e.detail.nombre, 10) || 0));
     document.addEventListener('plateau:lance', (e) => {
         const d = e.detail || {}, des = d.des || [], scores = d.scores || [];
-        if (des.length >= 20) pluie();
-        else if (des.length === 1 && des[0] === 100 && scores[0] === 100) toast('💯 Un 100 sur le d100. Centenaire !');
+        if (des.length === 1 && des[0] === 100 && scores[0] === 100) toast('💯 Un 100 sur le d100. Centenaire !');
     });
-    function pluie() {
-        toast('🎲 Vingt dés d’un coup ? Tu cherches un 20, toi.');
+    function pluie(nombre) {
+        toast(`🎲 ${nombre || 20} dés d’un coup ? Il pleut des dés !`, { titre: 'Averse de dés' });
         if (calme()) return;
         styles();
         const zone = document.createElement('div');
         zone.className = 'sx-pluie no-print'; zone.setAttribute('aria-hidden', 'true');
-        for (let i = 0; i < 26; i++) {
+        for (let i = 0, n = Math.min(60, (nombre || 20) + 8); i < n; i++) {
             const s = document.createElement('i');
             s.textContent = '🎲';
             s.style.left = (Math.random() * 100).toFixed(1) + '%';

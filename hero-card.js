@@ -1131,6 +1131,67 @@
     }
 
     // =====================================================
+    // L'ANNONCE — un nouveau style gagné
+    // Un cartouche aux couleurs du style : une petite carte arrive de dos, se
+    // retourne sur le héros dans son nouveau style et lâche des éclats ; à côté,
+    // la rareté, le nom, l'exploit, et de quoi aller voir la carte. Les annonces
+    // font la queue : jamais deux à la fois.
+    // =====================================================
+    const fileAnnonces = [];
+    let annonceEnCours = false;
+    function annoncer(id) {
+        if (!STYLES.some(x => x.id === id)) return;
+        fileAnnonces.push(id);
+        if (!annonceEnCours) annonceSuivante();
+    }
+    async function annonceSuivante() {
+        const id = fileAnnonces.shift();
+        if (!id) { annonceEnCours = false; return; }
+        annonceEnCours = true;
+        const x = styleParId(id), t = teintes(palette(id));
+        const el = document.createElement('div');
+        el.className = 'hc-annonce no-print r-' + (x.rarete || 'rare');
+        el.setAttribute('role', 'status');
+        el.style.setProperty('--a-or', rgb(t.or)); el.style.setProperty('--a-f1', rgb(t.f1)); el.style.setProperty('--a-f2', rgb(t.f2));
+        el.innerHTML = `<div class="hc-annonce-carte" aria-hidden="true"><div class="hc-annonce-pivot">
+                <canvas width="${Math.round(W * 0.2)}" height="${Math.round(H * 0.2)}"></canvas>
+                <div class="hc-annonce-dos"><img src="IMG/logo-256.png" alt=""></div>
+            </div></div>
+            <div class="hc-annonce-eclats" aria-hidden="true">${'<i></i>'.repeat(16)}</div>
+            <div class="hc-annonce-texte">
+                <span class="hc-annonce-sur">✦ Nouveau style de carte ✦</span>
+                <strong class="hc-annonce-nom">${esc(x.nom)}</strong>
+                <span class="hc-annonce-meta"><b class="hc-annonce-rarete">${esc(RARETES[x.rarete] || 'Rare')}</b>${x.sceau ? ' · ' + esc(x.sceau) : ''}</span>
+                <span class="hc-annonce-actions"><button type="button" class="hc-annonce-voir">🃏 Voir ma carte</button><button type="button" class="hc-annonce-fermer" aria-label="Fermer">✕</button></span>
+            </div>`;
+        el.querySelectorAll('.hc-annonce-eclats i').forEach((i, k) => {
+            const a = (Math.PI * 2 * k) / 16, r = 60 + Math.random() * 60;
+            i.style.setProperty('--dx', Math.round(Math.cos(a) * r) + 'px');
+            i.style.setProperty('--dy', Math.round(Math.sin(a) * r) + 'px');
+        });
+        document.body.appendChild(el);
+        try {
+            const c = el.querySelector('canvas'), dc = donnees();
+            dessiner(c, dc, { style: id, devise: lire('dnd-hero-devise') || '', arme: 'auto', echelle: 0.2 }, await preparer(dc));
+        } catch (e) {}
+        void el.offsetWidth;
+        el.classList.add('entre');
+        let minuteurA = null;
+        const fermerA = () => {
+            clearTimeout(minuteurA);
+            if (el.classList.contains('sort')) return;
+            el.classList.add('sort');
+            setTimeout(() => { el.remove(); annonceSuivante(); }, 450);
+        };
+        const armerA = () => { clearTimeout(minuteurA); minuteurA = setTimeout(fermerA, 9000); };
+        el.addEventListener('pointerenter', () => clearTimeout(minuteurA));
+        el.addEventListener('pointerleave', armerA);
+        el.querySelector('.hc-annonce-fermer').addEventListener('click', fermerA);
+        el.querySelector('.hc-annonce-voir').addEventListener('click', () => { fermerA(); ouvrir({ style: id }); });
+        armerA();
+    }
+
+    // =====================================================
     // SORTIE DE L'IMAGE
     // =====================================================
     const nomFichier = () => 'heros-' + (d.nom || 'sans-nom').normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -1155,17 +1216,18 @@
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 4000);
         toast(`🃏 Carte enregistrée — ${cv.width} × ${cv.height} px`);
+        document.dispatchEvent(new CustomEvent('carte:exportee'));
     }
     async function partager() {
         const b = await enBlob(); if (!b) return;
         const f = new File([b], nomFichier(), { type: 'image/jpeg' });
-        try { await navigator.share({ files: [f], title: d.nom, text: d.nom + ' — Bones & Blades' }); }
+        try { await navigator.share({ files: [f], title: d.nom, text: d.nom + ' — Bones & Blades' }); document.dispatchEvent(new CustomEvent('carte:exportee')); }
         catch (e) { if (e && e.name !== 'AbortError') toast('Le partage a échoué — télécharge l’image à la place.'); }
     }
     async function copier() {
         // La promesse est confiée telle quelle à ClipboardItem : attendre le blob
         // avant faisait perdre le « geste utilisateur » sur Safari.
-        try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPngReduit() })]); toast('📋 Image copiée — colle-la dans Discord'); }
+        try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPngReduit() })]); toast('📋 Image copiée — colle-la dans Discord'); document.dispatchEvent(new CustomEvent('carte:exportee')); }
         catch (e) { toast('Copie impossible ici — télécharge l’image à la place.'); }
     }
 
@@ -1176,6 +1238,7 @@
     window.HeroCard = {
         open: ouvrir,
         ajouterStyles,
+        annoncer,
         /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */
         styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; }
     };
