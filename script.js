@@ -436,66 +436,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', (e) => { if (!settingsDropdown.classList.contains('hidden') && !e.target.closest('.settings-container')) { settingsDropdown.classList.add('hidden'); } });
     }
 
-    // Bouton ⌨️ du menu ☰ : ouvre l'éditeur de raccourcis du bon côté (MJ ou joueur).
-    // ⚠️ Câblé ICI, au niveau global : l'écran MJ s'ouvre depuis l'accueil (sans personnage actif),
-    // donc un câblage dans la branche « fiche » laisserait le bouton mort côté MJ.
+    // Bouton ⌨️ du menu ☰ : ouvre l'éditeur de raccourcis de la fiche.
+    // Câblé au niveau global : le bouton vit dans le menu ☰, présent aussi hors fiche.
     document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
         if (settingsDropdown) settingsDropdown.classList.add('hidden');
-        // (Renvoi vers les raccourcis de l'écran MJ retiré avec celui-ci — voir ecran-mj/README.md)
         if (window.__openPlayerShortcuts) { window.__openPlayerShortcuts(); return; }
-        if (window.showAppToast) window.showAppToast('Ouvre une fiche ou l\'écran du MJ pour régler les raccourcis.', '#7a6050');
+        if (window.showAppToast) window.showAppToast('Ouvre une fiche pour régler les raccourcis.', '#7a6050');
     });
-
-    // ==========================================
-    // SESSION DE JEU (côté joueur) — UI du menu ☰
-    // ==========================================
-    (function wirePlayerSessionUI() {
-        const codeInput = document.getElementById('session-code-input');
-        const btnJoin   = document.getElementById('btn-join-session');
-        const btnLeave  = document.getElementById('btn-leave-session');
-        const msgEl     = document.getElementById('session-join-msg');
-        const boxDisc   = document.getElementById('player-session-disconnected');
-        const boxConn   = document.getElementById('player-session-connected');
-        const codeShow  = document.getElementById('session-current-code');
-        if (!btnJoin || !boxDisc || !boxConn) return;
-
-        function setMsg(text, color) { if (msgEl) { msgEl.textContent = text || ''; msgEl.style.color = color || '#777'; } }
-        function renderState(s) {
-            const connected = !!(s && s.connected);
-            boxDisc.classList.toggle('hidden', connected);
-            boxConn.classList.toggle('hidden', !connected);
-            if (connected && codeShow) codeShow.textContent = s.code || '';
-            if (!connected) setMsg('');
-        }
-
-        document.addEventListener('playersession:change', (e) => renderState(e.detail));
-        if (window.PlayerSession) renderState(window.PlayerSession.getState());
-
-        btnJoin.addEventListener('click', async () => {
-            const code = (codeInput.value || '').toUpperCase().trim();
-            if (!code) { setMsg('Entre un code.', '#c0392b'); return; }
-            if (!ACTIVE_CHAR_ID) { setMsg("Ouvre d'abord une fiche de personnage.", '#c0392b'); return; }
-            if (!window.SupaAuth || !window.SupaAuth.currentUser) { setMsg('Connecte-toi pour rejoindre.', '#c0392b'); return; }
-            btnJoin.disabled = true; setMsg('Connexion…', '#777');
-            try {
-                await window.PlayerSession.join(code);
-                codeInput.value = '';
-            } catch (err) {
-                const m = String((err && (err.message || err.code)) || err);
-                if (m.includes('SESSION_NOT_FOUND'))      setMsg('Code invalide ou session fermée.', '#c0392b');
-                else if (m.includes('AUCUNE_FICHE'))      setMsg("Ouvre d'abord une fiche.", '#c0392b');
-                else if (m.includes('NON_CONNECTE'))      setMsg('Connecte-toi pour rejoindre.', '#c0392b');
-                else if (m.includes('CODE_INVALIDE'))     setMsg('Code à 6 caractères attendu.', '#c0392b');
-                else                                       setMsg('Échec : ' + m, '#c0392b');
-            } finally { btnJoin.disabled = false; }
-        });
-
-        if (codeInput) codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); btnJoin.click(); } });
-        if (btnLeave) btnLeave.addEventListener('click', async () => {
-            btnLeave.disabled = true;
-            try { await window.PlayerSession.leave(); } finally { btnLeave.disabled = false; }
-        });
-    })();
 
     // Export / import d'UNE fiche : le format vit dans sheet-io.js, l'écran
     // aussi. Ici on ne fait qu'ouvrir la fenêtre — et on garde les deux entrées
@@ -1432,8 +1379,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = rollExpression(expr);
             if (res.error) { out.innerHTML = `<span class="expr-err">⚠️ ${res.error}</span>`; return; }
             out.innerHTML = `<span class="expr-total">${res.total}</span><span class="expr-detail">${res.detail}</span>`;
-            // Partagé avec la table si connecté à une session
-            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll('🎲 ' + expr, res.total, res.detail, null);
             pushRollHistory('🎲 ' + expr, res.total, res.detail, null);
         }
         const exprInput = document.getElementById('expr-input');
@@ -1770,15 +1715,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (resultsBox) { resultsBox.innerHTML = resultsHTML; }
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
-            sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
+            consignerPoolRoll(poolSnapshot, poolTotal, finalScores);
         }
-        // Diffuse un lancer du PLATEAU DE DÉS à la table + célèbre un d20 naturel seul.
+        // Consigne un lancer du PLATEAU DE DÉS dans l'historique, et célèbre un d20 naturel seul.
         // Point de passage UNIQUE des deux chemins (3D et repli 2D) → aussi le hook de l'historique.
-        function sharePoolRoll(poolSnapshot, poolTotal, scores) {
+        function consignerPoolRoll(poolSnapshot, poolTotal, scores) {
             const nat = (poolSnapshot.length === 1 && poolSnapshot[0] === 20) ? scores[0] : null;
             const label = poolSnapshot.map(f => 'd' + f).join(' + ');
-            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, poolTotal, scores.join(' + '), nat);
-            if (window.TableFX && nat) { if (nat === 20) window.TableFX.crit(); else if (nat === 1) window.TableFX.fumble(); }
+            if (window.RollFX && nat) { if (nat === 20) window.RollFX.crit(); else if (nat === 1) window.RollFX.fumble(); }
             pushRollHistory('🎲 ' + label, poolTotal, scores.join(' + '), nat);
         }
 
@@ -1832,7 +1776,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
-            sharePoolRoll(poolSnapshot, poolTotal, finalScores);   // partagé avec la table (si en session)
+            consignerPoolRoll(poolSnapshot, poolTotal, finalScores);
         }
 
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
@@ -1897,10 +1841,9 @@ document.addEventListener('DOMContentLoaded', () => {
             quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`;
             quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
             clearTimeout(quickToast._t); quickToast._t = setTimeout(() => { quickToast.classList.add('hidden'); }, 4000);
-            // Partagé avec la table si connecté à une session (case 🎲 du panneau ⚔️) + célébration critique
+            // Célébration d'un 20 ou d'un 1 naturel, puis historique
             const advTxt = advMode === 'adv' ? ' (avantage)' : (advMode === 'dis' ? ' (désavantage)' : '');
-            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
-            if (window.TableFX) { if (finalRoll === 20) window.TableFX.crit(); else if (finalRoll === 1) window.TableFX.fumble(); }
+            if (window.RollFX) { if (finalRoll === 20) window.RollFX.crit(); else if (finalRoll === 1) window.RollFX.fumble(); }
             pushRollHistory(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
         }
 
@@ -1959,7 +1902,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 let formula = macroBtn.getAttribute('data-formula'); let name = macroBtn.getAttribute('data-name'); let total = 0; let rolls = []; let parts = formula.replace(/\s+/g, '').split(/(?=[+-])/); if(parts[0] && !parts[0].startsWith('+') && !parts[0].startsWith('-')) parts[0] = '+' + parts[0];
                 parts.forEach(part => { if(!part) return; let sign = part.startsWith('-') ? -1 : 1; part = part.substring(1); if(part.includes('d')) { let [count, faces] = part.split('d'); count = parseInt(count) || 1; faces = parseInt(faces); for(let i=0; i<count; i++) { let r = Math.floor(Math.random() * faces) + 1; total += (r * sign); rolls.push(`${sign < 0 ? '-' : '+'}${r}`); } } else { let val = parseInt(part); if(!isNaN(val)) { total += (val * sign); rolls.push(`${sign < 0 ? '-' : '+'}${val}`); } } });
                 if(quickToast) { quickToast.innerHTML = `<span style="font-size:1rem;">${name}</span><br>= <span style="color:#f1c40f; font-size:2rem;">${total}</span> <br><span style="font-size:0.8rem; color:#ccc;">(${rolls.join(' ')})</span>`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4500); }
-                if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(name || formula, total, rolls.join(' '));   // partagé avec la table
             }
         });
 
@@ -3984,7 +3926,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = rollExpression(atk.dmg);
             if (res.error) { if (window.showAppToast) window.showAppToast('⚠️ ' + res.error, '#c0392b'); return; }
             const label = (c.name || 'Compagnon') + ' — ' + (atk.name || 'attaque') + ' (dégâts)';
-            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, res.total, res.detail, null);
             pushRollHistory(label, res.total, res.detail, null);
             if (window.showAppToast) window.showAppToast('💥 ' + res.total + ' dégâts');
         }
@@ -4304,7 +4245,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const label = '✨ ' + sp.name;
                 const detail = nat != null ? `attaque ${total} (d20 : ${nat})` : `dégâts ${total}`;
                 pushRollHistory(label, total, detail, nat);
-                if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, total, detail, nat);
             }
             renderGrimoire();
         }
@@ -5224,15 +5164,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(quickToast._t);
                 quickToast._t = setTimeout(() => quickToast.classList.add('hidden'), 5200);
             }
-            // Historique + partage avec la table, comme un jet de caractéristique
+            // Historique, comme un jet de caractéristique
             const label = '⚔️ ' + atk.name;
             const parts = [];
             if (r.hitTotal != null) parts.push(`toucher ${r.hitTotal} (d20 : ${r.nat})`);
             if (r.dmg) parts.push(`dégâts ${r.dmg.total}${r.crit ? ' (critique)' : ''}`);
             const total = r.hitTotal != null ? r.hitTotal : (r.dmg ? r.dmg.total : 0);
             pushRollHistory(label, total, parts.join(' · '), r.nat);
-            if (window.PlayerSession && window.PlayerSession.shareRoll) window.PlayerSession.shareRoll(label, total, parts.join(' · '), r.nat);
-            if (window.TableFX) { if (r.nat === 20) window.TableFX.crit(); else if (r.nat === 1) window.TableFX.fumble(); }
+            if (window.RollFX) { if (r.nat === 20) window.RollFX.crit(); else if (r.nat === 1) window.RollFX.fumble(); }
         }
 
         // Une ligne d'équipement ne montre que ce qui est rempli. Une corde de
@@ -6276,6 +6215,19 @@ document.addEventListener('DOMContentLoaded', () => {
             setStore('dnd-attacks', attacks); renderAttacks(); atkModal.classList.add('hidden');
         });
 
+        // ---------- Pour la carte de héros (hero-card.js) ----------
+        // Lecture seule. Le calcul du toucher et des dégâts vit dans cette
+        // fermeture : la carte affiche donc exactement ce que la fiche joue.
+        window.HeroCardArmes = () => attacks.map((a, i) => ({
+            i, nom: a.name || '', magique: isMagicWeapon(a), rarete: a.rarity || '',
+            toucher: a.mode === 'save' ? 'DD ' + (a.saveDC || a.bonus || '—') : (hitBonusOf(a) || ''),
+            degats: damageExprOf(a, !!a.twoHanded && hasVal(a.dmg2)) || '', type: a.dmgType || '',
+            extras: extraDamages(a).map(x => (x.dice + ' ' + (x.type || '')).trim()),
+            bottes: bottesDe(a).map(k => BOTTES[k].nom),
+            pinned: !!a.pinned, equipped: !!a.equipped
+        }));
+        window.HeroCardAvatar = () => getStore('dnd-avatar', false);
+
         window.deleteAttack = (index) => { window.deleteWithUndo(attacks, index, attacks[index].name || 'cette attaque', () => setStore('dnd-attacks', attacks), renderAttacks); };
         window.moveAttackUp = (index) => { if(moveWithinFilter(attacks, index, -1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } };
         window.moveAttackDown = (index) => { if(moveWithinFilter(attacks, index, 1, a => activeAtkTab === 'Tout' ? true : (a.category || 'Général') === activeAtkTab)) { setStore('dnd-attacks', attacks); renderAttacks(); } };
@@ -6507,24 +6459,6 @@ document.addEventListener('DOMContentLoaded', () => {
             nameEl.value = ''; document.getElementById('inv-qty').value = ''; document.getElementById('inv-weight').value = '';
             renderInventory(); nameEl.focus();
         }
-
-        // Réception d'un objet via le troc MJ (session.js) → ajout au sac
-        window.PlayerInventory = {
-            add(item) {
-                if (!item || !item.name) return false;
-                inventory.push({
-                    name: String(item.name),
-                    qty: parseInt(item.qty) || 1,
-                    weight: (item.weight != null && String(item.weight).trim()) ? String(item.weight).trim() : '-',
-                    category: item.category || 'Cadeaux',
-                    desc: item.desc || '',
-                    pinned: false
-                });
-                setStore('dnd-inventory', inventory);
-                renderInventory();
-                return true;
-            }
-        };
 
         if(document.getElementById('btn-add-inventory')) document.getElementById('btn-add-inventory').addEventListener('click', addInventoryFromInputs);
         ['inv-name', 'inv-qty', 'inv-weight'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); addInventoryFromInputs(); } }); });
@@ -7050,7 +6984,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             const appScreen = document.getElementById('app-screen');
-            if (!appScreen || appScreen.classList.contains('hidden') || document.body.classList.contains('gm-active')) return;
+            if (!appScreen || appScreen.classList.contains('hidden')) return;
             // Échap : ferme le portrait plein écran / la fenêtre ouverte la plus haute
             if (e.key === 'Escape') {
                 const fs = document.getElementById('portrait-fullscreen');

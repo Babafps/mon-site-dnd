@@ -1,7 +1,7 @@
 {
-  "name": "Bones & Blades — Fiches & Table virtuelle",
+  "name": "Bones & Blades — Fiches de personnage",
   "short_name": "Bones & Blades",
-  "description": "Fiche de personnage interactive et écran du Maître (cartes, combats, sessions en ligne).",
+  "description": "Fiche de personnage D&D 5e interactive, avec règles intégrées et dés 3D.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -22,7 +22,7 @@ inertes.
 
 | Dossier | Contenu |
 |---|---|
-| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `session.js` (temps réel joueur), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création)… |
+| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` (carte de héros à partager), `effets.js` (effets de dés et voiles d'état)… |
 | `data/srd/` | La base de règles générée — sorts, monstres, objets, équipement, classes, races, états. Voir son `README.md`. |
 | `tools/srd/` | Les scripts Python qui régénèrent `data/srd/` depuis le PDF officiel. |
 | `docs/` | Migration Supabase et cahier des charges en cours. |
@@ -33,19 +33,10 @@ inertes.
 **Supabase** — l'URL et la clé sont en tête de `auth.js`. La clé est de type
 `publishable`, prévue pour être publique : ce sont les politiques **Row Level
 Security** qui protègent les données, pas la clé. Vérifie qu'elles sont actives
-sur `characters`, `character_data` et les tables de session.
+sur `characters` et `character_data`.
 
 La migration `docs/Archivage et ordre des personnages.sql` est **facultative** :
 sans elle, l'archivage et l'ordre des personnages restent locaux au navigateur.
-
-**Interface Maître du Jeu** — désactivée par défaut. Un seul interrupteur, en
-tête d'`index.html` :
-
-```js
-window.GM_ENABLED = false;   // true = onglet MJ + chargement de gm-screen.js/css
-```
-
-À `false`, les 508 Ko de l'écran MJ ne sont même pas téléchargés.
 
 ## Régénérer la base de règles
 

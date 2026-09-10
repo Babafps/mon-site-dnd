@@ -144,9 +144,9 @@
                     '[À COMPLÉTER : le prestataire de paiement, quand les options payantes existeront] ;',
                     'les autorités, uniquement sur réquisition légale.'
                 ] },
-                { p: 'Si vous partagez une fiche avec votre table, ou si vous rejoignez une session de jeu, '
-                   + 'les informations que vous choisissez de montrer deviennent visibles par les autres '
-                   + 'participants. C’est vous qui décidez ce que vous partagez.' },
+                { p: 'Si vous partagez une fiche — un export, une carte de héros —, les informations que vous '
+                   + 'choisissez de montrer deviennent visibles par les personnes à qui vous l’envoyez. '
+                   + 'C’est vous qui décidez ce que vous partagez.' },
 
                 { h: 'Où sont les données' },
                 { p: 'Les données sont hébergées dans la région [À COMPLÉTER : région Supabase du projet]. '

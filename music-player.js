@@ -26,11 +26,6 @@
     let ytReadyTimeout = null;
     let seekInterval = null;
     let dragSrcIndex = -1;
-    // Rôle : 'free' = contrôle total (défaut / MJ) ; 'player' = volume seul (joueur en session)
-    let role = 'free';
-    // Diffusion de la lecture MJ → joueurs (défini par l'écran MJ quand une session est ouverte)
-    let broadcastFn = null;
-    let lastRemoteKey = null;   // piste distante en cours côté joueur (anti-rechargement)
 
     // DOM
     let audioEl, seekBar, volumeBar;
@@ -231,128 +226,6 @@
         window.addEventListener('beforeunload', () => {
             if (currentType === 'youtube' && ytPlayer && ytPlayerReady) ytPlayer.stopVideo();
         });
-
-        applyRole();
-    }
-
-    // =====================================================
-    // RÔLE (permissions audio) — joueur = volume seul
-    // =====================================================
-    function applyRole() {
-        if (!container) return;
-        const restricted = role === 'player';
-        container.classList.toggle('music-restricted', restricted);
-        // Boutons de transport / playlist désactivés pour les joueurs
-        [playBtn, prevBtn, nextBtn, loopBtn, shuffleBtn, queueToggleBtn].forEach(b => { if (b) b.disabled = restricted; });
-        ['music-btn-add-from-queue', 'music-btn-add-url'].forEach(id => { const e = document.getElementById(id); if (e) e.disabled = restricted; });
-        const fileInput = document.getElementById('music-file-input'); if (fileInput) fileInput.disabled = restricted;
-        if (restricted) { if (queuePanel) queuePanel.classList.add('hidden'); if (addPanel) addPanel.classList.add('hidden'); }
-    }
-
-    // Joue un effet sonore ponctuel (soundboard) sans perturber la file en cours.
-    // Respecte le volume / mute local choisi par l'utilisateur.
-    function playSfx(url) {
-        if (!url) return;
-        try { const a = new Audio(url); a.volume = isMuted ? 0 : volume; a.play().catch(() => {}); } catch (e) {}
-    }
-
-    // =====================================================
-    // SOUNDBOARD NATIF : effets synthétisés (Web Audio API), sans fichier
-    // Le même nom produit le même son chez le MJ et les joueurs.
-    // =====================================================
-    let sfxCtx = null;
-    function sfxContext() {
-        try { if (!sfxCtx) sfxCtx = new (window.AudioContext || window.webkitAudioContext)(); if (sfxCtx.state === 'suspended') sfxCtx.resume(); } catch (e) { return null; }
-        return sfxCtx;
-    }
-    function sfxNoiseBuf(ctx, dur) {
-        const n = Math.max(1, Math.floor(ctx.sampleRate * dur));
-        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-        const d = buf.getChannelData(0);
-        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-        return buf;
-    }
-    function sfxTone(ctx, master, o) {
-        const t0 = ctx.currentTime + (o.t || 0), osc = ctx.createOscillator(), g = ctx.createGain();
-        osc.type = o.type || 'sine';
-        osc.frequency.setValueAtTime(o.f0, t0);
-        if (o.f1) osc.frequency.exponentialRampToValueAtTime(o.f1, t0 + o.dur);
-        g.gain.setValueAtTime(0.0001, t0);
-        g.gain.exponentialRampToValueAtTime(o.gain || 0.3, t0 + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
-        osc.connect(g); g.connect(master); osc.start(t0); osc.stop(t0 + o.dur + 0.05);
-    }
-    function sfxNoise(ctx, master, o) {
-        const t0 = ctx.currentTime + (o.t || 0), src = ctx.createBufferSource(); src.buffer = sfxNoiseBuf(ctx, o.dur);
-        const f = ctx.createBiquadFilter(); f.type = o.filter || 'bandpass'; f.frequency.value = o.freq || 1200; if (o.q) f.Q.value = o.q;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(o.gain || 0.4, t0);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
-        src.connect(f); f.connect(g); g.connect(master); src.start(t0); src.stop(t0 + o.dur + 0.05);
-    }
-    function playBuiltinSfx(name) {
-        const ctx = sfxContext(); if (!ctx) return;
-        const master = ctx.createGain(); master.gain.value = (isMuted ? 0 : volume) * 0.9; master.connect(ctx.destination);
-        switch (name) {
-            case 'sword': sfxNoise(ctx, master, { filter: 'highpass', freq: 2500, dur: 0.18, gain: 0.5 }); sfxTone(ctx, master, { type: 'square', f0: 1800, f1: 600, dur: 0.12, gain: 0.12 }); break;
-            case 'arrow': sfxNoise(ctx, master, { filter: 'bandpass', freq: 1800, q: 1.2, dur: 0.3, gain: 0.35 }); break;
-            case 'magic': sfxTone(ctx, master, { f0: 500, f1: 1600, dur: 0.5, gain: 0.25 }); sfxTone(ctx, master, { f0: 760, f1: 2100, dur: 0.5, gain: 0.15, t: 0.04 }); break;
-            case 'fire': sfxNoise(ctx, master, { filter: 'lowpass', freq: 700, dur: 0.6, gain: 0.6 }); sfxTone(ctx, master, { type: 'sawtooth', f0: 90, f1: 40, dur: 0.5, gain: 0.2 }); break;
-            case 'thunder': sfxNoise(ctx, master, { filter: 'lowpass', freq: 300, dur: 1.1, gain: 0.7 }); sfxTone(ctx, master, { f0: 60, f1: 30, dur: 1.0, gain: 0.25 }); break;
-            case 'heal': sfxTone(ctx, master, { f0: 660, dur: 0.5, gain: 0.25 }); sfxTone(ctx, master, { f0: 880, dur: 0.6, gain: 0.2, t: 0.12 }); sfxTone(ctx, master, { f0: 1320, dur: 0.6, gain: 0.12, t: 0.24 }); break;
-            case 'bell': sfxTone(ctx, master, { f0: 880, dur: 1.2, gain: 0.3 }); sfxTone(ctx, master, { f0: 2640, dur: 1.0, gain: 0.08 }); break;
-            case 'horn': sfxTone(ctx, master, { type: 'sawtooth', f0: 160, dur: 0.7, gain: 0.3 }); sfxTone(ctx, master, { type: 'sawtooth', f0: 240, dur: 0.7, gain: 0.2, t: 0.02 }); break;
-            case 'coins': for (let i = 0; i < 5; i++) sfxTone(ctx, master, { type: 'triangle', f0: 1800 + Math.random() * 900, dur: 0.1, gain: 0.18, t: i * 0.07 }); break;
-            case 'dice': for (let i = 0; i < 6; i++) sfxNoise(ctx, master, { filter: 'highpass', freq: 3000, dur: 0.05, gain: 0.25, t: i * 0.05 }); break;
-            case 'door': sfxTone(ctx, master, { type: 'sawtooth', f0: 120, f1: 70, dur: 0.8, gain: 0.18 }); sfxNoise(ctx, master, { filter: 'bandpass', freq: 500, dur: 0.8, gain: 0.12 }); break;
-            case 'tavern': {
-                const src = ctx.createBufferSource(); src.buffer = sfxNoiseBuf(ctx, 1.8);
-                const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 0.6;
-                const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.linearRampToValueAtTime(0.16, ctx.currentTime + 0.3); g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 1.8);
-                src.connect(f); f.connect(g); g.connect(master); src.start(); src.stop(ctx.currentTime + 1.9);
-                for (let i = 0; i < 4; i++) sfxTone(ctx, master, { type: 'triangle', f0: 200 + Math.random() * 200, dur: 0.2, gain: 0.05, t: 0.2 + i * 0.35 }); break;
-            }
-            default: sfxTone(ctx, master, { f0: 600, dur: 0.2, gain: 0.2 });
-        }
-    }
-
-    // =====================================================
-    // DIFFUSION (MJ → joueurs) : synchronisation de la lecture
-    // =====================================================
-    function trackDescriptor(t) { return t ? { id: t.id, type: t.type, src: t.src || null, videoId: t.videoId || null, title: t.title, badge: t.badge } : null; }
-    function curTime() {
-        if (currentType === 'audio') return audioEl ? (audioEl.currentTime || 0) : 0;
-        if (currentType === 'youtube' && ytPlayerReady) return ytPlayer.getCurrentTime() || 0;
-        return 0;
-    }
-    function seekSeconds(s) {
-        if (currentType === 'audio' && audioEl && audioEl.duration) audioEl.currentTime = Math.min(s, audioEl.duration);
-        else if (currentType === 'youtube' && ytPlayerReady) ytPlayer.seekTo(s, true);
-    }
-    // Émet l'état de lecture courant (seul le MJ, qui possède un broadcastFn, émet)
-    function emitMusic(action) {
-        if (!broadcastFn || role === 'player') return;
-        const t = (currentIndex >= 0 && currentIndex < queue.length) ? queue[currentIndex] : null;
-        try { broadcastFn({ action: action, track: trackDescriptor(t), time: curTime(), ts: Date.now() }); } catch (e) {}
-    }
-    // Applique l'état reçu du MJ (côté joueur)
-    function applyRemoteMusic(p) {
-        if (!p) return;
-        if (p.action === 'stop' || !p.track) { stopAllPlayback(); lastRemoteKey = null; return; }
-        setVisible(true, false);
-        const key = p.track.type === 'youtube' ? ('yt:' + p.track.videoId) : ('au:' + p.track.src);
-        if (key !== lastRemoteKey) {
-            lastRemoteKey = key;
-            queue = [{ id: p.track.id || uid(), type: p.track.type, src: p.track.src, videoId: p.track.videoId, title: p.track.title || 'Ambiance du MJ', badge: p.track.badge || '🎬 MJ' }];
-            currentIndex = -1;
-            playAtIndex(0);
-            if (p.time) setTimeout(() => seekSeconds(p.time), p.track.type === 'youtube' ? 1200 : 700);
-            if (p.action === 'pause') setTimeout(() => { if (currentType === 'audio') pauseAudio(); else if (ytPlayerReady) ytPlayer.pauseVideo(); }, 350);
-        } else {
-            if (p.action === 'pause') { if (currentType === 'audio') pauseAudio(); else if (ytPlayerReady) ytPlayer.pauseVideo(); }
-            else if (p.action === 'play') { if (currentType === 'audio') resumeAudio(); else if (ytPlayerReady && ytPlayer.playVideo) ytPlayer.playVideo(); }
-            if (p.time != null && Math.abs(curTime() - p.time) > 2.5) seekSeconds(p.time);
-        }
     }
 
     // =====================================================
@@ -382,13 +255,11 @@
                         playBtn.textContent = '⏸';
                         playerBar.classList.add('music-playing');
                         startYTSeekPoll();
-                        emitMusic('play');
                     } else if (ev.data === YT.PlayerState.PAUSED) {
                         isPlaying = false;
                         playBtn.textContent = '▶';
                         playerBar.classList.remove('music-playing');
                         stopSeekPoll();
-                        emitMusic('pause');
                     } else if (ev.data === YT.PlayerState.ENDED) {
                         stopSeekPoll();
                         onTrackEnded();
@@ -482,7 +353,6 @@
         isPlaying = false;
         playBtn.textContent = '▶';
         playerBar.classList.remove('music-playing');
-        emitMusic('pause');
     }
 
     function resumeAudio() {
@@ -490,7 +360,6 @@
         isPlaying = true;
         playBtn.textContent = '⏸';
         playerBar.classList.add('music-playing');
-        emitMusic('play');
     }
 
     function prevTrack() {
@@ -581,7 +450,6 @@
                 showToast('⚠️ Impossible de lire ce fichier.', '#c0392b');
             });
         }
-        emitMusic('play');
     }
 
     function stopAllPlayback() {
@@ -602,7 +470,6 @@
         } else if (currentType === 'youtube' && ytPlayerReady) {
             ytPlayer.seekTo(pct * (ytPlayer.getDuration() || 0), true);
         }
-        emitMusic('seek');
     }
 
     function applyVolume() {
@@ -830,67 +697,8 @@
             if (container.style.display === 'none') { setVisible(true, true); showPlayer(); return; }
             if (playerBar.classList.contains('music-bar-hidden')) showPlayer(); else hidePlayer();
         },
-        // Joue immédiatement une URL (YouTube ou audio direct) — utilisé par les scènes MJ
-        playUrl: (url, title) => playUrl(url, title),
-        // Joue une playlist d'ambiance en boucle (liste d'URL ou {url,title}) — scènes MJ (Lot 38)
-        playPlaylist: (items, title) => playPlaylist(items, title),
-        // Effet sonore ponctuel (soundboard MJ → joueurs)
-        playSfx: (url) => playSfx(url),
-        playBuiltinSfx: (name) => playBuiltinSfx(name),
-        // Permissions : 'free' (contrôle total) | 'player' (volume seul)
-        setRole: (r) => { role = (r === 'player') ? 'player' : 'free'; applyRole(); },
-        getRole: () => role,
-        getVolume: () => (isMuted ? 0 : volume),
-        // Diffusion MJ → joueurs
-        setBroadcaster: (fn) => { broadcastFn = fn || null; },
-        applyRemoteMusic: (p) => applyRemoteMusic(p),
-        resync: () => emitMusic(isPlaying ? 'play' : 'pause')
+        getVolume: () => (isMuted ? 0 : volume)
     };
-
-    // Ajoute une piste depuis une URL et la lance aussitôt (ambiance de scène diffusée)
-    function playUrl(url, title) {
-        if (!url) return;
-        const ytId = extractYTId(url);
-        let track;
-        if (ytId) {
-            track = { id: uid(), type: 'youtube', videoId: ytId, title: title || ('YouTube – ' + ytId), badge: '▶ YouTube' };
-            loadYTApi();
-        } else {
-            const ext = url.split('?')[0].split('#')[0].split('.').pop().toLowerCase();
-            track = { id: uid(), type: 'audio', src: url, title: title || 'Ambiance', badge: ext ? ext.toUpperCase() : '🔗 URL' };
-        }
-        queue.push(track);
-        renderQueue();
-        if (isShuffle) buildShuffleOrder();
-        setVisible(true, true);
-        playAtIndex(queue.length - 1);
-    }
-
-    // Charge une LISTE d'URLs comme playlist d'ambiance (remplace la file) et la joue en boucle. (Lot 38)
-    // items = tableau d'URL (string) ou d'objets { url, title }.
-    function playPlaylist(items, title) {
-        if (!Array.isArray(items) || !items.length) return;
-        const tracks = items.map(it => {
-            const url = (typeof it === 'string') ? it : (it && it.url);
-            const t = (it && typeof it === 'object' && it.title) ? it.title : '';
-            if (!url) return null;
-            const ytId = extractYTId(url);
-            if (ytId) { loadYTApi(); return { id: uid(), type: 'youtube', videoId: ytId, title: t || ('YouTube – ' + ytId), badge: '▶ YouTube' }; }
-            const ext = url.split('?')[0].split('#')[0].split('.').pop().toLowerCase();
-            return { id: uid(), type: 'audio', src: url, title: t || (title || 'Ambiance'), badge: ext ? ext.toUpperCase() : '🔗 URL' };
-        }).filter(Boolean);
-        if (!tracks.length) return;
-        queue = tracks;                 // la playlist de scène REMPLACE la file courante
-        currentIndex = -1;
-        // Ambiance = boucle sur toute la playlist (le morceau enchaîne sur le suivant, puis reboucle)
-        loopMode = 1;
-        if (loopBtn) { loopBtn.textContent = '🔁'; loopBtn.title = 'Boucle — tout'; loopBtn.classList.add('active'); }
-        if (currentType === 'audio') audioEl.loop = false;
-        if (isShuffle) buildShuffleOrder();
-        renderQueue();
-        setVisible(true, true);
-        playAtIndex(0);
-    }
 
     // =====================================================
     // AJOUT DE MUSIQUE
@@ -1025,7 +833,7 @@
         if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
-    // Édition inline du nom d'une piste (le MJ organise sa playlist comme il veut).
+    // Édition inline du nom d'une piste (chacun organise sa playlist comme il veut).
     function beginTrackRename(nameEl, idx) {
         if (!nameEl || isNaN(idx) || !queue[idx] || nameEl.querySelector('input')) return;
         const original = queue[idx].title || '';

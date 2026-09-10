@@ -76,7 +76,7 @@
             ],
             tips: [
                 'Chaque jet est conservé dans l’historique, avec son détail.',
-                'Si tu es connecté à la session de ton MJ, tes jets lui sont envoyés en direct.'
+                'Un 20 naturel fait pleuvoir des étincelles d’or ; un 1 naturel fait trembler l’écran.'
             ]
         },
         {

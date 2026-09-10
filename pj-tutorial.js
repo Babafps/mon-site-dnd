@@ -680,12 +680,12 @@
             { icon: '📜', title: 'Voici ta fiche !', text: 'Petite visite guidée (1 minute). Tout se sauvegarde automatiquement pendant que tu écris. Tu peux revoir cette visite à tout moment via le menu ☰ en haut à droite.' },
             { sel: '#widget-hp', icon: '❤️', title: 'Tes points de vie', text: 'La barre suit tes PV. Saisis un montant puis 💥 (dégâts) ou 💚 (soins) — les PV temporaires ont leur propre case.' },
             { sel: '#widget-stats', icon: '💪', title: 'Caractéristiques & compétences', text: 'Clique sur le NOM d\'une caractéristique ou d\'une compétence pour lancer le d20 correspondant ! Le bouton ○ devant chaque compétence = maîtrise (●) puis expertise (★) en double-cliquant.' },
-            { sel: '#widget-combat', icon: '🛡️', title: 'Le combat', text: 'CA, initiative, vitesse… tout est là. Ces valeurs sont visibles par ton MJ quand tu es connecté à sa session.' },
+            { sel: '#widget-combat', icon: '🛡️', title: 'Le combat', text: 'CA, initiative, vitesse… tout est là.' },
             { sel: '#widget-attacks', icon: '⚔️', title: 'Tes attaques', text: 'Ajoute tes armes et sorts d\'attaque : un clic lance le jet complet (toucher + dégâts), rangeables par onglets.' },
             { sel: '#widget-spells', icon: '✨', title: 'Tes sorts', text: 'Ton grimoire : ajoute tes sorts, prépare-les, suis tes emplacements. Les caractéristiques de magie (DD, bonus) se calculent automatiquement.' },
             { sel: '#widget-inventory', icon: '🎒', title: 'Ton sac à dos', text: 'Objets, pièces, encombrement… avec des onglets personnalisables pour t\'organiser.' },
-            { sel: '#widget-rests', icon: '🌙', title: 'Les repos', text: 'Repos court (dés de vie) ou long (récupération complète) en un clic. Ton MJ est prévenu si tu es en session.' },
-            { sel: '#btn-settings-toggle', icon: '☰', title: 'Le menu', text: 'Thème et couleurs, disposition de la fiche, connexion à la session de ton MJ (code à 6 caractères)… et le bouton pour REVOIR ce tutoriel. Bonne aventure ! 🎲' }
+            { sel: '#widget-rests', icon: '🌙', title: 'Les repos', text: 'Repos court (dés de vie) ou long (récupération complète) en un clic.' },
+            { sel: '#btn-settings-toggle', icon: '☰', title: 'Le menu', text: 'Thème et couleurs, disposition de la fiche, sauvegardes, carte de héros… et le bouton pour REVOIR ce tutoriel. Bonne aventure ! 🎲' }
         ];
         // On ne garde que les étapes dont la cible existe et est visible (selon la disposition)
         return all.filter(s => !s.sel || (document.querySelector(s.sel) && document.querySelector(s.sel).offsetParent !== null));

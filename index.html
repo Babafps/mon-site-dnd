@@ -75,7 +75,7 @@
 <div class="settings-container no-print">
     <button id="btn-settings-toggle" class="btn-icon btn-hamburger" title="Menu des paramètres">☰</button>
     <div id="settings-dropdown" class="settings-dropdown hidden">
-        <details class="menu-cat"><summary>🧩 Ma fiche</summary><div class="menu-cat-body"><p class="menu-hint">Comment la fiche s'agence, et ce qui flotte par-dessus.</p><div class="player-only-setting">
+        <details class="menu-cat"><summary>🧩 Ma fiche</summary><div class="menu-cat-body"><p class="menu-hint">Comment la fiche s'agence, et ce qui flotte par-dessus.</p><button type="button" id="btn-menu-hero-card" class="btn-menu-item">🃏 Créer ma carte de héros</button><hr><div class="player-only-setting">
                     <label class="menu-label">Disposition de la fiche</label>
                     <select id="layout-selector" class="select-layout">
                         <option value="classic">📜 Mode Classique</option>
@@ -94,7 +94,7 @@
             </div></details><details class="menu-cat">
             <summary>🎨 Apparence</summary>
             <div class="menu-cat-body">
-                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-dark-mode"> 🌙 Mode nuit</label>
+                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-dark-mode"> 🌙 Mode nuit</label><label class="toggle-label menu-toggle" title="Un voile coloré recouvre l'écran quand ton personnage est empoisonné, aveuglé, effrayé, en feu…"><input type="checkbox" id="toggle-status-fx" checked> 💥 Effets d'état plein écran</label>
                 
                 <label class="menu-label">Couleurs</label>
                 <div class="menu-color"><label>Principale</label><input type="color" id="color-primary" value="#7A2828" class="color-picker"></div>
@@ -107,23 +107,6 @@
                 <button id="btn-change-bg" class="btn-menu-item">🖼️ Changer l'image de fond</button>
                 <button id="btn-reset-bg" class="btn-menu-item" style="color:var(--primary-hover);">↺ Supprimer l'image de fond</button>
                 <input type="file" id="bg-file-input" accept="image/*" class="hidden">
-            </div>
-        </details><details class="menu-cat player-only-setting">
-            <summary>🔗 Session de jeu</summary>
-            <div class="menu-cat-body">
-                <div id="player-session-disconnected">
-                    <p class="menu-hint">Entre le code à 6 caractères fourni par ton MJ pour qu'il suive ta fiche.</p>
-                    <div style="display:flex; gap:5px;">
-                        <input type="text" id="session-code-input" maxlength="6" placeholder="CODE" autocomplete="off" style="flex:1; min-width:0; text-transform:uppercase; letter-spacing:0.18em; font-family:monospace; font-weight:bold; text-align:center; padding:8px; border:1px solid var(--primary-color); border-radius:6px;">
-                        <button id="btn-join-session" class="btn-small" style="background:#2c3e50; flex-shrink:0;">Rejoindre</button>
-                    </div>
-                    <div id="session-join-msg" style="font-size:0.74rem; margin-top:5px;"></div>
-                </div>
-                <div id="player-session-connected" class="hidden" style="text-align:center; background:rgba(39,174,96,0.1); border:1px solid #27ae60; border-radius:8px; padding:8px; margin-top:4px;">
-                    <div style="font-size:0.8rem; color:#1e8449;">🟢 Connecté — ta fiche est partagée en direct</div>
-                    <div id="session-current-code" style="font-family:monospace; font-weight:bold; letter-spacing:0.18em; font-size:1.15rem; color:var(--primary-color); margin:3px 0;"></div>
-                    <button id="btn-leave-session" class="btn-small" style="background:#e74c3c; width:100%;">Quitter la session</button>
-                </div>
             </div>
         </details><details class="menu-cat">
             <summary>💾 Sauvegardes</summary>
@@ -367,7 +350,7 @@
             <div id="widget-calculator" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">🎲 Lanceur d'expression</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="qa-row no-print" style="margin-bottom:8px;"><input type="text" id="expr-input" class="qa-input qa-grow" placeholder="Entre une formule : 2d6+3, 8d6, 1d20+5…"><button id="btn-expr-roll" class="qa-add" title="Lancer l'expression">🎲</button></div><div id="expr-result" class="expr-result"></div></div></div></div>
             <div id="widget-quests" class="draggable-widget widget-full"><div class="dynamic-box"><div class="section-title-row collapsible-header"><label class="section-title">🗺️ Quêtes & PNJ</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="sub-section-head"><label class="sub-section-title">📜 Quêtes en cours</label><button id="btn-add-quest" class="btn-icon no-print">➕ Ajouter</button></div><div id="quests-list"></div><div class="sub-section-head"><label class="sub-section-title">👤 Registre des PNJ</label><button id="btn-add-npc" class="btn-icon no-print">➕ Ajouter</button></div><div id="npcs-list"></div></div></div></div>
             <div id="widget-notes" class="draggable-widget widget-full"><div><div class="dynamic-box full-width-notes"><div class="section-title-row collapsible-header"><label class="section-title">📋 Notes Rapides</label><div style="display:flex; gap:10px;"><button id="btn-add-quick-note" class="btn-icon no-print">➕ Ajouter</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content"><div id="quick-notes-list"></div></div></div><div class="dynamic-box full-width-notes"><div class="section-title-row collapsible-header"><label class="section-title">Journal</label><div style="display:flex; gap:10px;"><button id="btn-open-journal" class="btn-icon no-print">📕 Ouvrir</button><span class="collapse-icon no-print">▼</span></div></div><div class="collapsible-content add-form spell-form no-print"><input type="text" id="new-journal-title" placeholder="Titre (Ex: Rencontre avec le Roi)"><div id="new-journal-content" style="background: white; color: black; min-height: 150px; margin-bottom: 10px; border-radius: 4px;"></div><button id="btn-save-journal" class="btn-small" style="margin-top: 5px; width: 100%;">Sauvegarder ce chapitre</button></div></div></div></div>
-            <div id="widget-appearance" class="draggable-widget widget-full"><div class="dynamic-box appearance-box"><div class="section-title-row collapsible-header"><label class="section-title">Identité</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="avatar-upload-container"><label for="avatar-file-input" class="avatar-label"><img id="main-avatar-preview" src="" alt="Avatar" class="hidden"><span id="avatar-placeholder">📸 Portrait</span></label><input type="file" id="avatar-file-input" accept="image/*" class="hidden"></div><div class="avatar-actions no-print" style="text-align:center; display:flex; gap:6px; justify-content:center;"><button id="btn-change-avatar" class="btn-small" title="Choisir une autre photo">📸 Changer</button><button id="btn-recrop-avatar" class="btn-small" style="display:none;" title="Réajuster le zoom et le cadrage du portrait sans réimporter le fichier">✏️ Recadrer</button></div><div class="appearance-header" style="display: flex; gap: 15px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;"><label>Alignement :</label><input type="text" id="char-alignment" style="flex: 1; min-width: 150px;"><label>Langues :</label><input type="text" id="char-languages" placeholder="Commun, Elfique..." style="flex: 2; min-width: 200px;"></div><label style="font-weight:bold; color:#555; display:block; margin-bottom:4px;">Apparence :</label><textarea id="char-appearance" class="auto-expand" placeholder="Décris l'apparence physique..."></textarea><label style="font-weight:bold; color:#555; display:block; margin:10px 0 4px;">Histoire &amp; personnalité :</label><textarea id="char-backstory" class="auto-expand" placeholder="Histoire du personnage, traits de personnalité, idéaux, liens, défauts..."></textarea></div></div></div>
+            <div id="widget-appearance" class="draggable-widget widget-full"><div class="dynamic-box appearance-box"><div class="section-title-row collapsible-header"><label class="section-title">Identité</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="avatar-upload-container"><label for="avatar-file-input" class="avatar-label"><img id="main-avatar-preview" src="" alt="Avatar" class="hidden"><span id="avatar-placeholder">📸 Portrait</span></label><input type="file" id="avatar-file-input" accept="image/*" class="hidden"></div><div class="avatar-actions no-print" style="text-align:center; display:flex; gap:6px; justify-content:center;"><button id="btn-change-avatar" class="btn-small" title="Choisir une autre photo">📸 Changer</button><button id="btn-recrop-avatar" class="btn-small" style="display:none;" title="Réajuster le zoom et le cadrage du portrait sans réimporter le fichier">✏️ Recadrer</button><button id="btn-hero-card" class="btn-small" title="Créer une image de ton héros à partager">🃏 Carte de héros</button></div><div class="appearance-header" style="display: flex; gap: 15px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;"><label>Alignement :</label><input type="text" id="char-alignment" style="flex: 1; min-width: 150px;"><label>Langues :</label><input type="text" id="char-languages" placeholder="Commun, Elfique..." style="flex: 2; min-width: 200px;"></div><label style="font-weight:bold; color:#555; display:block; margin-bottom:4px;">Apparence :</label><textarea id="char-appearance" class="auto-expand" placeholder="Décris l'apparence physique..."></textarea><label style="font-weight:bold; color:#555; display:block; margin:10px 0 4px;">Histoire &amp; personnalité :</label><textarea id="char-backstory" class="auto-expand" placeholder="Histoire du personnage, traits de personnalité, idéaux, liens, défauts..."></textarea></div></div></div>
         </div>
     </div>
 
@@ -432,12 +415,12 @@
 </div>
 
 <script src="auth.js"></script>
-<script src="vtt-geo.js"></script>
-<script src="session.js"></script>
+<script src="effets.js"></script>
 <script src="pj-tutorial.js"></script>
 <script src="srd-data.js"></script>
 <script src="srd-autocomplete.js"></script>
 <script src="script.js"></script>
+<script src="hero-card.js"></script>
 <script src="sheet-io.js"></script>
 <script src="music-player.js"></script>
 <script src="fiche-layout.js"></script>
