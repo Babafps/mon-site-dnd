@@ -1753,6 +1753,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function consignerPoolRoll(poolSnapshot, poolTotal, scores) {
             const nat = (poolSnapshot.length === 1 && poolSnapshot[0] === 20) ? scores[0] : null;
             const label = poolSnapshot.map(f => 'd' + f).join(' + ');
+            document.dispatchEvent(new CustomEvent('plateau:lance', { detail: { des: poolSnapshot.slice(), scores: scores.slice() } }));
             pushRollHistory('🎲 ' + label, poolTotal, scores.join(' + '), nat);
         }
 
@@ -4230,7 +4231,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sp = spells[index]; if (!sp) return;
             const o = opts || {};
             if (!claimConcentration(index)) return;
-            document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau: spLvl(sp), part } }));
+            document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau: spLvl(sp), part, nom: sp.name || '' } }));
 
             const bits = [];
             let total = 0, nat = null;
@@ -5203,6 +5204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (r.dmg) parts.push(`dégâts ${r.dmg.total}${r.crit ? ' (critique)' : ''}`);
             const total = r.hitTotal != null ? r.hitTotal : (r.dmg ? r.dmg.total : 0);
             pushRollHistory(label, total, parts.join(' · '), r.nat);
+            if (r.dmg) document.dispatchEvent(new CustomEvent('degats:jet', { detail: { total: r.dmg.total } }));
         }
 
         // Une ligne d'équipement ne montre que ce qui est rempli. Une corde de

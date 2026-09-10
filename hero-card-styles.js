@@ -873,5 +873,353 @@
         }
     });
 
+    // =====================================================
+    // LA DEUXIÈME VAGUE — formes utiles à ces styles
+    // =====================================================
+    function flamme(ctx, x, y, h, w, c1, c2) {
+        const g = ctx.createLinearGradient(0, y, 0, y - h); g.addColorStop(0, c1); g.addColorStop(1, c2);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - w / 2, y);
+        ctx.quadraticCurveTo(x - w * 0.6, y - h * 0.5, x + w * 0.1, y - h); ctx.quadraticCurveTo(x + w * 0.2, y - h * 0.45, x + w / 2, y);
+        ctx.closePath(); ctx.fill();
+    }
+    function croix(ctx, x, y, s, c) { ctx.fillStyle = c; ctx.fillRect(x - s * 0.18, y - s / 2, s * 0.36, s); ctx.fillRect(x - s / 2, y - s * 0.18, s, s * 0.36); }
+    function griffes(ctx, x, y, s, a, c) {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.strokeStyle = c; ctx.lineCap = 'round';
+        [-1, 0, 1].forEach(k => { ctx.lineWidth = s * 0.07; ctx.beginPath(); ctx.moveTo(k * s * 0.22 - s * 0.1, -s / 2); ctx.quadraticCurveTo(k * s * 0.22 + s * 0.12, 0, k * s * 0.22 - s * 0.05, s / 2); ctx.stroke(); });
+        ctx.restore();
+    }
+    function eclat(ctx, T, x, y, r, n, c) {
+        ctx.fillStyle = c; ctx.beginPath();
+        for (let i = 0; i < n * 2; i++) { const a = TAU * i / (n * 2), rr = i % 2 ? r * (0.35 + T.alea() * 0.2) : r * (0.8 + T.alea() * 0.4); ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+        ctx.closePath(); ctx.fill();
+    }
+    function eclair(ctx, T, x1, y1, x2, y2, c, l) {
+        ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = l; ctx.lineJoin = 'round'; lueur(ctx, T, c, 12);
+        ctx.beginPath(); ctx.moveTo(x1, y1);
+        for (let i = 1; i < 8; i++) { const t = i / 8; ctx.lineTo(x1 + (x2 - x1) * t + (T.alea() - 0.5) * 40, y1 + (y2 - y1) * t + (T.alea() - 0.5) * 40); }
+        ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+    }
+    function livres(ctx, T, x0, x1, base) {
+        const teintes = ['#7a2828', '#2f4f6f', '#3f6a3a', '#8a6a2a', '#5a3a6a', '#6a4a2a'];
+        for (let x = x0; x < x1;) {
+            const w = 12 + T.alea() * 14, h = 60 + T.alea() * 55;
+            ctx.fillStyle = teintes[Math.floor(T.alea() * teintes.length)]; ctx.globalAlpha = 0.75;
+            ctx.fillRect(x, base - h, w - 2, h); ctx.globalAlpha = 1;
+            ctx.fillStyle = 'rgba(214,176,110,.5)'; ctx.fillRect(x + 2, base - h + 10, w - 6, 2); ctx.fillRect(x + 2, base - 14, w - 6, 2);
+            x += w;
+        }
+        ctx.fillStyle = 'rgba(90,60,30,.95)'; ctx.fillRect(x0 - 10, base, x1 - x0 + 20, 9);
+    }
+    function engrenage(ctx, x, y, r, n, c, l) {
+        ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = l; ctx.beginPath();
+        for (let i = 0; i < n * 4; i++) { const a = TAU * i / (n * 4), rr = (i % 4 === 0 || i % 4 === 1) ? r * 1.14 : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+        ctx.closePath(); ctx.stroke(); cercle(ctx, x, y, r * 0.35, c, l); ctx.restore();
+    }
+    function chope(ctx, x, y, s) {
+        ctx.save();
+        const g = ctx.createLinearGradient(x - s / 2, 0, x + s / 2, 0); g.addColorStop(0, '#b8741c'); g.addColorStop(0.5, '#f0b040'); g.addColorStop(1, '#a86418');
+        ctx.fillStyle = g; ctx.fillRect(x - s * 0.4, y - s * 0.6, s * 0.8, s * 1.1);
+        ctx.strokeStyle = 'rgba(80,50,20,.9)'; ctx.lineWidth = s * 0.07; ctx.strokeRect(x - s * 0.4, y - s * 0.6, s * 0.8, s * 1.1);
+        ctx.beginPath(); ctx.arc(x + s * 0.4, y - s * 0.05, s * 0.26, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+        ctx.fillStyle = '#fffaf0'; [-0.3, -0.05, 0.22].forEach((k, i) => { ctx.beginPath(); ctx.arc(x + k * s, y - s * 0.62, s * (0.2 + i * 0.02), 0, TAU); ctx.fill(); });
+        ctx.restore();
+    }
+    function caisse(ctx, x, y, s) {
+        ctx.save(); ctx.fillStyle = 'rgba(150,110,60,.9)'; ctx.fillRect(x, y, s, s);
+        ctx.strokeStyle = 'rgba(70,48,24,.95)'; ctx.lineWidth = s * 0.07; ctx.strokeRect(x, y, s, s); ctx.strokeRect(x + s * 0.12, y + s * 0.12, s * 0.76, s * 0.76);
+        ctx.beginPath(); ctx.moveTo(x + s * 0.12, y + s * 0.12); ctx.lineTo(x + s * 0.88, y + s * 0.88); ctx.stroke();
+        ctx.restore();
+    }
+    function sapin(ctx, x, y, h, c) {
+        ctx.fillStyle = c;
+        [0, 1, 2].forEach(i => { const w = h * (0.5 - i * 0.1), b = y - i * h * 0.26; ctx.beginPath(); ctx.moveTo(x - w / 2, b); ctx.lineTo(x, b - h * 0.45); ctx.lineTo(x + w / 2, b); ctx.closePath(); ctx.fill(); });
+        ctx.fillRect(x - h * 0.03, y, h * 0.06, h * 0.1);
+    }
+    function dents(ctx, x0, x1, y, taille, sens, c) {
+        ctx.fillStyle = c; ctx.beginPath();
+        for (let x = x0; x < x1; x += taille) { ctx.moveTo(x, y); ctx.lineTo(x + taille / 2, y + sens * taille * 0.9); ctx.lineTo(x + taille, y); }
+        ctx.closePath(); ctx.fill();
+    }
+
+    // =====================================================
+    // LA DEUXIÈME VAGUE — les styles
+    // =====================================================
+    STYLES.push({
+        id: 'pyromane', nom: '🔥 Pyromane', exploit: 'pyromane', entete: 'ENFANT DU BRASIER', sceau: 'Dix boules de feu lancées', indice: 'Une certaine passion pour les explosions.',
+        palette: { fondA: [70, 18, 6], fondB: [10, 2, 0], or: [255, 170, 60], encre: [255, 238, 214], primaire: [180, 50, 10] },
+        fond(ctx, T) {
+            const { W, H, alea } = T;
+            T.halo(ctx, W / 2, H + 60, 760, 'rgba(255,110,20,.35)');
+            for (let i = 0; i < 30; i++) flamme(ctx, 20 + i * 36 + alea() * 16, H + 10, 70 + alea() * 170, 44 + alea() * 36, 'rgba(255,190,70,.32)', 'rgba(255,70,10,0)');
+            semis(T, 50, (x, y, k) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.9)', 8); disque(ctx, x, y, 1 + k * 2.4, `rgba(255,${150 + Math.round(k * 80)},60,${0.3 + k * 0.5})`); ctx.restore(); }, [60, 420, W - 60, H - 60]);
+        },
+        cadre(ctx, T) { const g = ctx.createLinearGradient(0, T.H, 0, 0); g.addColorStop(0, '#ffcf6a'); g.addColorStop(0.5, '#ff6a1a'); g.addColorStop(1, '#8a1a04'); doubleCadre(ctx, T, g, 6, 'rgba(255,170,60,.4)'); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            for (let i = 0; i < 14; i++) { const a = Math.PI + Math.PI * i / 13; flamme(ctx, PX + Math.cos(a) * (PR + 6), PY + Math.sin(a) * (PR + 6) + 6, 26 + (i % 3) * 8, 16, 'rgba(255,200,80,.85)', 'rgba(255,80,20,0)'); }
+            anneauBrillant(ctx, T, 'rgba(255,150,50,.95)', 5, 'rgba(255,170,60,.35)');
+        },
+        nomDuHeros(ctx, T, l) { const g = ctx.createLinearGradient(0, 500, 0, 570); g.addColorStop(0, '#ffe08a'); g.addColorStop(1, '#ff6a1a'); ctx.shadowColor = 'rgba(255,120,30,.8)'; ctx.shadowBlur = T.flou(26); ctx.fillStyle = g; }
+    });
+
+    STYLES.push({
+        id: 'soigneur', nom: '✨ Soigneur', exploit: 'soigneur', entete: 'MAIN DE LUMIÈRE', sceau: '500 points de vie rendus', indice: 'Remettre les autres debout, encore et encore.',
+        palette: { nuit: false, fondA: [250, 246, 232], fondB: [222, 210, 178], or: [176, 132, 40], encre: [48, 38, 20], primaire: [140, 100, 30] },
+        fond(ctx, T) {
+            const { W, PX, PY } = T;
+            ctx.save(); ctx.globalAlpha = 0.12; ctx.fillStyle = '#e8c46a';
+            for (let i = 0; i < 28; i++) { const a = Math.PI * 0.1 + Math.PI * 0.8 * i / 27; ctx.beginPath(); ctx.moveTo(W / 2, -60); ctx.arc(W / 2, -60, 1500, a - 0.015, a + 0.015); ctx.closePath(); ctx.fill(); }
+            ctx.restore();
+            T.halo(ctx, PX, PY, 420, 'rgba(255,255,240,.7)');
+            semis(T, 18, (x, y, k) => croix(ctx, x, y, 10 + k * 16, `rgba(176,132,40,${0.1 + k * 0.15})`));
+        },
+        cadre(ctx, T) { const { W, H } = T; doubleCadre(ctx, T, T.dorure(ctx, 0, 0, W, H), 4, 'rgba(176,132,40,.4)'); [[W / 2, 30], [W / 2, H - 30], [30, H / 2], [W - 30, H / 2]].forEach(([x, y]) => croix(ctx, x, y, 22, '#b0842a')); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; ctx.save(); lueur(ctx, T, 'rgba(255,240,180,1)', 30); cercle(ctx, PX, PY, PR + 4, '#c89a3a', 5); ctx.restore(); cercle(ctx, PX, PY, PR + 18, 'rgba(176,132,40,.4)', 1.6); }
+    });
+
+    STYLES.push({
+        id: 'increvable', nom: '🩸 Increvable', exploit: 'increvable', entete: 'INCREVABLE', sceau: '1 000 dégâts encaissés', indice: 'Encaisser, encore et encore.',
+        palette: { fondA: [60, 10, 14], fondB: [10, 1, 2], or: [220, 90, 80], encre: [250, 230, 226], primaire: [140, 20, 30] },
+        fond(ctx, T) {
+            T.halo(ctx, T.PX, T.PY, 460, 'rgba(160,20,30,.3)');
+            [[180, 360, 150, -0.4], [900, 700, 180, 0.5], [230, 1050, 130, 0.2], [880, 200, 110, -0.2]].forEach(([x, y, s, a]) => griffes(ctx, x, y, s, a, 'rgba(10,0,0,.45)'));
+            fissuresSimples(ctx, T, 3);
+        },
+        cadre(ctx, T) {
+            const { W, H, rrect } = T;
+            ctx.strokeStyle = 'rgba(30,4,6,.95)'; ctx.lineWidth = 14; rrect(ctx, 34, 34, W - 68, H - 68, 12); ctx.stroke();
+            ctx.strokeStyle = 'rgba(220,90,80,.6)'; ctx.lineWidth = 2; rrect(ctx, 50, 50, W - 100, H - 100, 10); ctx.stroke();
+            // Des entailles dans le cadre
+            ctx.strokeStyle = 'rgba(220,90,80,.8)'; ctx.lineWidth = 3;
+            [[200, 34], [640, 34], [W - 34, 400], [W - 34, 980], [380, H - 34], [34, 760]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 10, y - 10); ctx.lineTo(x + 10, y + 10); ctx.stroke(); });
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            cercle(ctx, PX, PY, PR + 6, 'rgba(30,4,6,.95)', 10); cercle(ctx, PX, PY, PR + 6, 'rgba(220,90,80,.8)', 2);
+            // Des points de suture qui tiennent le tout
+            ctx.strokeStyle = 'rgba(250,230,226,.85)'; ctx.lineWidth = 2.4;
+            for (let i = 0; i < 20; i++) { const a = TAU * i / 20; const cx = PX + Math.cos(a) * (PR + 6), cy = PY + Math.sin(a) * (PR + 6); ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9); ctx.lineTo(cx - Math.cos(a) * 9, cy - Math.sin(a) * 9); ctx.stroke(); }
+        }
+    });
+
+    STYLES.push({
+        id: 'dormeur', nom: '💤 Dormeur', exploit: 'dormeur', entete: 'GRAND DORMEUR', sceau: 'Vingt-cinq repos longs', indice: 'Rien ne vaut une bonne nuit de sommeil.',
+        palette: { fondA: [26, 30, 70], fondB: [6, 6, 18], or: [200, 190, 255], encre: [236, 234, 255], primaire: [90, 80, 170] },
+        fond(ctx, T) {
+            const { W, H, CINZEL } = T;
+            semis(T, 70, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.4, `rgba(255,255,255,${0.2 + k * 0.5})`));
+            ctx.save(); lueur(ctx, T, 'rgba(236,230,190,.7)', 20); croissant(ctx, 150, 200, 42, 'rgba(240,232,200,.9)'); ctx.restore();
+            ctx.fillStyle = 'rgba(200,190,255,.55)'; ctx.textAlign = 'center';
+            [[850, 230, 64], [920, 170, 44], [970, 125, 30]].forEach(([x, y, t]) => { ctx.font = `700 ${t}px ${CINZEL}`; ctx.fillText('Z', x, y); });
+            ctx.fillStyle = 'rgba(170,160,230,.13)';
+            for (let x = -40; x < W + 80; x += 110) { ctx.beginPath(); ctx.arc(x, H - 30 - (x % 220 ? 10 : 40), 90, 0, TAU); ctx.fill(); }
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(200,190,255,.7)', 3, 'rgba(200,190,255,.3)', [2, 10]); },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(210,200,255,.95)', 4); cercle(ctx, T.PX, T.PY, T.PR + 17, 'rgba(200,190,255,.4)', 2, [1, 9]); }
+    });
+
+    STYLES.push({
+        id: 'feudecamp', nom: '🏕️ Feu de camp', exploit: 'feudecamp', entete: 'AU COIN DU FEU', sceau: 'Vingt-cinq repos courts', indice: 'Une petite pause, et on repart.',
+        palette: { fondA: [22, 34, 26], fondB: [4, 6, 4], or: [255, 180, 90], encre: [246, 236, 220], primaire: [120, 80, 40] },
+        fond(ctx, T) {
+            const { W, H, alea } = T;
+            semis(T, 60, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.3, `rgba(255,250,230,${0.15 + k * 0.45})`), [40, 40, W - 40, 520]);
+            T.halo(ctx, W / 2, H + 40, 620, 'rgba(255,140,50,.3)');
+            for (let i = 0; i < 6; i++) { sapin(ctx, 60 + i * 42 + alea() * 12, H - 40, 180 + alea() * 120, 'rgba(4,10,6,.92)'); sapin(ctx, W - 60 - i * 42 - alea() * 12, H - 40, 180 + alea() * 120, 'rgba(4,10,6,.92)'); }
+            semis(T, 24, (x, y, k) => disque(ctx, x, y, 1 + k * 2, `rgba(255,170,70,${0.3 + k * 0.5})`), [360, 1000, 720, 1300]);
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(255,180,90,.7)', 3, 'rgba(255,180,90,.3)'); },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(255,180,90,.95)', 4, 'rgba(255,180,90,.3)'); }
+    });
+
+    STYLES.push({
+        id: 'coupfatal', nom: '💥 Coup fatal', exploit: 'coupfatal', entete: 'COUP FATAL', sceau: '100 dégâts en un seul coup', indice: 'Un seul coup. Un très, très gros coup.',
+        palette: { fondA: [30, 6, 6], fondB: [4, 0, 0], or: [255, 80, 60], encre: [255, 236, 230], primaire: [150, 10, 10] },
+        fond(ctx, T) {
+            const { PX, PY, W, H } = T;
+            ctx.save(); ctx.strokeStyle = 'rgba(255,80,60,.14)'; ctx.lineWidth = 3;
+            for (let i = 0; i < 40; i++) { const a = TAU * i / 40, r1 = 260 + T.alea() * 60; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * r1, PY + Math.sin(a) * r1); ctx.lineTo(PX + Math.cos(a) * 1200, PY + Math.sin(a) * 1200); ctx.stroke(); }
+            ctx.restore();
+            ctx.save(); lueur(ctx, T, 'rgba(255,60,40,.8)', 30); eclat(ctx, T, PX, PY, 300, 14, 'rgba(160,10,10,.55)'); ctx.restore();
+            semis(T, 16, (x, y, k) => { ctx.save(); ctx.translate(x, y); ctx.rotate(k * TAU); ctx.fillStyle = `rgba(255,120,100,${0.15 + k * 0.3})`; ctx.beginPath(); ctx.moveTo(0, -14 - k * 20); ctx.lineTo(6 + k * 8, 10); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill(); ctx.restore(); }, [60, 560, W - 60, H - 80]);
+        },
+        cadre(ctx, T) {
+            const { W, H } = T, c = 46;
+            ctx.strokeStyle = 'rgba(255,80,60,.85)'; ctx.lineWidth = 4; ctx.beginPath();
+            ctx.moveTo(30 + c, 30); ctx.lineTo(W - 30 - c, 30); ctx.lineTo(W - 30, 30 + c); ctx.lineTo(W - 30, H - 30 - c); ctx.lineTo(W - 30 - c, H - 30); ctx.lineTo(30 + c, H - 30); ctx.lineTo(30, H - 30 - c); ctx.lineTo(30, 30 + c); ctx.closePath(); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,80,60,.3)'; ctx.lineWidth = 1.5; ctx.strokeRect(50, 50, W - 100, H - 100);
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, 'rgba(255,90,70,.95)', 5);
+            ctx.fillStyle = 'rgba(255,90,70,.9)';
+            for (let i = 0; i < 8; i++) { const a = TAU * i / 8 + Math.PI / 8; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a - 0.06) * (PR + 8), PY + Math.sin(a - 0.06) * (PR + 8)); ctx.lineTo(PX + Math.cos(a) * (PR + 36), PY + Math.sin(a) * (PR + 36)); ctx.lineTo(PX + Math.cos(a + 0.06) * (PR + 8), PY + Math.sin(a + 0.06) * (PR + 8)); ctx.closePath(); ctx.fill(); }
+        }
+    });
+
+    STYLES.push({
+        id: 'surcharge', nom: '⚡ Surcharge', exploit: 'surcharge', entete: 'SURCHARGE ARCANIQUE', sceau: 'Tous ses emplacements de sort vidés', indice: 'Jusqu’au dernier emplacement de sort.',
+        palette: { fondA: [40, 10, 70], fondB: [6, 2, 14], or: [220, 130, 255], encre: [248, 236, 255], primaire: [120, 40, 190] },
+        fond(ctx, T) {
+            const { PX, PY, W, H } = T;
+            T.halo(ctx, PX, PY, 520, 'rgba(190,90,255,.24)');
+            [[60, 120], [W - 60, 160], [80, H - 200], [W - 90, H - 140], [W / 2, H - 40]].forEach(([x, y]) => eclair(ctx, T, PX, PY, x, y, 'rgba(230,170,255,.55)', 3));
+            semis(T, 60, (x, y, k) => disque(ctx, x, y, 1 + k * 2, `rgba(230,180,255,${0.2 + k * 0.5})`));
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(220,130,255,.8)', 3, 'rgba(220,130,255,.3)', [20, 6, 4, 6]); coins(ctx, T, c => eclair(c, T, -8, -8, 40, 40, 'rgba(240,200,255,.9)', 2.5)); },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(230,160,255,1)', 4); cercle(ctx, T.PX, T.PY, T.PR + 17, 'rgba(220,130,255,.7)', 3, [26, 12]); }
+    });
+
+    STYLES.push({
+        id: 'erudit', nom: '📚 Érudit', exploit: 'erudit', entete: 'RAT DE BIBLIOTHÈQUE', sceau: 'Cent fiches de règles lues', indice: 'Tout lire. Absolument tout.',
+        palette: { fondA: [44, 30, 20], fondB: [10, 6, 4], or: [214, 176, 110], encre: [246, 234, 214], primaire: [110, 60, 30] },
+        fond(ctx, T) {
+            T.halo(ctx, T.PX, T.PY, 440, 'rgba(255,210,140,.14)');
+            [250, 400, 540].forEach(b => { livres(ctx, T, 70, 250, b); livres(ctx, T, 830, 1010, b); });
+        },
+        cadre(ctx, T) { const { W, H, rrect } = T; ctx.strokeStyle = 'rgba(90,60,30,.95)'; ctx.lineWidth = 12; rrect(ctx, 34, 34, W - 68, H - 68, 10); ctx.stroke(); ctx.strokeStyle = 'rgba(214,176,110,.6)'; ctx.lineWidth = 2; rrect(ctx, 48, 48, W - 96, H - 96, 8); ctx.stroke(); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; ctx.save(); ctx.lineWidth = 7; ctx.strokeStyle = T.dorure(ctx, PX - PR, PY - PR, PX + PR, PY + PR); ctx.beginPath(); ctx.arc(PX, PY, PR + 5, 0, TAU); ctx.stroke(); ctx.restore(); }
+    });
+
+    STYLES.push({
+        id: 'bestiaire', nom: '🐺 Bestiaire', exploit: 'bestiaire', entete: 'CHASSEUR DE MONSTRES', sceau: 'Trente monstres étudiés', indice: 'Connaître chaque créature du manuel.',
+        palette: { fondA: [30, 40, 24], fondB: [6, 8, 4], or: [196, 210, 120], encre: [238, 242, 222], primaire: [90, 110, 50] },
+        fond(ctx, T) {
+            const { W, H } = T;
+            [[200, 700, 170, 0.3], [880, 380, 150, -0.3], [860, 1080, 120, 0.1]].forEach(([x, y, s, a]) => griffes(ctx, x, y, s, a, 'rgba(0,0,0,.35)'));
+            // Des yeux qui brillent dans l'ombre des bords
+            [[110, 260], [W - 120, 560], [140, 940], [W - 150, 1180]].forEach(([x, y]) => { ctx.save(); lueur(ctx, T, 'rgba(230,220,80,.9)', 10); [-12, 12].forEach(dx => { ctx.fillStyle = 'rgba(240,230,110,.85)'; ctx.beginPath(); ctx.ellipse(x + dx, y, 6, 3.5, 0, 0, TAU); ctx.fill(); }); ctx.restore(); });
+        },
+        cadre(ctx, T) { const { W, H } = T; doubleCadre(ctx, T, 'rgba(196,210,120,.7)', 3, 'rgba(196,210,120,.3)'); dents(ctx, 80, W - 80, 32, 28, 1, 'rgba(236,232,210,.85)'); dents(ctx, 80, W - 80, H - 32, 28, -1, 'rgba(236,232,210,.85)'); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            cercle(ctx, PX, PY, PR + 5, 'rgba(196,210,120,.9)', 5);
+            ctx.fillStyle = 'rgba(240,236,214,.95)';
+            [-Math.PI / 2 - 0.25, -Math.PI / 2 + 0.25, Math.PI / 2 - 0.25, Math.PI / 2 + 0.25].forEach(a => { const x = PX + Math.cos(a) * (PR + 5), y = PY + Math.sin(a) * (PR + 5), sn = Math.sin(a) < 0 ? 1 : -1; ctx.beginPath(); ctx.moveTo(x - 8, y); ctx.lineTo(x, y + sn * 26); ctx.lineTo(x + 8, y); ctx.closePath(); ctx.fill(); });
+        }
+    });
+
+    STYLES.push({
+        id: 'mimique', nom: '🧰 Mimique', exploit: 'mimique', entete: 'PAS UN COFFRE', sceau: 'A ouvert le mauvais coffre', indice: 'Méfie-toi de ce que tu cherches dans les règles.',
+        palette: { fondA: [60, 36, 18], fondB: [14, 8, 3], or: [226, 176, 90], encre: [250, 238, 220], primaire: [120, 70, 30] },
+        fond(ctx, T) {
+            const { W, H, alea } = T;
+            ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 3;
+            for (let y = 0; y < H; y += 90) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+            ctx.strokeStyle = 'rgba(255,220,160,.05)'; ctx.lineWidth = 1.5;
+            for (let i = 0; i < 40; i++) { const y = alea() * H, x = alea() * W; ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 60, y + 6, x + 120, y - 6, x + 200, y); ctx.stroke(); }
+            [470, 880].forEach(y => { ctx.fillStyle = 'rgba(30,24,20,.55)'; ctx.fillRect(0, y, W, 26); for (let x = 60; x < W; x += 140) rivet(ctx, x, y + 13, 5, '#9a8a70'); });
+        },
+        cadre(ctx, T) {
+            const { W, H } = T;
+            doubleCadre(ctx, T, 'rgba(40,30,22,.95)', 12, 'rgba(226,176,90,.5)');
+            // Le cadre est une bouche
+            dents(ctx, 70, W - 70, 40, 30, 1, 'rgba(244,239,226,.95)'); dents(ctx, 70, W - 70, H - 40, 30, -1, 'rgba(244,239,226,.95)');
+            coins(ctx, T, c => { c.fillStyle = 'rgba(40,30,22,.95)'; c.fillRect(-30, -30, 70, 14); c.fillRect(-30, -30, 14, 70); rivet(c, -23, -23, 5, '#b8a888'); }, 40);
+        },
+        anneau(ctx, T) { const { PX, PY, PR } = T; cercle(ctx, PX, PY, PR + 6, 'rgba(40,30,22,.95)', 12); cercle(ctx, PX, PY, PR + 6, 'rgba(226,176,90,.7)', 2); for (let i = 0; i < 10; i++) { const a = TAU * i / 10; rivet(ctx, PX + Math.cos(a) * (PR + 6), PY + Math.sin(a) * (PR + 6), 4.5, '#c8b898'); } }
+    });
+
+    STYLES.push({
+        id: 'tavernier', nom: '🍺 Tavernier', exploit: 'tavernier', entete: 'HABITUÉ DE LA TAVERNE', sceau: 'Dix boissons dans le sac', indice: 'Le sac tinte quand on marche.',
+        palette: { fondA: [58, 34, 16], fondB: [12, 6, 2], or: [240, 190, 90], encre: [252, 240, 220], primaire: [130, 70, 20] },
+        fond(ctx, T) {
+            const { W, H, PY } = T;
+            ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 3;
+            for (let x = 0; x < W; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+            T.halo(ctx, T.PX, PY, 420, 'rgba(255,190,90,.18)');
+            chope(ctx, 180, PY + 20, 90); chope(ctx, W - 180, PY + 20, 90);
+            semis(T, 30, (x, y, k) => cercle(ctx, x, y, 2 + k * 6, `rgba(255,250,235,${0.1 + k * 0.2})`, 1.2));
+        },
+        cadre(ctx, T) { const { W, H, rrect } = T; ctx.strokeStyle = 'rgba(70,40,16,.95)'; ctx.lineWidth = 16; rrect(ctx, 34, 34, W - 68, H - 68, 14); ctx.stroke(); ctx.strokeStyle = 'rgba(240,190,90,.55)'; ctx.lineWidth = 2; rrect(ctx, 52, 52, W - 104, H - 104, 10); ctx.stroke(); },
+        anneau(ctx, T) { const { PX, PY, PR } = T; anneauBrillant(ctx, T, 'rgba(240,180,70,.95)', 6); for (let i = 0; i < 9; i++) { const a = Math.PI * 1.15 + Math.PI * 0.7 * i / 8; disque(ctx, PX + Math.cos(a) * (PR + 10), PY + Math.sin(a) * (PR + 10), 9 + (i % 3) * 3, 'rgba(255,250,240,.92)'); } }
+    });
+
+    STYLES.push({
+        id: 'horloger', nom: '⚙️ Horloger', exploit: 'horloger', entete: 'MAÎTRE DU TEMPS', sceau: 'Trois heures sur une fiche', indice: 'Perdre la notion du temps sur sa fiche.',
+        palette: { fondA: [40, 34, 26], fondB: [8, 6, 4], or: [214, 176, 96], encre: [244, 236, 220], primaire: [120, 90, 40] },
+        fond(ctx, T) {
+            const { W, H, PX, PY } = T;
+            engrenage(ctx, PX, PY, 250, 16, 'rgba(214,176,96,.16)', 10);
+            engrenage(ctx, 110, 260, 120, 10, 'rgba(214,176,96,.2)', 7); engrenage(ctx, W - 130, 1000, 150, 12, 'rgba(214,176,96,.16)', 8); engrenage(ctx, 180, 1180, 80, 8, 'rgba(214,176,96,.18)', 6);
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 6, 'rgba(214,176,96,.4)'); coins(ctx, T, c => engrenage(c, 0, 0, 16, 8, 'rgba(214,176,96,.9)', 2.5)); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            cercle(ctx, PX, PY, PR + 5, '#c8a258', 6);
+            ctx.strokeStyle = 'rgba(214,176,96,.9)';
+            for (let i = 0; i < 60; i++) { const a = TAU * i / 60, l = i % 5 ? 6 : 16; ctx.lineWidth = i % 5 ? 1.2 : 3; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * (PR + 12), PY + Math.sin(a) * (PR + 12)); ctx.lineTo(PX + Math.cos(a) * (PR + 12 + l), PY + Math.sin(a) * (PR + 12 + l)); ctx.stroke(); }
+        }
+    });
+
+    STYLES.push({
+        id: 'lycan', nom: '🌕 Lycan', exploit: 'pleine-lune', entete: 'NUIT DE PLEINE LUNE', sceau: 'Présent un soir de pleine lune', indice: 'Quand la lune est ronde…',
+        palette: { fondA: [20, 26, 44], fondB: [3, 4, 8], or: [220, 226, 240], encre: [236, 240, 250], primaire: [80, 90, 120] },
+        fond(ctx, T) {
+            const { W, H, alea } = T;
+            T.halo(ctx, 820, 270, 360, 'rgba(220,226,240,.25)');
+            ctx.save(); lueur(ctx, T, 'rgba(220,226,240,.8)', 40); disque(ctx, 820, 270, 170, 'rgba(232,236,244,.9)'); ctx.restore();
+            semis(T, 9, (x, y, k) => disque(ctx, 820 + (x / W - 0.5) * 240, 270 + (y / H - 0.5) * 240, 8 + k * 18, 'rgba(180,186,200,.35)'));
+            semis(T, 60, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.2, `rgba(255,255,255,${0.2 + k * 0.4})`), [40, 40, W - 40, 600]);
+            for (let i = 0; i < 16; i++) sapin(ctx, i * 72 + alea() * 30, H - 30, 160 + alea() * 160, 'rgba(2,4,8,.9)');
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(220,226,240,.7)', 2.5, 'rgba(220,226,240,.3)'); },
+        anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(232,236,246,.95)', 4, 'rgba(220,226,240,.35)'); }
+    });
+
+    STYLES.push({
+        id: 'treize', nom: '🪞 Treize', exploit: 'vendredi13', entete: 'VENDREDI 13', sceau: 'Présent un vendredi 13', indice: 'Un jour où il vaut mieux ne pas sortir.',
+        palette: { fondA: [40, 40, 46], fondB: [6, 6, 8], or: [200, 205, 215], encre: [242, 242, 246], primaire: [90, 90, 100] },
+        fond(ctx, T) {
+            const { W, H, alea, CINZEL } = T;
+            ctx.save(); ctx.fillStyle = 'rgba(200,205,215,.06)'; ctx.font = `700 520px ${CINZEL}`; ctx.textAlign = 'center'; ctx.fillText('13', W / 2, H - 120); ctx.restore();
+            // Un miroir brisé : un point d'impact, des rayons, des cercles cassés
+            const x0 = 260, y0 = 860;
+            ctx.strokeStyle = 'rgba(230,234,244,.28)'; ctx.lineWidth = 1.6;
+            for (let i = 0; i < 18; i++) { const a = TAU * i / 18 + alea() * 0.2, l = 180 + alea() * 420; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + Math.cos(a) * l, y0 + Math.sin(a) * l); ctx.stroke(); }
+            [40, 95, 170].forEach(r => { ctx.beginPath(); for (let i = 0; i <= 18; i++) { const a = TAU * i / 18, rr = r + (alea() - 0.5) * 14; if (i) ctx.lineTo(x0 + Math.cos(a) * rr, y0 + Math.sin(a) * rr); else ctx.moveTo(x0 + Math.cos(a) * rr, y0 + Math.sin(a) * rr); } ctx.stroke(); });
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(200,205,215,.75)', 3, 'rgba(200,205,215,.3)', [60, 6, 14, 6]); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            cercle(ctx, PX, PY, PR + 4, 'rgba(210,214,224,.9)', 4);
+            ctx.strokeStyle = 'rgba(230,234,244,.6)'; ctx.lineWidth = 1.5;
+            [0.4, 2.2, 3.9].forEach(a => { ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * (PR - 30), PY + Math.sin(a) * (PR - 30)); ctx.lineTo(PX + Math.cos(a + 0.1) * (PR + 26), PY + Math.sin(a + 0.1) * (PR + 26)); ctx.stroke(); });
+        }
+    });
+
+    STYLES.push({
+        id: 'demenageur', nom: '📦 Déménageur', exploit: 'demenageur', entete: 'BÊTE DE SOMME', sceau: 'Plus de 150 kg dans le sac', indice: 'Qui a besoin d’une mule ?',
+        palette: { fondA: [70, 54, 34], fondB: [16, 12, 6], or: [226, 190, 120], encre: [250, 240, 222], primaire: [120, 90, 50] },
+        fond(ctx, T) {
+            const { W, H } = T;
+            [[70, 1130, 110], [180, 1160, 80], [110, 1030, 90], [W - 180, 1130, 110], [W - 270, 1170, 80], [W - 150, 1030, 80]].forEach(([x, y, s]) => caisse(ctx, x, y, s));
+            ctx.strokeStyle = 'rgba(210,180,120,.25)'; ctx.lineWidth = 5;
+            [140, 180].forEach((y, i) => { ctx.beginPath(); ctx.moveTo(40, y); for (let x = 40; x < W - 40; x += 120) ctx.quadraticCurveTo(x + 60, y + (i ? -26 : 26), x + 120, y); ctx.stroke(); });
+        },
+        cadre(ctx, T) {
+            const { W, H, rrect } = T;
+            // Une corde tressée : deux brins en pointillés décalés
+            ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(210,180,120,.9)'; ctx.setLineDash([14, 10]); rrect(ctx, 36, 36, W - 72, H - 72, 24); ctx.stroke();
+            ctx.strokeStyle = 'rgba(150,120,70,.9)'; ctx.lineDashOffset = 12; rrect(ctx, 36, 36, W - 72, H - 72, 24); ctx.stroke();
+            ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(210,180,120,.95)'; ctx.setLineDash([12, 8]); ctx.beginPath(); ctx.arc(PX, PY, PR + 6, 0, TAU); ctx.stroke();
+            ctx.strokeStyle = 'rgba(150,120,70,.95)'; ctx.lineDashOffset = 10; ctx.beginPath(); ctx.arc(PX, PY, PR + 6, 0, TAU); ctx.stroke();
+            ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        }
+    });
+
+    // =====================================================
+    // LA RARETÉ — affichée dans la vitrine de la carte
+    // =====================================================
+    const RARETES = {
+        legendaire: ['epique', 'chanceux', 'chatnoir', 'jumeaux', 'veteran', 'archimage', 'coupfatal', 'surcharge', 'pyromane', 'horloger'],
+        epique: ['astral', 'revenant', 'tresor', 'liche', 'forteresse', 'sommet', 'mendiant', 'armurier', 'chroniqueur', 'fidele', 'soigneur', 'increvable', 'dormeur', 'feudecamp', 'erudit', 'bestiaire', 'demenageur', 'lycan']
+    };
+    STYLES.forEach(s => { s.rarete = Object.keys(RARETES).find(r => RARETES[r].includes(s.id)) || 'rare'; });
+
     window.HeroCard.ajouterStyles(STYLES);
 })();

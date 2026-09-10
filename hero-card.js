@@ -30,7 +30,9 @@
     // des ombres échappe à la transformation du contexte : il passe par flou().
     const W = 1080, H = 1350, M = 80;
     const ECHELLE = 2;
-    const flou = (n) => n * ECHELLE;
+    // Les vignettes de l'atelier se dessinent en petit : l'échelle suit le dessin en cours.
+    let echelleDessin = ECHELLE;
+    const flou = (n) => n * echelleDessin;
     const CINZEL = 'Cinzel, Georgia, serif';
     const LORA = 'Lora, Georgia, serif';
 
@@ -57,10 +59,10 @@
     // LES STYLES — offerts, ou gagnés par un exploit (exploits.js)
     // =====================================================
     const STYLES = [
-        { id: 'nuit', nom: '🌙 Nuit' },
-        { id: 'parchemin', nom: '📜 Parchemin' },
-        { id: 'legende', nom: '👑 Légende', exploit: 'triple20', entete: 'ÉLU DES DIEUX', sceau: 'Trois 20 naturels d’affilée', indice: 'Les dieux aiment les séries.' },
-        { id: 'maudit', nom: '☠️ Maudit', exploit: 'triple1', entete: 'MAUDIT PAR LES DÉS', sceau: 'Trois 1 naturels d’affilée', indice: 'Les dés, eux aussi, savent haïr.' }
+        { id: 'nuit', nom: '🌙 Nuit', rarete: 'offert' },
+        { id: 'parchemin', nom: '📜 Parchemin', rarete: 'offert' },
+        { id: 'legende', nom: '👑 Légende', exploit: 'triple20', entete: 'ÉLU DES DIEUX', sceau: 'Trois 20 naturels d’affilée', indice: 'Les dieux aiment les séries.', rarete: 'legendaire' },
+        { id: 'maudit', nom: '☠️ Maudit', exploit: 'triple1', entete: 'MAUDIT PAR LES DÉS', sceau: 'Trois 1 naturels d’affilée', indice: 'Les dés, eux aussi, savent haïr.', rarete: 'legendaire' }
     ];
     const styleParId = (id) => STYLES.find(x => x.id === id) || STYLES[0];
     const exploitDe = (st) => (st.exploit && window.Exploits ? window.Exploits.info(st.exploit) : null);
@@ -249,7 +251,7 @@
             g.putImageData(img, 0, 0);
         }
         const motif = ctx.createPattern(grainCanvas, 'repeat');
-        if (motif && motif.setTransform && window.DOMMatrix) motif.setTransform(new DOMMatrix([1 / ECHELLE, 0, 0, 1 / ECHELLE, 0, 0]));
+        if (motif && motif.setTransform && window.DOMMatrix) motif.setTransform(new DOMMatrix([1 / echelleDessin, 0, 0, 1 / echelleDessin, 0, 0]));
         return motif;
     }
 
@@ -551,7 +553,8 @@
     // =====================================================
     function dessiner(cv, d, reg, res) {
         const ctx = cv.getContext('2d');
-        ctx.setTransform(ECHELLE, 0, 0, ECHELLE, 0, 0);
+        echelleDessin = reg.echelle || ECHELLE;
+        ctx.setTransform(echelleDessin, 0, 0, echelleDessin, 0, 0);
         ctx.imageSmoothingEnabled = true;
         if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
         const p = palette(reg.style);
@@ -838,50 +841,107 @@
     }
 
     // =====================================================
-    // LA FENÊTRE
+    // L'ATELIER — la fenêtre de la carte
+    // Une scène : la carte en 3D, qui s'incline sous le pointeur, fait jouer un
+    // reflet holographique et se retourne à chaque changement de style. Un
+    // panneau : la collection (vignettes vivantes, raretés, indices), les
+    // réglages et l'export. Tout l'atelier prend les couleurs du style choisi.
     // =====================================================
-    let modal = null, cv = null, d = null, reglages = null, minuteur = null;
+    const RARETES = { offert: 'Offert', rare: 'Rare', epique: 'Épique', legendaire: 'Légendaire' };
+    let modal = null, cv = null, d = null, reglages = null, minuteur = null, jetonVignettes = 0, filtre = 'tous';
+    const rgb = (c) => c.map(Math.round).join(',');
+    const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+    const attendre = (ms) => new Promise(ok => setTimeout(ok, ms));
+    const calmeAtelier = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+    const armeReglee = () => reglages.arme === 'auto' ? 'auto' : reglages.arme === 'aucune' ? 'aucune' : parseInt(reglages.arme, 10);
+
+    /** Les teintes de l'atelier : un style clair s'assombrit, une encre sombre s'éclaire. */
+    function teintes(pal) {
+        const clair = !pal.nuit;
+        return {
+            f1: clair ? melange(pal.fondA, [24, 16, 10], 0.8) : pal.fondA,
+            f2: clair ? melange(pal.fondB, [0, 0, 0], 0.88) : pal.fondB,
+            or: lum(pal.or) < 120 ? melange(pal.or, [255, 236, 190], 0.55) : pal.or
+        };
+    }
 
     function construire() {
         if (modal) return;
         modal = document.createElement('div');
         modal.id = 'hero-card-modal';
-        modal.className = 'modal-overlay hidden no-print';
-        modal.innerHTML = `<div class="modal-box hc-box" role="dialog" aria-labelledby="hc-titre">
-            <div class="modal-header"><h2 id="hc-titre">🃏 Carte de héros</h2><button type="button" class="btn-close-modal" data-hc="fermer" aria-label="Fermer">✕</button></div>
-            <div class="hc-grid">
-                <div class="hc-apercu"><canvas id="hc-canvas" width="${W * ECHELLE}" height="${H * ECHELLE}" role="img" aria-label="Carte de héros"></canvas></div>
-                <div class="hc-reglages">
-                    <div class="hc-f"><label>Style <span id="hc-compte"></span></label>
-                        <div class="hc-seg hc-vitrine">${STYLES.map(x => `<button type="button" data-hc-style="${x.id}">${x.nom}</button>`).join('')}</div>
-                        <p class="hc-indice" id="hc-indice" hidden></p>
+        modal.className = 'hc2 hidden no-print';
+        modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', 'hc-titre');
+        const tuiles = STYLES.map(x => `<button type="button" class="hc2-tuile r-${x.rarete || 'rare'}" data-hc-style="${x.id}"><canvas width="${Math.round(W * 0.2)}" height="${Math.round(H * 0.2)}"></canvas><span class="hc2-tuile-nom"></span><span class="hc2-verrou" aria-hidden="true">🔒</span></button>`).join('');
+        modal.innerHTML = `<div class="hc2-fond" aria-hidden="true">${'<i></i>'.repeat(18)}</div>
+            <button type="button" class="hc2-fermer" data-hc="fermer" aria-label="Fermer">✕</button>
+            <div class="hc2-grille">
+                <section class="hc2-scene">
+                    <header class="hc2-entete">
+                        <span class="hc2-rarete" id="hc-rarete"></span>
+                        <h2 class="hc2-titre" id="hc-titre">Carte de héros</h2>
+                        <p class="hc2-origine" id="hc-origine"></p>
+                    </header>
+                    <div class="hc2-stage" id="hc-stage">
+                        <div class="hc2-carte" id="hc-carte">
+                            <div class="hc2-pivot" id="hc-pivot">
+                                <div class="hc2-face">
+                                    <canvas id="hc-canvas" width="${W * ECHELLE}" height="${H * ECHELLE}" role="img" aria-label="Carte de héros"></canvas>
+                                    <div class="hc2-holo" aria-hidden="true"></div>
+                                    <div class="hc2-forge" aria-hidden="true"><span>Forge de la carte…</span></div>
+                                </div>
+                                <div class="hc2-dos" aria-hidden="true"><img src="IMG/logo-256.png" alt=""><span>Bones &amp; Blades</span></div>
+                            </div>
+                        </div>
+                        <div class="hc2-ombre" aria-hidden="true"></div>
                     </div>
-                    <div class="hc-f"><label for="hc-devise">Devise <span>facultative</span></label>
-                        <input type="text" id="hc-devise" maxlength="90" placeholder="Je ne recule jamais." autocomplete="off">
+                    <div class="hc2-nav">
+                        <button type="button" data-hc-nav="-1" aria-label="Style précédent">‹</button>
+                        <span id="hc-position"></span>
+                        <button type="button" data-hc-nav="1" aria-label="Style suivant">›</button>
                     </div>
-                    <div class="hc-f"><label for="hc-arme">Arme fétiche</label><select id="hc-arme"></select></div>
-                    <p class="hc-note">Ton cadre de portrait (menu ☰ → Apparence) s'applique à la carte. L'image est fabriquée sur ton appareil : rien n'est envoyé nulle part.</p>
-                    <div class="hc-actions">
-                        <button type="button" class="btn hc-go" data-hc="partager" hidden>↗ Partager</button>
-                        <button type="button" class="btn hc-go" data-hc="telecharger">⬇ Télécharger</button>
-                        <button type="button" class="btn-small hc-ghost" data-hc="copier" hidden>📋 Copier l'image</button>
+                </section>
+                <aside class="hc2-panneau">
+                    <div class="hc2-bloc">
+                        <div class="hc2-bloc-tete"><h3>Collection</h3><span id="hc-compte"></span></div>
+                        <div class="hc2-jauge"><i id="hc-jauge"></i></div>
+                        <div class="hc2-filtres">
+                            <button type="button" data-hc-filtre="tous">Tous</button>
+                            <button type="button" data-hc-filtre="gagnes">Débloqués</button>
+                            <button type="button" data-hc-filtre="verrous">À trouver</button>
+                        </div>
+                        <div class="hc2-galerie" id="hc-galerie">${tuiles}</div>
+                        <p class="hc2-indice" id="hc-indice" hidden></p>
                     </div>
-                </div>
-            </div>
-        </div>`;
+                    <div class="hc2-bloc">
+                        <div class="hc2-bloc-tete"><h3>Personnaliser</h3></div>
+                        <label class="hc2-champ"><span>Devise</span><input type="text" id="hc-devise" maxlength="90" placeholder="Je ne recule jamais." autocomplete="off"></label>
+                        <label class="hc2-champ"><span>Arme fétiche</span><select id="hc-arme"></select></label>
+                    </div>
+                    <div class="hc2-actions">
+                        <button type="button" class="hc2-btn hc2-principal" data-hc="telecharger">⬇ Télécharger la carte</button>
+                        <button type="button" class="hc2-btn" data-hc="partager" hidden>↗ Partager</button>
+                        <button type="button" class="hc2-btn" data-hc="copier" hidden>📋 Copier</button>
+                    </div>
+                    <p class="hc2-note">Image 2160 × 2700 px, fabriquée sur ton appareil. Ton cadre de portrait s’applique aux styles offerts.</p>
+                </aside>
+            </div>`;
         document.body.appendChild(modal);
         cv = modal.querySelector('#hc-canvas');
+        modal.querySelectorAll('.hc2-fond i').forEach(i => {
+            i.style.left = (Math.random() * 100).toFixed(1) + '%';
+            i.style.animationDelay = (-Math.random() * 16).toFixed(1) + 's';
+            i.style.animationDuration = (10 + Math.random() * 10).toFixed(1) + 's';
+            i.style.setProperty('--t', (2 + Math.random() * 4).toFixed(1) + 'px');
+        });
 
         modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.closest('[data-hc="fermer"]')) { fermer(); return; }
-            const st = e.target.closest('[data-hc-style]');
-            if (st) {
-                const indice = modal.querySelector('#hc-indice');
-                // Un style verrouillé ne se choisit pas : il livre seulement son indice.
-                if (st.classList.contains('is-verrou')) { indice.hidden = false; indice.textContent = '🔒 Indice : ' + (st.dataset.indice || 'mystère.'); return; }
-                indice.hidden = true;
-                reglages.style = st.dataset.hcStyle; noter('dnd-hero-style', reglages.style); majSegments(); rendre(); return;
-            }
+            if (e.target.closest('[data-hc="fermer"]')) { fermer(); return; }
+            const tuile = e.target.closest('[data-hc-style]');
+            if (tuile) { choisir(tuile.dataset.hcStyle); return; }
+            const nav = e.target.closest('[data-hc-nav]');
+            if (nav) { voisin(parseInt(nav.dataset.hcNav, 10)); return; }
+            const f = e.target.closest('[data-hc-filtre]');
+            if (f) { filtre = f.dataset.hcFiltre; majGalerie(); return; }
             const act = e.target.closest('[data-hc]');
             if (!act) return;
             if (act.dataset.hc === 'telecharger') telecharger();
@@ -900,16 +960,117 @@
             rendre();
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) fermer();
+            if (!modal || modal.classList.contains('hidden')) return;
+            if (e.key === 'Escape') { fermer(); return; }
+            if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName || '')) return;
+            if (e.key === 'ArrowRight') { e.preventDefault(); voisin(1); }
+            else if (e.key === 'ArrowLeft') { e.preventDefault(); voisin(-1); }
+        });
+
+        // La carte s'incline sous le pointeur ; le reflet holographique suit.
+        const stage = modal.querySelector('#hc-stage'), carte = modal.querySelector('#hc-carte');
+        stage.addEventListener('pointermove', (e) => {
+            if (calmeAtelier() || e.pointerType === 'touch') return;
+            const r = carte.getBoundingClientRect();
+            const px = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+            const py = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+            carte.style.setProperty('--ry', ((px - 0.5) * 22).toFixed(2) + 'deg');
+            carte.style.setProperty('--rx', ((0.5 - py) * 16).toFixed(2) + 'deg');
+            carte.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
+            carte.style.setProperty('--my', (py * 100).toFixed(1) + '%');
+            carte.classList.add('suit');
+        });
+        stage.addEventListener('pointerleave', () => {
+            carte.classList.remove('suit');
+            carte.style.setProperty('--rx', '0deg'); carte.style.setProperty('--ry', '0deg');
         });
     }
 
-    function majSegments() {
-        modal.querySelectorAll('[data-hc-style]').forEach(b => {
-            const on = b.dataset.hcStyle === reglages.style;
-            b.classList.toggle('is-on', on);
-            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    function majGalerie() {
+        const libres = STYLES.filter(disponible);
+        modal.querySelector('#hc-compte').textContent = `${libres.length} / ${STYLES.length}`;
+        modal.querySelector('#hc-jauge').style.width = (100 * libres.length / STYLES.length).toFixed(1) + '%';
+        modal.querySelectorAll('[data-hc-filtre]').forEach(b => b.classList.toggle('is-on', b.dataset.hcFiltre === filtre));
+        STYLES.forEach(x => {
+            const b = modal.querySelector(`.hc2-tuile[data-hc-style="${x.id}"]`); if (!b) return;
+            const libre = disponible(x);
+            b.classList.toggle('is-verrou', !libre);
+            b.classList.toggle('is-on', x.id === reglages.style);
+            b.hidden = (filtre === 'gagnes' && !libre) || (filtre === 'verrous' && libre);
+            b.querySelector('.hc2-tuile-nom').textContent = libre ? x.nom : '???';
+            b.title = libre ? x.nom : 'Verrouillé — clique pour un indice';
+            const pal = palette(x.id);
+            b.style.setProperty('--t1', rgb(pal.fondA)); b.style.setProperty('--t2', rgb(pal.fondB));
         });
+        const ids = libres.map(x => x.id);
+        modal.querySelector('#hc-position').textContent = `${ids.indexOf(reglages.style) + 1} / ${ids.length}`;
+    }
+
+    function majEntete() {
+        const x = styleParId(reglages.style);
+        const info = exploitDe(x);
+        modal.querySelector('#hc-titre').textContent = x.nom.replace(/^\S+\s/, '');
+        const rar = modal.querySelector('#hc-rarete');
+        rar.textContent = RARETES[x.rarete] || 'Rare';
+        rar.className = 'hc2-rarete r-' + (x.rarete || 'rare');
+        let quand = '';
+        if (info) { try { quand = new Date(info.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {} }
+        modal.querySelector('#hc-origine').textContent = info ? `${x.sceau || 'Débloqué'} · le ${quand}` : 'Offert à tous les héros';
+        const t = teintes(palette(x.id));
+        modal.style.setProperty('--hc-or', rgb(t.or));
+        modal.style.setProperty('--hc-fond', rgb(t.f1));
+        modal.style.setProperty('--hc-fond2', rgb(t.f2));
+        modal.dataset.rarete = x.rarete || 'rare';
+    }
+
+    async function choisir(id) {
+        const x = STYLES.find(y => y.id === id); if (!x) return;
+        const indice = modal.querySelector('#hc-indice');
+        if (!disponible(x)) {
+            indice.hidden = false;
+            indice.innerHTML = `<b>🔒 ${esc(RARETES[x.rarete] || 'Rare')}</b> — ${esc(x.indice || 'Un mystère.')}`;
+            return;
+        }
+        indice.hidden = true;
+        if (id === reglages.style) return;
+        reglages.style = id;
+        noter('dnd-hero-style', id);
+        majGalerie();
+        await retourner();
+    }
+    function voisin(sens) {
+        const ids = STYLES.filter(disponible).map(x => x.id);
+        if (!ids.length) return;
+        const i = ids.indexOf(reglages.style);
+        choisir(ids[(i + sens + ids.length) % ids.length]);
+    }
+
+    /** Le changement de style : la carte pivote sur la tranche, se redessine, revient. */
+    async function retourner() {
+        const pivot = modal.querySelector('#hc-pivot');
+        if (calmeAtelier()) { await rendre(); return; }
+        pivot.classList.remove('tourne-entree', 'entree');
+        pivot.classList.add('tourne-sortie');
+        await attendre(200);
+        await rendre();
+        pivot.classList.remove('tourne-sortie');
+        void pivot.offsetWidth;
+        pivot.classList.add('tourne-entree');
+        setTimeout(() => pivot.classList.remove('tourne-entree'), 420);
+    }
+
+    /** Les vignettes de la collection, dessinées une à une sans figer l'atelier. */
+    async function peindreVignettes() {
+        const jeton = ++jetonVignettes;
+        const res = await preparer(d);
+        for (const x of STYLES) {
+            if (jeton !== jetonVignettes || modal.classList.contains('hidden')) return;
+            if (!disponible(x)) continue;
+            const c = modal.querySelector(`.hc2-tuile[data-hc-style="${x.id}"] canvas`);
+            if (!c) continue;
+            try { dessiner(c, d, { style: x.id, devise: reglages.devise, arme: armeReglee(), echelle: 0.2 }, res); } catch (e) {}
+            await attendre(12);
+        }
     }
 
     /** `opts.style` impose un style : les bannières des secrets ouvrent sur le style gagné. */
@@ -922,21 +1083,8 @@
         let style = (opts && opts.style) || lire('dnd-hero-style');
         if (!STYLES.some(x => x.id === style && disponible(x))) style = 'nuit';
         if (opts && opts.style) noter('dnd-hero-style', style);
-        reglages = {
-            style,
-            devise: lire('dnd-hero-devise') || '',
-            arme: lire('dnd-hero-arme') || 'auto'
-        };
-        let gagnes = 0;
-        STYLES.forEach(x => {
-            const b = modal.querySelector(`[data-hc-style="${x.id}"]`); if (!b) return;
-            const libre = disponible(x); if (libre) gagnes++;
-            b.classList.toggle('is-verrou', !libre);
-            b.textContent = libre ? x.nom : '🔒 ???';
-            b.dataset.indice = x.indice || '';
-            b.title = libre ? x.nom : 'Style verrouillé — clique pour un indice';
-        });
-        modal.querySelector('#hc-compte').textContent = `${gagnes} / ${STYLES.length}`;
+        reglages = { style, devise: lire('dnd-hero-devise') || '', arme: lire('dnd-hero-arme') || 'auto' };
+        filtre = 'tous';
         modal.querySelector('#hc-indice').hidden = true;
         modal.querySelector('#hc-devise').value = reglages.devise;
         const sel = modal.querySelector('#hc-arme');
@@ -945,7 +1093,7 @@
             + '<option value="aucune">Aucune arme</option>';
         if (![...sel.options].some(o => o.value === reglages.arme)) reglages.arme = 'auto';
         sel.value = reglages.arme;
-        majSegments();
+        majGalerie();
 
         let peutPartager = false;
         try { peutPartager = !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'carte.jpg', { type: 'image/jpeg' })] })); } catch (e) {}
@@ -953,17 +1101,31 @@
         modal.querySelector('[data-hc="copier"]').hidden = !(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem);
 
         modal.classList.remove('hidden');
+        document.body.classList.add('hc2-ouvert');
+        const pivot = modal.querySelector('#hc-pivot');
+        pivot.classList.remove('entree', 'tourne-entree', 'tourne-sortie');
+        void pivot.offsetWidth;
+        if (!calmeAtelier()) pivot.classList.add('entree');
         await rendre();
+        const actif = modal.querySelector('.hc2-tuile.is-on');
+        if (actif) actif.scrollIntoView({ block: 'nearest' });
+        try { modal.querySelector('.hc2-fermer').focus({ preventScroll: true }); } catch (e) {}
+        peindreVignettes();
     }
 
-    function fermer() { if (modal) modal.classList.add('hidden'); }
+    function fermer() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        document.body.classList.remove('hc2-ouvert');
+        jetonVignettes++;
+    }
 
     async function rendre() {
         if (!cv || !d) return;
         modal.classList.add('is-busy');
+        majEntete();
         const res = await preparer(d);
-        const arme = reglages.arme === 'auto' ? 'auto' : reglages.arme === 'aucune' ? 'aucune' : parseInt(reglages.arme, 10);
-        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme }, res);
+        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme: armeReglee() }, res);
         cv.setAttribute('aria-label', `Carte de héros de ${d.nom}, ${d.classe || 'aventurier'} de niveau ${d.niveau}`);
         modal.classList.remove('is-busy');
     }
