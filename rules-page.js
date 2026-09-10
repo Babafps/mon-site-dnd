@@ -444,6 +444,8 @@
                 + (sub ? `<p class="rules-detail-sub">${esc(sub)}</p>` : '')
                 + parent
                 + window.SRD.renderEntry(cat, e);
+            // Les secrets des monstres (secrets-monde.js) écoutent l'ouverture d'une fiche.
+            document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat, id, box } }));
             if (window.matchMedia('(max-width: 859px)').matches) {
                 box.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }

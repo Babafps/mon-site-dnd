@@ -53,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function setStore(key, val, isJson = true) {
         if(!ACTIVE_CHAR_ID) return;
         DB.set(`${ACTIVE_CHAR_ID}_${key}`, isJson ? JSON.stringify(val) : val);
+        // Le sac prévient les secrets (secrets-monde.js : le sac sans fond).
+        if (key === 'dnd-inventory') document.dispatchEvent(new CustomEvent('fiche:inventaire'));
     }
 
     // ==========================================
@@ -1546,6 +1548,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let diceThemeColor = DB.get('dnd-dice-theme-color') || '#7A2828';
         let diceThemeRandom = DB.get('dnd-dice-theme-random') === 'true';
         function currentDiceThemeColor() {
+            // Prison des dés (secrets.js) : le dé neuf impose sa couleur pour quelques jets.
+            const relais = window.Secrets && window.Secrets.couleurDeRelais && window.Secrets.couleurDeRelais();
+            if (relais) return relais;
             const mat = currentDiceMaterial();
             // Une matière impose sa teinte : c'est elle qu'on a achetée.
             if (mat.color) return mat.color;
@@ -7098,6 +7103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!e) throw new Error('introuvable');
                     if (bodyEl) bodyEl.innerHTML = window.SRD.renderEntry(res.category, e)
                         + `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`;
+                    document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat: res.category, id: res.id, box: bodyEl } }));
                 } catch (err) {
                     if (bodyEl) bodyEl.innerHTML = `<p style="color:#c0392b;">Impossible de charger cette fiche.<br><small>${escAb(err.message)}</small></p>`;
                 }

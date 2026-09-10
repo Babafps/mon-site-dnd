@@ -17,9 +17,10 @@
 // Le cadre de portrait choisi dans « Apparence » s'applique à la carte : c'est
 // ce qui fait de chaque image partagée une vitrine des cadres.
 //
-// Un troisième style, « Légende », reste caché : il se débloque pour un
-// personnage quand il enchaîne trois 20 naturels (effets.js écrit alors la clé
-// `dnd-legende`). Noir et or, lauriers, et la date de l'exploit gravée au pied.
+// Nuit et Parchemin sont offerts ; les autres styles se DÉBLOQUENT par des
+// exploits (exploits.js), une fois pour tous les personnages du joueur :
+// Légende (trois 20 naturels d'affilée), Maudit (trois 1). Un héros de niveau
+// 20 porte en plus le ruban « Héros épique », quel que soit le style.
 // =====================================================
 (function () {
     'use strict';
@@ -53,6 +54,19 @@
     const metres = (v) => { const s = String(v || '').trim(); return /^\d+([.,]\d+)?$/.test(s) ? s + ' m' : s; };
 
     // =====================================================
+    // LES STYLES — offerts, ou gagnés par un exploit (exploits.js)
+    // =====================================================
+    const STYLES = [
+        { id: 'nuit', nom: '🌙 Nuit' },
+        { id: 'parchemin', nom: '📜 Parchemin' },
+        { id: 'legende', nom: '👑 Légende', exploit: 'triple20', entete: 'ÉLU DES DIEUX', sceau: 'Trois 20 naturels d’affilée' },
+        { id: 'maudit', nom: '☠️ Maudit', exploit: 'triple1', entete: 'MAUDIT PAR LES DÉS', sceau: 'Trois 1 naturels d’affilée' }
+    ];
+    const styleParId = (id) => STYLES.find(x => x.id === id) || STYLES[0];
+    const exploitDe = (st) => (st.exploit && window.Exploits ? window.Exploits.info(st.exploit) : null);
+    const disponible = (st) => !st.exploit || !!exploitDe(st);
+
+    // =====================================================
     // COULEURS — tirées du thème actif, pour que la carte ressemble à SA fiche
     // =====================================================
     function versRgb(c, repli) {
@@ -81,6 +95,15 @@
                 nuit: true, legende: true, primaire: [96, 64, 20], or: orL, encre: [250, 241, 220],
                 fondA: [44, 31, 13], fondB: [6, 5, 4],
                 carte: css(orL, 0.06), trait: css(orL, 0.3)
+            };
+        }
+        if (style === 'maudit') {
+            // Vert venin sur noir de marais : lui aussi se reconnaît d'une fiche à l'autre.
+            const venin = [150, 205, 92];
+            return {
+                nuit: true, maudit: true, primaire: [44, 72, 34], or: venin, encre: [228, 234, 214],
+                fondA: [24, 34, 22], fondB: [4, 7, 5],
+                carte: css(venin, 0.05), trait: css(venin, 0.26)
             };
         }
         if (style === 'parchemin') {
@@ -368,6 +391,113 @@
     }
 
     // =====================================================
+    // MAUDIT — le style secret des trois 1 naturels
+    // =====================================================
+    /** Des fissures qui partent des bords et se ramifient. */
+    function fissures(ctx, alea) {
+        const trace = (x, y, angle, longueur, epaisseur, profondeur) => {
+            const pts = [[x, y]];
+            let a = angle, fait = 0;
+            while (fait < longueur) {
+                const pas = 14 + alea() * 26;
+                a += (alea() - 0.5) * 0.9;
+                x += Math.cos(a) * pas; y += Math.sin(a) * pas; fait += pas;
+                pts.push([x, y]);
+                if (profondeur > 0 && alea() < 0.16) trace(x, y, a + (alea() < 0.5 ? -1 : 1) * (0.5 + alea() * 0.6), longueur * 0.35, epaisseur * 0.6, profondeur - 1);
+            }
+            [['rgba(0,0,0,.6)', epaisseur + 1.5, 0], ['rgba(150,205,92,.28)', Math.max(0.8, epaisseur * 0.45), 1.2]].forEach(([c, l, dx]) => {
+                ctx.strokeStyle = c; ctx.lineWidth = l;
+                ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px + dx, py + dx) : ctx.moveTo(px + dx, py + dx))); ctx.stroke();
+            });
+        };
+        ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        [[0, 0.1, 0.5], [1, 0.08, 2.5], [0, 0.72, -0.3], [1, 0.86, 3.5], [0.22, 1, -1.3]]
+            .forEach(([fx, fy, a]) => trace(fx * W, fy * H, a, 260 + alea() * 260, 3, 2));
+        ctx.restore();
+    }
+
+    function cadreMaudit(ctx, p, alea) {
+        ctx.save();
+        ctx.strokeStyle = css(p.or, 0.85); ctx.lineWidth = 5;
+        ctx.setLineDash([180, 14, 60, 22, 240, 10, 90, 30]);
+        rrect(ctx, 30, 30, W - 60, H - 60, 28); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.4; ctx.strokeStyle = css(p.or, 0.35);
+        rrect(ctx, 48, 48, W - 96, H - 96, 20); ctx.stroke();
+        // Le venin suinte du haut du cadre, de part et d'autre du titre
+        for (let i = 0; i < 8; i++) {
+            const x = i % 2 ? W - 90 - alea() * 200 : 90 + alea() * 200;
+            const long = 16 + alea() * 58, r = 3.5 + alea() * 3.5, bas = 32 + long;
+            ctx.strokeStyle = css(p.or, 0.75); ctx.lineWidth = r * 0.7;
+            ctx.beginPath(); ctx.moveTo(x, 32); ctx.lineTo(x, bas); ctx.stroke();
+            ctx.fillStyle = css(p.or, 0.9); ctx.shadowColor = css(p.or, 0.8); ctx.shadowBlur = flou(10);
+            ctx.beginPath(); ctx.moveTo(x - r, bas); ctx.quadraticCurveTo(x, bas - r * 2.6, x + r, bas); ctx.arc(x, bas, r, 0, Math.PI); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+    }
+
+    function anneauMaudit(ctx, x, y, r, p, alea) {
+        ctx.save();
+        ctx.strokeStyle = css(p.or); ctx.lineWidth = 6; ctx.shadowColor = css(p.or, 0.6); ctx.shadowBlur = flou(16);
+        // Un anneau brisé : quatre arcs, quatre éclats manquants
+        for (let i = 0; i < 4; i++) {
+            const a0 = i * Math.PI / 2 + 0.16 + alea() * 0.1, a1 = (i + 1) * Math.PI / 2 - 0.05 - alea() * 0.12;
+            ctx.beginPath(); ctx.arc(x, y, r + 4, a0, a1); ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1.6; ctx.strokeStyle = css(p.or, 0.45); ctx.setLineDash([4, 9]);
+        ctx.beginPath(); ctx.arc(x, y, r + 18, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        // Des éclats qui fendent le bord du portrait
+        ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.lineWidth = 2.2;
+        for (let i = 0; i < 5; i++) {
+            const a = alea() * Math.PI * 2;
+            let px = x + Math.cos(a) * (r - 6), py = y + Math.sin(a) * (r - 6);
+            ctx.beginPath(); ctx.moveTo(px, py);
+            for (let k = 0; k < 3; k++) { px += Math.cos(a + Math.PI + (alea() - 0.5)) * 12; py += Math.sin(a + Math.PI + (alea() - 0.5)) * 12; ctx.lineTo(px, py); }
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    /** Le portrait prend la teinte du venin, comme sous l'effet d'une malédiction. */
+    function teinteMaudite(ctx, x, y, r) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'color';
+        ctx.fillStyle = 'rgba(110,170,70,.55)'; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.globalCompositeOperation = 'multiply';
+        const g = ctx.createRadialGradient(x, y, r * 0.35, x, y, r);
+        g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(40,60,30,1)');
+        ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.restore();
+    }
+
+    /** Le ruban « Héros épique », noué au pied du portrait d'un héros de niveau 20. */
+    function ruban(ctx, x, y, texte, p) {
+        ctx.save();
+        ctx.font = `700 19px ${CINZEL}`;
+        const w = largeurEspacee(ctx, texte, 4) + 60, h = 36;
+        ctx.fillStyle = css(melange(p.primaire, [0, 0, 0], 0.45));
+        [-1, 1].forEach(sn => {
+            const bx = x + sn * (w / 2 - 10);
+            ctx.beginPath();
+            ctx.moveTo(bx, y - h / 2 + 8); ctx.lineTo(bx + sn * 34, y - h / 2 + 8);
+            ctx.lineTo(bx + sn * 22, y + 6); ctx.lineTo(bx + sn * 34, y + h / 2 + 8); ctx.lineTo(bx, y + h / 2 + 8);
+            ctx.closePath(); ctx.fill();
+        });
+        const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
+        g.addColorStop(0, css(melange(p.primaire, [255, 255, 255], 0.15))); g.addColorStop(1, css(melange(p.primaire, [0, 0, 0], 0.25)));
+        ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = flou(12);
+        rrect(ctx, x - w / 2, y - h / 2, w, h, 5); ctx.fillStyle = g; ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = css(p.or); ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = css(p.or); ctx.textBaseline = 'middle';
+        texteEspace(ctx, texte, x, y + 1, 4, true);
+        ctx.restore();
+    }
+
+    // =====================================================
     // LES DONNÉES DE LA FICHE
     // =====================================================
     function donnees() {
@@ -407,6 +537,8 @@
         ctx.imageSmoothingEnabled = true;
         if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
         const p = palette(reg.style);
+        const st = styleParId(reg.style);
+        const sceauInfo = st.sceau ? exploitDe(st) : null;
         const nuit = p.nuit;
         const alea = graine(d.nom + '|' + d.classe);
         const PX = W / 2, PY = 300, PR = 160;
@@ -420,6 +552,7 @@
         halo(ctx, W / 2, 300, 520, css(p.or, nuit ? 0.2 : 0.16));
         halo(ctx, W / 2, H + 80, 760, css(p.primaire, nuit ? 0.3 : 0.1));
         if (p.legende) { rayons(ctx, PX, PY, p); halo(ctx, PX, PY, 420, css(p.or, 0.22)); }
+        if (p.maudit) halo(ctx, W / 2, H - 40, 720, css(p.or, 0.13));
         if (!nuit) for (let i = 0; i < 7; i++) halo(ctx, alea() * W, alea() * H, 120 + alea() * 220, css([120, 80, 30], 0.05 + alea() * 0.05));
         for (let i = 0; i < (nuit ? 54 : 26); i++) {
             const x = alea() * W, y = alea() * H, r = 0.8 + alea() * 2.6;
@@ -431,6 +564,7 @@
             ctx.restore();
         }
         if (p.legende) for (let i = 0; i < 16; i++) etoile(ctx, M + alea() * (W - 2 * M), M + alea() * (H - 2 * M), 3 + alea() * 6, css(p.or, 0.35 + alea() * 0.5));
+        if (p.maudit) fissures(ctx, alea);
         ctx.save();
         ctx.globalAlpha = nuit ? 0.08 : 0.13;
         ctx.globalCompositeOperation = nuit ? 'overlay' : 'multiply';
@@ -441,10 +575,10 @@
         vignette.addColorStop(1, nuit ? 'rgba(0,0,0,.55)' : 'rgba(80,50,20,.28)');
         ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
 
-        if (p.legende) cadreLegende(ctx, p); else cadre(ctx, p, d.cadre);
+        if (p.legende) cadreLegende(ctx, p); else if (p.maudit) cadreMaudit(ctx, p, alea); else cadre(ctx, p, d.cadre);
 
         // --- En-tête ---
-        const entete = p.legende ? 'ÉLU DES DIEUX' : 'BONES & BLADES';
+        const entete = st.entete || 'BONES & BLADES';
         ctx.fillStyle = css(p.or); ctx.font = `600 24px ${CINZEL}`; ctx.textAlign = 'center';
         texteEspace(ctx, entete, W / 2, 104, 8, true);
         const lt = largeurEspacee(ctx, entete, 8);
@@ -473,8 +607,12 @@
             ctx.fillText((d.nom.trim()[0] || '?').toUpperCase(), PX, PY + 8);
             ctx.textBaseline = 'alphabetic';
         }
+        if (p.maudit) teinteMaudite(ctx, PX, PY, PR);
         ctx.restore();
-        if (p.legende) anneauLegende(ctx, PX, PY, PR, p); else anneau(ctx, PX, PY, PR, p, d.cadre);
+        if (p.legende) anneauLegende(ctx, PX, PY, PR, p);
+        else if (p.maudit) anneauMaudit(ctx, PX, PY, PR, p, alea);
+        else anneau(ctx, PX, PY, PR, p, d.cadre);
+        if ((parseInt(d.niveau, 10) || 0) >= 20) ruban(ctx, PX, PY + PR + 4, 'HÉROS ÉPIQUE', p);
 
         // --- Nom et identité ---
         ctx.textAlign = 'center';
@@ -523,8 +661,8 @@
         const infos = [['CA', d.ca], ['PV', d.pv], ['INIT', bonus(d.init)], ['VITESSE', metres(d.vitesse)], ['MAÎTRISE', bonus(d.maitrise)]].filter(([, v]) => v);
         // Le bloc du bas se centre dans la place qui reste au-dessus du pied.
         const bloc = 150 + (infos.length ? 20 + 84 : 0) + (arme ? 22 + 118 : 0);
-        // En Légende, le sceau de l'exploit prend place juste au-dessus du pied.
-        const reste = (p.legende ? 1166 : 1190) - (y + bloc);
+        // Un style gagné grave son exploit juste au-dessus du pied.
+        const reste = (sceauInfo ? 1166 : 1190) - (y + bloc);
         if (reste > 0) y += reste / 2;
 
         // --- Caractéristiques ---
@@ -622,11 +760,11 @@
             if (dg) { ctx.fillStyle = css(p.encre, 0.68); ctx.font = `italic 400 ${tDg}px ${LORA}`; ctx.fillText(dg, dx, y + 92); }
         }
 
-        // --- Le sceau de l'exploit (Légende) ---
-        if (p.legende && reg.legende) {
+        // --- Le sceau de l'exploit (styles gagnés) ---
+        if (sceauInfo) {
             let quand = '';
-            try { quand = new Date(reg.legende.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {}
-            const sceau = ['Trois 20 naturels d’affilée', quand, reg.legende.fois > 1 ? '×' + reg.legende.fois : ''].filter(Boolean).join('  ·  ');
+            try { quand = new Date(sceauInfo.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {}
+            const sceau = [st.sceau, quand, sceauInfo.fois > 1 ? '×' + sceauInfo.fois : ''].filter(Boolean).join('  ·  ');
             ctx.save();
             ctx.textAlign = 'center';
             ctx.font = `italic 400 ${ajuster(ctx, sceau, 'italic 400', LORA, 23, 15, W - 2 * M - 90)}px ${LORA}`;
@@ -686,7 +824,7 @@
                 <div class="hc-apercu"><canvas id="hc-canvas" width="${W * ECHELLE}" height="${H * ECHELLE}" role="img" aria-label="Carte de héros"></canvas></div>
                 <div class="hc-reglages">
                     <div class="hc-f"><label>Style</label>
-                        <div class="hc-seg"><button type="button" data-hc-style="nuit">🌙 Nuit</button><button type="button" data-hc-style="parchemin">📜 Parchemin</button><button type="button" data-hc-style="legende" hidden>👑 Légende</button></div>
+                        <div class="hc-seg">${STYLES.map(x => `<button type="button" data-hc-style="${x.id}"${x.exploit ? ' hidden' : ''}>${x.nom}</button>`).join('')}</div>
                     </div>
                     <div class="hc-f"><label for="hc-devise">Devise <span>facultative</span></label>
                         <input type="text" id="hc-devise" maxlength="90" placeholder="Je ne recule jamais." autocomplete="off">
@@ -738,28 +876,22 @@
         });
     }
 
-    /** Le trophée des trois 20 naturels de CE personnage, ou null. */
-    function legendeDuPerso() {
-        try { const e = JSON.parse(lire('dnd-legende') || 'null'); return e && e.date ? e : null; } catch (err) { return null; }
-    }
-
-    /** `opts.style` impose un style : la bannière de effets.js ouvre sur « legende ». */
+    /** `opts.style` impose un style : les bannières des secrets ouvrent sur le style gagné. */
     async function ouvrir(opts) {
         const app = $('app-screen');
         if (!app || app.classList.contains('hidden') || !idPerso()) { toast('Ouvre une fiche pour créer la carte de ton héros.'); return; }
         const menu = $('settings-dropdown'); if (menu) menu.classList.add('hidden');
         construire();
         d = donnees();
-        const legende = legendeDuPerso();
         let style = (opts && opts.style) || lire('dnd-hero-style');
-        if (!['nuit', 'parchemin', 'legende'].includes(style) || (style === 'legende' && !legende)) style = 'nuit';
+        if (!STYLES.some(x => x.id === style && disponible(x))) style = 'nuit';
         if (opts && opts.style) noter('dnd-hero-style', style);
         reglages = {
-            style, legende,
+            style,
             devise: lire('dnd-hero-devise') || '',
             arme: lire('dnd-hero-arme') || 'auto'
         };
-        modal.querySelector('[data-hc-style="legende"]').hidden = !legende;
+        STYLES.forEach(x => { const b = modal.querySelector(`[data-hc-style="${x.id}"]`); if (b) b.hidden = !disponible(x); });
         modal.querySelector('#hc-devise').value = reglages.devise;
         const sel = modal.querySelector('#hc-arme');
         sel.innerHTML = '<option value="auto">Choisie pour moi</option>'
@@ -785,7 +917,7 @@
         modal.classList.add('is-busy');
         const res = await preparer(d);
         const arme = reglages.arme === 'auto' ? 'auto' : reglages.arme === 'aucune' ? 'aucune' : parseInt(reglages.arme, 10);
-        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme, legende: reglages.legende }, res);
+        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme }, res);
         cv.setAttribute('aria-label', `Carte de héros de ${d.nom}, ${d.classe || 'aventurier'} de niveau ${d.niveau}`);
         modal.classList.remove('is-busy');
     }
@@ -833,5 +965,9 @@
         if (e.target.closest('#btn-hero-card, #btn-menu-hero-card')) { e.preventDefault(); ouvrir(); }
     });
 
-    window.HeroCard = { open: ouvrir };
+    window.HeroCard = {
+        open: ouvrir,
+        /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */
+        styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; }
+    };
 })();

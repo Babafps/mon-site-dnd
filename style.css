@@ -7877,9 +7877,9 @@ body.theme-dark .ql-snow .ql-picker-label { color: var(--text-color); }
     font-family: 'Lora', serif; font-size: .95rem; color: var(--text-color);
     background: var(--sheet-bg-color); border: 1px solid var(--soft-border); border-radius: var(--radius-sm);
 }
-.hc-seg { display: flex; gap: 6px; }
+.hc-seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .hc-seg button {
-    flex: 1; min-height: 44px; cursor: pointer; font-family: 'Lora', serif; font-size: .9rem;
+    flex: 1 1 calc(33.33% - 6px); min-height: 44px; cursor: pointer; font-family: 'Lora', serif; font-size: .9rem;
     color: var(--text-color); background: var(--glass-bg);
     border: 1px solid var(--soft-border); border-radius: var(--radius-sm);
 }
@@ -7894,6 +7894,16 @@ body.theme-dark .ql-snow .ql-picker-label { color: var(--text-color); }
 .hc-seg button[data-hc-style="legende"].is-on {
     color: #2a1c06; background: linear-gradient(180deg, #f6dc8c, #c8962f); border-color: #f3d27a;
     box-shadow: 0 0 14px rgba(232, 193, 106, .5);
+}
+.hc-seg button[data-hc-style="maudit"] { color: #5f8f2f; border-color: color-mix(in srgb, #9ccc65 55%, transparent); }
+.hc-seg button[data-hc-style="maudit"].is-on {
+    color: #0e1a08; background: linear-gradient(180deg, #c8ef86, #5f8f2f); border-color: #b6e36a;
+    box-shadow: 0 0 14px rgba(150, 220, 90, .45);
+}
+/* La signature du menu ☰ : discrète… et cliquable cinq fois (secrets-monde.js). */
+.menu-signature {
+    margin-top: 10px; padding: 8px 4px 2px; text-align: center; border-top: 1px solid var(--soft-border);
+    font-family: 'Lora', serif; font-style: italic; font-size: .72rem; opacity: .45; cursor: default; user-select: none;
 }
 .hc-note { margin: 0; font-size: .8rem; line-height: 1.5; font-style: italic; opacity: .6; }
 .hc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
