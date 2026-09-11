@@ -68,6 +68,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     window.SheetStore = {
         activeId: () => ACTIVE_CHAR_ID,
+        /** Lecture / écriture d'une clé JSON de la fiche active, avec les mêmes
+         *  règles que le reste du site (synchronisation cloud, événements). */
+        get: (key) => getStore(key),
+        set: (key, value) => setStore(key, value),
         list: () => charactersList.slice(),
         meta: () => charactersList.find(c => c.id === ACTIVE_CHAR_ID) || null,
 
@@ -554,6 +558,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('change', (e) => {
             const c = e.target;
             if (!c || c.type !== 'checkbox' || !c.checked) return;
+            // Une case cochée par un module (armure, assistant) n'est pas un geste.
+            if (!e.isTrusted) return;
             if (!c.isConnected) return;
             const r = c.getBoundingClientRect();
             if (!r.width) return;
@@ -572,105 +578,174 @@ document.addEventListener('DOMContentLoaded', () => {
     window.DragSort = (function () {
         const SEUIL = 6;          // px avant qu'un mouvement compte comme un glissement
         const APPUI_LONG = 250;   // ms d'appui maintenu au doigt
+        const MARGE = 60;         // px du bord où le défilement automatique s'enclenche
+
+        /** Le premier ancêtre qui défile vraiment, sinon null (la fenêtre). */
+        function zoneDefilante(el) {
+            for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+                const oy = getComputedStyle(n).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 2) return n;
+            }
+            return null;
+        }
 
         function enable(conteneur, opt) {
             if (!conteneur || conteneur.dataset.dragSort) return;
             conteneur.dataset.dragSort = '1';
             const itemSel = opt.itemSel;
-            let ligne = null, depart = null, actif = false, minuteur = null, pointeur = null;
-            let repere = null, y0 = 0, x0 = 0;
+            let ligne = null, depart = -1, actif = false, minuteur = null, pointeur = null;
+            let repere = null, x0 = 0, y0 = 0, yCourant = 0, defileur = null, boucle = 0;
+            let clicBloqueJusqua = 0;
 
-            const items = () => [...conteneur.querySelectorAll(itemSel)];
+            // Les lignes qui appartiennent à CE conteneur. Une zone triable
+            // imbriquée (les groupes d'armes dans la liste) gère les siennes :
+            // sans ce filtre, les deux zones réagissaient au même geste et la
+            // ligne était déplacée deux fois.
+            const siennes = (el) => el.closest('[data-drag-sort]') === conteneur;
+            const items = () => [...conteneur.querySelectorAll(itemSel)].filter(siennes);
 
             function poserRepere(cible, avant) {
-                if (!repere) {
-                    repere = document.createElement('div');
-                    repere.className = 'ds-drop';
+                if (!repere) { repere = document.createElement('div'); repere.className = 'ds-drop'; }
+                const ref = avant ? cible : cible.nextSibling;
+                if (repere.parentNode !== cible.parentNode || repere.nextSibling !== ref) {
+                    cible.parentNode.insertBefore(repere, ref);
                 }
-                cible.parentNode.insertBefore(repere, avant ? cible : cible.nextSibling);
             }
+
             function nettoyer() {
-                clearTimeout(minuteur);
-                if (ligne) ligne.classList.remove('is-dragging');
+                clearTimeout(minuteur); minuteur = null;
+                cancelAnimationFrame(boucle); boucle = 0;
+                if (ligne) ligne.classList.remove('is-dragging', 'ds-armed');
                 conteneur.classList.remove('ds-active');
                 if (repere && repere.parentNode) repere.parentNode.removeChild(repere);
-                repere = null; ligne = null; depart = null; actif = false; pointeur = null;
+                try { if (pointeur != null && conteneur.hasPointerCapture(pointeur)) conteneur.releasePointerCapture(pointeur); } catch (err) {}
+                repere = null; ligne = null; depart = -1; actif = false; pointeur = null; defileur = null;
                 document.body.classList.remove('ds-grabbing');
             }
 
+            // Défilement continu près des bords, même pointeur immobile : sans lui,
+            // on ne peut pas sortir une ligne d'une liste plus haute que l'écran.
+            function defiler() {
+                if (!actif) return;
+                const r = defileur ? defileur.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+                const haut = Math.max(r.top, 0) + MARGE, bas = Math.min(r.bottom, window.innerHeight) - MARGE;
+                let dy = 0;
+                if (yCourant < haut) dy = -Math.ceil((haut - yCourant) / 4);
+                else if (yCourant > bas) dy = Math.ceil((yCourant - bas) / 4);
+                if (dy) {
+                    dy = Math.max(-18, Math.min(18, dy));
+                    if (defileur) defileur.scrollTop += dy; else window.scrollBy(0, dy);
+                }
+                boucle = requestAnimationFrame(defiler);
+            }
+
             function demarrer() {
-                if (!ligne) return;
+                minuteur = null;
+                if (!ligne || !ligne.isConnected) { nettoyer(); return; }
                 actif = true;
                 try { if (pointeur != null) conteneur.setPointerCapture(pointeur); } catch (err) {}
+                ligne.classList.remove('ds-armed');
                 ligne.classList.add('is-dragging');
                 conteneur.classList.add('ds-active');
                 document.body.classList.add('ds-grabbing');
+                defileur = zoneDefilante(conteneur);
+                boucle = requestAnimationFrame(defiler);
                 if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+            }
+
+            function placer(x, y) {
+                const autres = items().filter(el => el !== ligne);
+                if (!autres.length) return;
+                const sous = document.elementFromPoint(x, y);
+                let cible = sous && sous.closest(itemSel);
+                if (cible && (cible === ligne || !siennes(cible))) cible = null;
+                if (cible) {
+                    const r = cible.getBoundingClientRect();
+                    poserRepere(cible, y < r.top + r.height / 2);
+                    return;
+                }
+                // Hors d'une ligne (en-tête de groupe, fond de la liste) : avant
+                // la première ou après la dernière, selon la hauteur du pointeur.
+                const premier = autres[0], dernier = autres[autres.length - 1];
+                if (y < premier.getBoundingClientRect().top) poserRepere(premier, true);
+                else if (y > dernier.getBoundingClientRect().bottom) poserRepere(dernier, false);
+            }
+
+            /** Rang d'arrivée, compté sans la ligne déplacée et lu dans l'ordre du
+             *  document : un repère posé en fin de groupe désigne la ligne qui
+             *  suit, et non plus la fin de toute la liste. */
+            function rangArrivee() {
+                if (!repere || !repere.parentNode) return -1;
+                const autres = items().filter(el => el !== ligne);
+                const i = autres.findIndex(el => repere.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+                return i < 0 ? autres.length : i;
             }
 
             conteneur.addEventListener('pointerdown', (e) => {
                 if (e.button != null && e.button !== 0) return;
+                if (ligne) nettoyer();                     // reste d'un geste interrompu
                 // Un clic sur un bouton reste un clic : on ne saisit que le fond
                 // de la ligne, ou la poignée si le module en déclare une.
-                if (e.target.closest('button, input, select, textarea, a, label')) return;
+                if (e.target.closest('button, input, select, textarea, a, label, [contenteditable="true"]')) return;
                 const l = e.target.closest(itemSel);
-                if (!l || !conteneur.contains(l)) return;
+                if (!l || !conteneur.contains(l) || !siennes(l)) return;
                 if (opt.handleSel && !e.target.closest(opt.handleSel)) return;
-
-                ligne = l; depart = items().indexOf(l); y0 = e.clientY; x0 = e.clientX;
+                ligne = l; depart = items().indexOf(l);
+                x0 = e.clientX; y0 = yCourant = e.clientY;
                 pointeur = e.pointerId;
                 // On NE capture PAS ici. Un pointeur capturé fait retomber le
                 // `click` sur le conteneur au lieu de la ligne : les cartes de
-                // personnage cessaient de s'ouvrir. La capture attend donc que
-                // le glissement soit réellement engagé (voir demarrer()).
-                if (e.pointerType === 'touch') minuteur = setTimeout(demarrer, APPUI_LONG);
+                // personnage cessaient de s'ouvrir. La capture attend que le
+                // glissement soit réellement engagé (voir demarrer()).
+                if (e.pointerType === 'touch') { ligne.classList.add('ds-armed'); minuteur = setTimeout(demarrer, APPUI_LONG); }
             });
 
             conteneur.addEventListener('pointermove', (e) => {
-                if (!ligne) return;
+                if (!ligne || e.pointerId !== pointeur) return;
+                // Bouton relâché hors de la liste : son `pointerup` n'est jamais
+                // arrivé ici. Sans ce garde-fou, survoler la liste plus tard
+                // relançait un glissement « fantôme ».
+                if (e.pointerType !== 'touch' && e.buttons === 0) { nettoyer(); return; }
+                if (!ligne.isConnected) { nettoyer(); return; }   // liste redessinée entre-temps
                 if (!actif) {
-                    const d = Math.abs(e.clientY - y0);
-                    // Au doigt, un mouvement avant l'appui long = défilement : on lâche.
+                    const d = Math.hypot(e.clientX - x0, e.clientY - y0);
+                    // Au doigt, bouger avant la fin de l'appui long = défiler : on lâche.
                     if (e.pointerType === 'touch') { if (d > SEUIL) nettoyer(); return; }
-                    if (d < SEUIL && Math.abs(e.clientX - x0) < SEUIL) return;
+                    if (d < SEUIL) return;
                     demarrer();
                 }
                 e.preventDefault();
-                // Défilement automatique près des bords : sans lui, on ne peut
-                // pas sortir une ligne d'une liste plus haute que l'écran.
-                const marge = 70, vitesse = 14;
-                if (e.clientY < marge) window.scrollBy(0, -vitesse);
-                else if (e.clientY > window.innerHeight - marge) window.scrollBy(0, vitesse);
-                const sous = document.elementFromPoint(e.clientX, e.clientY);
-                const cible = sous && sous.closest(itemSel);
-                if (!cible || cible === ligne || !conteneur.contains(cible)) return;
-                const r = cible.getBoundingClientRect();
-                poserRepere(cible, e.clientY < r.top + r.height / 2);
+                yCourant = e.clientY;
+                placer(e.clientX, e.clientY);
             }, { passive: false });
 
-            const lacher = (e) => {
-                if (!ligne) return;
-                if (!actif) { nettoyer(); return; }
-                let arrivee = -1;
-                if (repere && repere.parentNode) {
-                    const apres = items().filter(x => x !== ligne);
-                    const suivant = repere.nextElementSibling;
-                    const i = suivant ? apres.indexOf(suivant) : -1;
-                    arrivee = i < 0 ? apres.length : i;
-                }
-                const d = depart;
-                try { if (pointeur != null) conteneur.releasePointerCapture(pointeur); } catch (err) {}
-                // Un glissement ne doit pas se terminer par un clic : sinon lâcher
-                // une arme sur sa liste déclencherait aussi son bouton.
-                const avaler = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
-                conteneur.addEventListener('click', avaler, { capture: true, once: true });
-                setTimeout(() => conteneur.removeEventListener('click', avaler, true), 0);
+            // Au doigt, une fois le glissement engagé, la page ne doit plus défiler :
+            // sinon le navigateur annule le geste (pointercancel) au premier mouvement.
+            conteneur.addEventListener('touchmove', (e) => { if (actif && e.cancelable) e.preventDefault(); }, { passive: false });
+            // L'appui long ouvrirait le menu contextuel du téléphone.
+            conteneur.addEventListener('contextmenu', (e) => { if (ligne) e.preventDefault(); });
+
+            // Un glissement ne se termine jamais par un clic : lâcher une arme sur
+            // sa liste déclencherait aussi son bouton. Au doigt, ce clic arrive
+            // parfois bien après le lâcher : on bloque donc une courte fenêtre.
+            conteneur.addEventListener('click', (e) => {
+                if (Date.now() < clicBloqueJusqua) { e.stopPropagation(); e.preventDefault(); }
+            }, true);
+
+            conteneur.addEventListener('pointerup', (e) => {
+                if (!ligne || e.pointerId !== pointeur) return;
+                if (!actif || !ligne.isConnected) { nettoyer(); return; }
+                const arrivee = rangArrivee(), d = depart;
+                clicBloqueJusqua = Date.now() + 350;
                 nettoyer();
                 if (arrivee >= 0 && d >= 0 && arrivee !== d) opt.onDrop(d, arrivee);
-            };
-            conteneur.addEventListener('pointerup', lacher);
-            conteneur.addEventListener('pointercancel', nettoyer);
-            window.addEventListener('blur', nettoyer);
+            });
+            conteneur.addEventListener('pointercancel', () => { if (ligne) nettoyer(); });
+            conteneur.addEventListener('lostpointercapture', () => { if (actif) nettoyer(); });
+            // Relâché hors de la liste avant que le glissement ne commence.
+            window.addEventListener('pointerup', (e) => { if (ligne && !actif && e.pointerId === pointeur) nettoyer(); });
+            window.addEventListener('blur', () => { if (ligne) nettoyer(); });
+            document.addEventListener('visibilitychange', () => { if (document.hidden && ligne) nettoyer(); });
         }
 
         /** Déplace un élément d'un tableau, de `de` vers `vers`.
@@ -1136,10 +1211,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ALL_WIDGETS.forEach(wId => { const w = document.getElementById(wId); if(w) storage.appendChild(w); });
         }
 
-        const layoutSelector = document.getElementById('layout-selector'); const layoutTabsContainer = document.getElementById('layout-tabs-container'); const layoutClassicContainer = document.getElementById('layout-classic-container'); const layoutCustomContainer = document.getElementById('layout-custom-container'); const btnEditCustom = document.getElementById('btn-edit-custom'); let isEditMode = false;
+        const layoutClassicContainer = document.getElementById('layout-classic-container');
         
         const DEFAULT_CLASSIC_LAYOUT = { 'col-left': ['widget-proficiency', 'widget-inspiration', 'widget-concentration', 'widget-stats', 'widget-training', 'widget-quests'], 'col-center': ['widget-combat', 'widget-hp', 'widget-rests', 'widget-traits', 'widget-attacks', 'widget-inventory', 'widget-currency', 'widget-companion'], 'col-right': ['widget-magic', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'col-bottom': ['widget-appearance', 'widget-notes'] };
-        const DEFAULT_TABS_LAYOUT = { 'tab-strict-gen': ['widget-proficiency', 'widget-concentration', 'widget-inspiration', 'widget-stats', 'widget-rests', 'widget-appearance', 'widget-traits', 'widget-training', 'widget-companion'], 'tab-strict-com': ['widget-combat', 'widget-hp', 'widget-attacks', 'widget-currency', 'widget-inventory'], 'tab-strict-mag': ['widget-magic', 'widget-abilities', 'widget-macros', 'widget-calculator'], 'tab-strict-not': ['widget-quests', 'widget-notes'] };
 
         // ===== AFFICHAGE TÉLÉPHONE (≤700px) : une section à la fois + barre de navigation basse =====
         const MOBILE_LAYOUT = {
@@ -1201,86 +1275,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function applyWidgetSizes() { ALL_WIDGETS.forEach(wId => { const el = document.getElementById(wId); if(el) { el.classList.remove('widget-full', 'widget-half', 'widget-third'); if(['widget-inspiration', 'widget-concentration', 'widget-proficiency'].includes(wId)) { el.classList.add('widget-third'); } else { el.classList.add('widget-full'); } } }); }
 
-        let customProfiles = []; try { customProfiles = JSON.parse(DB.get('dnd-global-profiles')) || []; } catch(e) { customProfiles = []; }
 
-        function updateLayoutSelectorOptions() { if(!layoutSelector) return; const currentVal = getStore('dnd-layout-mode', false) || 'classic'; layoutSelector.innerHTML = `<option value="classic">📜 Mode Classique</option><option value="tabs">📑 Mode Onglets</option><option value="custom">🧩 Mode Personnalisé (Brouillon)</option>`; customProfiles.forEach(p => { let opt = document.createElement('option'); opt.value = p.id; opt.textContent = `💾 Profil: ${p.name}`; layoutSelector.appendChild(opt); }); let found = Array.from(layoutSelector.options).some(o => o.value === currentVal); layoutSelector.value = found ? currentVal : 'classic'; }
 
-        const btnSaveAsProfile = document.getElementById('btn-save-as-profile'); if(btnSaveAsProfile) { btnSaveAsProfile.addEventListener('click', () => { let name = prompt("Donnez un nom à ce profil :"); if(name && name.trim() !== '') { let newProf = { id: 'prof_' + Date.now(), name: name.trim(), layout: JSON.parse(JSON.stringify(customLayout)) }; customProfiles.push(newProf); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); layoutSelector.value = newProf.id; applyLayout(newProf.id); } }); }
-        const btnRenameProfile = document.getElementById('btn-rename-profile'); if(btnRenameProfile) { btnRenameProfile.addEventListener('click', () => { let selValue = layoutSelector.value; let prof = customProfiles.find(p => p.id === selValue); if(prof) { let newName = prompt("Nouveau nom :", prof.name); if(newName && newName.trim() !== '') { prof.name = newName.trim(); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); } } }); }
-        const btnDeleteProfile = document.getElementById('btn-delete-profile'); if(btnDeleteProfile) { btnDeleteProfile.addEventListener('click', () => { let selValue = layoutSelector.value; if(confirm("Supprimer ce profil ?")) { customProfiles = customProfiles.filter(p => p.id !== selValue); DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); updateLayoutSelectorOptions(); applyLayout('classic'); } }); }
-
-        let customLayout = []; let activeCustomTabId = null; let managerActiveTabId = null; let hiddenCustomWidgets = [];
-        // Les trois anciens modules de magie ont fusionné en « widget-magic ».
-        // Sans cette reprise, une disposition personnalisée enregistrée avant la
-        // refonte perdrait la magie au lieu de l'afficher.
-        const MAGIC_OLD = ['widget-magic-stats', 'widget-spells', 'widget-prepared-spells'];
-        function migrateMagicLayout(tabs) {
-            if (!Array.isArray(tabs)) return tabs;
-            tabs.forEach(t => ['col1','col2','col3'].forEach(c => {
-                if (!Array.isArray(t[c])) return;
-                const hit = t[c].some(w => MAGIC_OLD.includes(w));
-                t[c] = t[c].filter(w => !MAGIC_OLD.includes(w));
-                if (hit && !tabs.some(x => ['col1','col2','col3'].some(y => (x[y]||[]).includes('widget-magic')))) {
-                    t[c].push('widget-magic');
-                }
-            }));
-            return tabs;
-        }
-
-        function syncHiddenWidgets() { let used = []; customLayout.forEach(t => used.push(...t.col1, ...t.col2, ...t.col3)); hiddenCustomWidgets = ALL_WIDGETS.filter(w => !used.includes(w)); }
-
-        function renderCustomSheet() { safeStoreAllWidgets(); const nav = document.getElementById('custom-tabs-nav'); if(!nav) return; nav.innerHTML = ''; if (customLayout.length <= 1) { nav.style.display = 'none'; } else { nav.style.display = 'flex'; customLayout.forEach(tab => { let btn = document.createElement('button'); btn.className = `tab-btn-strict ${tab.id === activeCustomTabId ? 'active' : ''}`; btn.textContent = tab.name; btn.onclick = () => { activeCustomTabId = tab.id; renderCustomSheet(); }; nav.appendChild(btn); }); } let activeTab = customLayout.find(t => t.id === activeCustomTabId); if(!activeTab) { activeTab = customLayout[0]; activeCustomTabId = activeTab.id; } const c1 = document.getElementById('custom-col-1'); c1.innerHTML = ''; const c2 = document.getElementById('custom-col-2'); c2.innerHTML = ''; const c3 = document.getElementById('custom-col-3'); c3.innerHTML = ''; activeTab.col1.forEach(wId => { let w = document.getElementById(wId); if(w) c1.appendChild(w); }); activeTab.col2.forEach(wId => { let w = document.getElementById(wId); if(w) c2.appendChild(w); }); activeTab.col3.forEach(wId => { let w = document.getElementById(wId); if(w) c3.appendChild(w); }); applyWidgetSizes(); }
-
-        function renderManager() { syncHiddenWidgets(); const tabsList = document.getElementById('manager-tabs-list'); if(!tabsList) return; tabsList.innerHTML = ''; customLayout.forEach(tab => { let div = document.createElement('div'); div.style.display = 'flex'; div.style.alignItems = 'center'; div.style.gap = '5px'; div.style.background = tab.id === managerActiveTabId ? 'var(--primary-color)' : 'rgba(0,0,0,0.1)'; div.style.color = tab.id === managerActiveTabId ? 'white' : 'var(--text-color)'; div.style.padding = '5px 10px'; div.style.borderRadius = '5px'; let input = document.createElement('input'); input.value = tab.name; input.style.border = 'none'; input.style.background = 'transparent'; input.style.color = 'inherit'; input.style.fontWeight = 'bold'; input.style.width = '120px'; input.onchange = (e) => { tab.name = e.target.value.trim() || 'Onglet'; saveCustomLayout(); renderManager(); renderCustomSheet(); }; div.appendChild(input); let btnSelect = document.createElement('button'); btnSelect.innerHTML = '⚙️'; btnSelect.className = 'btn-small'; btnSelect.style.background = 'transparent'; btnSelect.onclick = () => { managerActiveTabId = tab.id; renderManager(); }; div.appendChild(btnSelect); if (customLayout.length > 1) { let btnDel = document.createElement('button'); btnDel.innerHTML = 'X'; btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.onclick = () => { if(confirm(`Supprimer l'onglet "${tab.name}" ?`)) { customLayout = customLayout.filter(t => t.id !== tab.id); if(managerActiveTabId === tab.id) managerActiveTabId = customLayout[0].id; if(activeCustomTabId === tab.id) activeCustomTabId = customLayout[0].id; saveCustomLayout(); renderManager(); renderCustomSheet(); } }; div.appendChild(btnDel); } tabsList.appendChild(div); }); let activeTab = customLayout.find(t => t.id === managerActiveTabId); if(!activeTab) { activeTab = customLayout[0]; managerActiveTabId = activeTab.id; } ['col1', 'col2', 'col3'].forEach(colName => { const colContainer = document.getElementById(`manager-${colName}-list`); if(!colContainer) return; colContainer.innerHTML = ''; activeTab[colName].forEach((wId, index) => { let prettyName = wId.replace('widget-', '').toUpperCase(); colContainer.innerHTML += `<div class="manager-widget-row" style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; border-radius:4px; font-size:0.8rem;"><span class="manager-widget-name" style="font-weight:bold;">${prettyName}</span><div style="display:flex; gap:3px;"><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.5;"' : ''}>▲</button><button class="btn-small" style="background:#7f8c8d; padding:2px 6px;" onclick="window.moveCustomWidget('${managerActiveTabId}', '${colName}', ${index}, 1)" ${index === activeTab[colName].length - 1 ? 'disabled style="opacity:0.5;"' : ''}>▼</button><button class="btn-small" style="background:#e74c3c; padding:2px 6px;" onclick="window.removeCustomWidget('${managerActiveTabId}', '${colName}', ${index})">X</button></div></div>`; }); }); const sel = document.getElementById('manager-hidden-select'); if(sel) { sel.innerHTML = hiddenCustomWidgets.length === 0 ? '<option value="">(Aucun module)</option>' : hiddenCustomWidgets.map(w => `<option value="${w}">${w.replace('widget-', '').toUpperCase()}</option>`).join(''); } }
-
-        window.moveCustomWidget = (tabId, colName, index, dir) => { let tab = customLayout.find(t => t.id === tabId); let arr = tab[colName]; if (dir === -1 && index > 0) [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]]; else if (dir === 1 && index < arr.length - 1) [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]]; saveCustomLayout(); renderManager(); renderCustomSheet(); };
-        window.removeCustomWidget = (tabId, colName, index) => { let tab = customLayout.find(t => t.id === tabId); tab[colName].splice(index, 1); saveCustomLayout(); renderManager(); renderCustomSheet(); };
-        window.addCustomWidget = (colName) => { const sel = document.getElementById('manager-hidden-select'); if(!sel || !sel.value) return; let tab = customLayout.find(t => t.id === managerActiveTabId); tab[colName].push(sel.value); saveCustomLayout(); renderManager(); renderCustomSheet(); };
-        let btnAddCol1 = document.getElementById('btn-manager-add-col1'); if(btnAddCol1) btnAddCol1.onclick = () => addCustomWidget('col1'); let btnAddCol2 = document.getElementById('btn-manager-add-col2'); if(btnAddCol2) btnAddCol2.onclick = () => addCustomWidget('col2'); let btnAddCol3 = document.getElementById('btn-manager-add-col3'); if(btnAddCol3) btnAddCol3.onclick = () => addCustomWidget('col3');
-        let btnAddTab = document.getElementById('btn-manager-add-tab'); if(btnAddTab) { btnAddTab.onclick = () => { let newTab = { id: 'tab_' + Date.now(), name: 'Nouvel Onglet', col1: [], col2: [], col3: [] }; customLayout.push(newTab); managerActiveTabId = newTab.id; saveCustomLayout(); renderManager(); renderCustomSheet(); }; }
-        
-        const btnResetCustomLayout = document.getElementById('btn-reset-custom-layout');
-        if (btnResetCustomLayout) {
-            btnResetCustomLayout.addEventListener('click', () => {
-                if (confirm("Réinitialiser cette disposition personnalisée à l'état par défaut ?")) {
-                    customLayout = [{
-                        id: 'tab_custom_default',
-                        name: 'Ma Fiche',
-                        col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']],
-                        col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']],
-                        col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']]
-                    }];
-                    managerActiveTabId = customLayout[0].id;
-                    activeCustomTabId = customLayout[0].id;
-                    saveCustomLayout();
-                    renderManager();
-                    renderCustomSheet();
-                }
-            });
-        }
-        
-        function saveCustomLayout() { let mode = getStore('dnd-layout-mode', false) || 'classic'; if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { prof.layout = customLayout; DB.set('dnd-global-profiles', JSON.stringify(customProfiles)); } } else { setStore('dnd-custom-layout', customLayout); } }
-        if(btnEditCustom) btnEditCustom.addEventListener('click', () => { isEditMode = !isEditMode; const manager = document.getElementById('custom-layout-manager'); if(manager) manager.classList.toggle('hidden', !isEditMode); if(isEditMode) { renderManager(); btnEditCustom.textContent = "✅ Terminer Édition"; } else { btnEditCustom.textContent = "⚙️ Modifier Disposition"; } });
-        updateLayoutSelectorOptions(); 
-
-        function applyLayout(mode, opts) {
-            setStore('dnd-layout-mode', mode, false); isEditMode = false; const profileActions = document.getElementById('profile-actions'); if(profileActions) { if(mode.startsWith('prof_')) profileActions.classList.remove('hidden'); else profileActions.classList.add('hidden'); }
-            if(document.getElementById('custom-layout-manager')) document.getElementById('custom-layout-manager').classList.add('hidden'); if(btnEditCustom) btnEditCustom.textContent = "⚙️ Modifier Disposition";
-            if(layoutTabsContainer) layoutTabsContainer.classList.add('hidden'); if(layoutClassicContainer) layoutClassicContainer.classList.add('hidden'); if(layoutCustomContainer) layoutCustomContainer.classList.add('hidden');
+        // Une seule disposition sur grand écran : la classique (trois colonnes
+        // et une zone basse). Les modes « Onglets » et « Personnalisé » ont été
+        // retirés : une préférence enregistrée à leur nom est simplement ignorée.
+        // Le téléphone garde son affichage dédié, par sections.
+        function applyLayout(_mode, opts) {
             safeStoreAllWidgets(); applyWidgetSizes();
-
-            // Téléphone : l'affichage mobile dédié remplace les modes bureau (le mode choisi reste mémorisé pour le grand écran)
             const mobile = isMobileView() && !(opts && opts.forceDesktop);
             document.body.classList.toggle('mobile-sheet', mobile);
-            if (mobile) { renderMobileSheet(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); return; }
+            if (layoutClassicContainer) layoutClassicContainer.classList.toggle('hidden', mobile);
+            if (mobile) { renderMobileSheet(); return; }
             const mobContainer = document.getElementById('layout-mobile-container'); if (mobContainer) mobContainer.classList.add('hidden');
-
-            if (mode === 'tabs' && layoutTabsContainer) { layoutTabsContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_TABS_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } } switchStrictTab('tab-strict-gen');
-            } else if (mode === 'classic' && layoutClassicContainer) { layoutClassicContainer.classList.remove('hidden'); for (const [containerId, widgetList] of Object.entries(DEFAULT_CLASSIC_LAYOUT)) { const container = document.getElementById(containerId); if (container) { widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); }); } }
-            } else if (mode === 'custom' || mode.startsWith('prof_')) { layoutCustomContainer.classList.remove('hidden'); if (mode.startsWith('prof_')) { let prof = customProfiles.find(p => p.id === mode); if (prof) { customLayout = migrateMagicLayout(prof.layout); } else { applyLayout('classic'); return; } } else { let savedBrouillon = getStore('dnd-custom-layout'); if (savedBrouillon && Array.isArray(savedBrouillon)) { customLayout = migrateMagicLayout(savedBrouillon); } else { customLayout = [{ id: 'tab_custom_default', name: 'Ma Fiche', col1: [...DEFAULT_CLASSIC_LAYOUT['col-left']], col2: [...DEFAULT_CLASSIC_LAYOUT['col-center']], col3: [...DEFAULT_CLASSIC_LAYOUT['col-right']] }]; } } if (!customLayout.find(t => t.id === activeCustomTabId)) { activeCustomTabId = customLayout[0].id; managerActiveTabId = customLayout[0].id; } renderCustomSheet(); }
-            if(settingsDropdown) settingsDropdown.classList.add('hidden');
+            for (const [containerId, widgetList] of Object.entries(DEFAULT_CLASSIC_LAYOUT)) {
+                const container = document.getElementById(containerId);
+                if (container) widgetList.forEach(widgetId => { const w = document.getElementById(widgetId); if (w) container.appendChild(w); });
+            }
         }
-        if(layoutSelector) layoutSelector.addEventListener('change', (e) => applyLayout(e.target.value));
 
         // Câblage de l'affichage téléphone : onglets bas, bandeau vital, chevron d'en-tête, bascule au redimensionnement
         document.querySelectorAll('#mobile-nav .mob-tab').forEach(btn => btn.addEventListener('click', () => switchMobileTab(btn.dataset.msec)));
@@ -1309,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         const onMobileMediaChange = () => {
-            applyLayout(getStore('dnd-layout-mode', false) || 'classic');
+            applyLayout();
             // Resynchronise le lecteur de musique avec la préférence de l'écran courant (mobile = caché par défaut)
             const musicPref = isMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') || 'false');
             if (window.MusicPlayer) window.MusicPlayer.setVisible(musicPref === 'true', false);
@@ -1348,8 +1360,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (next < 0 || next >= MOBILE_TAB_ORDER.length) return;
             switchMobileTab(MOBILE_TAB_ORDER[next]);
         }, { passive: true });
-        function switchStrictTab(tabId) { document.querySelectorAll('.tab-btn-strict').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId)); document.querySelectorAll('#layout-tabs-container .tab-content').forEach(content => { content.classList.toggle('hidden', content.id !== tabId); content.classList.toggle('active', content.id === tabId); }); }
-        document.querySelectorAll('.tab-btn-strict').forEach(btn => { btn.addEventListener('click', () => switchStrictTab(btn.dataset.tab)); });
 
         // ===== LANCEUR D'EXPRESSION DE DÉS (remplace l'ancienne calculatrice) =====
         // Comprend « 2d6+3 », « 8d6 », « 1d20+5 », « 4d6-1 », « 1d8+2d6+3 »…
@@ -3635,6 +3645,89 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (touched) { setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); }
                 return touched;
+            },
+            /** Armes du SRD -> module Attaques, complètes : dégâts, portée,
+             *  propriétés, toucher calculé. Même forme que « Forger une arme ». */
+            addSrdWeapons(list) {
+                const PROP = (window.SRDAuto && window.SRDAuto.PROP_FR) || {};
+                const DMG = (window.SRDAuto && window.SRDAuto.DMG_FR) || {};
+                const portee = (w) => {
+                    const bits = [];
+                    if (w.range_m) {
+                        if (w.weapon_range === 'Ranged') bits.push(`${w.range_m.normal} m${w.range_m.long ? '/' + w.range_m.long + ' m' : ''}`);
+                        else if (w.range_m.normal && w.range_m.normal !== 1.5) bits.push(`allonge ${w.range_m.normal} m`);
+                    }
+                    if (w.throw_range_m) bits.push(`jet ${w.throw_range_m.normal} m${w.throw_range_m.long ? '/' + w.throw_range_m.long + ' m' : ''}`);
+                    return bits.join(' · ');
+                };
+                let added = 0;
+                (list || []).forEach(w => {
+                    if (!w || !w.name || attacks.some(a => a.name === w.name)) return;
+                    const props = Array.isArray(w.properties) ? w.properties : [];
+                    attacks.push({
+                        name: w.name, category: 'Général', rarity: w.rarity || '', mode: 'attack', bonus: '',
+                        saveDC: '', saveAbility: '', range: portee(w), crit: 20,
+                        props: props.filter(p => p !== 'versatile' || !w.versatile_damage).map(p => PROP[p] || p).join(', '),
+                        dmg: (w.damage && w.damage.dice) || '',
+                        dmgType: w.damage ? (DMG[w.damage.type] || w.damage.type || '') : '',
+                        dmg2: w.versatile_damage || '', bonusDmg: '', bonusDmgType: '',
+                        damages: [], abilities: [], masteries: [],
+                        notes: '', desc: Array.isArray(w.desc) ? w.desc.join('\n\n') : (w.desc || ''),
+                        reqAttune: false, isAttuned: false, pinned: false, equipped: true,
+                        ammo: null, ammoMax: null, charges: null, chargesMax: null, recharge: 'none', rechargeDice: '',
+                        autoAbility: w.damage ? 'auto' : 'manual',
+                        wtype: props.includes('thrown') ? 'thrown' : (/ranged|distance/i.test(w.weapon_range || '') ? 'ranged' : 'melee'),
+                        hitExtra: '', dmgExtra: '', noProf: false
+                    });
+                    added++;
+                });
+                if (added) { setStore('dnd-attacks', attacks); renderAttacks(); }
+                return added;
+            },
+            /** Objets complets -> sac : [{ name, qty, weight, value, desc }].
+             *  Un objet déjà présent voit simplement sa quantité augmenter. */
+            addItems(items) {
+                let added = 0;
+                (items || []).forEach(it => {
+                    const name = String((it && it.name) || '').trim();
+                    if (!name) return;
+                    const qty = parseInt(it.qty, 10) || 1;
+                    const same = inventory.find(i => i.name === name);
+                    if (same) { same.qty = (parseInt(same.qty, 10) || 1) + qty; added++; return; }
+                    inventory.push({
+                        name, qty, weight: it.weight != null && it.weight !== '' ? it.weight : '-',
+                        category: 'Général', pinned: false, value: it.value || '', desc: it.desc || ''
+                    });
+                    added++;
+                });
+                if (added) { setStore('dnd-inventory', inventory); renderInventory(); }
+                return added;
+            },
+            /** { po: 15, pa: 3 } -> ajouté à la bourse. */
+            addCoins(map) {
+                let touched = 0;
+                Object.entries(map || {}).forEach(([k, n]) => {
+                    const el = document.getElementById('coin-' + k);
+                    const v = parseInt(n, 10) || 0;
+                    if (!el || !v) return;
+                    el.value = (parseInt(el.value, 10) || 0) + v;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    touched++;
+                });
+                return touched;
+            },
+            /** Sorts du SRD -> grimoire, préparés. Un sort déjà inscrit ne l'est pas deux fois. */
+            addSrdSpells(entries) {
+                let added = 0;
+                (entries || []).forEach(s => {
+                    if (!s || !window.srdSpellToSheet) return;
+                    const f = window.srdSpellToSheet(s);
+                    if (spells.some(x => window.SRD.fold(x.name || '') === window.SRD.fold(f.name))) return;
+                    spells.push(Object.assign(f, { prepared: true, pinned: false }));
+                    added++;
+                });
+                if (added) { setStore('dnd-spells', spells); renderGrimoire(); }
+                return added;
             },
             refresh() { updateStatsAndSkills(); }
         };
@@ -6407,7 +6500,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if(entries.length === 0) {
                 listEl.innerHTML = `<div class="compact-empty">${inventory.length === 0
-                    ? 'Sac vide.<br><small>Tape un nom dans la ligne ci-dessus — ou menu ☰ → Aide → « Remplir mon sac ».</small>'
+                    ? 'Sac vide.<br><small>Tape un nom dans la ligne ci-dessus — ou menu ☰ → Aide → « Découvrir la fiche ».</small>'
                     : (needle ? 'Aucun objet ne correspond à « ' + escAb(invSearch) + ' ».' : 'Aucun objet dans cet onglet.')}</div>`;
             } else {
                 listEl.innerHTML = entries.map(({ item, index }) => {
@@ -6991,7 +7084,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('#prof-armor-light, #prof-armor-med, #prof-armor-heavy, #prof-armor-shield, #prof-weapon-simple, #prof-weapon-martial, #prof-weapon-other').forEach(input => { const saved = getStore('dnd-sheet-'+input.id, false); if (saved !== null) input.checked = (saved === 'true'); input.addEventListener('change', () => { setStore('dnd-sheet-'+input.id, input.checked, false); updateStatsAndSkills(); }); });
         }
 
-        let savedLayout = getStore('dnd-layout-mode', false) || 'classic'; if(layoutSelector) layoutSelector.value = savedLayout; applyLayout(savedLayout);
+        applyLayout();
         initSkillProfSave(); initGlobalSave(); restoreCollapsedWidgets(); 
         // Bonus de maîtrise : auto-calculé depuis le niveau UNIQUEMENT s'il n'a jamais été saisi
         // (même logique que l'initiative ci-dessous — une valeur éditée à la main survit au rechargement ;
@@ -7078,8 +7171,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.PrintSheet) {
                 try { const ok = await window.PrintSheet.print(); if (ok) return; } catch (e) { console.warn('Impression fiche officielle KO, repli :', e); }
             }
-            applyLayout('classic', { forceDesktop: true }); window.print();
-            if (isMobileView()) applyLayout(getStore('dnd-layout-mode', false) || 'classic');
+            applyLayout(null, { forceDesktop: true }); window.print();
+            if (isMobileView()) applyLayout();
         });
 
         // ==========================================

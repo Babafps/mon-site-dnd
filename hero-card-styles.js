@@ -1493,6 +1493,93 @@
     });
 
     // =====================================================
+    // LA DÉCOUVERTE DE LA FICHE (help.js) — deux styles gagnés en chemin
+    // =====================================================
+    /** Une rose des vents : huit branches bicolores. */
+    function roseDesVents(ctx, x, y, r, c1, c2) {
+        ctx.save(); ctx.translate(x, y);
+        for (let i = 0; i < 8; i++) {
+            const long = i % 2 === 0 ? r : r * 0.55;
+            ctx.save(); ctx.rotate(i * Math.PI / 4);
+            ctx.beginPath(); ctx.moveTo(0, -long); ctx.lineTo(r * 0.12, 0); ctx.lineTo(0, r * 0.12); ctx.closePath(); ctx.fillStyle = c1; ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -long); ctx.lineTo(-r * 0.12, 0); ctx.lineTo(0, r * 0.12); ctx.closePath(); ctx.fillStyle = c2; ctx.fill();
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    STYLES.push({
+        id: 'explorateur', nom: '🧭 Explorateur', exploit: 'decouverte-1', entete: 'EXPLORATEUR DE LA FICHE', sceau: 'Trois thèmes découverts', indice: 'Menu ☰ → Aide & raccourcis → Découvrir la fiche.',
+        palette: { fondA: [22, 52, 58], fondB: [4, 12, 16], or: [214, 190, 120], encre: [240, 234, 214], primaire: [40, 110, 118] },
+        fond(ctx, T) {
+            const { W, H, PX, PY, PR } = T;
+            T.halo(ctx, PX, PY, 560, 'rgba(90,170,170,.18)');
+            // Le quadrillage d'une carte marine
+            ctx.save(); ctx.strokeStyle = 'rgba(214,190,120,.08)'; ctx.lineWidth = 1.5;
+            for (let x = 60; x < W; x += 90) { ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, H - 40); ctx.stroke(); }
+            for (let y = 60; y < H; y += 90) { ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(W - 40, y); ctx.stroke(); }
+            ctx.restore();
+            // Une grande rose des vents derrière le portrait
+            ctx.save(); ctx.globalAlpha = 0.2; roseDesVents(ctx, PX, PY, PR + 180, 'rgb(214,190,120)', 'rgb(110,160,160)'); ctx.restore();
+            cercle(ctx, PX, PY, PR + 118, 'rgba(214,190,120,.25)', 2, [4, 10]);
+            semis(T, 40, (x, y, k) => disque(ctx, x, y, 0.8 + k * 1.6, `rgba(240,234,214,${0.1 + k * 0.3})`));
+        },
+        cadre(ctx, T) {
+            doubleCadre(ctx, T, T.css(T.p.or, 0.75), 3, T.css(T.p.or, 0.3), [12, 6]);
+            coins(ctx, T, c => roseDesVents(c, 0, 0, 22, 'rgba(214,190,120,.95)', 'rgba(140,120,70,.95)'));
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, T.css(T.p.or, 0.95), 4, T.css(T.p.or, 0.35));
+            // Les quatre points cardinaux, en losanges
+            [[0, -1], [1, 0], [0, 1], [-1, 0]].forEach(([dx, dy]) => T.losange(ctx, PX + dx * (PR + 17), PY + dy * (PR + 17), 7, T.css(T.p.or, 0.95)));
+        }
+    });
+
+    STYLES.push({
+        id: 'cartographe', nom: '🗺️ Cartographe', exploit: 'decouverte-2', entete: 'CARTOGRAPHE DE LA FICHE', sceau: 'Toute la fiche découverte', indice: 'Découvre les sept thèmes de la visite guidée.',
+        palette: { fondA: [72, 52, 30], fondB: [18, 11, 5], or: [230, 196, 120], encre: [250, 240, 218], primaire: [140, 90, 40] },
+        fond(ctx, T) {
+            const { W, H } = T;
+            T.halo(ctx, T.PX, T.PY, 600, 'rgba(230,196,120,.16)');
+            // Des courbes de niveau
+            ctx.save(); ctx.strokeStyle = 'rgba(230,196,120,.1)'; ctx.lineWidth = 2;
+            semis(T, 5, (cx, cy, k) => {
+                for (let r = 40; r < 220; r += 36) { ctx.beginPath(); ctx.ellipse(cx, cy, r * (1 + k * 0.4), r * 0.7, k * 3, 0, TAU); ctx.stroke(); }
+            });
+            ctx.restore();
+            // Un itinéraire en pointillés, et la croix de l'arrivée
+            const ax = W - 150, ay = H * 0.62;
+            ctx.save(); ctx.strokeStyle = 'rgba(200,80,60,.55)'; ctx.lineWidth = 4; ctx.setLineDash([14, 12]); ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(110, H - 150); ctx.bezierCurveTo(W * 0.25, H * 0.55, W * 0.7, H * 0.95, ax, ay); ctx.stroke();
+            ctx.restore();
+            ctx.save(); ctx.strokeStyle = 'rgba(200,80,60,.85)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(ax - 18, ay - 18); ctx.lineTo(ax + 18, ay + 18); ctx.moveTo(ax + 18, ay - 18); ctx.lineTo(ax - 18, ay + 18); ctx.stroke();
+            ctx.restore();
+        },
+        cadre(ctx, T) {
+            const { W, H, css, p } = T;
+            doubleCadre(ctx, T, css(p.or, 0.8), 4, css(p.or, 0.35));
+            // Les graduations d'une carte, sur les quatre bords
+            ctx.save(); ctx.strokeStyle = css(p.or, 0.55); ctx.lineWidth = 2;
+            for (let x = 90, k = 0; x < W - 60; x += 45, k++) {
+                const l = k % 2 ? 10 : 18;
+                ctx.beginPath(); ctx.moveTo(x, 30); ctx.lineTo(x, 30 + l); ctx.moveTo(x, H - 30); ctx.lineTo(x, H - 30 - l); ctx.stroke();
+            }
+            for (let y = 90, k = 0; y < H - 60; y += 45, k++) {
+                const l = k % 2 ? 10 : 18;
+                ctx.beginPath(); ctx.moveTo(30, y); ctx.lineTo(30 + l, y); ctx.moveTo(W - 30, y); ctx.lineTo(W - 30 - l, y); ctx.stroke();
+            }
+            ctx.restore();
+            coins(ctx, T, c => roseDesVents(c, 0, 0, 20, css(p.or, 0.95), 'rgba(160,110,60,.95)'));
+        },
+        anneau(ctx, T) {
+            anneauBrillant(ctx, T, T.css(T.p.or, 0.95), 5, T.css(T.p.or, 0.4));
+            cercle(ctx, T.PX, T.PY, T.PR + 30, 'rgba(200,80,60,.45)', 2, [6, 8]);
+        }
+    });
+
+    // =====================================================
     // LA RARETÉ — affichée dans la vitrine de la carte
     // =====================================================
     const RARETES = {

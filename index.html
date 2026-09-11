@@ -73,76 +73,91 @@
 <div id="concentration-glow" class="hidden no-print"></div>
 
 <div class="settings-container no-print">
-    <button id="btn-settings-toggle" class="btn-icon btn-hamburger" title="Menu des paramètres">☰</button>
-    <div id="settings-dropdown" class="settings-dropdown hidden">
-        <details class="menu-cat"><summary>🧩 Ma fiche</summary><div class="menu-cat-body"><p class="menu-hint">Comment la fiche s'agence, et ce qui flotte par-dessus.</p><button type="button" id="btn-menu-hero-card" class="btn-menu-item">🃏 Créer ma carte de héros</button><hr><div class="player-only-setting">
-                    <label class="menu-label">Disposition de la fiche</label>
-                    <select id="layout-selector" class="select-layout">
-                        <option value="classic">📜 Mode Classique</option>
-                        <option value="tabs">📑 Mode Onglets</option>
-                        <option value="custom">🧩 Mode Personnalisé (Brouillon)</option>
-                    </select>
-                    <div class="mobile-layout-note">📱 Sur téléphone, la fiche passe automatiquement en affichage mobile (navigation en bas d'écran). Le mode choisi ici s'applique sur grand écran.</div>
-                    <div id="profile-actions" class="hidden" style="display:flex; gap:5px; margin-top:8px;">
-                        <button id="btn-rename-profile" class="btn-small" style="flex:1; background:#e67e22;">✏️ Renommer</button>
-                        <button id="btn-delete-profile" class="btn-small" style="flex:1; background:#e74c3c;">❌ Supprimer</button>
-                    </div>
-                </div><hr>
-                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-floating-dice" checked> 🎲 Bouton dés</label>
-                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-search-btn" checked> 🔍 Bouton recherche</label>
-                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-music-player" checked> 🎵 Lecteur de musique</label>
-            </div></details><details class="menu-cat">
-            <summary>🎨 Apparence</summary>
+    <button id="btn-settings-toggle" class="btn-icon btn-hamburger" title="Menu" aria-label="Ouvrir le menu" aria-controls="settings-dropdown" aria-expanded="false">☰</button>
+    <div class="menu-scrim hidden" data-menu-close aria-hidden="true"></div>
+    <div id="settings-dropdown" class="settings-dropdown hidden" role="dialog" aria-label="Menu des options">
+        <div class="menu-head">
+            <span class="menu-head-seal" aria-hidden="true">✦</span>
+            <div class="menu-head-txt"><b>Options</b><span>Bones &amp; Blades</span></div>
+            <button type="button" class="menu-close" data-menu-close aria-label="Fermer le menu">✕</button>
+        </div>
+
+        <details class="menu-cat" data-cat="fiche">
+            <summary><span class="menu-ico" aria-hidden="true">🧩</span><span class="menu-cat-txt"><b>Ma fiche</b><small>Carte de héros, boutons flottants</small></span></summary>
             <div class="menu-cat-body">
-                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-dark-mode"> 🌙 Mode nuit</label><label class="toggle-label menu-toggle" title="Un voile coloré recouvre l'écran quand ton personnage est empoisonné, aveuglé, effrayé, en feu…"><input type="checkbox" id="toggle-status-fx" checked> 💥 Effets d'état plein écran</label>
-                
-                <label class="menu-label">Couleurs</label>
-                <div class="menu-color"><label>Principale</label><input type="color" id="color-primary" value="#7A2828" class="color-picker"></div>
-                <div class="menu-color"><label>Accent</label><input type="color" id="color-accent" value="#C49B35" class="color-picker"></div>
-                <div class="menu-color"><label>Fond de la fiche</label><input type="color" id="color-sheet-bg" value="#FAF3E0" class="color-picker"></div>
-                <div class="menu-color"><label>Fond des blocs</label><input type="color" id="color-widget-bg" value="#FFFFFF" class="color-picker"></div>
-                <div class="menu-color"><label>Concentration</label><input type="color" id="color-concentration" value="#2980b9" class="color-picker"></div>
-                <button id="btn-reset-theme" class="btn-small" style="width:100%; margin-bottom:8px;">Réinitialiser les couleurs</button>
-                <label class="menu-label">Image de fond</label>
-                <button id="btn-change-bg" class="btn-menu-item">🖼️ Changer l'image de fond</button>
-                <button id="btn-reset-bg" class="btn-menu-item" style="color:var(--primary-hover);">↺ Supprimer l'image de fond</button>
+                <button type="button" id="btn-menu-hero-card" class="btn-menu-item">🃏 Créer ma carte de héros</button>
+                <div class="player-only-setting menu-layout-note">
+                    <span class="menu-chip">📜 Disposition classique</span>
+                    <p class="menu-hint">Sur téléphone, la fiche passe seule en affichage mobile, avec une navigation en bas d’écran.</p>
+                </div>
+                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-floating-dice" checked> <span>🎲 Bouton dés</span></label>
+                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-search-btn" checked> <span>🔍 Bouton recherche</span></label>
+                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-music-player" checked> <span>🎵 Lecteur de musique</span></label>
+            </div>
+        </details>
+
+        <details class="menu-cat" data-cat="apparence">
+            <summary><span class="menu-ico" aria-hidden="true">🎨</span><span class="menu-cat-txt"><b>Apparence</b><small>Mode nuit, couleurs, image de fond</small></span></summary>
+            <div class="menu-cat-body">
+                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-dark-mode"> <span>🌙 Mode nuit</span></label>
+                <label class="toggle-label menu-toggle" title="Un voile coloré recouvre l'écran quand ton personnage est empoisonné, aveuglé, effrayé, en feu…"><input type="checkbox" id="toggle-status-fx" checked> <span>💥 Effets d'état plein écran</span></label>
+                <span class="menu-label">Couleurs</span>
+                <div class="menu-colors">
+                    <div class="menu-color"><label for="color-primary">Principale</label><input type="color" id="color-primary" value="#7A2828" class="color-picker"></div>
+                    <div class="menu-color"><label for="color-accent">Accent</label><input type="color" id="color-accent" value="#C49B35" class="color-picker"></div>
+                    <div class="menu-color"><label for="color-sheet-bg">Fond de la fiche</label><input type="color" id="color-sheet-bg" value="#FAF3E0" class="color-picker"></div>
+                    <div class="menu-color"><label for="color-widget-bg">Fond des blocs</label><input type="color" id="color-widget-bg" value="#FFFFFF" class="color-picker"></div>
+                    <div class="menu-color"><label for="color-concentration">Concentration</label><input type="color" id="color-concentration" value="#2980b9" class="color-picker"></div>
+                </div>
+                <button type="button" id="btn-reset-theme" class="btn-menu-item menu-quiet">↺ Réinitialiser les couleurs</button>
+                <span class="menu-label">Image de fond</span>
+                <div class="menu-pair">
+                    <button type="button" id="btn-change-bg" class="btn-menu-item">🖼️ Changer</button>
+                    <button type="button" id="btn-reset-bg" class="btn-menu-item menu-quiet">↺ Retirer</button>
+                </div>
                 <input type="file" id="bg-file-input" accept="image/*" class="hidden">
             </div>
-        </details><details class="menu-cat">
-            <summary>💾 Sauvegardes</summary>
+        </details>
+
+        <details class="menu-cat" data-cat="sauvegardes">
+            <summary><span class="menu-ico" aria-hidden="true">💾</span><span class="menu-cat-txt"><b>Sauvegardes</b><small>Exporter, importer, PDF</small></span></summary>
             <div class="menu-cat-body">
-                <button id="btn-export-char" class="btn-menu-item" style="color:#8a6320;" data-io-tab="export">🪪 Exporter cette fiche</button>
-                <button id="btn-import-char" class="btn-menu-item" style="color:#27ae60;" data-io-tab="import">📤 Importer une fiche</button>
-                <button id="btn-export-pdf" class="btn-menu-item">🖨️ Enregistrer en PDF</button>
-                <hr>
+                <button type="button" id="btn-export-char" class="btn-menu-item" data-io-tab="export">🪪 Exporter cette fiche</button>
+                <button type="button" id="btn-import-char" class="btn-menu-item" data-io-tab="import">📤 Importer une fiche</button>
+                <button type="button" id="btn-export-pdf" class="btn-menu-item">🖨️ Enregistrer en PDF</button>
                 <p class="menu-hint">La sauvegarde complète emporte tous tes personnages et ton contenu personnel.</p>
-                <button id="btn-backup-export" class="btn-menu-item" style="color:#2e7d4f;">🛟 Sauvegarde complète</button>
-                <label class="btn-menu-item" style="color:#8a6320; cursor:pointer; display:block;">
-                    ♻️ Restaurer une sauvegarde <input type="file" id="backup-import-input" accept=".json" class="hidden">
-                </label>
+                <button type="button" id="btn-backup-export" class="btn-menu-item">🛟 Sauvegarde complète</button>
+                <label class="btn-menu-item menu-file">♻️ Restaurer une sauvegarde <input type="file" id="backup-import-input" accept=".json" class="hidden"></label>
             </div>
-        </details><details class="menu-cat">
-            <summary>🎓 Aide &amp; raccourcis</summary>
+        </details>
+
+        <details class="menu-cat" data-cat="aide">
+            <summary><span class="menu-ico" aria-hidden="true">🎓</span><span class="menu-cat-txt"><b>Aide &amp; raccourcis</b><small>Découverte, assistant, clavier</small></span></summary>
+            <div class="menu-cat-body menu-help">
+                <button type="button" id="btn-discover" class="menu-tile" data-discover>
+                    <span class="menu-tile-ico" aria-hidden="true">🧭</span>
+                    <span class="menu-tile-txt"><b>Découvrir la fiche</b><small>Visite intégrale ou par thème · 2 cartes de héros à gagner</small></span>
+                </button>
+                <button type="button" id="btn-pj-wizard-replay" class="menu-tile">
+                    <span class="menu-tile-ico" aria-hidden="true">✨</span>
+                    <span class="menu-tile-txt"><b>Relancer l’assistant de création</b><small>Nom, classe, origine, caractéristiques… pas à pas</small></span>
+                </button>
+                <button type="button" id="btn-shortcuts" class="menu-tile">
+                    <span class="menu-tile-ico" aria-hidden="true">⌨️</span>
+                    <span class="menu-tile-txt"><b>Raccourcis clavier</b><small>Voir et personnaliser les touches</small></span>
+                </button>
+            </div>
+        </details>
+
+        <details class="menu-cat" data-cat="compte">
+            <summary><span class="menu-ico" aria-hidden="true">👤</span><span class="menu-cat-txt"><b>Compte &amp; abonnement</b><small>Connexion, tarifs</small></span></summary>
             <div class="menu-cat-body">
-                <p class="menu-hint">Chaque bouton ouvre une fiche courte, en étapes.</p>
-                <button class="btn-menu-item" data-help="fiche">📜 Découvrir la fiche</button>
-                <button class="btn-menu-item" data-help="armes">⚔️ Remplir mes armes</button>
-                <button class="btn-menu-item" data-help="sac">🎒 Remplir mon sac à dos</button>
-                <button class="btn-menu-item" data-help="des">🎲 Lancer les dés</button>
-                <button class="btn-menu-item" data-help="regles">📖 Les règles &amp; mon contenu</button>
-                <button class="btn-menu-item" data-help="assistant">✨ L'assistant de création</button>
-                <hr>
-                <button id="btn-pj-tuto-replay" class="btn-menu-item">🎓 Revoir la visite guidée</button>
-                <button id="btn-pj-wizard-replay" class="btn-menu-item">✨ Relancer l'assistant de création</button>
-                <button id="btn-shortcuts" class="btn-menu-item">⌨️ Raccourcis clavier</button>
+                <div id="auth-user-display" class="menu-user"></div>
+                <button type="button" id="btn-signout" class="btn-menu-item menu-danger">🚪 Se déconnecter</button>
             </div>
-        </details><details class="menu-cat">
-            <summary>👤 Compte &amp; abonnement</summary>
-            <div class="menu-cat-body">
-                <div id="auth-user-display" style="font-size:0.75rem; color:#888; text-align:center; padding:4px 0; font-style:italic;"></div>
-                <button id="btn-signout" class="btn-menu-item" style="color:#e74c3c;">🚪 Se déconnecter</button>
-            </div>
-        </details><div id="menu-signature" class="menu-signature">Bones &amp; Blades · forgé dé après dé</div></div>
+        </details>
+        <div id="menu-signature" class="menu-signature">Bones &amp; Blades · forgé dé après dé</div>
+    </div>
 </div>
 
 <div id="home-screen" class="screen-view">
@@ -222,49 +237,9 @@
             </div>
         </header>
 
-        <div id="layout-tabs-container" class="layout-wrapper hidden">
-            <nav class="tabs-nav no-print">
-                <button class="tab-btn-strict active" data-tab="tab-strict-gen">👤 Général</button>
-                <button class="tab-btn-strict" data-tab="tab-strict-com">⚔️ Combat & Sac</button>
-                <button class="tab-btn-strict" data-tab="tab-strict-mag">✨ Magie</button>
-                <button class="tab-btn-strict" data-tab="tab-strict-not">📜 Quêtes & Notes</button>
-            </nav>
-            <div id="tab-strict-gen" class="tab-content active"></div>
-            <div id="tab-strict-com" class="tab-content hidden"></div>
-            <div id="tab-strict-mag" class="tab-content hidden"></div>
-            <div id="tab-strict-not" class="tab-content hidden"></div>
-        </div>
-
         <div id="layout-classic-container" class="layout-wrapper hidden">
             <div class="classic-grid"><div id="col-left" class="sheet-col col-flex-row"></div><div id="col-center" class="sheet-col"></div><div id="col-right" class="sheet-col"></div></div>
             <div id="col-bottom" class="full-width-zone"></div>
-        </div>
-
-        <div id="layout-custom-container" class="layout-wrapper hidden">
-            <div style="text-align:center; margin-bottom: 20px;" class="no-print"><button id="btn-edit-custom" class="btn" style="background:#2980b9; color:white;">⚙️ Modifier Disposition</button></div>
-            <div id="custom-layout-manager" class="hidden no-print" style="background: var(--widget-bg); border: 2px solid var(--accent-color); border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--primary-color); margin-bottom: 10px; padding-bottom: 5px;">
-                    <div class="manager-header" style="border:none; margin:0; padding:0;">⚙️ Gestionnaire de Disposition</div>
-                    <div style="display:flex; gap:10px;">
-                        <button id="btn-reset-custom-layout" class="btn-small" style="background:#e67e22;">↺ Réinitialiser</button>
-                        <button id="btn-save-as-profile" class="btn-small" style="background:#2980b9;">💾 Enregistrer Profil</button>
-                    </div>
-                </div>
-                <div style="margin-bottom: 15px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:bold; color:var(--primary-color);">Onglets :</label><div id="manager-tabs-list" style="display:flex; gap:5px; flex-wrap:wrap;"></div><button id="btn-manager-add-tab" class="btn-small" style="background:#27ae60;">➕ Onglet</button></div>
-                <div style="background:rgba(0,0,0,0.03); padding:15px; border-radius:8px; border:1px solid #c4b487;">
-                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;" id="manager-cols-container">
-                        <div class="manager-col"><strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Col Gauche</strong><div id="manager-col1-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div></div>
-                        <div class="manager-col"><strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Col Centre</strong><div id="manager-col2-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div></div>
-                        <div class="manager-col"><strong style="display:block; margin-bottom:10px; color:var(--primary-color); border-bottom:1px solid #c4b487;">Col Droite</strong><div id="manager-col3-list" style="display:flex; flex-direction:column; gap:5px; min-height:50px;"></div></div>
-                    </div>
-                    <div style="margin-top:20px; padding-top:15px; border-top:1px dashed #c4b487; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <strong style="color:var(--primary-color);">📦 Réserve :</strong><select id="manager-hidden-select" style="flex:1; min-width:150px; padding:5px; border-radius:4px; border:1px solid var(--primary-color); font-weight:bold;"></select>
-                        <button id="btn-manager-add-col1" class="btn-small">➔ Gauche</button><button id="btn-manager-add-col2" class="btn-small">➔ Centre</button><button id="btn-manager-add-col3" class="btn-small">➔ Droite</button>
-                    </div>
-                </div>
-            </div>
-            <nav id="custom-tabs-nav" class="tabs-nav no-print"></nav>
-            <div class="classic-grid"><div id="custom-col-1" class="sheet-col col-flex-row"></div><div id="custom-col-2" class="sheet-col"></div><div id="custom-col-3" class="sheet-col"></div></div>
         </div>
 
         <!-- Affichage téléphone (≤700px) : une section à la fois, pilotée par la barre de navigation basse #mobile-nav -->
@@ -282,7 +257,7 @@
             <div id="widget-proficiency" class="draggable-widget widget-third"><div class="dynamic-box mini-stat-box" style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; height:100%;"><label class="section-title">Maîtrise</label><div class="prof-bonus-box" style="margin:auto 0;"><input type="number" id="prof-bonus" value="2"></div></div></div>
             <div id="widget-stats" class="draggable-widget widget-full"><div id="attributes-list"></div></div>
             <div id="widget-training" class="draggable-widget widget-full"><div class="dynamic-box training-module"><div class="section-title-row collapsible-header"><label class="section-title">Maîtrises & Outils</label><span class="collapse-icon no-print">▼</span></div><div class="collapsible-content"><div class="training-row"><strong>ARMURES</strong><label><input type="checkbox" id="prof-armor-light"> Légères</label><label><input type="checkbox" id="prof-armor-med"> Inter.</label><label><input type="checkbox" id="prof-armor-heavy"> Lourdes</label><label><input type="checkbox" id="prof-armor-shield"> Boucliers</label></div><div class="training-row"><strong>ARMES</strong><label><input type="checkbox" id="prof-weapon-simple"> Courantes</label><label><input type="checkbox" id="prof-weapon-martial"> De guerre</label><label><input type="checkbox" id="prof-weapon-other"> Autres</label></div><div class="training-text-box"><strong>OUTILS & AUTRES</strong><textarea id="prof-tools" class="auto-expand" placeholder="Outils de voleur, instruments..."></textarea></div></div></div></div>
-            <div id="widget-combat" class="draggable-widget widget-full"><div class="dynamic-box combat-stats"><div class="combat-box"><input type="number" id="armor-class"><label>CA</label><div class="shield-check"><input type="checkbox" id="has-shield" title="Bouclier"></div></div><div class="combat-box"><input type="number" id="initiative" title="S'actualise avec la DEX"><label class="rollable" data-name="Initiative" data-target="initiative">Initiative</label></div><div class="combat-box"><input type="text" id="speed"><label>Vitesse</label></div><div class="combat-box"><input type="text" id="char-size" placeholder="Ex: M"><label>Taille</label></div><div class="combat-box"><input type="number" id="passive-perception"><label>Percep. Passive</label></div></div><div class="defenses-row"><div class="defense-field"><label title="Tu subis la MOITIÉ des dégâts de ces types">🛡️ Résistances</label><input type="text" id="dmg-resist" placeholder="Ex : feu, froid, contondant…"></div><div class="defense-field"><label title="Tu ne subis AUCUN dégât de ces types">✨ Immunités</label><input type="text" id="dmg-immune" placeholder="Ex : poison, psychique…"></div><div class="defense-field"><label title="Tu subis le DOUBLE des dégâts de ces types">💥 Vulnérabilités</label><input type="text" id="dmg-vulnerable" placeholder="Ex : radiant, tranchant…"></div></div></div>
+            <div id="widget-combat" class="draggable-widget widget-full"><div class="dynamic-box combat-stats"><div class="combat-box ac-cell"><input type="number" id="armor-class" aria-label="Classe d’armure"><button type="button" id="btn-open-armor" class="ac-open" title="Armures, bouclier, résistances : ouvrir le widget" aria-haspopup="dialog"><span aria-hidden="true">🛡️</span> CA <span class="ac-open-cta" aria-hidden="true">⚙</span></button><span class="ac-auto-badge hidden" title="CA calculée à partir des armures portées">auto</span><div class="shield-check"><input type="checkbox" id="has-shield" title="Bouclier"></div></div><div class="combat-box"><input type="number" id="initiative" title="S'actualise avec la DEX"><label class="rollable" data-name="Initiative" data-target="initiative">Initiative</label></div><div class="combat-box"><input type="text" id="speed"><label>Vitesse</label></div><div class="combat-box"><input type="text" id="char-size" placeholder="Ex: M"><label>Taille</label></div><div class="combat-box"><input type="number" id="passive-perception"><label>Percep. Passive</label></div></div><div class="defenses-row"><div class="defense-field"><label title="Tu subis la MOITIÉ des dégâts de ces types">🛡️ Résistances</label><input type="text" id="dmg-resist" placeholder="Ex : feu, froid, contondant…"></div><div class="defense-field"><label title="Tu ne subis AUCUN dégât de ces types">✨ Immunités</label><input type="text" id="dmg-immune" placeholder="Ex : poison, psychique…"></div><div class="defense-field"><label title="Tu subis le DOUBLE des dégâts de ces types">💥 Vulnérabilités</label><input type="text" id="dmg-vulnerable" placeholder="Ex : radiant, tranchant…"></div></div></div>
             <div id="widget-hp" class="draggable-widget widget-full"><div class="dynamic-box health-block"><div class="health-section"><div class="health-inputs"><div class="health-col"><label>PV Max</label><input type="number" id="hp-max" class="hp-input"></div><div class="health-col"><label>PV Actuels</label><input type="number" id="hp-current" class="hp-input"></div><div class="health-col"><label>PV Temp.</label><input type="number" id="hp-temp" class="hp-input"></div></div><div class="hp-bar-block no-print"><div class="hp-bar-track"><div id="hp-bar-fill" class="hp-bar-fill"></div><span id="hp-bar-text" class="hp-bar-text">0 / 0</span></div><div class="hp-quick-controls"><button id="btn-hp-damage" class="btn-hp-quick btn-hp-dmg" title="Infliger des dégâts">−</button><input type="number" id="hp-quick-amount" class="hp-quick-amount" placeholder="PV" min="0"><button id="btn-hp-heal" class="btn-hp-quick btn-hp-heal" title="Soigner">+</button></div></div><div class="conditions-track" id="conditions-track-container"><label><input type="checkbox" id="cond-blind"> 👁️ Aveuglé</label><label><input type="checkbox" id="cond-charm"> 💖 Charmé</label><label><input type="checkbox" id="cond-deaf"> 🙉 Assourdi</label><label><input type="checkbox" id="cond-fright"> 👻 Effrayé</label><label><input type="checkbox" id="cond-grap"> ✊ Empoigné</label><label><input type="checkbox" id="cond-pois"> 🧪 Empoisonné</label><label><input type="checkbox" id="cond-prone"> ⏬ À terre</label><label><input type="checkbox" id="cond-restr"> ⛓️ Entravé</label><label><input type="checkbox" id="cond-stun"> 💫 Étourdi</label><label><input type="checkbox" id="cond-uncon"> 💤 Inconscient</label></div><div id="custom-conditions-container" style="width:100%; margin-top:5px;"></div><div style="display:flex; gap:5px; margin-top:5px; width:100%;"><input type="text" id="input-custom-condition" placeholder="Nouvel état personnalisé..." style="flex:1;"><button id="btn-add-custom-condition" class="btn-small no-print">Ajouter</button></div></div><div class="death-saves-section"><label class="rollable" data-name="Jet contre la mort" data-target="none">Jets contre la mort</label><div class="death-saves-row"><span style="color:#2ecc71;">Succès</span><input type="checkbox" id="death-s1"><input type="checkbox" id="death-s2"><input type="checkbox" id="death-s3"></div><div class="death-saves-row"><span style="color:#e74c3c;">Échecs</span><input type="checkbox" id="death-f1"><input type="checkbox" id="death-f2"><input type="checkbox" id="death-f3"></div></div></div></div>
             <div id="widget-rests" class="draggable-widget widget-full"><div class="dynamic-box" style="display:flex; justify-content:space-around; align-items:center; flex-wrap:wrap; gap:15px; padding:10px;"><div style="display:flex; gap:10px;"><button id="btn-short-rest" class="btn btn-icon" style="background:#4a6b53; padding:10px 15px;">⏳ Repos Court</button><button id="btn-long-rest" class="btn btn-icon" style="background:#2c3e50; padding:10px 15px;">⛺ Repos Long</button></div><div class="hit-dice-box"><label>Dés de Vie :</label><div style="display:flex; align-items:center; gap:3px;"><input type="number" id="hd-spent" value="0" min="0" title="Dés dépensés"><span>/</span><input type="number" id="hd-max" value="1" min="1" title="Dés maximum"><select id="hd-size" title="Taille du dé"><option value="6">d6</option><option value="8" selected>d8</option><option value="10">d10</option><option value="12">d12</option></select></div></div></div></div>
             
@@ -420,6 +395,7 @@
 <script src="srd-data.js"></script>
 <script src="srd-autocomplete.js"></script>
 <script src="script.js"></script>
+<script src="armor.js"></script>
 <script src="hero-card.js"></script>
 <script src="hero-card-styles.js"></script>
 <script src="exploits.js"></script>
@@ -435,6 +411,7 @@
 <script src="rules-page.js"></script>
 <script src="homebrew.js"></script>
 <script src="help.js"></script>
+<script src="menu.js"></script>
 <script src="entitlements.js"></script>
 <script src="cosmetics.js"></script>
 <script src="pricing.js"></script>
