@@ -1265,20 +1265,25 @@ body.theme-dark .prepared-spell-row, body.theme-dark .spell-name { color: var(--
 .trait-row:hover .item-controls, .trait-row:focus-within .item-controls { opacity: 1; transform: translateY(0); pointer-events: auto; }
 @media (max-width: 768px) { .trait-row .item-controls { opacity: 1; pointer-events: auto; transform: none; } }
 
-/* Cases à cocher & radios : look soigné en mode nuit (plus de carré blanc) */
-body.theme-dark input[type="checkbox"] {
+/* Cases à cocher & radios : look soigné en mode nuit (plus de carré blanc).
+   Les interrupteurs (menu, calcul de la CA, assistant) ont leur propre dessin :
+   cette case écrasait leur rail et laissait leur bouton rond flotter à côté,
+   en petits points blancs. :where() garde la spécificité d'origine. */
+body.theme-dark input[type="checkbox"]:where(:not(.ac-switch input, .pjw-auto input, .menu-toggle input, [role="switch"])) {
     -webkit-appearance: none; appearance: none;
     width: 16px; height: 16px; flex-shrink: 0; margin: 0 2px;
     border: 1.5px solid rgba(196,155,53,0.55); border-radius: 4px;
     background: rgba(255,255,255,0.06); cursor: pointer; position: relative; vertical-align: middle;
     transition: background .15s, border-color .15s;
 }
-body.theme-dark input[type="checkbox"]:hover { border-color: var(--accent-color); }
-body.theme-dark input[type="checkbox"]:checked { background: var(--accent-color); border-color: var(--accent-color); }
-body.theme-dark input[type="checkbox"]:checked::after {
+body.theme-dark input[type="checkbox"]:where(:not(.ac-switch input, .pjw-auto input, .menu-toggle input, [role="switch"])):hover { border-color: var(--accent-color); }
+body.theme-dark input[type="checkbox"]:where(:not(.ac-switch input, .pjw-auto input, .menu-toggle input, [role="switch"])):checked { background: var(--accent-color); border-color: var(--accent-color); }
+body.theme-dark input[type="checkbox"]:where(:not(.ac-switch input, .pjw-auto input, .menu-toggle input, [role="switch"])):checked::after {
     content: ''; position: absolute; left: 4.5px; top: 1px; width: 4px; height: 8px;
     border: solid #1d1712; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
+/* Interrupteurs décochés : leur rail, pensé pour le parchemin, disparaissait sur fond sombre. */
+body.theme-dark :is(.ac-switch input, .settings-dropdown .menu-toggle input[type="checkbox"]):not(:checked) { background: rgba(255,255,255,.14); border-color: rgba(196,155,53,.45); }
 body.theme-dark input[type="radio"] {
     -webkit-appearance: none; appearance: none;
     width: 16px; height: 16px; flex-shrink: 0;
