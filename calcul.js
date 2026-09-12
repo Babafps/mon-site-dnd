@@ -127,7 +127,12 @@
 
     // ---------- Initiative et vitesse ----------
     function initiative(ctx) {
-        return resultat('initiative', 'Initiative', [sourceCarac('dex')], ctx);
+        const sources = [sourceCarac('dex')];
+        // Bonus manuel (Alerte, Bagou, objet…) : il s'ajoute au calcul et n'est
+        // jamais effacé par un changement de DEX — comme pour les compétences.
+        const manuel = entier(brut('dnd-sheet-initiative-bonus'), 0) || 0;
+        if (manuel) sources.push(source('bonus manuel', manuel, 'manuel'));
+        return resultat('initiative', 'Initiative', sources, ctx, { manuel });
     }
     function vitesse(ctx) {
         const txt = lecteur.texte('speed');

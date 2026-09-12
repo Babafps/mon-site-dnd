@@ -29,10 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
                       + "Fais une « Sauvegarde complète » (menu ☰) avant de fermer, "
                       + "puis allège tes images ou supprime un personnage.";
             if (window.showAppToast) window.showAppToast(msg, '#c0392b');
-            else setTimeout(() => alert(msg), 200);
+            else setTimeout(() => window.Dialogue.informer({ titre: 'Mémoire du navigateur pleine', message: msg, type: 'erreur' }), 200);
         },
         keys: function() { try { return Object.keys(localStorage); } catch(e) { return []; } }
     };
+
+    // Ouvrir une fiche, revenir à l'accueil… : chaque navigation recharge la page.
+    // On tente donc l'envoi AVANT de partir. Rien n'est perdu si le réseau manque :
+    // la file de synchro est déjà écrite sur le disque (auth.js).
+    function rechargerApresEnvoi() {
+        Promise.resolve(window.SyncQueue ? window.SyncQueue.quitter() : null)
+            .then(() => location.reload(), () => location.reload());
+    }
 
     let ACTIVE_CHAR_ID = DB.get('dnd-active-char');
     let charactersList = [];
@@ -146,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         /** Ouvre une fiche (et recharge, comme partout ailleurs sur le site). */
-        open(charId) { DB.set('dnd-active-char', charId); location.reload(); },
+        open(charId) { DB.set('dnd-active-char', charId); rechargerApresEnvoi(); },
 
         /** TOUT ce que le site sait de l'utilisateur, dans un seul fichier.
          *  C'est le droit à la portabilité du RGPD (art. 20) : un format
@@ -401,21 +409,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (backupImportInput) backupImportInput.addEventListener('change', (e) => {
         const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
-        reader.onload = (ev) => {
+        reader.onload = async (ev) => {
             let backup;
-            try { backup = JSON.parse(ev.target.result); } catch (err) { alert('Fichier illisible.'); return; }
+            try { backup = JSON.parse(ev.target.result); }
+            catch (err) { window.Dialogue.informer({ titre: 'Fichier illisible', message: 'Ce fichier n’est pas lisible : il est peut-être incomplet ou modifié.', type: 'erreur' }); return; }
             if (backup.format !== 'bones-and-blades-backup' || !backup.data) {
-                alert("Ce fichier n'est pas une sauvegarde complète Bones & Blades."); return;
+                window.Dialogue.informer({ titre: 'Mauvais fichier', message: "Ce fichier n'est pas une sauvegarde complète Bones & Blades.", type: 'erreur' }); return;
             }
             const n = (backup.characters || []).length;
             const when = (backup.exportedAt || '').slice(0, 10);
-            if (!confirm(`Restaurer ${n} personnage(s) sauvegardé(s) le ${when} ?\n\n`
-                       + `⚠️ Cela REMPLACE tout le contenu actuel de ce navigateur.`)) return;
+            if (!await window.Dialogue.confirmer({
+                titre: 'Restaurer cette sauvegarde ?', danger: true, confirmer: 'Restaurer',
+                message: `${n} personnage(s), sauvegardés le ${when}.\n\n`
+                       + `Cela REMPLACE tout le contenu actuel de ce navigateur.`
+            })) return;
             // On repart d'un stockage propre pour ne pas laisser d'orphelins
             DB.keys().forEach(k => { if (k.startsWith('dnd-') || k.includes('_dnd-')) DB.remove(k); });
             Object.entries(backup.data).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch (err) { DB.warnQuotaOnce(); } });
             DB.remove('dnd-active-char');
-            alert('Sauvegarde restaurée. La page va se recharger.');
+            await window.Dialogue.informer({ titre: 'Sauvegarde restaurée', message: 'La page va se recharger.', type: 'reussite' });
             location.reload();
         };
         reader.readAsText(file);
@@ -454,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         b.addEventListener('click', () => {
             if (settingsDropdown) settingsDropdown.classList.add('hidden');
             if (window.SheetIO) window.SheetIO.open(b.dataset.ioTab);
-            else alert("L'export de fiche n'a pas pu se charger.");
+            else window.Dialogue.informer({ titre: 'Module indisponible', message: "L'export de fiche n'a pas pu se charger. Vérifie ta connexion, puis recharge la page.", type: 'erreur' });
         });
     });
 
@@ -466,10 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.applySavedBackground = applySavedBackground;
 
     const btnChangeBg = document.getElementById('btn-change-bg'); if(btnChangeBg && bgInput) { btnChangeBg.addEventListener('click', () => { bgInput.click(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
-    if(bgInput) { bgInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1920; let width = img.width; let height = img.height; if(width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); try { DB.set(CUSTOM_BG_KEY, canvas.toDataURL('image/jpeg', 0.7)); applySavedBackground(); } catch (err) { alert("L'image est toujours trop lourde."); } bgInput.value = ''; }; img.src = event.target.result; }; reader.readAsDataURL(file); }); }
+    if(bgInput) { bgInput.addEventListener('change', (e) => { const file = e.target.files[0]; if(!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1920; let width = img.width; let height = img.height; if(width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); try { DB.set(CUSTOM_BG_KEY, canvas.toDataURL('image/jpeg', 0.7)); applySavedBackground(); } catch (err) { window.Dialogue.informer({ titre: 'Image trop lourde', message: "Même réduite, cette image ne tient pas dans la mémoire du navigateur. Essaie une image plus petite.", type: 'erreur' }); } bgInput.value = ''; }; img.src = event.target.result; }; reader.readAsDataURL(file); }); }
     const btnResetBg = document.getElementById('btn-reset-bg'); if(btnResetBg) { btnResetBg.addEventListener('click', () => { DB.remove(CUSTOM_BG_KEY); applySavedBackground(); if(settingsDropdown) settingsDropdown.classList.add('hidden'); }); }
 
-    const btnGoHome = document.getElementById('btn-go-home'); if(btnGoHome) btnGoHome.addEventListener('click', () => { DB.remove('dnd-active-char'); location.reload(); });
+    const btnGoHome = document.getElementById('btn-go-home'); if(btnGoHome) btnGoHome.addEventListener('click', () => { DB.remove('dnd-active-char'); rechargerApresEnvoi(); });
 
     const btnCreateChar = document.getElementById('btn-create-char');
     if(btnCreateChar) {
@@ -486,18 +498,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     // synchronisées — refusé par la base, pas par l'écran.
                     if (window.SupaAuth.lastCreateError === 'quota') {
                         const q = window.Ent ? window.Ent.characterQuota() : { max: 3 };
-                        if (confirm(`Ton compte synchronise déjà ${q.max} fiches, le maximum sans abonnement.\n\n`
-                            + `Tes fiches LOCALES restent illimitées : déconnecte-toi pour en créer d’autres sur cet appareil.\n\n`
-                            + `Voir les tarifs ?`) && window.Pricing) window.Pricing.open();
+                        const voir = await window.Dialogue.confirmer({
+                            titre: 'Maximum de fiches synchronisées', icone: '☁',
+                            confirmer: 'Voir les tarifs', annuler: 'Fermer',
+                            message: `Ton compte synchronise déjà ${q.max} fiches, le maximum sans abonnement.\n\n`
+                                   + `Tes fiches LOCALES restent illimitées : déconnecte-toi pour en créer d’autres sur cet appareil.`
+                        });
+                        if (voir && window.Pricing) window.Pricing.open();
                     } else {
-                        alert("Erreur lors de la création.");
+                        window.Dialogue.informer({ titre: 'Création impossible', message: "Le personnage n'a pas pu être créé. Réessaie dans un instant.", type: 'erreur' });
                     }
                     return;
                 }
                 newId = newChar.id; charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); } else { newId = 'char_' + Date.now(); charactersList.push({ id: newId, name: name, level: 1, class: '' }); DB.set('dnd-character-list', JSON.stringify(charactersList)); }
             DB.set(`${newId}_dnd-sheet-char-name`, name); DB.set('dnd-active-char', newId);
             DB.set('dnd-pj-wizard-pending', '1');   // fiche neuve → l'assistant de création se lance après le reload (pj-tutorial.js)
-            location.reload();
+            rechargerApresEnvoi();
         });
     }
 
@@ -837,7 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let newId;
             if (window.SupaAuth?.currentUser) {
                 const created = await window.SupaAuth.createCharacter(newName);
-                if (!created) { alert('Erreur lors de la duplication.'); return; }
+                if (!created) { window.Dialogue.informer({ titre: 'Duplication impossible', message: 'La copie n’a pas pu être créée. Réessaie dans un instant.', type: 'erreur' }); return; }
                 newId = created.id;
                 const data = await window.SupaAuth.loadCharacterData(src.id);
                 const entries = Object.entries(data).map(([key, value]) => ({ key, value }));
@@ -924,6 +940,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const openChar = async () => {
                     metaOf(c.id).lastOpened = Date.now(); saveCharMeta();
                     DB.set('dnd-active-char', c.id);
+                    // L'envoi d'abord : sinon le cloud, relu juste après, pourrait
+                    // renvoyer une version plus ancienne que ce qui attend ici.
+                    if (window.SyncQueue) await window.SyncQueue.quitter();
                     if (window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); }
                     location.reload();
                 };
@@ -966,7 +985,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     metaOf(c.id).archived = !archived; saveCharMeta(); syncCharMetaCloud(c.id); renderCharacterList();
                 });
                 addItem('🗑  Supprimer', async () => {
-                    if (!confirm(`Supprimer définitivement ${c.name} ?\nCette action est irréversible.`)) return;
+                    if (!await window.Dialogue.confirmer({
+                        titre: 'Supprimer ce personnage ?', danger: true, confirmer: 'Supprimer',
+                        message: `« ${c.name} » et toute sa fiche seront effacés. C'est sans retour en arrière.`
+                    })) return;
                     if (window.SupaAuth?.currentUser) { await window.SupaAuth.deleteCharacter(c.id); }
                     charactersList = charactersList.filter(char => char.id !== c.id);
                     DB.set('dnd-character-list', JSON.stringify(charactersList));
@@ -1471,7 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function drawCrop() { if(!cropState || !cropCanvas) return; const ctx = cropCanvas.getContext('2d'); const S = cropCanvas.width; const d = cropEffDims(); ctx.clearRect(0,0,S,S); ctx.fillStyle = '#1a1410'; ctx.fillRect(0,0,S,S); ctx.save(); ctx.translate(S/2 + cropState.ox, S/2 + cropState.oy); ctx.rotate((cropState.rot || 0) * Math.PI / 180); ctx.drawImage(cropState.img, -d.w/2, -d.h/2, d.w, d.h); ctx.restore(); }
         function openAvatarCrop(img, newSource) { if(!avatarCropModal || !cropCanvas) return; const S = cropCanvas.width; const base = Math.max(S / img.width, S / img.height); cropState = { img, base, scale: 1, ox: 0, oy: 0, rot: 0, newSource: !!newSource }; if(cropZoom) cropZoom.value = 100; clampCrop(); drawCrop(); avatarCropModal.classList.remove('hidden'); }
         function closeAvatarCrop() { if(avatarCropModal) avatarCropModal.classList.add('hidden'); cropState = null; }
-        function saveAvatarDataUrl(dataUrl) { try { setStore('dnd-avatar', dataUrl, false); loadAvatar(); } catch(err) { alert("L'image est trop lourde à enregistrer."); } }
+        function saveAvatarDataUrl(dataUrl) { try { setStore('dnd-avatar', dataUrl, false); loadAvatar(); } catch(err) { window.Dialogue.informer({ titre: 'Portrait trop lourd', message: "Cette image ne tient pas dans la mémoire du navigateur. Choisis une image plus légère.", type: 'erreur' }); } }
         if(cropZoom) cropZoom.addEventListener('input', () => { if(!cropState) return; cropState.scale = (parseInt(cropZoom.value, 10) || 100) / 100; clampCrop(); drawCrop(); });
         const btnCropRotate = document.getElementById('btn-avatar-crop-rotate');
         if(btnCropRotate) btnCropRotate.addEventListener('click', () => { if(!cropState) return; cropState.rot = ((cropState.rot || 0) + 90) % 360; clampCrop(); drawCrop(); });
@@ -1504,7 +1526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.drawImage(cropState.img, -d.w / 2 * k, -d.h / 2 * k, d.w * k, d.h * k);
             return out;
         }
-        const btnCropConfirm = document.getElementById('btn-avatar-crop-confirm'); if(btnCropConfirm) btnCropConfirm.addEventListener('click', () => { if(!cropState || !cropCanvas) return; if(cropState.newSource) storeAvatarSource(cropState.img); try { saveAvatarDataUrl(cropEnHauteDefinition().toDataURL('image/jpeg', 0.85)); } catch(err) { alert("Impossible d'enregistrer l'image."); } closeAvatarCrop(); });
+        const btnCropConfirm = document.getElementById('btn-avatar-crop-confirm'); if(btnCropConfirm) btnCropConfirm.addEventListener('click', () => { if(!cropState || !cropCanvas) return; if(cropState.newSource) storeAvatarSource(cropState.img); try { saveAvatarDataUrl(cropEnHauteDefinition().toDataURL('image/jpeg', 0.85)); } catch(err) { window.Dialogue.informer({ titre: 'Portrait non enregistré', message: "L'image n'a pas pu être enregistrée. Essaie une image plus légère.", type: 'erreur' }); } closeAvatarCrop(); });
         loadAvatar();
 
         const cbConcentration = document.getElementById('is-concentrating'); const concentrationGlow = document.getElementById('concentration-glow');
@@ -1952,7 +1974,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function renderCategoryManagerList() { const list = document.getElementById('cat-manager-list'); if(!list) return; list.innerHTML = ''; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; if (categories.length === 0) { list.innerHTML = `<p style="text-align:center; color:#888;">Aucun onglet personnalisé.</p>`; return; } categories.forEach((cat, index) => { let row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.marginBottom = '10px'; let moveBox = document.createElement('div'); moveBox.className = 'cat-move-box'; let btnUp = document.createElement('button'); btnUp.className = 'btn-small cat-move-btn'; btnUp.textContent = '▲'; btnUp.title = 'Monter cet onglet'; btnUp.disabled = index === 0; btnUp.onclick = () => moveCategory(index, -1); let btnDown = document.createElement('button'); btnDown.className = 'btn-small cat-move-btn'; btnDown.textContent = '▼'; btnDown.title = 'Descendre cet onglet'; btnDown.disabled = index === categories.length - 1; btnDown.onclick = () => moveCategory(index, 1); moveBox.appendChild(btnUp); moveBox.appendChild(btnDown); let input = document.createElement('input'); input.type = 'text'; input.value = cat; input.style.flex = '1'; input.style.padding = '5px'; input.style.border = '1px solid rgba(138,28,28,0.25)'; input.style.borderRadius = '4px'; input.style.background = 'rgba(255,255,255,0.5)'; let btnSave = document.createElement('button'); btnSave.className = 'btn-small'; btnSave.textContent = '💾'; btnSave.title = 'Enregistrer'; btnSave.onclick = () => saveCategoryRename(index, input.value.trim()); let btnDel = document.createElement('button'); btnDel.className = 'btn-small'; btnDel.style.background = '#e74c3c'; btnDel.textContent = 'X'; btnDel.title = 'Supprimer'; btnDel.onclick = () => deleteCategory(index); row.appendChild(moveBox); row.appendChild(input); row.appendChild(btnSave); row.appendChild(btnDel); list.appendChild(row); }); }
         function moveCategory(index, direction) { let categories = currentCatContext === 'inv' ? invCategories : atkCategories; const target = index + direction; if (target < 0 || target >= categories.length) return; [categories[index], categories[target]] = [categories[target], categories[index]]; if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
         function saveCategoryRename(index, newName) { if (!newName) return; let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(newName === oldName) return; categories[index] = newName; items.forEach(item => { if (item.category === oldName) item.category = newName; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = newName; if (activeInvTabModal === oldName) activeInvTabModal = newName; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = newName; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
-        function deleteCategory(index) { let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(!confirm(`Supprimer l'onglet "${oldName}" ? Les objets à l'intérieur retourneront dans "Général".`)) return; categories.splice(index, 1); items.forEach(item => { if (item.category === oldName) item.category = 'Général'; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = 'Tout'; if (activeInvTabModal === oldName) activeInvTabModal = 'Tout'; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = 'Tout'; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
+        async function deleteCategory(index) { let categories = currentCatContext === 'inv' ? invCategories : atkCategories; let items = currentCatContext === 'inv' ? inventory : attacks; let oldName = categories[index]; if(!await window.Dialogue.confirmer({ titre: 'Supprimer cet onglet ?', danger: true, confirmer: 'Supprimer', message: `L'onglet « ${oldName} » disparaît. Les objets qu'il contient retournent dans « Général » : rien n'est perdu.` })) return; categories.splice(index, 1); items.forEach(item => { if (item.category === oldName) item.category = 'Général'; }); if (currentCatContext === 'inv') { setStore('dnd-inv-categories', categories); setStore('dnd-inventory', items); if (activeInvTabPinned === oldName) activeInvTabPinned = 'Tout'; if (activeInvTabModal === oldName) activeInvTabModal = 'Tout'; updateCategorySelects(); renderInventory(); } else { setStore('dnd-atk-categories', categories); setStore('dnd-attacks', items); if (activeAtkTab === oldName) activeAtkTab = 'Tout'; updateCategorySelects(); renderAttacks(); } renderCategoryManagerList(); }
         if(document.getElementById('btn-close-cat-manager')) document.getElementById('btn-close-cat-manager').addEventListener('click', () => catManagerModal.classList.add('hidden'));
 
         function renderTabs(containerId, items, activeTab, categoriesArr, onTabClick, onAddCategory, onEditCategories) { const container = document.getElementById(containerId); if(!container) return; let html = `<button class="cat-tab ${activeTab === 'Tout' ? 'active' : ''}" data-cat="Tout">Tout</button>`; categoriesArr.forEach(cat => { html += `<button class="cat-tab ${activeTab === cat ? 'active' : ''}" data-cat="${cat}">${cat}</button>`; }); html += `<button class="cat-tab-add" title="Nouvelle catégorie">+</button><button class="cat-tab-edit" title="Gérer les onglets">⚙️</button>`; container.innerHTML = html; container.querySelectorAll('.cat-tab').forEach(btn => { btn.addEventListener('click', (e) => { e.preventDefault(); onTabClick(e.target.dataset.cat); }); }); const addBtn = container.querySelector('.cat-tab-add'); if(addBtn) addBtn.addEventListener('click', (e) => { e.preventDefault(); onAddCategory(); }); const editBtn = container.querySelector('.cat-tab-edit'); if(editBtn && onEditCategories) editBtn.addEventListener('click', (e) => { e.preventDefault(); onEditCategories(); }); }
@@ -3795,7 +3817,22 @@ document.addEventListener('DOMContentLoaded', () => {
             ov.querySelector('.lvfx-close')?.focus();
         }
         const levelInput = document.getElementById('char-level'); const profInput = document.getElementById('prof-bonus'); const initInput = document.getElementById('initiative');
-        function syncCharMeta() { const lvl = parseInt(document.getElementById('char-level').value) || 1; const cls = document.getElementById('char-class').value || ''; const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID); if(idx !== -1) { charactersList[idx].level = lvl; charactersList[idx].class = cls; DB.set('dnd-character-list', JSON.stringify(charactersList)); } }
+        // La carte de l'accueil lit `dnd-character-list` : nom, niveau et classe y
+        // sont recopiés dès la frappe. Sans ça, un personnage renommé hors ligne
+        // gardait son ancien nom sur l'accueil jusqu'au retour du réseau.
+        function syncCharMeta() {
+            const lvl = parseInt(document.getElementById('char-level').value) || 1;
+            const cls = document.getElementById('char-class').value || '';
+            const nom = (document.getElementById('char-name')?.value || '').trim();
+            const idx = charactersList.findIndex(c => c.id === ACTIVE_CHAR_ID);
+            if(idx === -1) return;
+            charactersList[idx].level = lvl;
+            charactersList[idx].class = cls;
+            if(nom) charactersList[idx].name = nom;
+            DB.set('dnd-character-list', JSON.stringify(charactersList));
+        }
+        const charNameInput = document.getElementById('char-name');
+        if(charNameInput) charNameInput.addEventListener('input', syncCharMeta);
         if(levelInput && profInput) { levelInput.addEventListener('input', () => { let lvl = parseInt(levelInput.value) || 1; let prof = Math.floor((lvl - 1) / 4) + 2; profInput.value = prof; setStore('dnd-sheet-prof-bonus', prof, false); updateStatsAndSkills(); syncCharMeta(); }); }
         // Édition manuelle du bonus de maîtrise : recalcul complet (compétences + stats magiques)
         if(profInput) { profInput.addEventListener('input', () => { updateStatsAndSkills(); }); }
@@ -3838,6 +3875,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             updateAutoMagicStats();
             updatePassivePerception();
+            updateInitiative();
         }
 
         // Perception passive = 10 + modificateur total de Perception (mod. Sagesse + maîtrise + bonus manuel).
@@ -3858,14 +3896,51 @@ document.addEventListener('DOMContentLoaded', () => {
             passivePercEl.title = "Calculée automatiquement (10 + Perception). Saisis une valeur pour forcer manuellement ; vide le champ pour revenir en auto.";
         }
 
-        const statDex = document.getElementById('stat-dex'); if(statDex && initInput) { statDex.addEventListener('change', () => { const dexScore = parseInt(statDex.value) || 10; initInput.value = getModifier(dexScore); setStore('dnd-sheet-initiative', initInput.value, false); }); }
+        // ---- Initiative : modificateur de DEX + bonus manuel conservé ----
+        // Le champ affiche le TOTAL (c'est lui que l'export, l'impression et les
+        // jets lisent, exactement comme avant). Ce qui dépasse le modificateur de
+        // DEX est gardé à part, dans `dnd-sheet-initiative-bonus` : changer la DEX
+        // recalcule le total sans effacer ce bonus.
+        let initiativePrete = false;   // vrai une fois la fiche chargée (voir la migration plus bas)
+        function detailInitiative(r) {
+            return 'Initiative ' + window.Calcul.signe(r.total) + '\u2003' + window.Calcul.detail(r)
+                 + '\nSaisis une autre valeur : l’écart devient un bonus manuel, gardé quand la DEX change.';
+        }
+        function updateInitiative() {
+            if(!initInput || !initiativePrete) return;
+            const r = window.Calcul.valeur('initiative'); if(!r) return;
+            initInput.value = r.total;
+            setStore('dnd-sheet-initiative', r.total, false);
+            const txt = detailInitiative(r);
+            initInput.title = txt;
+            const lbl = document.querySelector('[data-target="initiative"]');
+            if(lbl) lbl.title = txt;
+        }
+        const statDex = document.getElementById('stat-dex');
+        if(statDex && initInput) { statDex.addEventListener('change', () => updateInitiative()); }
+        // Saisie directe du total : l'écart avec le calcul devient le bonus manuel.
+        if(initInput) initInput.addEventListener('input', () => {
+            if(!initiativePrete) return;
+            const total = parseInt(initInput.value, 10);
+            if(isNaN(total)) return;                       // champ vide ou « - » en cours de frappe
+            const r = window.Calcul.valeur('initiative');
+            const auto = r ? r.total - (r.manuel || 0) : getModifier(parseInt(statDex?.value) || 10);
+            setStore('dnd-sheet-initiative-bonus', total - auto, false);
+            const apres = window.Calcul.valeur('initiative');
+            if(apres) {
+                const txt = detailInitiative(apres);
+                initInput.title = txt;
+                const lbl = document.querySelector('[data-target="initiative"]');
+                if(lbl) lbl.title = txt;
+            }
+        });
         document.body.addEventListener('input', (e) => { if(e.target.classList.contains('stat-score')) updateStatsAndSkills(); });
         document.body.addEventListener('change', (e) => { if(e.target.classList.contains('stat-score')) updateStatsAndSkills(); });
         document.body.addEventListener('click', (e) => { const btn = e.target.closest('.skill-prof-btn'); if(!btn) return; const skillId = btn.dataset.skill; const hiddenInput = document.getElementById('prof-' + skillId); if(!hiddenInput) return; let level = (parseInt(hiddenInput.value) || 0) + 1; if(level > 2) level = 0; hiddenInput.value = level; setStore('dnd-sheet-prof-' + skillId, level, false); updateSkillProfBtn(skillId); updateStatsAndSkills(); });
         // Bonus manuel par compétence (demi-maîtrise « Touche-à-tout », objet magique...) :
         // additionné au calcul automatique, jamais écrasé par lui.
         const skillNameById = {}; skillsMap.forEach(attr => attr.skills.forEach(s => { skillNameById[s.id] = s.type === 'save' ? `${s.name} ${attr.name}` : s.name; }));
-        document.body.addEventListener('click', (e) => { const span = e.target.closest('.skill-mod'); if(!span || !span.id || !span.id.startsWith('skill-val-')) return; const skillId = span.id.replace('skill-val-', ''); if(!(skillId in skillNameById)) return; const current = parseInt(getStore('dnd-sheet-skill-bonus-' + skillId, false)) || 0; const raw = prompt(`Bonus manuel pour « ${skillNameById[skillId]} »\n(ajouté au calcul automatique, ex : 1 ou -2 — vide ou 0 pour retirer) :`, current || ''); if(raw === null) return; const n = String(raw).trim() === '' ? 0 : parseInt(raw, 10); if(isNaN(n)) { alert('Valeur invalide : entre un nombre entier (ex : 1 ou -2).'); return; } setStore('dnd-sheet-skill-bonus-' + skillId, n, false); updateStatsAndSkills(); });
+        document.body.addEventListener('click', (e) => { const span = e.target.closest('.skill-mod'); if(!span || !span.id || !span.id.startsWith('skill-val-')) return; const skillId = span.id.replace('skill-val-', ''); if(!(skillId in skillNameById)) return; const current = parseInt(getStore('dnd-sheet-skill-bonus-' + skillId, false)) || 0; window.Dialogue.demander({ titre: 'Bonus manuel', etiquette: `« ${skillNameById[skillId]} »`, message: 'Ajouté au calcul automatique (ex : 1 ou -2). Vide ou 0 pour le retirer.', type: 'number', valeur: current || '', placeholder: '0' }).then((raw) => { if(raw === null) return; const n = String(raw).trim() === '' ? 0 : parseInt(raw, 10); if(isNaN(n)) return; setStore('dnd-sheet-skill-bonus-' + skillId, n, false); updateStatsAndSkills(); }); });
         const spellCastingAbility = document.getElementById('spellcasting-ability'); if(spellCastingAbility) spellCastingAbility.addEventListener('change', () => { setStore('dnd-sheet-spellcasting-ability', spellCastingAbility.value, false); updateAutoMagicStats(); });
 
         let customConditions = getStore('dnd-custom-conditions') || []; const customCondContainer = document.getElementById('custom-conditions-container'); const customCondInput = document.getElementById('input-custom-condition'); const btnAddCustomCond = document.getElementById('btn-add-custom-condition');
@@ -3917,12 +3992,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             updateHpVisuals();
         }
+        // Au clavier, le signe décide : « -8 ⏎ » inflige 8 dégâts (les PV temporaires
+        // encaissent d'abord), « 8 ⏎ » et « +8 ⏎ » soignent 8. Les boutons − et +
+        // gardent leur sens quoi qu'il arrive : ce sont eux qu'on vise au doigt.
         const hpQuickAmount = document.getElementById('hp-quick-amount');
-        const getHpQuickAmount = () => Math.abs(parseInt(hpQuickAmount?.value) || 0);
+        /** Le montant saisi AVEC son signe : « -8 » → -8, « 8 » et « +8 » → 8, sinon 0. */
+        function lireMontantPv() {
+            const m = String(hpQuickAmount ? hpQuickAmount.value : '').replace(/\s+/g, '').match(/^([+−-]?)(\d+)$/);
+            if(!m) return 0;
+            const n = parseInt(m[2], 10) || 0;
+            return (m[1] === '-' || m[1] === '−') ? -n : n;
+        }
+        const getHpQuickAmount = () => Math.abs(lireMontantPv());
         const btnHpDamage = document.getElementById('btn-hp-damage'); const btnHpHeal = document.getElementById('btn-hp-heal');
         if(btnHpDamage) btnHpDamage.addEventListener('click', () => { const a = getHpQuickAmount(); if(a > 0) { applyHpDelta(-a); if(hpQuickAmount) hpQuickAmount.value = ''; } });
         if(btnHpHeal) btnHpHeal.addEventListener('click', () => { const a = getHpQuickAmount(); if(a > 0) { applyHpDelta(a); if(hpQuickAmount) hpQuickAmount.value = ''; } });
-        if(hpQuickAmount) hpQuickAmount.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); btnHpHeal?.click(); } });
+        if(hpQuickAmount) hpQuickAmount.addEventListener('keydown', (e) => {
+            if(e.key !== 'Enter') return;
+            e.preventDefault();
+            const delta = lireMontantPv();
+            if(!delta) return;
+            applyHpDelta(delta);
+            hpQuickAmount.value = '';
+        });
 
         function createDefaultSpellSlotLevel() { return { total: 0, used: [], regenMode: 'long', shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1 }; }
         function normalizeSpellSlotsData(rawData) { return Array.from({length: 9}, (_, lvl) => { const base = createDefaultSpellSlotLevel(); const old = Array.isArray(rawData) ? rawData[lvl] : null; if(old && typeof old === 'object') { base.total = Math.max(0, Math.min(9, parseInt(old.total) || 0)); base.used = Array.isArray(old.used) ? old.used.slice(0, base.total).map(Boolean) : []; base.regenMode = old.regenMode || 'long'; base.shortType = old.shortType || 'all'; base.shortAmount = Math.max(1, parseInt(old.shortAmount) || 1); base.longType = old.longType || 'all'; base.longAmount = Math.max(1, parseInt(old.longAmount) || 1); } while(base.used.length < base.total) base.used.push(false); base.used = base.used.slice(0, base.total); return base; }); }
@@ -3962,7 +4054,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-short-rest') { document.getElementById('rest-modal-title').innerText = "Repos Court"; restLongContent.classList.add('hidden'); restShortContent.classList.remove('hidden'); shortRestRollLog = []; restRollResult.innerHTML = ``; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); restModal.classList.remove('hidden'); } if(e.target.id === 'btn-long-rest') { document.getElementById('rest-modal-title').innerText = "Repos Long"; restShortContent.classList.add('hidden'); restLongContent.classList.remove('hidden'); restModal.classList.remove('hidden'); } });
         if(btnRollHitDie) { btnRollHitDie.addEventListener('click', () => { const hdMax = parseInt(document.getElementById('hd-max').value) || 0; let hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); if(available <= 0) return; let amountToRoll = parseInt(document.getElementById('rest-hd-to-roll').value) || 1; if(amountToRoll > available) amountToRoll = available; if(amountToRoll <= 0) return; const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const conText = conMod >= 0 ? `+${conMod}` : `${conMod}`; let totalHealed = 0; let rollDetails = []; for(let i=0; i < amountToRoll; i++) { const roll = Math.floor(Math.random() * hdSize) + 1; const healed = Math.max(0, roll + conMod); totalHealed += healed; rollDetails.push(`[${roll}${conText}=${healed}]`); } const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; const newHp = Math.min(maxHp, currentHp + totalHealed); hdSpent += amountToRoll; document.getElementById('hd-spent').value = hdSpent; setStore('dnd-sheet-hd-spent', hdSpent, false); document.getElementById('hp-current').value = newHp; setStore('dnd-sheet-hp-current', newHp, false); shortRestRollLog.push(`<strong>${amountToRoll}d${hdSize}</strong> : ${rollDetails.join(' + ')} ➔ <span style="color:#2ecc71;">+${totalHealed} PV</span>`); restRollResult.innerHTML = `<p class="rest-log-line" style="font-size:1.2rem;"><strong>Lancé (${amountToRoll} dés) :</strong> ➔ <strong>+${totalHealed} PV</strong></p><p class="rest-log-line">PV : ${currentHp} → ${newHp}</p><div class="rest-roll-history" style="margin-top:10px; border-top:1px dashed var(--primary-color); padding-top:10px;"><strong>Historique :</strong><br>${shortRestRollLog.join('<br>')}</div>`; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); updateHpVisuals(); }); }
         if(document.getElementById('btn-confirm-short-rest')) document.getElementById('btn-confirm-short-rest').addEventListener('click', () => { recoverAbilitiesByRest('short'); recoverSpellSlotsByRest('short'); recoverGearByRest('short'); restModal.classList.add('hidden'); });
-        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { alert("Tu dois avoir au moins 1 PV pour un repos long."); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); recoverGearByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
+        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { window.Dialogue.informer({ titre: 'Repos long impossible', message: "Tu dois avoir au moins 1 PV pour prendre un repos long.", type: 'erreur' }); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); recoverGearByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
 
         // ===== COMPAGNONS / FAMILIERS (plusieurs par personnage) =====
         // Modèle : dnd-companions = [{ id, name, type, ac, hp, hpMax, hpTemp, speed, init,
@@ -4310,16 +4402,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateConcentrationUI();
             }
         }
-        /** Réclame la concentration pour un sort. Renvoie false si le joueur renonce. */
-        function claimConcentration(i) {
+        /** Réclame la concentration pour un sort. Renvoie false si le joueur renonce.
+         *  Asynchrone : la question passe par une fenêtre du site (Dialogue). */
+        async function claimConcentration(i) {
             const sp = spells[i];
             if (!sp || !spIsConc(sp)) return true;
             const cur = concentratingOn();
             if (cur === i) return true;
             if (cur >= 0) {
                 const other = spells[cur];
-                if (!confirm(`Tu te concentres déjà sur « ${other.name} ».\n\n`
-                    + `Lancer « ${sp.name} » met fin à « ${other.name} ».\n\nContinuer ?`)) return false;
+                if (!await window.Dialogue.confirmer({
+                    titre: 'Changer de concentration ?', icone: '◈', confirmer: 'Continuer',
+                    message: `Tu te concentres déjà sur « ${other.name} ».\n\n`
+                           + `Lancer « ${sp.name} » met fin à « ${other.name} ».`
+                })) return false;
                 if (window.showAppToast) window.showAppToast(`◈ « ${other.name} » prend fin.`, '#8a6320');
             }
             setConcentration(i);
@@ -4340,7 +4436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         async function castSpell(index, part, opts) {
             const sp = spells[index]; if (!sp) return;
             const o = opts || {};
-            if (!claimConcentration(index)) return;
+            if (!await claimConcentration(index)) return;
             document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau: spLvl(sp), part, nom: sp.name || '' } }));
 
             const bits = [];
@@ -4706,9 +4802,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 if (e.target.closest('.sp-conc')) {
-                    if (concentratingOn() === i) setConcentration(-1);
-                    else if (!claimConcentration(i)) return;
-                    renderGrimoire();
+                    if (concentratingOn() === i) { setConcentration(-1); renderGrimoire(); }
+                    else claimConcentration(i).then(ok => { if (ok) renderGrimoire(); });
                     return;
                 }
                 if (e.target.closest('.prep-cb')) {
@@ -4802,8 +4897,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 document.getElementById('new-spell-desc').focus();
                 if (b.dataset.cmd === 'createLink') {
-                    const url = prompt('Adresse du lien :', 'https://');
-                    if (url && !/^\s*javascript:/i.test(url)) document.execCommand('createLink', false, url);
+                    // La fenêtre prend le focus : on mémorise la sélection pour la
+                    // remettre en place avant d'insérer le lien.
+                    const champ = document.getElementById('new-spell-desc');
+                    const sel = window.getSelection();
+                    const plage = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+                    window.Dialogue.demander({
+                        titre: 'Insérer un lien', etiquette: 'Adresse du lien',
+                        valeur: 'https://', placeholder: 'https://…'
+                    }).then((url) => {
+                        if (!url || /^\s*javascript:/i.test(url)) return;
+                        if (champ) champ.focus();
+                        if (plage) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(plage); }
+                        document.execCommand('createLink', false, url);
+                    });
                     return;
                 }
                 document.execCommand(b.dataset.cmd, false, null);
@@ -5392,7 +5499,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function renderAttacks() {
             const list = document.getElementById('attacks-list'); if(!list) return;
-            renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }, () => { openCategoryManager('atk'); });
+            renderTabs('atk-tabs-container', attacks, activeAtkTab, atkCategories, (tab) => { activeAtkTab = tab; renderAttacks(); }, () => { window.Dialogue.demander({ titre: 'Nouvelle catégorie', etiquette: 'Nom de l’onglet', placeholder: 'Ex : Arène' }).then((nouv) => { if(nouv && nouv.trim() !== "" && !atkCategories.includes(nouv.trim())) { atkCategories.push(nouv.trim()); setStore('dnd-atk-categories', atkCategories); updateCategorySelects(); renderAttacks(); } }); }, () => { openCategoryManager('atk'); });
             list.innerHTML = '';
             let entries = attacks.map((atk, index) => ({ atk, index }))
                 .filter(({ atk }) => activeAtkTab === 'Tout' || (atk.category || 'Général') === activeAtkTab);
@@ -6461,7 +6568,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function renderInventory() {
             const listEl = document.getElementById('pinned-inventory-list'); if(!listEl) return;
-            const onAddInvCat = () => { let nouv = prompt("Nouvelle catégorie :"); if(nouv && nouv.trim() !== "" && !invCategories.includes(nouv.trim())) { invCategories.push(nouv.trim()); setStore('dnd-inv-categories', invCategories); updateCategorySelects(); renderInventory(); } };
+            const onAddInvCat = () => { window.Dialogue.demander({ titre: 'Nouvelle catégorie', etiquette: 'Nom de l’onglet', placeholder: 'Ex : Trésor' }).then((nouv) => { if(nouv && nouv.trim() !== "" && !invCategories.includes(nouv.trim())) { invCategories.push(nouv.trim()); setStore('dnd-inv-categories', invCategories); updateCategorySelects(); renderInventory(); } }); };
             renderTabs('inv-tabs-container-pinned', inventory, activeInvTabPinned, invCategories, (tab) => { activeInvTabPinned = tab; renderInventory(); }, onAddInvCat, () => { openCategoryManager('inv'); });
 
             let totalWeight = 0; inventory.forEach(item => { let w = parseFloat(item.weight); let q = parseInt(item.qty) || 1; if(!isNaN(w)) totalWeight += (w * q); });
@@ -7149,7 +7256,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => { scCaptureId = null; document.getElementById('shortcuts-modal')?.classList.add('hidden'); });
         document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => { DB.remove('dnd-shortcuts-player'); renderShortcutsEditor(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
         
-        let savedInit = getStore('dnd-sheet-initiative', false); if(savedInit === null) { let mod = getModifier(parseInt(document.getElementById('stat-dex').value) || 10); if(initInput) initInput.value = mod; setStore('dnd-sheet-initiative', mod, false); }
+        // Migration sans perte : les fiches d'avant ne connaissent que le TOTAL
+        // d'initiative. On en déduit la part manuelle (total − modificateur de DEX).
+        // Le nombre affiché ne bouge pas d'un point ; il devient simplement
+        // recalculable quand la DEX change.
+        if(getStore('dnd-sheet-initiative-bonus', false) === null) {
+            const dexMod = getModifier(parseInt(document.getElementById('stat-dex')?.value) || 10);
+            const savedInit = getStore('dnd-sheet-initiative', false);
+            const total = savedInit === null ? dexMod : (parseInt(savedInit, 10) || 0);
+            setStore('dnd-sheet-initiative-bonus', total - dexMod, false);
+        }
+        initiativePrete = true;
+        updateInitiative();
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', async () => {
             // Fiche officielle remplie (print-sheet.js) ; repli = impression classique du site (hors-ligne / erreur)
             if (window.PrintSheet) {

@@ -332,7 +332,11 @@
             case 'wear': mutate(d => { const a = d.armors[i]; if (!a) return false; wear(d, a, !a.equipped); }); break;
             case 'del': {
                 const a = load().armors[i];
-                if (a && confirm(`Supprimer « ${a.name || 'cette armure'} » ?`)) mutate(d => { d.armors.splice(i, 1); });
+                if (!a) break;
+                window.Dialogue.confirmer({
+                    titre: 'Supprimer cette armure ?', danger: true, confirmer: 'Supprimer',
+                    message: `« ${a.name || 'cette armure'} » sera retirée de la liste.`
+                }).then(ok => { if (ok) mutate(d => { d.armors.splice(i, 1); }); });
                 break;
             }
             case 'add-srd': addFromQuery(); break;

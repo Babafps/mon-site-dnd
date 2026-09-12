@@ -32,8 +32,16 @@ window.SupaAuth = {
 
     async getUser() {
         const { data: { user } } = await _supabase.auth.getUser();
-        this.currentUser = user;
-        return user;
+        if (user) { this.currentUser = user; return user; }
+        // `getUser` interroge le serveur : hors ligne, il ne répond rien. La
+        // session déjà gardée par supabase-js fait alors foi, sinon recharger
+        // la page sans réseau renverrait le joueur à l'écran de connexion — et
+        // ses modifications en attente seraient hors de portée.
+        try {
+            const { data: { session } } = await _supabase.auth.getSession();
+            this.currentUser = (session && session.user) || null;
+        } catch (e) { this.currentUser = null; }
+        return this.currentUser;
     },
 
     async signInEmail(email, password) {
@@ -65,6 +73,8 @@ window.SupaAuth = {
     // sélection de base — l'archivage et l'ordre restent alors locaux au navigateur.
     charMetaColumns: false,
 
+    /** La liste du cloud, ou `null` si elle n'a PAS pu être lue (hors ligne,
+     *  panne) — à ne pas confondre avec « aucun personnage ». */
     async loadCharacters() {
         if (!this.currentUser) return [];
         const query = (cols) => _supabase
@@ -80,7 +90,7 @@ window.SupaAuth = {
         } else {
             this.charMetaColumns = true;
         }
-        if (res.error) { console.warn('loadCharacters:', res.error); return []; }
+        if (res.error) { console.warn('loadCharacters:', res.error); return null; }
         return res.data || [];
     },
 
@@ -159,65 +169,242 @@ window.SupaAuth = {
 };
 
 // =====================================================
-// QUEUE DE SYNC — regroupe les écritures
+// QUEUE DE SYNC — la file d'attente des écritures
+//
+// Une file PAR PERSONNAGE, gardée dans le navigateur sous
+// `dnd-file-sync_<id>` : ce qui n'est pas encore parti survit au
+// rechargement, à la fermeture de l'onglet et à la coupure de réseau.
+//
+// Trois règles, pour ne jamais rien perdre :
+//   1. rien ne quitte la file avant d'avoir été ACCEPTÉ par le cloud ;
+//   2. une clé modifiée PENDANT l'envoi reste en attente, avec sa nouvelle
+//      valeur (on ne retire que ce qui n'a pas bougé) ;
+//   3. une clé en attente n'est jamais écrasée par ce que renvoie le cloud
+//      (voir `retientCle`, utilisé au chargement des données plus bas).
+//
+// L'envoi est retenté avec un délai qui grandit (2 s, 4 s, 8 s, 15 s, 30 s,
+// puis 60 s), et relancé dès qu'un signe de vie apparaît : retour du réseau,
+// retour sur l'onglet, ou départ de la page.
 // =====================================================
+const SYNC_PREFIXE = 'dnd-file-sync_';
+const SYNC_DELAIS  = [2000, 4000, 8000, 15000, 30000, 60000];
+
 window.SyncQueue = {
-    pending: new Map(),
-    timer: null,
     charId: null,
+    timer: null,
+    reprise: null,
+    echecs: 0,
+    enVol: false,
+
+    /** Les clés en attente d'un personnage : { clé: valeur }. */
+    attente(charId) {
+        if (!charId) return {};
+        try {
+            const brut = localStorage.getItem(SYNC_PREFIXE + charId);
+            const o = brut ? JSON.parse(brut) : null;
+            return (o && typeof o === 'object') ? o : {};
+        } catch (e) { return {}; }
+    },
+
+    _ecrire(charId, o) {
+        try {
+            if (!o || !Object.keys(o).length) localStorage.removeItem(SYNC_PREFIXE + charId);
+            else localStorage.setItem(SYNC_PREFIXE + charId, JSON.stringify(o));
+        } catch (e) { console.warn('File de synchro : écriture impossible.', e); }
+    },
+
+    /** Les personnages qui ont encore quelque chose à envoyer. */
+    personnages() {
+        const out = [];
+        try {
+            Object.keys(localStorage).forEach(k => {
+                if (!k.startsWith(SYNC_PREFIXE)) return;
+                const id = k.slice(SYNC_PREFIXE.length);
+                if (Object.keys(this.attente(id)).length) out.push(id);
+            });
+        } catch (e) {}
+        return out;
+    },
+
+    /** Combien de clés attendent encore, tous personnages confondus. */
+    enAttente() {
+        return this.personnages().reduce((n, id) => n + Object.keys(this.attente(id)).length, 0);
+    },
+
+    /** Vrai si cette clé n'est pas encore partie : le cloud ne doit pas l'écraser. */
+    retientCle(charId, cle) {
+        return Object.prototype.hasOwnProperty.call(this.attente(charId), cle);
+    },
 
     push(charId, key, value) {
+        if (!charId) return;
         this.charId = charId;
-        this.pending.set(key, value);
+        const o = this.attente(charId);
+        o[key] = String(value);
+        this._ecrire(charId, o);
+        this.signaler();
         clearTimeout(this.timer);
         this.timer = setTimeout(() => this.flush(), 800);
     },
 
     async flush() {
-        if (!this.pending.size || !this.charId) return;
-        const entries = [...this.pending.entries()].map(([key, value]) => ({ key, value }));
-        this.pending.clear();
-        
-        let toast = document.getElementById('sync-toast');
-        if(!toast) {
-            toast = document.createElement('div');
-            toast.id = 'sync-toast';
-            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#f39c12; color:white; padding:8px 15px; border-radius:8px; font-size:0.9rem; font-weight:bold; z-index:9999; transition:0.3s; font-family:"Cinzel",serif; box-shadow: 0 4px 10px rgba(0,0,0,0.3);';
-            document.body.appendChild(toast);
-        }
-        toast.style.background = '#f39c12';
-        toast.textContent = '⏳ Sauvegarde...';
-        toast.style.opacity = '1';
+        clearTimeout(this.timer);   this.timer = null;
+        clearTimeout(this.reprise); this.reprise = null;
+        if (this.enVol) return;                          // un envoi est déjà en cours
+        const ids = this.personnages();
+        if (!ids.length) { this.echecs = 0; this.signaler(); return; }
+        // Sans compte connecté, la file attend simplement son heure.
+        if (!window.SupaAuth?.currentUser) { this.signaler(); return; }
 
-        try { 
-            await window.SupaAuth.saveKeys(this.charId, entries); 
-            toast.style.background = '#27ae60';
-            toast.textContent = '✅ Sauvegardé';
-            setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+        this.enVol = true;
+        this.signaler();
+        let echec = false;
+        for (const id of ids) {
+            const instantane = this.attente(id);
+            const entries = Object.entries(instantane).map(([key, value]) => ({ key, value }));
+            if (!entries.length) continue;
+            try {
+                await window.SupaAuth.saveKeys(id, entries);
+                // On ne retire que ce qui n'a pas bougé pendant l'envoi.
+                const maintenant = this.attente(id);
+                entries.forEach(({ key, value }) => { if (maintenant[key] === value) delete maintenant[key]; });
+                this._ecrire(id, maintenant);
+            } catch (e) {
+                console.warn('Synchro : envoi refusé, la file est conservée.', e);
+                echec = true;
+            }
         }
-        catch (e) { 
-            console.error('Erreur Supabase:', e); 
-            toast.style.background = '#c0392b';
-            toast.textContent = '❌ Erreur de sauvegarde';
+        this.enVol = false;
+
+        if (echec) {
+            const delai = SYNC_DELAIS[Math.min(this.echecs, SYNC_DELAIS.length - 1)];
+            this.echecs++;
+            this.reprise = setTimeout(() => this.flush(), delai);
+        } else {
+            this.echecs = 0;
         }
+        this.signaler();
+    },
+
+    /** Relance demandée par le joueur (clic sur l'icône) : on repart de zéro. */
+    reessayer() { this.echecs = 0; return this.flush(); },
+
+    /** Avant de quitter la page : on tente l'envoi sans bloquer la navigation.
+     *  Rien n'est perdu si le délai expire — la file est déjà sur le disque. */
+    quitter() {
+        return Promise.race([
+            this.flush(),
+            new Promise(r => setTimeout(r, 1500))
+        ]).catch(() => {});
+    },
+
+    signaler() { try { window.SyncEtat?.maj(); } catch (e) {} }
+};
+
+// =====================================================
+// ÉTAT DE LA SYNCHRO — une icône discrète près du nom
+//
+// Cinq états : à jour, envoi, en attente (N), hors ligne, erreur.
+// L'icône garde sa place et ne recouvre rien. Tant qu'il reste quelque chose
+// à envoyer, un clic relance l'envoi tout de suite.
+// =====================================================
+window.SyncEtat = {
+    ETATS: {
+        ajour:        { icone: '✓', titre: 'Tout est enregistré.' },
+        envoi:        { icone: '↻', titre: 'Envoi en cours…' },
+        attente:      { icone: '⇡', titre: 'modification(s) en attente d’envoi. Clique pour envoyer maintenant.' },
+        'hors-ligne': { icone: '⊘', titre: 'Hors ligne : tout est gardé sur cet appareil et partira au retour du réseau.' },
+        erreur:       { icone: '!', titre: 'L’envoi a échoué. Clique pour réessayer.' }
+    },
+
+    /** L'état, maintenant. */
+    lire() {
+        const q = window.SyncQueue;
+        const n = q ? q.enAttente() : 0;
+        if (q && q.enVol) return { etat: 'envoi', n };
+        if (!navigator.onLine) return { etat: n ? 'hors-ligne' : 'ajour', n };
+        if (n && q && q.echecs > 0) return { etat: 'erreur', n };
+        if (n) return { etat: 'attente', n };
+        return { etat: 'ajour', n: 0 };
+    },
+
+    maj() {
+        const el = document.getElementById('sync-etat');
+        if (!el) return;
+        const { etat, n } = this.lire();
+        const def = this.ETATS[etat];
+        el.dataset.etat = etat;
+        const icone = el.querySelector('.sync-icone');
+        const nb = el.querySelector('.sync-nb');
+        if (icone) icone.textContent = def.icone;
+        if (nb) nb.textContent = (etat !== 'ajour' && etat !== 'envoi' && n) ? String(n) : '';
+        const texte = etat === 'attente' ? n + ' ' + def.titre : def.titre;
+        el.title = texte;
+        el.setAttribute('aria-label', 'Sauvegarde : ' + texte);
+        el.disabled = (etat === 'ajour' || etat === 'envoi');
+        // La zone annoncée vit À CÔTÉ du bouton : à l'état « à jour » celui-ci est
+        // désactivé, et un lecteur d'écran ne lirait pas ce qu'il contient.
+        const annonce = document.querySelector('.sync-annonce');
+        if (annonce && annonce.textContent !== texte) annonce.textContent = texte;
+    },
+
+    brancher() {
+        const el = document.getElementById('sync-etat');
+        if (el && !el.dataset.branche) {
+            el.dataset.branche = '1';
+            el.addEventListener('click', () => { window.SyncQueue?.reessayer(); });
+        }
+        this.maj();
     }
 };
+
+// Les rendez-vous où l'on tente d'envoyer : retour du réseau, retour sur
+// l'onglet, et départ de la page (sur téléphone, un onglet qu'on quitte passe
+// par `pagehide`, jamais par `beforeunload`).
+window.addEventListener('online',  () => { window.SyncQueue.reessayer(); });
+window.addEventListener('offline', () => { window.SyncEtat.maj(); });
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') window.SyncQueue.flush();
+    else window.SyncQueue.reessayer();
+});
+window.addEventListener('pagehide', () => { window.SyncQueue.flush(); });
 
 // =====================================================
 // CHARGEMENT DES DONNÉES EN CACHE LOCAL
 // =====================================================
+// Une clé encore en attente d'envoi est PLUS RÉCENTE que le cloud : on la
+// garde telle quelle, et c'est sa valeur locale qui fait foi partout.
+// Sans ça, ouvrir un personnage écrasait les modifications faites hors ligne.
+function poserCleCloud(charId, key, value) {
+    if (window.SyncQueue?.retientCle(charId, key)) return;
+    try { localStorage.setItem(`${charId}_${key}`, value); }
+    catch (e) { console.warn('Stockage local plein : clé non écrite', key, e); }
+}
+/** La valeur qui fait foi pour une clé : celle qui attend, sinon celle du cloud. */
+function valeurRetenue(charId, key, cloud) {
+    const attente = window.SyncQueue?.attente(charId) || {};
+    return Object.prototype.hasOwnProperty.call(attente, key) ? attente[key] : cloud;
+}
+
 async function loadUserDataIntoLocalStorage(userId) {
     const characters = await SupaAuth.loadCharacters();
+    // Liste illisible (hors ligne, panne) : on garde celle du navigateur.
+    // L'écraser par une liste vide ferait disparaître tous les personnages
+    // de l'accueil — et l'accueil est le seul chemin vers eux.
+    if (!characters) {
+        if (typeof window.renderHomeScreen === 'function') window.renderHomeScreen();
+        return;
+    }
 
     await Promise.all(characters.map(async (c) => {
         const data = await SupaAuth.loadCharacterData(c.id);
         Object.entries(data).forEach(([key, value]) => {
-            localStorage.setItem(`${c.id}_${key}`, value);
+            poserCleCloud(c.id, key, value);
         });
         
-        const sheetName  = data['dnd-sheet-char-name'];
-        const sheetLevel = data['dnd-sheet-char-level'];
-        const sheetClass = data['dnd-sheet-char-class'];
+        const sheetName  = valeurRetenue(c.id, 'dnd-sheet-char-name',  data['dnd-sheet-char-name']);
+        const sheetLevel = valeurRetenue(c.id, 'dnd-sheet-char-level', data['dnd-sheet-char-level']);
+        const sheetClass = valeurRetenue(c.id, 'dnd-sheet-char-class', data['dnd-sheet-char-class']);
         if(sheetName  && sheetName  !== 'undefined') c.name  = sheetName;
         if(sheetLevel && sheetLevel !== 'undefined') c.level = parseInt(sheetLevel) || c.level;
         if(sheetClass && sheetClass !== 'undefined') c.class = sheetClass;
@@ -231,7 +418,7 @@ async function loadUserDataIntoLocalStorage(userId) {
 async function loadCharacterDataIntoLocalStorage(charId) {
     const data = await SupaAuth.loadCharacterData(charId);
     Object.entries(data).forEach(([key, value]) => {
-        localStorage.setItem(`${charId}_${key}`, value);
+        poserCleCloud(charId, key, value);
     });
     return data;
 }
@@ -469,8 +656,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const btnSignOut = document.getElementById('btn-signout');
     if (btnSignOut) btnSignOut.addEventListener('click', async () => {
-        if (!confirm('Te déconnecter ?')) return;
-        await SyncQueue.flush();
+        if (!await window.Dialogue.confirmer({
+            titre: 'Se déconnecter', icone: '⚿',
+            message: 'Te déconnecter de ce compte sur cet appareil ?',
+            confirmer: 'Se déconnecter'
+        })) return;
+        await SyncQueue.quitter();
+        // La déconnexion vide le stockage de cet appareil : si quelque chose
+        // n'est pas encore parti, on le dit AVANT, pas après.
+        const reste = SyncQueue.enAttente();
+        if (reste && !await window.Dialogue.confirmer({
+            titre: 'Des modifications ne sont pas envoyées', danger: true, icone: '⚠',
+            message: reste + ' modification(s) attendent encore le réseau. Te déconnecter maintenant les perdrait.\n\n'
+                   + 'Reconnecte-toi à Internet et attends l’icône « tout est enregistré », ou déconnecte-toi quand même.',
+            confirmer: 'Se déconnecter quand même'
+        })) return;
         await SupaAuth.signOut();
         location.reload();
     });
@@ -505,5 +705,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         wrap.appendChild(eye);
     });
-    window.addEventListener('beforeunload', () => { SyncQueue.flush(); });
+    // L'icône d'état vit dans la fiche : on la branche une fois la page prête.
+    // Les envois, eux, sont déclenchés plus haut par `online`, `visibilitychange`
+    // et `pagehide`.
+    window.SyncEtat.brancher();
+    SyncQueue.flush();   // ce qui restait d'une session précédente part maintenant
 });

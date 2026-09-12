@@ -216,8 +216,11 @@
 
     function openPortal() {
         if (!PORTAL_URL) {
-            alert('Le portail de gestion d’abonnement n’est pas encore configuré.\n\n'
-                + 'En attendant, écris-nous : la résiliation est traitée à la main.');
+            window.Dialogue.informer({
+                titre: 'Portail pas encore ouvert',
+                message: 'Le portail de gestion d’abonnement n’est pas encore configuré.\n\n'
+                       + 'En attendant, écris-nous : la résiliation est traitée à la main.'
+            });
             return;
         }
         window.open(PORTAL_URL, '_blank', 'noopener');
@@ -232,7 +235,10 @@
         if (!a) return;
         const user = window.SupaAuth?.currentUser;
         if (!user) {
-            alert('Il faut être connecté pour acheter : c’est le compte qui garde le droit d’accès.');
+            window.Dialogue.informer({
+                titre: 'Connexion nécessaire', icone: '⚿',
+                message: 'Il faut être connecté pour acheter : c’est le compte qui garde le droit d’accès.'
+            });
             window.navTo('login-screen');
             return;
         }
@@ -277,7 +283,11 @@
         if (!a.lien) return;
         let url;
         try { url = new URL(a.lien); }
-        catch (e) { alert('Le lien de paiement de cet article est mal formé.'); return; }
+        catch (e) {
+            window.Dialogue.informer({ titre: 'Lien de paiement invalide', type: 'erreur',
+                message: 'Le lien de paiement de cet article est mal formé. Préviens-nous : rien n’a été débité.' });
+            return;
+        }
         url.searchParams.set('client_reference_id', user.id);
         if (user.email) url.searchParams.set('prefilled_email', user.email);
         window.open(url.toString(), '_blank', 'noopener');

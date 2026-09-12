@@ -742,7 +742,7 @@
             try { r = HB().importText(String(reader.result), 'merge'); }
             catch (err) {
                 if (window.showAppToast) window.showAppToast(err.message, '#c0392b');
-                else alert(err.message);
+                else window.Dialogue.informer({ titre: 'Import impossible', message: err.message, type: 'erreur' });
                 return;
             }
             renderList();

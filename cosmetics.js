@@ -286,7 +286,7 @@
             const locked = e.target.closest('[data-cos-locked]');
             if (locked) {
                 if (window.Pricing) { close(); window.Pricing.open(); }
-                else alert('Cet article fait partie des options payantes.');
+                else window.Dialogue.informer({ titre: 'Article verrouillé', icone: '🔒', message: 'Cet article fait partie des options payantes.' });
                 return;
             }
 
@@ -319,7 +319,8 @@
             if (act === 'save-theme') {
                 const input = ov.querySelector('.cos-theme-name');
                 const r = saveCurrentTheme(input && input.value);
-                if (r.error) alert(r.error); else renderBody();
+                if (r.error) window.Dialogue.informer({ titre: 'Thème non enregistré', message: r.error, type: 'erreur' });
+                else renderBody();
                 return;
             }
         });

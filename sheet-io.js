@@ -1008,8 +1008,8 @@
 
     async function open(startTab) {
         const S = window.SheetStore;
-        if (!S) { alert('Le stockage n’est pas prêt.'); return; }
-        if (!S.activeId()) { alert('Ouvre d’abord une fiche de personnage.'); return; }
+        if (!S) { window.Dialogue.informer({ titre: 'Un instant', message: 'Le stockage n’est pas encore prêt. Réessaie dans une seconde.' }); return; }
+        if (!S.activeId()) { window.Dialogue.informer({ titre: 'Aucune fiche ouverte', message: 'Ouvre d’abord une fiche de personnage : l’export et l’import travaillent sur la fiche en cours.' }); return; }
 
         document.getElementById('sheet-io')?.remove();
         const dump = await S.dump();
@@ -1114,9 +1114,11 @@
             if (act === 'do-import') {
                 if (!pending) return;
                 const mode = ov.querySelector('input[name="sio-mode"]:checked')?.value || 'new';
-                if (mode === 'overwrite' && !confirm(
-                    `Remplacer le contenu de la fiche ouverte par « ${pending.name} » ?\n\n`
-                    + `C’est sans retour en arrière.`)) return;
+                if (mode === 'overwrite' && !await window.Dialogue.confirmer({
+                    titre: 'Remplacer la fiche ouverte ?', danger: true, confirmer: 'Remplacer',
+                    message: `Tout le contenu de la fiche ouverte sera remplacé par « ${pending.name} ».\n\n`
+                           + `C’est sans retour en arrière.`
+                })) return;
                 btn.disabled = true; btn.textContent = '⏳ Import…';
                 try {
                     const r = await applyImport(pending, mode);
