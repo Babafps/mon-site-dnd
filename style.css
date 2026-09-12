@@ -1369,6 +1369,68 @@ body.theme-dark .auth-tab.active { color: var(--accent-color); }
 .slot-main-content { display: flex; flex-direction: column; gap: 5px; }
 .slot-checkboxes { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
 .slot-check { transform: scale(1.4); cursor: pointer; accent-color: var(--primary-color); }
+
+/* ===== Les gemmes d'emplacement =====
+   Une gemme allumee = un emplacement disponible ; eteinte = depense. Ce sont
+   de vrais boutons : Tab les atteint, Entree et Espace les activent, et
+   aria-pressed dit leur etat aux lecteurs d'ecran. */
+.slot-gems { display: flex; gap: 7px; flex-wrap: wrap; flex: 1; }
+.slot-gem {
+    position: relative; width: 22px; height: 22px; padding: 0; cursor: pointer;
+    border: none; background: none; -webkit-appearance: none; appearance: none;
+    transition: transform .16s ease, filter .16s ease;
+}
+.slot-gem::before {
+    content: ''; position: absolute; inset: 0;
+    clip-path: polygon(50% 0%, 100% 35%, 82% 100%, 18% 100%, 0% 35%);
+    background: radial-gradient(circle at 34% 26%, #ffe9a8 0%, var(--accent-color, #C49B35) 42%, #8a6320 100%);
+    box-shadow: 0 0 7px rgba(196,155,53,0.6);
+    transition: background .2s ease, box-shadow .2s ease, opacity .2s ease;
+}
+.slot-gem .slot-gem-eclat {
+    position: absolute; left: 26%; top: 18%; width: 26%; height: 22%;
+    border-radius: 50%; background: rgba(255,255,255,0.75); pointer-events: none;
+    transition: opacity .2s ease;
+}
+.slot-gem:hover { transform: translateY(-2px) scale(1.06); }
+.slot-gem:focus-visible { outline: 2px solid var(--accent-color, #C49B35); outline-offset: 3px; border-radius: 4px; }
+.slot-gem.is-spent::before {
+    background: radial-gradient(circle at 34% 26%, rgba(255,255,255,0.18) 0%, #6b6157 45%, #3b342c 100%);
+    box-shadow: none; opacity: 0.55;
+}
+.slot-gem.is-spent .slot-gem-eclat { opacity: 0; }
+/* Ce qui vient de bouger, et cela seul, s'anime. Le delai echelonne fait
+   courir la lumiere d'une gemme a l'autre au sortir d'un repos. */
+.slot-gem.is-depense::before { animation: gemExtinction .34s ease-out both; animation-delay: var(--gem-delai, 0ms); }
+.slot-gem.is-rallume::before { animation: gemAllumage .5s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--gem-delai, 0ms); }
+@keyframes gemExtinction {
+    0% { box-shadow: 0 0 14px rgba(196,155,53,0.9); }
+    45% { transform: scale(1.18); }
+    100% { box-shadow: none; transform: scale(1); }
+}
+@keyframes gemAllumage {
+    0% { opacity: .4; transform: scale(.7); box-shadow: none; }
+    60% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 16px rgba(196,155,53,0.95); }
+    100% { transform: scale(1); box-shadow: 0 0 7px rgba(196,155,53,0.6); }
+}
+/* La magie de pacte a sa propre reserve : elle se voit du premier coup d'oeil. */
+.spell-slot-row.is-pacte { border-color: rgba(96,58,138,0.45); background: linear-gradient(158deg, rgba(246,240,255,0.8), rgba(233,224,250,0.55)); }
+.spell-slot-row.is-pacte .slot-gem::before { background: radial-gradient(circle at 34% 26%, #e8d6ff 0%, #8b5cd6 42%, #4a2a7a 100%); box-shadow: 0 0 8px rgba(139,92,214,0.65); }
+.spell-slot-row.is-pacte .slot-gem.is-spent::before { background: radial-gradient(circle at 34% 26%, rgba(255,255,255,0.15) 0%, #5d5468 45%, #332c3d 100%); box-shadow: none; }
+.slot-pacte { margin-left: 6px; font-family: 'Lora', Georgia, serif; font-size: 0.62rem; font-weight: normal; letter-spacing: .05em; text-transform: uppercase; color: #6b3fa0; }
+.slot-compte { font-weight: bold; color: var(--primary-color); }
+.slot-compte.is-empty { color: #b3322c; }
+.spell-slot-row.is-vide { opacity: 0.82; }
+body.theme-dark .spell-slot-row.is-pacte { background: linear-gradient(158deg, rgba(60,44,86,0.5), rgba(40,30,58,0.4)); }
+body.theme-dark .slot-pacte { color: #c9a8f5; }
+body.theme-dark .slot-compte { color: var(--accent-color, #C49B35); }
+body.theme-dark .slot-compte.is-empty { color: #ff9b8f; }
+@media (hover: none) { .slot-gem { width: 26px; height: 26px; } .slot-gem:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .slot-gem, .slot-gem::before, .slot-gem:hover { transition: none !important; transform: none !important; }
+    .slot-gem.is-depense::before, .slot-gem.is-rallume::before { animation: none !important; }
+}
+.slot-check { transform: scale(1.4); cursor: pointer; accent-color: var(--primary-color); }
 .slot-info { font-size: 0.75rem; color: #777; line-height: 1.2; }
 
 /* ============================================================
@@ -2059,6 +2121,12 @@ body.theme-dark .auth-forgot-hint { color: #c2b094; }
     .slot-lvl-label { font-size: 7.5pt !important; }
     .slot-info { font-size: 7pt !important; }
     .slot-check { transform: scale(1) !important; }
+    .slot-gems { gap: 3px !important; }
+    .slot-gem { width: 9px !important; height: 9px !important; transform: none !important; }
+    .slot-gem::before { background: #fff !important; border: 0.5pt solid #6b3f10 !important; box-shadow: none !important; clip-path: none !important; border-radius: 50% !important; }
+    .slot-gem.is-spent::before { background: #6b3f10 !important; opacity: 1 !important; }
+    .slot-gem .slot-gem-eclat { display: none !important; }
+    .slot-pacte { font-size: 6pt !important; color: #1a0800 !important; }
     .ca-row, .ci-row { break-inside: avoid; page-break-inside: avoid; }
     .ci-actions, .ci-step, .ci-pin, .ca-actions, .qa-row { display: none !important; }
     .ci-qty { background: none !important; padding: 0 !important; }
@@ -3300,6 +3368,30 @@ body.theme-dark .home-sort { background: #2a2118; }
 .level-up-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent-color); outline-offset: 1px; }
 @media (hover: none), (max-width: 700px) { .level-up-btn { opacity: 0.85; width: 24px; height: 24px; } }
 
+/* ===== Classe : la roue qui ouvre le multiclassage =====
+   Même geste que le ▲ du niveau, au même endroit du champ. La pastille ⚔
+   n'apparaît que si le héros porte réellement plusieurs classes. */
+.class-group { position: relative; }
+.class-group input { padding-right: 26px; }
+.class-group.is-multi input { padding-right: 44px; }
+.classes-btn {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; padding: 0; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer;
+    font-size: 0.66rem; color: var(--accent-color);
+    opacity: 0.45; border-radius: 5px;
+    transition: opacity .15s, background .15s, transform .15s;
+}
+.classes-btn:hover { opacity: 1; background: rgba(196,155,53,0.18); transform: translateY(-50%) translateY(-1px); }
+.classes-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent-color); outline-offset: 1px; }
+.class-multi {
+    position: absolute; right: 27px; top: 50%; transform: translateY(-50%);
+    font-size: 0.62rem; color: var(--accent-color); opacity: 0.75; pointer-events: none;
+}
+@media (hover: none), (max-width: 700px) { .classes-btn { opacity: 0.85; width: 24px; height: 24px; } }
+@media (prefers-reduced-motion: reduce) { .classes-btn, .classes-btn:hover { transition: none; transform: translateY(-50%); } }
+
 /* Le champ pulse en or juste après la montée */
 @keyframes levelFieldFlash {
     0%   { box-shadow: 0 0 0 0 rgba(196,155,53,0.7); }
@@ -3664,6 +3756,46 @@ body.theme-dark .lvup-choice-count.is-done::after { color: #7fc47f; }
     padding: 11px 12px; border-radius: var(--radius-sm);
     border: 1px solid rgba(196,155,53,0.45); background: rgba(196,155,53,0.07);
 }
+
+/* ===== Etape « Classe » : qui monte ? ===== */
+.lvup-cl-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 0; }
+.lvup-cl-opt { display: block; position: relative; cursor: pointer; }
+.lvup-cl-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.lvup-cl-carte {
+    display: flex; flex-direction: column; gap: 2px; padding: 11px 14px;
+    border: 1px solid var(--soft-border); border-radius: 10px;
+    background: rgba(255,255,255,0.4);
+    transition: border-color .15s ease, background .15s ease;
+}
+.lvup-cl-carte b { font-family: 'Cinzel', Georgia, serif; font-size: .95rem; color: var(--primary-color); }
+.lvup-cl-carte i { font-style: normal; font-size: .82rem; opacity: .78; }
+.lvup-cl-carte.is-new b { color: var(--accent-color); }
+.lvup-cl-opt input:checked + .lvup-cl-carte {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.15);
+    box-shadow: inset 0 0 0 1px rgba(196,155,53,0.45);
+}
+.lvup-cl-opt input:focus-visible + .lvup-cl-carte { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.lvup-cl-new { margin: 4px 0 0; padding: 11px 14px; border-radius: 10px;
+    border: 1px dashed rgba(196,155,53,0.5); background: rgba(196,155,53,0.07); }
+.lvup-cl-nom { width: 100%; box-sizing: border-box; font: inherit; font-size: .95rem;
+    padding: 8px 11px; border-radius: 8px; border: 1px solid var(--soft-border);
+    background: rgba(255,255,255,0.75); color: inherit; }
+.lvup-cl-nom:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+.lvup-cl-prereq { margin-top: 7px; font-size: .84rem; line-height: 1.45; }
+.lvup-cl-prereq p { margin: 0 0 3px; }
+.lvup-cl-warn { color: #9b1c1c; }
+.lvup-cl-ok { color: #2e6b35; }
+.lvup-skip[hidden] { display: none !important; }
+/* Le de de PV qui roule : le bouton attend son resultat sans clignoter. */
+.lvup-hp-roll.is-rolling { opacity: .6; cursor: progress; }
+body.theme-dark .lvup-cl-carte { background: rgba(255,255,255,0.05); }
+body.theme-dark .lvup-cl-opt input:checked + .lvup-cl-carte { background: rgba(196,155,53,0.18); }
+body.theme-dark .lvup-cl-carte b { color: var(--accent-color); }
+body.theme-dark .lvup-cl-nom { background: rgba(255,255,255,0.07); }
+body.theme-dark .lvup-cl-warn { color: #ff9b8f; }
+body.theme-dark .lvup-cl-ok { color: #8fd79a; }
+@media (prefers-reduced-motion: reduce) { .lvup-cl-carte { transition: none !important; } }
+
 .lvup-asi-modes {
     display: flex; flex-wrap: wrap; gap: 5px 16px;
     font-family: 'Lora', serif; font-size: 0.79rem;
@@ -5181,6 +5313,10 @@ body.theme-dark #grimoire-overlay .set-sort button.is-on{color:#241a10}
 #grimoire-overlay .tag{background-image:none;background-color:var(--pg-panel-2);color:var(--pg-soft)}
 #grimoire-overlay .tag.conc{background:rgba(41,128,185,.18);color:#2b7fb8}
 body.theme-dark #grimoire-overlay .tag.conc{background:rgba(90,170,230,.14);color:#7fc0ef}
+/* Rituel : se lance sans emplacement, le grimoire le signale d'un coup d'oeil. */
+#grimoire-overlay .tag.rituel{background:rgba(120,90,170,.18);color:#5b3f8c;font-weight:600}
+body.theme-dark #grimoire-overlay .tag.rituel{background:rgba(160,130,220,.16);color:#c3a6ef}
+#grimoire-overlay .sp-cast.is-plain{background:linear-gradient(180deg,rgba(196,155,53,.24),rgba(196,155,53,.12))}
 #grimoire-overlay .spell{background-image:none;background-color:var(--pg-panel);border-color:var(--pg-line)}
 #grimoire-overlay .spell.is-prepared{background-image:none;background-color:var(--pg-panel-2);border-color:var(--pg-accent)}
 
@@ -5424,6 +5560,11 @@ body.theme-dark #spell-roll-overlay .sro-name { color: #e0b850; }
 #spell-roll-overlay .atkfx-detail { color: #8a7457; }
 body.theme-dark #spell-roll-overlay .atkfx-detail { color: #b6a484; }
 #spell-roll-overlay .atkfx-conc { margin-top: 9px; font-size: .78rem; opacity: .75; font-style: italic; }
+/* Ce que le lancement a coute : un emplacement, un rituel, ou rien. */
+#spell-roll-overlay .atkfx-slot { margin-top: 9px; font-size: .82rem; padding: 6px 10px; border-radius: 8px;
+    background: rgba(196,155,53,.16); border: 1px solid rgba(196,155,53,.4); }
+#spell-roll-overlay .atkfx-slot.is-rituel { background: rgba(41,128,185,.14); border-color: rgba(41,128,185,.38); }
+#spell-roll-overlay .atkfx-slot.is-sans { background: rgba(179,50,44,.12); border-color: rgba(179,50,44,.38); }
 @media (max-width: 760px) { #spell-roll-overlay .sro-panel { width: 100%; } }
 
 /* ============================================================
@@ -7554,6 +7695,53 @@ body.theme-dark .ql-snow .ql-picker-label { color: var(--text-color); }
 }
 .abil-pips .ability-charge-check:hover { transform: scale(1.12); }
 .abil-regen {
+    font-family: 'Courier New', monospace; font-size: .66rem;
+    letter-spacing: .08em; text-transform: uppercase; opacity: .55;
+}
+
+/* ===== Le de d'une capacite, et son bouton « Utiliser » =====
+   Une capacite qui porte un de (Rage, Inspiration bardique, Attaque
+   sournoise...) gagne un bouton qui depense une charge ET lance le de. */
+.abil-de {
+    flex: none; margin-left: auto; font-family: 'Courier New', monospace;
+    font-size: .74rem; font-weight: 700; letter-spacing: .04em;
+    padding: 3px 8px; border-radius: 999px;
+    color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+}
+.abil-head .abil-de + .abil-count { margin-left: 0; }
+.abil-lien { margin-left: 5px; font-size: .72rem; opacity: .6; }
+.abil-utiliser, .trait-utiliser {
+    align-self: flex-start; min-height: 34px; padding: 6px 14px; cursor: pointer;
+    font-family: 'Cinzel', Georgia, serif; font-size: .78rem; font-weight: 600; letter-spacing: .03em;
+    color: var(--accent-color); border-radius: 8px;
+    background: linear-gradient(180deg, var(--primary-hover, #9c3333), var(--primary-color, #7A2828));
+    border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+    transition: transform .14s ease, filter .14s ease;
+}
+.abil-utiliser:hover:not(:disabled), .trait-utiliser:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+.abil-utiliser:disabled, .trait-utiliser:disabled { opacity: .42; cursor: not-allowed; }
+.abil-utiliser:focus-visible, .trait-utiliser:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+/* La ligne d'un trait relie a une capacite montre ses charges sur place. */
+.trait-row.has-charges { border-color: color-mix(in srgb, var(--accent-color) 36%, var(--soft-border)); }
+.trait-charges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 9px 8px; }
+.trait-charges-compte {
+    font-family: 'Courier New', monospace; font-size: .74rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px; border: 1px solid var(--soft-border);
+}
+.trait-charges-compte.is-empty { color: var(--primary-color); border-color: var(--primary-color); }
+.trait-charges-de { font-family: 'Courier New', monospace; font-size: .72rem; color: var(--accent-color); }
+.trait-utiliser { align-self: auto; min-height: 30px; padding: 4px 11px; font-size: .72rem; }
+
+/* Saisie : un de qui suit la table se lit, mais ne se tape pas. */
+.ab-cfg-de.is-auto { opacity: .7; font-style: italic; cursor: not-allowed; }
+.ab-cfg-extra { flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+    .abil-utiliser, .trait-utiliser, .abil-utiliser:hover, .trait-utiliser:hover { transition: none !important; transform: none !important; }
+}
     font-family: 'Courier New', monospace; font-size: .66rem;
     letter-spacing: .08em; text-transform: uppercase; opacity: .55;
 }

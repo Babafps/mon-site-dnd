@@ -1042,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dtype = dmg ? (/^\d+d\d+$/.test(dmg[1]) ? dmg[2] : 'de ' + dmg[1]) : '';
 
             return {
-                name: s.name || '', level: parseInt(s.level, 10) || 0,
+                name: s.name || '', level: parseInt(s.level, 10) || 0, rituel: !!s.ritual,
                 time: s.casting_time || '', range: s.range || '', duration: s.duration || '',
                 comp: c, res: spellResString(c),
                 desc: paras + hl, notes: '',
@@ -2149,17 +2149,63 @@ document.addEventListener('DOMContentLoaded', () => {
             return inf[col.field || col.key];
         }
 
-        /** Construit le plan de montée. Ne touche à RIEN sur la fiche. */
-        async function buildLevelUpPlan(from) {
+        /** Les classes du héros, et celle qui va gagner ce niveau.
+         *  `cible` peut nommer une classe déjà présente, ou une toute nouvelle
+         *  (multiclassage) ; sans rien, c'est la classe principale qui monte. */
+        async function lvupClasses(cible) {
+            let liste = [];
+            try {
+                await window.charger('multiclasse');
+                liste = window.Multiclasse.liste();
+            } catch (e) {
+                const nom = document.getElementById('char-class')?.value || '';
+                liste = nom ? [{ id: null, nom, niveau: lvupNum('char-level') || 1,
+                                 sousClasse: document.getElementById('char-subclass')?.value || '' }] : [];
+            }
+            if (!liste.length) liste = [{ id: null, nom: '', niveau: lvupNum('char-level') || 1, sousClasse: '' }];
+            let entree = null;
+            if (cible && cible.nouvelle) {
+                entree = { id: cible.id || null, nom: cible.nom || '', niveau: 0, sousClasse: '', nouvelle: true };
+            } else if (cible) {
+                entree = liste.find(c => (cible.id && c.id === cible.id) || c.nom === cible.nom) || null;
+            }
+            return { liste, entree: entree || liste[0] };
+        }
+
+        /** Construit le plan de montée. Ne touche à RIEN sur la fiche.
+         *  `from` est le niveau TOTAL du personnage ; la classe qui monte, elle,
+         *  a son propre niveau, et c'est lui qui commande ses aptitudes. */
+        async function buildLevelUpPlan(from, cible) {
             const to = from + 1;
-            const { cls, sub } = await sheetClass();
-            const className = document.getElementById('char-class')?.value || '';
-            const info = cls ? window.SRD.levelInfo(cls, to, sub) : null;
-            const prev = cls ? window.SRD.levelInfo(cls, from, sub) : null;
+            const { liste: classes, entree } = await lvupClasses(cible);
+            const multi = classes.length > 1 || !!(entree && entree.nouvelle);
+            const className = entree.nom || document.getElementById('char-class')?.value || '';
+
+            // La fiche de règles de CETTE classe, et sa sous-classe à elle.
+            let cls = null, sub = null, cat = [];
+            try {
+                cat = await window.SRD.category('classes');
+                cls = (window.Multiclasse && window.Multiclasse.trouverClasse)
+                    ? window.Multiclasse.trouverClasse(cat, entree)
+                    : await window.SRD.classByName(className);
+                if (cls && entree.sousClasse) sub = window.SRD.subclassByName(cls, entree.sousClasse);
+                // Une fiche à classe unique garde son ancien comportement : la
+                // sous-classe du champ de la fiche fait foi si l'entrée n'en porte pas.
+                if (cls && !sub && !multi) sub = window.SRD.subclassByName(cls, document.getElementById('char-subclass')?.value || '');
+            } catch (e) { cls = null; sub = null; }
+
+            // Le niveau DE CLASSE : c'est lui qui dit quelles aptitudes arrivent.
+            const clsFrom = Math.max(0, parseInt(entree.niveau, 10) || 0);
+            const clsTo = clsFrom + 1;
+            const info = cls ? window.SRD.levelInfo(cls, clsTo, sub) : null;
+            const prev = (cls && clsFrom >= 1) ? window.SRD.levelInfo(cls, clsFrom, sub) : null;
             const die = (cls && Number(cls.hit_die)) || HIT_DIE_FALLBACK[classKey(className)] || 0;
 
             const plan = {
                 from, to, cls, sub, info, className,
+                classes, entree, multi, catalogue: cat,
+                classeNiveau: { from: clsFrom, to: clsTo },
+                nouvelleClasse: clsFrom === 0,
                 subName: (sub && sub.name) || '',
                 die, warnings: [],
                 prof: null, hitDice: null, hp: null,
@@ -2171,15 +2217,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     + 'emplacements de sorts ne peuvent pas être déduits. Le reste s’applique quand même.');
             }
             if (!die) plan.warnings.push('Dé de vie inconnu : renseigne-le toi-même dans le bloc Repos.');
+            if (plan.nouvelleClasse) {
+                plan.warnings.push(`Premier niveau de ${className || 'cette classe'} : tu ne reçois ni son `
+                    + 'équipement de départ, ni les points de vie maximum du niveau 1 — seulement '
+                    + 'ce que le multiclassage accorde. Vérifie les maîtrises gagnées (bouton ⚙ à côté de « Classe »).');
+            }
 
-            // Bonus de maîtrise — la table de la classe fait foi si elle existe.
+            // Bonus de maîtrise. Multiclassé, il suit le niveau TOTAL du
+            // personnage, jamais la table d'une seule classe (règle explicite des
+            // deux éditions). Classe unique : la table de la classe fait foi, une
+            // classe perso pouvant avoir sa propre progression.
             const profNow = parseInt(document.getElementById('prof-bonus')?.value, 10) || (Math.floor((from - 1) / 4) + 2);
-            const profNew = (info && info.prof_bonus != null) ? Number(info.prof_bonus) : (Math.floor((to - 1) / 4) + 2);
+            const profNew = (!multi && info && info.prof_bonus != null)
+                ? Number(info.prof_bonus) : (Math.floor((to - 1) / 4) + 2);
             plan.prof = { from: profNow, to: profNew, changed: profNew !== profNow };
 
-            // Dés de vie.
+            // Dés de vie. La réserve grossit d'un dé quel que soit le cas ; en
+            // revanche la fiche n'a qu'UNE taille de dé, alors que le multiclassage
+            // en donne souvent plusieurs. On ne change la taille que si toutes les
+            // classes s'accordent, et on le dit sinon.
             const hdMax = lvupNum('hd-max');
             plan.hitDice = { from: hdMax, to: hdMax + 1 };
+            plan.desMelanges = '';
+            if (multi) {
+                try {
+                    const apres = classes.map(c => (c.nom === entree.nom)
+                        ? Object.assign({}, c, { niveau: clsTo }) : c);
+                    if (plan.nouvelleClasse) apres.push({ id: entree.id, nom: entree.nom, niveau: 1 });
+                    const dv = window.Multiclasse.desDeVie(apres, await window.SRD.category('classes'));
+                    if (dv.groupes.length > 1) plan.desMelanges = dv.texte;
+                } catch (e) { /* sans les règles, on garde le dé de la classe qui monte */ }
+            }
+            if (plan.desMelanges) {
+                plan.warnings.push(`Tes classes n’ont pas le même dé de vie (${plan.desMelanges}). `
+                    + 'La fiche n’en garde qu’une taille : note la répartition dans le bloc Repos.');
+            }
 
             // Points de vie : moyenne du dé + mod. de Constitution (minimum 1).
             const conMod = getModifier(lvupNum('stat-con') || 10);
@@ -2190,14 +2262,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 current: lvupNum('hp-max')
             };
 
-            // Emplacements de sorts : on ne PROPOSE que ce qui augmente. Un
-            // multiclassé qui a plus d'emplacements que la table ne les perd pas.
-            if (info && info.spell_slots) {
-                Object.keys(info.spell_slots).forEach(r => {
+            // Emplacements de sorts. Classe unique : la table de la classe. Plusieurs
+            // classes : la table « Incantateur multiclassé », lue dans les règles de
+            // l'édition en vigueur (multiclasse.js). Dans les deux cas on ne PROPOSE
+            // que ce qui augmente — des emplacements venus d'ailleurs ne sont jamais
+            // retirés, et la case reste décochable.
+            let slotsSource = (info && info.spell_slots) ? info.spell_slots : null;
+            if (multi) {
+                try {
+                    const apres = classes.map(c => (c.nom === entree.nom)
+                        ? Object.assign({}, c, { niveau: clsTo }) : c);
+                    if (plan.nouvelleClasse) apres.push({ id: entree.id, nom: entree.nom, niveau: 1 });
+                    const prop = await window.Multiclasse.proposition(apres);
+                    if (prop.parRang) { slotsSource = prop.parRang; plan.incantateur = prop.niveauIncantateur; }
+                    (prop.avertissements || []).forEach(a => plan.warnings.push(a));
+                } catch (e) {
+                    plan.warnings.push('La table des incantateurs multiclassés n’a pas pu être lue : '
+                        + 'vérifie tes emplacements à la main.');
+                    slotsSource = null;
+                }
+            }
+            if (slotsSource) {
+                Object.keys(slotsSource).forEach(r => {
                     const rank = parseInt(r, 10);
                     if (!(rank >= 1 && rank <= 9)) return;
-                    const want = parseInt(info.spell_slots[r], 10) || 0;
-                    const have = (spellSlotsData[rank - 1] || {}).total || 0;
+                    const want = parseInt(slotsSource[r], 10) || 0;
+                    const dispo = spellSlotsData[rank - 1] || {};
+                    // Les emplacements de pacte ont leur propre ligne : on ne les
+                    // compte pas comme des emplacements ordinaires déjà acquis.
+                    const have = dispo.pacte ? 0 : (dispo.total || 0);
                     if (want > have) plan.slots.push({ rank, from: have, to: want });
                 });
                 plan.slots.sort((a, b) => a.rank - b.rank);
@@ -2299,7 +2392,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // « Vous en recevez une autre aux niveaux 10 et 17 » : aux niveaux
             // suivants, c'est UNE de plus, pas la fournée du début.
             const first = lvupFirstLevel(plan.cls, f);
-            if (first && plan.to > first && /(?:une|un)\s+autre|suppl[ée]mentaire/i.test(txt)) count = 1;
+            if (first && plan.classeNiveau.to > first && /(?:une|un)\s+autre|suppl[ée]mentaire/i.test(txt)) count = 1;
             count = Math.max(1, Math.min(count, opts.length));
 
             // Ce qui est déjà écrit sur la fiche ne se reprend pas.
@@ -2334,13 +2427,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!subs.length) return null;
             const at = lvupSubclassLevel(plan.cls);
             if (!at) return null;
-            const typed = (document.getElementById('char-subclass')?.value || '').trim();
-            if (plan.to === at) {
+            const typed = plan.multi
+                ? String((plan.entree && plan.entree.sousClasse) || '').trim()
+                : (document.getElementById('char-subclass')?.value || '').trim();
+            if (plan.classeNiveau.to === at) {
                 return { at, list: subs, chosen: plan.sub || null, required: !plan.sub, late: false };
             }
             // Rattrapage : le niveau est passé et la fiche n'en porte aucune.
             // Proposé, jamais imposé — un multiclassé peut avoir ses raisons.
-            if (plan.to > at && !typed) {
+            if (plan.classeNiveau.to > at && !typed) {
                 return { at, list: subs, chosen: null, required: false, late: true };
             }
             return null;
@@ -2349,7 +2444,7 @@ document.addEventListener('DOMContentLoaded', () => {
         /** Les aptitudes qu'une sous-classe donne À CE NIVEAU. */
         function lvupSubFeatures(plan, sub) {
             return ((sub && sub.features) || [])
-                .filter(f => Number(f.level) === plan.to)
+                .filter(f => Number(f.level) === plan.classeNiveau.to)
                 .map(f => ({ id: f.id, name: f.name, text: f.text, from: sub.name,
                              subclass: true, options: f.options || null }));
         }
@@ -2449,19 +2544,63 @@ document.addEventListener('DOMContentLoaded', () => {
         // grisé qui, cliqué, emmène droit à cette étape.
 
         const LVUP_STEP_NAMES = {
-            recap: 'Récapitulatif', subclass: 'Sous-classe', feats: 'Aptitudes',
+            classe: 'Classe',
+            recap: 'Niveau et PV', subclass: 'Sous-classe', feats: 'Aptitudes',
             asi: 'Caractéristique ou don', spells: 'Sorts'
         };
 
         /** Les étapes réellement utiles à CETTE montée : une seule pour un
          *  guerrier niveau 5, quatre pour un magicien niveau 4. */
         function lvupSteps(plan) {
-            const ids = ['recap'];
+            // La classe qui monte vient en premier : c'est elle qui commande tout
+            // le reste. Une fiche sans aucune classe reconnue saute l'étape.
+            const ids = (plan.classes && plan.classes.length && plan.classes[0].nom)
+                ? ['classe', 'recap'] : ['recap'];
             if (plan.subclass) ids.push('subclass');
             if (plan.features.length || plan.subclass) ids.push('feats');
             if (plan.asi) ids.push('asi');
             if (plan.spells) ids.push('spells');
             return ids;
+        }
+
+        // ---------- Étape 0 : quelle classe monte ? ----------
+        // C'est ici que naît un multiclassage. Le panneau ne décide rien : il
+        // désigne la classe, et tout le plan est reconstruit à partir d'elle.
+
+        function lvupClasseHtml(plan) {
+            const choisie = (c) => plan.entree && !plan.nouvelleClasse
+                && (plan.entree.id ? plan.entree.id === c.id : plan.entree.nom === c.nom);
+            const lignes = plan.classes.map((c, i) => `
+                <label class="lvup-cl-opt">
+                    <input type="radio" name="lvup-classe" value="${i}"${choisie(c) ? ' checked' : ''}>
+                    <span class="lvup-cl-carte">
+                        <b>${escAb(c.nom)}</b>
+                        <i>niveau ${c.niveau} <span class="lvup-arrow">→</span> ${c.niveau + 1}${c.sousClasse ? ' · ' + escAb(c.sousClasse) : ''}</i>
+                    </span>
+                </label>`).join('');
+            const place = plan.classes.length < 6;
+            const nouvelle = place ? `
+                <label class="lvup-cl-opt">
+                    <input type="radio" name="lvup-classe" value="new"${plan.nouvelleClasse ? ' checked' : ''}>
+                    <span class="lvup-cl-carte is-new">
+                        <b>Une nouvelle classe</b>
+                        <i>Commencer un multiclassage — tu ne reçois qu’une partie de ses maîtrises</i>
+                    </span>
+                </label>
+                <div class="lvup-cl-new"${plan.nouvelleClasse ? '' : ' hidden'}>
+                    <input type="text" class="lvup-cl-nom" list="lvup-cl-dl" autocomplete="off"
+                           placeholder="Laquelle ? (tape pour chercher)" aria-label="Nom de la nouvelle classe"
+                           value="${escAb(plan.nouvelleClasse ? (plan.entree.nom || '') : '')}">
+                    <datalist id="lvup-cl-dl">${plan.catalogue
+                        .filter(c => !plan.classes.some(x => x.nom === c.name))
+                        .map(c => `<option value="${escAb(c.name)}"></option>`).join('')}</datalist>
+                    <div class="lvup-cl-prereq" role="status"></div>
+                </div>` : `<p class="lvup-step-note">Six classes, c’est déjà beaucoup.</p>`;
+
+            return `<h3 class="lvup-step-title">Quelle classe monte ?</h3>
+                <p class="lvup-step-note">Niveau de personnage ${plan.from}
+                    <span class="lvup-arrow">→</span> ${plan.to}. Un seul de tes niveaux de classe augmente.</p>
+                <div class="lvup-cl-list">${lignes}${nouvelle}</div>`;
         }
 
         // ---------- Briques de rendu ----------
@@ -2501,8 +2640,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             rows.push(lvupRow({
                 key: 'level', kind: 'fixed', ico: '⬆️',
-                title: `Niveau ${plan.from} <span class="lvup-arrow">→</span> ${plan.to}`,
-                detail: plan.className
+                // Multiclassé, deux niveaux montent en même temps : celui de la
+                // classe (qui donne les aptitudes) et celui du personnage.
+                title: plan.multi
+                    ? `${escAb(plan.className)} ${plan.classeNiveau.from} <span class="lvup-arrow">→</span> ${plan.classeNiveau.to}`
+                    : `Niveau ${plan.from} <span class="lvup-arrow">→</span> ${plan.to}`,
+                detail: plan.multi
+                    ? `Personnage niveau ${plan.from} → ${plan.to}` + (plan.subName ? ' · ' + escAb(plan.subName) : '')
+                    : plan.className
                     ? escAb(plan.className) + (plan.subName ? ' · ' + escAb(plan.subName) : '')
                     : 'Classe non renseignée sur la fiche'
             }));
@@ -2514,9 +2659,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             rows.push(lvupRow({
                 key: 'hd', ico: '🎲', title: 'Dé de vie supplémentaire',
-                detail: plan.die
-                    ? `${plan.hitDice.from}d${plan.die} <span class="lvup-arrow">→</span> ${plan.hitDice.to}d${plan.die}`
-                    : `${plan.hitDice.from} <span class="lvup-arrow">→</span> ${plan.hitDice.to} dés`
+                // Multiclassé, la réserve mélange les tailles : on annonce la
+                // répartition réelle plutôt qu'un « 5d8 » qui n'existe nulle part.
+                detail: plan.desMelanges
+                    ? `+1d${plan.die} — réserve : ${escAb(plan.desMelanges)}`
+                    : (plan.die
+                        ? `${plan.hitDice.from}d${plan.die} <span class="lvup-arrow">→</span> ${plan.hitDice.to}d${plan.die}`
+                        : `${plan.hitDice.from} <span class="lvup-arrow">→</span> ${plan.hitDice.to} dés`)
             }));
 
             if (plan.die) rows.push(lvupRow({
@@ -2749,7 +2898,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="lvup-head">
                         <div class="lvup-kicker">Montée de niveau</div>
                         <div class="lvup-big">${plan.to}</div>
-                        <div class="lvup-sub">${plan.className
+                        <div class="lvup-sub">${plan.multi
+                            ? escAb(plan.className) + ' ' + plan.classeNiveau.to + (plan.subName ? ' · ' + escAb(plan.subName) : '')
+                            : plan.className
                             ? escAb(plan.className) + (plan.subName ? ' · ' + escAb(plan.subName) : '')
                             : 'Personnage'}</div>
                     </div>
@@ -2769,6 +2920,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 data-act="prev" aria-label="Étape précédente" title="Étape précédente">←</button>
                         <button type="button" class="lvup-btn lvup-btn-ghost lvup-arrow-btn"
                                 data-act="next" aria-label="Étape suivante" title="Étape suivante">→</button>
+                        <button type="button" class="lvup-btn lvup-btn-ghost lvup-skip"
+                                data-act="skip" title="Renoncer aux choix de cette étape et passer à la suivante">Passer</button>
                     </span>
                     <span class="lvup-foot-end">
                         <button type="button" class="lvup-btn lvup-btn-alt" data-act="all">✦ Tout appliquer</button>
@@ -2779,6 +2932,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function lvupStepHtml(plan, id) {
+            if (id === 'classe') return lvupClasseHtml(plan);
             if (id === 'recap') return lvupRecapHtml(plan);
             if (id === 'subclass') return lvupSubclassHtml(plan);
             if (id === 'feats') return lvupFeatsHtml(plan);
@@ -3135,17 +3289,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 refresh();
             };
 
-            // --- Points de vie : moyenne / dé lancé / manuel ---
+            // --- Points de vie : moyenne / dé lancé en 3D / manuel ---
             const hpMode = ov.querySelector('.lvup-hp-mode');
             const hpVal = ov.querySelector('.lvup-hp-val');
             const hpDetail = ov.querySelector('.lvup-hp-detail');
-            const rollHp = () => Math.max(1, (1 + Math.floor(Math.random() * plan.die)) + plan.hp.conMod);
+            // Le dé de vie roule pour de vrai, comme tous les autres jets de la
+            // fiche : la 3D est un habillage, le résultat vient du tirage. Sans
+            // moteur 3D disponible (hors ligne, téléphone modeste), le tirage
+            // seul fait le travail — jamais d'attente ni d'échec visible.
+            let hpRoule = false;
+            const rollHp = async () => {
+                if (hpRoule || !plan.die) return;
+                hpRoule = true;
+                const bouton = ov.querySelector('.lvup-hp-roll');
+                if (bouton) { bouton.disabled = true; bouton.classList.add('is-rolling'); }
+                const de = 1 + Math.floor(Math.random() * plan.die);
+                // Les secrets réagissent dès le lancer, pas à la fin de l'animation
+                // (même règle que le plateau de dés).
+                document.dispatchEvent(new CustomEvent('des:lances', { detail: { nombre: 1 } }));
+                try {
+                    if (diceBoxReady && diceBox) await safeDiceRoll([`1d${plan.die}`]);
+                } catch (e) { /* la 3D n'est jamais bloquante */ }
+                hpMode.value = 'roll';
+                hpVal.disabled = true;
+                hpVal.value = Math.max(1, de + plan.hp.conMod);
+                plan.hp.deLance = de;
+                refreshHp(); refresh();
+                if (bouton) { bouton.disabled = false; bouton.classList.remove('is-rolling'); }
+                hpRoule = false;
+            };
             const refreshHp = () => {
                 if (!hpVal || !hpDetail) return;
                 const v = Math.max(0, parseInt(hpVal.value, 10) || 0);
                 const src = hpMode.value === 'average'
                     ? `moyenne d${plan.die} ${lvupSigned(plan.hp.conMod)} CON`
-                    : (hpMode.value === 'roll' ? `1d${plan.die} lancé ${lvupSigned(plan.hp.conMod)} CON` : 'saisie manuelle');
+                    : (hpMode.value === 'roll'
+                        ? `1d${plan.die}${plan.hp.deLance ? ' → ' + plan.hp.deLance : ' lancé'} ${lvupSigned(plan.hp.conMod)} CON`
+                        : 'saisie manuelle');
                 hpDetail.innerHTML = `+${v} PV (${escAb(src)}) — `
                     + `${plan.hp.current} <span class="lvup-arrow">→</span> ${plan.hp.current + v}`;
             };
@@ -3155,6 +3335,99 @@ document.addEventListener('DOMContentLoaded', () => {
                 const panel = ov.querySelector('[data-panel="feats"]');
                 if (panel) panel.innerHTML = lvupFeatsHtml(plan);
             };
+
+            // --- Changer la classe qui monte ---
+            // Tout dépend d'elle : aptitudes, sous-classe, sorts, dé de vie. On ne
+            // rafistole pas le plan, on le refait — et rien n'a encore été écrit sur
+            // la fiche, donc rien n'est perdu.
+            let enRefonte = false;
+            const cibleDepuis = (valeur) => {
+                if (valeur !== 'new') {
+                    const c = plan.classes[parseInt(valeur, 10)];
+                    return c ? { id: c.id, nom: c.nom } : null;
+                }
+                const nom = String((ov.querySelector('.lvup-cl-nom') || {}).value || '').trim();
+                return nom ? { nom, nouvelle: true } : null;
+            };
+            const changerClasse = async (valeur) => {
+                if (enRefonte) return;
+                const cible = cibleDepuis(valeur);
+                // « Une nouvelle classe » sans nom : on ouvre juste la saisie.
+                const zone = ov.querySelector('.lvup-cl-new');
+                if (zone) zone.hidden = (valeur !== 'new');
+                if (valeur === 'new' && !cible) {
+                    const champ = ov.querySelector('.lvup-cl-nom');
+                    if (champ) champ.focus();
+                    return;
+                }
+                if (!cible) return;
+                const memeClasse = !cible.nouvelle && plan.entree && !plan.nouvelleClasse
+                    && (cible.id ? cible.id === plan.entree.id : cible.nom === plan.entree.nom);
+                if (memeClasse) return;
+                enRefonte = true;
+                try {
+                    const neuf = await buildLevelUpPlan(plan.from, cible);
+                    close();
+                    openLevelUpScreen(neuf);
+                } catch (err) {
+                    console.error('[montée de niveau] changement de classe', err);
+                    if (window.showAppToast) window.showAppToast('Impossible de changer de classe.', 'erreur');
+                    enRefonte = false;
+                }
+            };
+
+            // --- Passer l'étape en cours ---
+            // « Passer » ne saute pas le niveau : il renonce aux CHOIX de l'étape
+            // (aptitudes décochées, caractéristique remise à plus tard, sorts
+            // choisis au grimoire) et passe à la suivante. Rien n'est verrouillé :
+            // on peut revenir en arrière par le fil d'étapes.
+            const passerEtape = () => {
+                const id = plan.steps[cur];
+                const panneau = ov.querySelector(`[data-panel="${id}"]`);
+                if (id === 'feats' && panneau) {
+                    panneau.querySelectorAll('.lvup-ck').forEach(ck => { ck.checked = false; });
+                } else if (id === 'asi') {
+                    const later = ov.querySelector('input[name="lvup-asi-mode"][value="later"]');
+                    if (later) { later.checked = true; later.dispatchEvent(new Event('change', { bubbles: true })); }
+                } else if (id === 'spells') {
+                    const later = ov.querySelector('.lvup-sp-later-ck');
+                    if (later && !later.checked) { later.checked = true; later.dispatchEvent(new Event('change', { bubbles: true })); }
+                } else if (id === 'subclass' && plan.subclass && !plan.subclass.required) {
+                    lvupChooseSubclass(plan, null);
+                    const p = ov.querySelector('[data-panel="subclass"]');
+                    if (p) p.innerHTML = lvupSubclassHtml(plan);
+                    redrawFeats();
+                }
+                if (cur < plan.steps.length - 1) goStep(cur + 1);
+                else refresh();
+            };
+
+            // --- La nouvelle classe : reconnue au fil de la frappe ---
+            const champNouvelle = ov.querySelector('.lvup-cl-nom');
+            if (champNouvelle) {
+                let minuteur = null;
+                const zonePrereq = ov.querySelector('.lvup-cl-prereq');
+                const regarder = async () => {
+                    const nom = champNouvelle.value.trim();
+                    const cls = nom ? window.Multiclasse.trouverClasse(plan.catalogue, { nom }) : null;
+                    if (!zonePrereq) return;
+                    if (!cls) { zonePrereq.textContent = nom ? 'Classe inconnue des règles — la saisie libre marche quand même.' : ''; return; }
+                    const manques = await window.Multiclasse.prerequisManquants(
+                        plan.classes.concat([{ id: cls.id, nom: cls.name, niveau: 1 }]));
+                    zonePrereq.innerHTML = manques.length
+                        ? manques.map(m => `<p class="lvup-cl-warn">⚠ ${escAb(m)}</p>`).join('')
+                        : `<p class="lvup-cl-ok">✓ ${escAb(cls.name)} — prérequis remplis. Dé de vie d${escAb(cls.hit_die || '?')}.</p>`;
+                };
+                champNouvelle.addEventListener('input', () => {
+                    clearTimeout(minuteur);
+                    minuteur = setTimeout(regarder, 250);
+                });
+                champNouvelle.addEventListener('change', () => changerClasse('new'));
+                champNouvelle.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); changerClasse('new'); }
+                });
+                regarder();
+            }
 
             // --- Le tour complet : fil d'étapes, gains, boutons ---
             const refresh = () => {
@@ -3188,6 +3461,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 ov.querySelector('[data-act="prev"]').disabled = (cur === 0);
                 ov.querySelector('[data-act="next"]').disabled = (cur === plan.steps.length - 1);
+                // « Passer » n'a de sens que là où il y a un choix à renoncer :
+                // ni sur le choix de classe, ni sur le récapitulatif.
+                const skip = ov.querySelector('[data-act="skip"]');
+                if (skip) {
+                    const id = plan.steps[cur];
+                    const renoncable = (id === 'feats' || id === 'asi' || id === 'spells'
+                        || (id === 'subclass' && plan.subclass && !plan.subclass.required));
+                    skip.hidden = !renoncable;
+                }
             };
 
             // --- Amélioration de caractéristique ---
@@ -3276,9 +3558,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                if (e.target.closest('.lvup-hp-roll')) {
-                    hpMode.value = 'roll'; hpVal.disabled = true; hpVal.value = rollHp();
-                    refreshHp(); refresh();
+                if (e.target.closest('.lvup-hp-roll')) { rollHp(); return; }
+
+                // --- Changer la classe qui monte : tout le plan est refait ---
+                const clOpt = e.target.closest('.lvup-cl-opt');
+                if (clOpt) {
+                    const radio = clOpt.querySelector('input[name="lvup-classe"]');
+                    if (radio) { radio.checked = true; changerClasse(radio.value); }
                     return;
                 }
 
@@ -3288,6 +3574,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (act === 'cancel') { close(); return; }
                 if (act === 'prev') { goStep(cur - 1); return; }
                 if (act === 'next') { goStep(cur + 1); return; }
+                if (act === 'skip') { passerEtape(); return; }
 
                 if (act === 'all' || act === 'confirm') {
                     // « Tout appliquer » prend les valeurs par défaut là où il y
@@ -3347,26 +3634,65 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             const fire = (el, types) => types.forEach(t => el.dispatchEvent(new Event(t, { bubbles: true })));
 
-            // 1. Niveau — le listener de #char-level recalcule la maîtrise
-            //    et met à jour la liste des personnages.
+            // 1. Les classes. C'est la classe choisie à l'étape « Classe » qui
+            //    gagne le niveau ; `Multiclasse.definir` remet ensuite la fiche
+            //    d'accord avec elle (champ Classe, champ Niveau, sous-classe).
+            //    Une fiche à classe unique qui reste telle quelle n'écrit rien de
+            //    plus qu'avant : la clé `dnd-classes` naît au premier vrai besoin.
             const lvlEl = document.getElementById('char-level');
-            lvlEl.value = plan.to;
-            fire(lvlEl, ['input']);
+            let classesEcrites = false;
+            if (plan.entree && plan.entree.nom && (plan.multi || window.Multiclasse)) {
+                // Les classes migrées d'un champ texte n'ont pas d'identifiant :
+                // le catalogue est là, on en profite pour le leur donner.
+                const suite = plan.classes.map(c => {
+                    const copie = Object.assign({}, c);
+                    if (!copie.id && window.Multiclasse.trouverClasse) {
+                        const trouve = window.Multiclasse.trouverClasse(plan.catalogue, copie);
+                        if (trouve) copie.id = trouve.id;
+                    }
+                    return copie;
+                });
+                if (plan.nouvelleClasse) {
+                    suite.push({ id: (plan.cls && plan.cls.id) || null, nom: plan.entree.nom,
+                                 niveau: 1, sousClasse: plan.subName || '' });
+                } else {
+                    const i = suite.findIndex(c => (plan.entree.id && c.id === plan.entree.id) || c.nom === plan.entree.nom);
+                    if (i !== -1) {
+                        suite[i].niveau = plan.classeNiveau.to;
+                        if (plan.subName) suite[i].sousClasse = plan.subName;
+                        if (plan.cls && !suite[i].id) suite[i].id = plan.cls.id;
+                    }
+                }
+                // On n'enregistre la liste que si elle apporte quelque chose :
+                // un multiclassage, ou une liste déjà enregistrée qu'il faut suivre.
+                if (suite.length > 1 || window.Multiclasse.enregistree()) {
+                    classesEcrites = window.Multiclasse.definir(suite);
+                }
+            }
+            // Niveau du personnage — le listener de #char-level recalcule la
+            // maîtrise et met à jour la liste des personnages.
+            if (!classesEcrites) {
+                lvlEl.value = plan.to;
+                fire(lvlEl, ['input']);
+            }
 
             // 2. Maîtrise : la table de la classe l'emporte sur la formule
-            //    standard (une classe perso peut avoir sa propre progression).
+            //    standard pour une classe unique (une classe perso peut avoir sa
+            //    propre progression) ; multiclassé, c'est le niveau total qui
+            //    commande, et le plan l'a déjà tranché.
             const profEl = document.getElementById('prof-bonus');
             if (profEl && String(profEl.value) !== String(plan.prof.to)) {
                 profEl.value = plan.prof.to;
                 fire(profEl, ['input']);
             }
 
-            // 3. Dés de vie.
+            // 3. Dés de vie. La taille ne change que si les classes s'accordent —
+            //    sinon le plan a déjà prévenu, et la saisie du joueur est respectée.
             if (on('hd')) {
                 const hdMaxEl = document.getElementById('hd-max');
                 if (hdMaxEl) { hdMaxEl.value = plan.hitDice.to; fire(hdMaxEl, ['input']); }
                 const hdSizeEl = document.getElementById('hd-size');
-                if (plan.die && hdSizeEl && hdSizeEl.value !== String(plan.die)
+                if (plan.die && !plan.desMelanges && hdSizeEl && hdSizeEl.value !== String(plan.die)
                     && [...hdSizeEl.options].some(o => o.value === String(plan.die))) {
                     hdSizeEl.value = String(plan.die);
                     fire(hdSizeEl, ['change']);
@@ -3403,22 +3729,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (Object.keys(slotMap).length && window.SheetApi) window.SheetApi.setSpellSlots(slotMap);
 
-            // 6. Sous-classe choisie à l'écran. Elle s'écrit sur la fiche, donc
-            //    elle vaut aussi pour toutes les montées suivantes.
+            // 6. Sous-classe choisie à l'écran. Elle appartient à la classe qui
+            //    vient de monter : sur une fiche multiclassée elle va dans SON
+            //    entrée, et le champ « Sous-classe » de la fiche, qui n'a qu'une
+            //    ligne, reste celui de la classe principale.
             let subDone = '';
             if (plan.subclass && plan.subclass.chosen) {
-                const subEl = document.getElementById('char-subclass');
                 const name = plan.subclass.chosen.name || '';
-                if (subEl && name && subEl.value.trim() !== name) {
-                    subEl.value = name;
-                    fire(subEl, ['input', 'change']);
+                if (name) {
                     subDone = name;
+                    if (classesEcrites) {
+                        const suite = window.Multiclasse.liste();
+                        const i = suite.findIndex(c => (plan.entree.id && c.id === plan.entree.id) || c.nom === plan.entree.nom);
+                        if (i !== -1 && suite[i].sousClasse !== name) {
+                            suite[i].sousClasse = name;
+                            window.Multiclasse.definir(suite);
+                        }
+                    } else {
+                        const subEl = document.getElementById('char-subclass');
+                        if (subEl && subEl.value.trim() !== name) {
+                            subEl.value = name;
+                            fire(subEl, ['input', 'change']);
+                        } else subDone = '';
+                    }
                 }
             }
 
             // 7. Aptitudes → module « Capacités ».
             const kept = plan.features.filter(f => on(f.ckKey));
-            if (kept.length) addFeaturesAsTraits(kept, plan.to);
+            // Le « Niv. N » d'une capacité parle du niveau DE SA CLASSE : sur une
+            // fiche multiclassée, « Niv. 3 » de roublard n'est pas le niveau 7 du héros.
+            const nivTrait = plan.multi ? plan.classeNiveau.to : plan.to;
+            if (kept.length) addFeaturesAsTraits(kept, nivTrait);
 
             // 8. Les options choisies dans une aptitude : « Style de combat :
             //    Défense » entre comme une capacité à part entière.
@@ -3428,7 +3770,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 f.choice.options.filter(o => f.choice.chosen.has(o.id)).forEach(o => {
                     const label = `${f.choice.name} : ${o.name}`;
                     if (window.SheetApi) window.SheetApi.addTraits([{
-                        name: label, type: 'class', level: plan.to, desc: o.text
+                        name: label, type: 'class', level: nivTrait, desc: o.text
                     }]);
                     optDone.push(label);
                 });
@@ -3627,15 +3969,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (added) { setStore('dnd-inventory', inventory); renderInventory(); }
                 return added;
             },
-            /** map : { "1": 2, "2": 3 } — rang de sort → nombre d'emplacements */
+            /** map : { "1": 2, "2": 3 } — rang de sort → nombre d'emplacements.
+             *  Une entrée peut aussi valoir { total, pacte } : c'est ainsi que le
+             *  multiclassage marque la réserve de Magie de pacte, qui ne se
+             *  confond pas avec les emplacements ordinaires. */
+            /** L'état des emplacements, rang par rang : de quoi proposer un
+             *  lancement sans que le module de lancement connaisse la fiche. */
+            emplacements() {
+                return spellSlotsData.map((d, i) => ({
+                    rang: i + 1, total: d.total,
+                    libres: Math.max(0, d.total - (d.used || []).filter(Boolean).length),
+                    pacte: !!d.pacte
+                })).filter(r => r.total > 0);
+            },
+            /** Dépense le premier emplacement libre d'un rang. Rend un objet qui
+             *  sait le rendre (le lancement d'un sort est annulable), ou null. */
+            depenserEmplacement(rang) { return depenserEmplacement(parseInt(rang, 10) || 0); },
             setSpellSlots(map) {
                 if (!map) return 0;
                 let touched = 0;
                 Object.keys(map).forEach(rank => {
                     const i = parseInt(rank, 10) - 1;
                     if (i < 0 || i >= spellSlotsData.length) return;
-                    const total = parseInt(map[rank], 10) || 0;
+                    const brut = map[rank];
+                    const detail = (brut && typeof brut === 'object') ? brut : { total: brut };
+                    const total = Math.max(0, Math.min(9, parseInt(detail.total, 10) || 0));
                     spellSlotsData[i].total = total;
+                    if (detail.pacte !== undefined) spellSlotsData[i].pacte = !!detail.pacte;
                     spellSlotsData[i].used = (spellSlotsData[i].used || []).slice(0, total);
                     while (spellSlotsData[i].used.length < total) spellSlotsData[i].used.push(false);
                     touched++;
@@ -3820,6 +4180,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if(profInput) { profInput.addEventListener('input', () => { updateStatsAndSkills(); }); }
         const classInput = document.getElementById('char-class'); if(classInput) { classInput.addEventListener('input', () => { syncCharMeta(); }); }
 
+        // ---------- Multiclassage : la roue à côté du champ « Classe » ----------
+        // Le module qui sait lire les tables de multiclassage (multiclasse.js)
+        // ne se charge qu'au clic : une fiche à classe unique ne le paie jamais.
+        // Ici on ne garde que le strict nécessaire — savoir s'il y a plusieurs
+        // classes pour poser la pastille, sans rien calculer.
+        function majPastilleClasses() {
+            const groupe = classInput && classInput.closest('.class-group');
+            if (!groupe) return;
+            const l = getStore('dnd-classes');
+            const plusieurs = Array.isArray(l) && l.length > 1;
+            groupe.classList.toggle('is-multi', plusieurs);
+            const pastille = groupe.querySelector('.class-multi');
+            if (pastille) {
+                pastille.classList.toggle('hidden', !plusieurs);
+                if (plusieurs) pastille.title = l.map(c => `${c.nom} ${c.niveau}`).join(' / ');
+            }
+        }
+        window.majPastilleClasses = majPastilleClasses;
+        const btnClasses = document.getElementById('btn-classes');
+        if (btnClasses) btnClasses.addEventListener('click', async () => {
+            btnClasses.disabled = true;
+            try {
+                await window.charger('multiclasse');
+                await window.Multiclasse.ouvrir();
+            } catch (e) {
+                console.error('[classes]', e);
+                if (window.showAppToast) window.showAppToast('Le module des classes n’a pas pu se charger.', 'erreur');
+            } finally { btnClasses.disabled = false; }
+        });
+        document.addEventListener('classes:change', majPastilleClasses);
+        majPastilleClasses();
+
         const skillsMap = [{ id: 'str', name: 'Force', skills: [{id: 'save-str', name: 'Sauvegarde', type: 'save'}, {id: 'athletics', name: 'Athlétisme'}] }, { id: 'dex', name: 'Dextérité', skills: [{id: 'save-dex', name: 'Sauvegarde', type: 'save'}, {id: 'acrobatics', name: 'Acrobaties'}, {id: 'sleight', name: 'Escamotage'}, {id: 'stealth', name: 'Discrétion'}] }, { id: 'con', name: 'Constitution', skills: [{id: 'save-con', name: 'Sauvegarde', type: 'save'}] }, { id: 'int', name: 'Intelligence', skills: [{id: 'save-int', name: 'Sauvegarde', type: 'save'}, {id: 'arcana', name: 'Arcanes'}, {id: 'history', name: 'Histoire'}, {id: 'investigation', name: 'Investigation'}, {id: 'nature', name: 'Nature'}, {id: 'religion', name: 'Religion'}] }, { id: 'wis', name: 'Sagesse', skills: [{id: 'save-wis', name: 'Sauvegarde', type: 'save'}, {id: 'animal', name: 'Dressage'}, {id: 'insight', name: 'Intuition'}, {id: 'medicine', name: 'Médecine'}, {id: 'perception', name: 'Perception'}, {id: 'survival', name: 'Survie'}] }, { id: 'cha', name: 'Charisme', skills: [{id: 'save-cha', name: 'Sauvegarde', type: 'save'}, {id: 'deception', name: 'Tromperie'}, {id: 'intimidation', name: 'Intimidation'}, {id: 'performance', name: 'Représentation'}, {id: 'persuasion', name: 'Persuasion'}] }];
         const attributesContainer = document.getElementById('attributes-list');
         if(attributesContainer) {
@@ -3998,14 +4390,118 @@ document.addEventListener('DOMContentLoaded', () => {
             hpQuickAmount.value = '';
         });
 
-        function createDefaultSpellSlotLevel() { return { total: 0, used: [], regenMode: 'long', shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1 }; }
-        function normalizeSpellSlotsData(rawData) { return Array.from({length: 9}, (_, lvl) => { const base = createDefaultSpellSlotLevel(); const old = Array.isArray(rawData) ? rawData[lvl] : null; if(old && typeof old === 'object') { base.total = Math.max(0, Math.min(9, parseInt(old.total) || 0)); base.used = Array.isArray(old.used) ? old.used.slice(0, base.total).map(Boolean) : []; base.regenMode = old.regenMode || 'long'; base.shortType = old.shortType || 'all'; base.shortAmount = Math.max(1, parseInt(old.shortAmount) || 1); base.longType = old.longType || 'all'; base.longAmount = Math.max(1, parseInt(old.longAmount) || 1); } while(base.used.length < base.total) base.used.push(false); base.used = base.used.slice(0, base.total); return base; }); }
+        // ===== EMPLACEMENTS DE SORTS =====
+        // Un rang d'emplacements : combien, lesquels sont dépensés, comment ils
+        // reviennent — et, nouveauté, s'il s'agit de la Magie de pacte. Ce
+        // drapeau sert à deux choses : montrer que cette réserve est à part, et
+        // ne pas la confondre avec les emplacements ordinaires quand le
+        // multiclassage propose de les recalculer (multiclasse.js).
+        function createDefaultSpellSlotLevel() { return { total: 0, used: [], regenMode: 'long', shortType: 'all', shortAmount: 1, longType: 'all', longAmount: 1, pacte: false }; }
+        function normalizeSpellSlotsData(rawData) { return Array.from({length: 9}, (_, lvl) => { const base = createDefaultSpellSlotLevel(); const old = Array.isArray(rawData) ? rawData[lvl] : null; if(old && typeof old === 'object') { base.total = Math.max(0, Math.min(9, parseInt(old.total) || 0)); base.used = Array.isArray(old.used) ? old.used.slice(0, base.total).map(Boolean) : []; base.regenMode = old.regenMode || 'long'; base.shortType = old.shortType || 'all'; base.shortAmount = Math.max(1, parseInt(old.shortAmount) || 1); base.longType = old.longType || 'all'; base.longAmount = Math.max(1, parseInt(old.longAmount) || 1); base.pacte = !!old.pacte; } while(base.used.length < base.total) base.used.push(false); base.used = base.used.slice(0, base.total); return base; }); }
         let spellSlotsData = normalizeSpellSlotsData(getStore('dnd-spell-slots')); setStore('dnd-spell-slots', spellSlotsData);
         function formatRecoverAmount(type, amount) { return type === 'all' ? 'Tout' : `+${amount}`; } function getSpellSlotRegenText(data) { if(data.regenMode === 'none') return 'Aucune régénération'; if(data.regenMode === 'short_long') return `Court: ${formatRecoverAmount(data.shortType, data.shortAmount)} | Long: ${formatRecoverAmount(data.longType, data.longAmount)}`; return `Long: ${formatRecoverAmount(data.longType, data.longAmount)}`; }
 
-        function renderSpellSlots() { const container = document.getElementById('spell-slots-grid'); if(!container) return; container.innerHTML = ''; const activeLevels = spellSlotsData.map((data, lvl) => ({ data, lvl })).filter(entry => entry.data.total > 0); if(activeLevels.length === 0) { container.innerHTML = `<div class="spell-slot-empty">Aucun emplacement configuré.</div>`; return; } activeLevels.forEach(({ data, lvl }) => { const usedCount = data.used.filter(Boolean).length; const available = Math.max(0, data.total - usedCount); let cbHtml = ''; for(let i=0; i<data.total; i++) cbHtml += `<input type="checkbox" class="slot-check" data-lvl="${lvl}" data-index="${i}" ${data.used[i]?'checked':''} title="Dépensé">`; container.innerHTML += `<div class="spell-slot-row"><div class="slot-lvl-label">Niveau ${lvl + 1}</div><div class="slot-main-content"><div class="slot-checkboxes">${cbHtml}</div><div class="slot-info">${available}/${data.total} dispos • ${getSpellSlotRegenText(data)}</div></div></div>`; }); document.querySelectorAll('.slot-check').forEach(cb => { cb.addEventListener('change', (e) => { spellSlotsData[parseInt(e.target.dataset.lvl)].used[parseInt(e.target.dataset.index)] = e.target.checked; setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); }); }); }
-        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-spell-slots-modal') { const list = document.getElementById('spell-slots-config-list'); if(!list) return; list.innerHTML = ''; spellSlotsData.forEach((data, lvl) => { list.innerHTML += `<div class="spell-slot-config-row ${data.total === 0 ? 'is-empty' : ''}" data-lvl="${lvl}"><div class="spell-slot-config-head"><div class="spell-slot-level-badge">Niv. ${lvl + 1}</div><label class="spell-slot-mini-field">Emplacements<input type="number" class="spell-config-total" min="0" max="9" value="${data.total}"></label><label class="spell-slot-mini-field spell-slot-regen-field">Récupération<select class="spell-config-regen-mode"><option value="none" ${data.regenMode === 'none' ? 'selected' : ''}>Aucune</option><option value="long" ${data.regenMode === 'long' ? 'selected' : ''}>Repos long</option><option value="short_long" ${data.regenMode === 'short_long' ? 'selected' : ''}>Repos court + long</option></select></label></div><div class="spell-slot-config-details"><div class="spell-recovery-pill spell-config-short-block hidden"><span>Court</span><select class="spell-config-short-type"><option value="all" ${data.shortType === 'all' ? 'selected' : ''}>Tout</option><option value="fixed" ${data.shortType === 'fixed' ? 'selected' : ''}>Partiel</option></select><input type="number" class="spell-config-short-amount hidden" min="1" value="${data.shortAmount}" placeholder="Nb"></div><div class="spell-recovery-pill spell-config-long-block"><span>Long</span><select class="spell-config-long-type"><option value="all" ${data.longType === 'all' ? 'selected' : ''}>Tout</option><option value="fixed" ${data.longType === 'fixed' ? 'selected' : ''}>Partiel</option></select><input type="number" class="spell-config-long-amount hidden" min="1" value="${data.longAmount}" placeholder="Nb"></div></div></div>`; }); document.querySelectorAll('.spell-slot-config-row').forEach(row => { const updateVisibility = () => { const total = Math.max(0, parseInt(row.querySelector('.spell-config-total').value) || 0); const mode = row.querySelector('.spell-config-regen-mode').value; row.classList.toggle('is-empty', total === 0); row.querySelector('.spell-slot-config-details').classList.toggle('hidden', total === 0 || mode === 'none'); row.querySelector('.spell-config-short-block').classList.toggle('hidden', total === 0 || mode !== 'short_long'); row.querySelector('.spell-config-long-block').classList.toggle('hidden', total === 0 || mode === 'none'); row.querySelector('.spell-config-short-amount').classList.toggle('hidden', row.querySelector('.spell-config-short-type').value === 'all'); row.querySelector('.spell-config-long-amount').classList.toggle('hidden', row.querySelector('.spell-config-long-type').value === 'all'); }; updateVisibility(); row.querySelectorAll('select, input').forEach(el => { el.addEventListener('input', updateVisibility); }); }); document.getElementById('spell-slots-modal').classList.remove('hidden'); } });
-        const btnSaveSpellSlots = document.getElementById('btn-save-spell-slots-config'); if(btnSaveSpellSlots) { btnSaveSpellSlots.addEventListener('click', () => { document.querySelectorAll('.spell-slot-config-row').forEach(row => { const lvl = parseInt(row.dataset.lvl); const total = Math.max(0, Math.min(9, parseInt(row.querySelector('.spell-config-total').value) || 0)); spellSlotsData[lvl] = { total: total, used: (spellSlotsData[lvl].used || []).slice(0, total), regenMode: row.querySelector('.spell-config-regen-mode').value, shortType: row.querySelector('.spell-config-short-type').value, shortAmount: Math.max(1, parseInt(row.querySelector('.spell-config-short-amount').value) || 1), longType: row.querySelector('.spell-config-long-type').value, longAmount: Math.max(1, parseInt(row.querySelector('.spell-config-long-amount').value) || 1) }; while(spellSlotsData[lvl].used.length < total) spellSlotsData[lvl].used.push(false); }); setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); document.getElementById('spell-slots-modal').classList.add('hidden'); }); }
+        // ---------- Les gemmes ----------
+        // Un emplacement n'est plus une case à cocher mais une gemme : allumée
+        // tant qu'elle est disponible, éteinte quand elle est dépensée. Ce sont
+        // de vrais boutons (Tab, Entrée, Espace) qui portent `aria-pressed` :
+        // « enfoncé » veut dire « dépensé ». L'animation ne sert qu'à montrer ce
+        // qui vient de changer ; `prefers-reduced-motion` la coupe (style.css).
+        let etatGemmes = null;      // photo du rendu précédent, pour n'animer que les mouvements
+
+        // Une chaîne de 0 et de 1 par rang : comparable caractère par caractère.
+        function photoGemmes() { return spellSlotsData.map(d => (d.used || []).slice(0, d.total).map(u => u ? '1' : '0').join('')); }
+
+        function renderSpellSlots() {
+            const container = document.getElementById('spell-slots-grid');
+            if(!container) return;
+            const avant = etatGemmes;
+            const apres = photoGemmes();
+            const rangs = spellSlotsData.map((data, lvl) => ({ data, lvl })).filter(e => e.data.total > 0);
+            if(!rangs.length) {
+                container.innerHTML = `<div class="spell-slot-empty">Aucun emplacement configuré.</div>`;
+                etatGemmes = apres;
+                return;
+            }
+            container.innerHTML = rangs.map(({ data, lvl }) => {
+                const depenses = data.used.filter(Boolean).length;
+                const dispos = Math.max(0, data.total - depenses);
+                const ancien = avant ? (avant[lvl] || '') : null;
+                let gemmes = '';
+                for(let i = 0; i < data.total; i++) {
+                    const use = !!data.used[i];
+                    // Ce qui a bougé depuis le dernier rendu s'anime ; le reste, non.
+                    let mouvement = '';
+                    if(ancien !== null && ancien.length > i) {
+                        const avantUse = ancien[i] === '1';
+                        if(avantUse !== use) mouvement = use ? ' is-depense' : ' is-rallume';
+                    }
+                    const rang = lvl + 1;
+                    gemmes += `<button type="button" class="slot-gem${use ? ' is-spent' : ''}${mouvement}"`
+                        + ` data-lvl="${lvl}" data-index="${i}" aria-pressed="${use}"`
+                        + ` style="--gem-delai:${i * 45}ms"`
+                        + ` title="${use ? 'Dépensé — clic pour le rendre' : 'Disponible — clic pour le dépenser'}"`
+                        + ` aria-label="Emplacement ${i + 1} sur ${data.total}, niveau ${rang} — ${use ? 'dépensé' : 'disponible'}">`
+                        + `<span class="slot-gem-eclat" aria-hidden="true"></span></button>`;
+                }
+                return `<div class="spell-slot-row${data.pacte ? ' is-pacte' : ''}${dispos === 0 ? ' is-vide' : ''}">
+                    <div class="slot-lvl-label">Niveau ${lvl + 1}${data.pacte ? '<span class="slot-pacte">pacte</span>' : ''}</div>
+                    <div class="slot-main-content">
+                        <div class="slot-gems" role="group" aria-label="Emplacements de niveau ${lvl + 1}">${gemmes}</div>
+                        <div class="slot-info"><span class="slot-compte${dispos === 0 ? ' is-empty' : ''}">${dispos}/${data.total}</span> dispos • ${getSpellSlotRegenText(data)}</div>
+                    </div></div>`;
+            }).join('');
+            etatGemmes = apres;
+        }
+
+        /** Marque (ou rend) un emplacement précis. Rend l'état obtenu. */
+        function poserEmplacement(lvl, index, depense) {
+            const d = spellSlotsData[lvl];
+            if(!d || index < 0 || index >= d.total) return null;
+            if(!Array.isArray(d.used)) d.used = [];
+            while(d.used.length < d.total) d.used.push(false);
+            d.used[index] = !!depense;
+            setStore('dnd-spell-slots', spellSlotsData);
+            renderSpellSlots();
+            return d.used[index];
+        }
+
+        /** Combien d'emplacements restent à ce rang (1 à 9). */
+        function emplacementsDispos(rang) {
+            const d = spellSlotsData[rang - 1];
+            if(!d || !d.total) return 0;
+            return Math.max(0, d.total - (d.used || []).filter(Boolean).length);
+        }
+
+        /** Dépense le premier emplacement libre du rang. Rend de quoi revenir en
+         *  arrière (le lancement d'un sort est annulable), ou null si c'est plein. */
+        function depenserEmplacement(rang) {
+            const d = spellSlotsData[rang - 1];
+            if(!d || !d.total) return null;
+            while((d.used || []).length < d.total) d.used.push(false);
+            const i = d.used.findIndex(u => !u);
+            if(i === -1) return null;
+            poserEmplacement(rang - 1, i, true);
+            return { rang, index: i, pacte: !!d.pacte, rendre: () => poserEmplacement(rang - 1, i, false) };
+        }
+
+        // Un seul écouteur pour toutes les gemmes, posé sur le conteneur : il
+        // survit aux redessins et ne va pas se coller aux jetons des Capacités
+        // (qui portaient la même classe que les anciennes cases).
+        (function brancherGemmes() {
+            const container = document.getElementById('spell-slots-grid');
+            if(!container) return;
+            container.addEventListener('click', (e) => {
+                const gem = e.target.closest('.slot-gem');
+                if(!gem) return;
+                const lvl = parseInt(gem.dataset.lvl, 10);
+                const i = parseInt(gem.dataset.index, 10);
+                if(isNaN(lvl) || isNaN(i)) return;
+                poserEmplacement(lvl, i, gem.getAttribute('aria-pressed') !== 'true');
+            });
+        })();
+        document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-spell-slots-modal') { const list = document.getElementById('spell-slots-config-list'); if(!list) return; list.innerHTML = ''; spellSlotsData.forEach((data, lvl) => { list.innerHTML += `<div class="spell-slot-config-row ${data.total === 0 ? 'is-empty' : ''}" data-lvl="${lvl}"><div class="spell-slot-config-head"><div class="spell-slot-level-badge">Niv. ${lvl + 1}</div><label class="spell-slot-mini-field">Emplacements<input type="number" class="spell-config-total" min="0" max="9" value="${data.total}"></label><label class="spell-slot-mini-field spell-slot-regen-field">Récupération<select class="spell-config-regen-mode"><option value="none" ${data.regenMode === 'none' ? 'selected' : ''}>Aucune</option><option value="long" ${data.regenMode === 'long' ? 'selected' : ''}>Repos long</option><option value="short_long" ${data.regenMode === 'short_long' ? 'selected' : ''}>Repos court + long</option></select></label><label class="spell-slot-mini-field spell-slot-pacte-field" title="Cette réserve vient de la Magie de pacte : elle se recharge et se recalcule à part.">Pacte<input type="checkbox" class="spell-config-pacte" ${data.pacte ? 'checked' : ''}></label></div><div class="spell-slot-config-details"><div class="spell-recovery-pill spell-config-short-block hidden"><span>Court</span><select class="spell-config-short-type"><option value="all" ${data.shortType === 'all' ? 'selected' : ''}>Tout</option><option value="fixed" ${data.shortType === 'fixed' ? 'selected' : ''}>Partiel</option></select><input type="number" class="spell-config-short-amount hidden" min="1" value="${data.shortAmount}" placeholder="Nb"></div><div class="spell-recovery-pill spell-config-long-block"><span>Long</span><select class="spell-config-long-type"><option value="all" ${data.longType === 'all' ? 'selected' : ''}>Tout</option><option value="fixed" ${data.longType === 'fixed' ? 'selected' : ''}>Partiel</option></select><input type="number" class="spell-config-long-amount hidden" min="1" value="${data.longAmount}" placeholder="Nb"></div></div></div>`; }); document.querySelectorAll('.spell-slot-config-row').forEach(row => { const updateVisibility = () => { const total = Math.max(0, parseInt(row.querySelector('.spell-config-total').value) || 0); const mode = row.querySelector('.spell-config-regen-mode').value; row.classList.toggle('is-empty', total === 0); row.querySelector('.spell-slot-config-details').classList.toggle('hidden', total === 0 || mode === 'none'); row.querySelector('.spell-config-short-block').classList.toggle('hidden', total === 0 || mode !== 'short_long'); row.querySelector('.spell-config-long-block').classList.toggle('hidden', total === 0 || mode === 'none'); row.querySelector('.spell-config-short-amount').classList.toggle('hidden', row.querySelector('.spell-config-short-type').value === 'all'); row.querySelector('.spell-config-long-amount').classList.toggle('hidden', row.querySelector('.spell-config-long-type').value === 'all'); }; updateVisibility(); row.querySelectorAll('select, input').forEach(el => { el.addEventListener('input', updateVisibility); }); }); document.getElementById('spell-slots-modal').classList.remove('hidden'); } });
+        const btnSaveSpellSlots = document.getElementById('btn-save-spell-slots-config'); if(btnSaveSpellSlots) { btnSaveSpellSlots.addEventListener('click', () => { document.querySelectorAll('.spell-slot-config-row').forEach(row => { const lvl = parseInt(row.dataset.lvl); const total = Math.max(0, Math.min(9, parseInt(row.querySelector('.spell-config-total').value) || 0)); spellSlotsData[lvl] = { total: total, used: (spellSlotsData[lvl].used || []).slice(0, total), regenMode: row.querySelector('.spell-config-regen-mode').value, shortType: row.querySelector('.spell-config-short-type').value, shortAmount: Math.max(1, parseInt(row.querySelector('.spell-config-short-amount').value) || 1), longType: row.querySelector('.spell-config-long-type').value, longAmount: Math.max(1, parseInt(row.querySelector('.spell-config-long-amount').value) || 1), pacte: !!(row.querySelector('.spell-config-pacte') || {}).checked }; while(spellSlotsData[lvl].used.length < total) spellSlotsData[lvl].used.push(false); }); setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); document.getElementById('spell-slots-modal').classList.add('hidden'); }); }
         function recoverSpellSlotsByRest(restType) { let recovered = 0; spellSlotsData.forEach(data => { if(data.regenMode === 'none' || (restType === 'short' && data.regenMode !== 'short_long')) return; const recoverType = restType === 'short' ? data.shortType : data.longType; const recoverAmount = recoverType === 'all' ? data.total : (restType === 'short' ? data.shortAmount : data.longAmount); let r = 0; for(let i = data.total - 1; i >= 0 && r < recoverAmount; i--) { if(data.used[i]) { data.used[i] = false; r++; recovered++; } } }); setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); return recovered; }
 
         const restModal = document.getElementById('rest-modal'); const restShortContent = document.getElementById('rest-short-content'); const restLongContent = document.getElementById('rest-long-content'); const restHdAvailable = document.getElementById('rest-hd-available'); const restHdMaxDisplay = document.getElementById('rest-hd-max-display'); const restHdSizeDisplay = document.getElementById('rest-hd-size-display'); const restConModDisplay = document.getElementById('rest-con-mod'); const restHpStatus = document.getElementById('rest-hp-status'); const restRollResult = document.getElementById('rest-roll-result'); const btnRollHitDie = document.getElementById('btn-roll-hit-die'); let shortRestRollLog = [];
@@ -4364,6 +4860,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const spLvl = (sp) => parseInt(sp.level, 10) || 0;
         // La concentration se déduit de la durée : c'est là que le joueur l'écrit.
         const spIsConc = (sp) => /concentration/i.test(sp.duration || '');
+        // Rituel : le drapeau des regles s'il existe, sinon le temps d'incantation
+        // (« 1 minute ou rituel »). Un grimoire d'avant en beneficie sans migration.
+        const spEstRituel = (sp) => (sp && sp.rituel != null) ? !!sp.rituel : /\brituel\b/i.test((sp && sp.time) || '');
 
         // ---------- Concentration : un seul sort à la fois ----------
         // La fiche a déjà une case « Concentration » et son halo ; le grimoire
@@ -4414,12 +4913,40 @@ document.addEventListener('DOMContentLoaded', () => {
         const spellAtkBonus = () => parseMod((document.getElementById('spell-attack-bonus') || {}).value || 0);
         const spellSaveDC = () => (document.getElementById('spell-save-dc') || {}).value || '—';
 
-        /** `part` : 'attack' | 'dmg' | 'cast'. Le résultat s'affiche par-dessus le livre. */
+        /** `part` : 'attack' | 'dmg' | 'cast'. Le résultat s'affiche par-dessus le livre.
+         *  Un sort de niveau 1 ou plus demande d'abord AVEC QUOI on le lance :
+         *  emplacement (le sien ou un plus haut, magie de pacte comprise), rituel,
+         *  ou rien du tout quand la réserve est vide. La dépense est annulable. */
         async function castSpell(index, part, opts) {
             const sp = spells[index]; if (!sp) return;
             const o = opts || {};
+            const niveau = spLvl(sp);
+
+            // 1. Avec quel emplacement ? Les sorts mineurs n'en coûtent aucun, et
+            //    l'appelant peut passer outre (relance depuis l'historique…).
+            let choix = null, depense = null;
+            if (niveau >= 1 && !o.sansEmplacement) {
+                try {
+                    await window.charger('lancer-sort');
+                    choix = await window.LancerSort.choisir({
+                        nom: sp.name || 'ce sort', niveau,
+                        rituel: spEstRituel(sp), concentration: spIsConc(sp)
+                    });
+                } catch (e) {
+                    console.warn('[sort] le module de lancement n’a pas pu se charger', e);
+                    choix = null;                       // hors ligne : on lance sans rien dépenser
+                    if (window.showAppToast) window.showAppToast('Emplacements non gérés : le module n’a pas pu se charger.', 'info');
+                }
+                if (choix === null && window.LancerSort) return;    // le joueur a renoncé
+            }
+            // 2. Concentration : la question vient APRÈS le choix, pour qu'annuler
+            //    l'un n'ait pas déjà rompu l'autre.
             if (!await claimConcentration(index)) return;
-            document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau: spLvl(sp), part, nom: sp.name || '' } }));
+            if (choix && choix.mode === 'emplacement' && window.SheetApi) {
+                depense = window.SheetApi.depenserEmplacement(choix.rang);
+                if (!depense) choix = { mode: 'sans', rang: choix.rang };   // plus rien entre-temps
+            }
+            document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau, part, nom: sp.name || '', rang: choix ? choix.rang : niveau, mode: choix ? choix.mode : 'aucun' } }));
 
             const bits = [];
             let total = 0, nat = null;
@@ -4456,6 +4983,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     + (sp.saveAbility ? ` de ${escAb(sp.saveAbility)}` : '') + `</div>`);
             }
             if (spIsConc(sp)) bits.push(`<div class="atkfx-line atkfx-conc">◈ Concentration en cours sur ce sort.</div>`);
+            // Ce que le lancement a coûté, dit noir sur blanc dans le résultat.
+            if (choix && window.LancerSort) {
+                const dit = window.LancerSort.libelle(choix, niveau);
+                if (dit) bits.push(`<div class="atkfx-line atkfx-slot is-${choix.mode}">⬦ ${escAb(dit)}</div>`);
+            }
             if (!bits.length) bits.push(`<div class="atkfx-line">Ce sort n'a ni jet ni dégâts : à toi de décrire.</div>`);
 
             showSpellRoll(sp, bits.join(''));
@@ -4463,8 +4995,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const aLance = nat != null || (wantDmg && hasVal(sp.dmg));
             if (aLance) {
                 const label = '✨ ' + sp.name;
-                const detail = nat != null ? `attaque ${total} (d20 : ${nat})` : `dégâts ${total}`;
+                const rang = (choix && choix.mode === 'emplacement' && choix.rang !== niveau)
+                    ? ` — niv. ${choix.rang}` : '';
+                const detail = (nat != null ? `attaque ${total} (d20 : ${nat})` : `dégâts ${total}`) + rang;
                 pushRollHistory(label, total, detail, nat);
+            }
+            // Un emplacement dépensé par mégarde se rend : le lancement est annulable
+            // tant que le message est à l'écran (6 s, comme toute suppression).
+            if (depense && window.showUndoToast) {
+                window.showUndoToast(
+                    `⬦ « ${sp.name} » — emplacement de niveau ${depense.rang} dépensé`,
+                    () => {
+                        depense.rendre();
+                        if (window.showAppToast) window.showAppToast(`⬦ Emplacement de niveau ${depense.rang} rendu.`, 'reussite');
+                    });
             }
             renderGrimoire();
         }
@@ -4681,6 +5225,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 sp.mode === 'attack' ? `<button class="sp-cast" data-part="attack">🎯 Attaque${hasVal(sp.dmg) ? ' + dégâts' : ''}</button>` : '',
                 sp.mode === 'save' ? `<button class="sp-cast is-dd" data-part="dmg">🛡️ DD ${escAb(spellSaveDC())}${sp.saveAbility ? ' ' + escAb(sp.saveAbility) : ''}</button>` : '',
                 (hasVal(sp.dmg) && sp.mode !== 'attack') ? `<button class="sp-cast" data-part="dmg">💥 ${escAb(sp.dmg)}${sp.dmgType ? ' ' + escAb(sp.dmgType) : ''}</button>` : '',
+                (spLvl(sp) >= 1 && sp.mode !== 'attack' && sp.mode !== 'save' && !hasVal(sp.dmg))
+                    ? `<button class="sp-cast is-plain" data-part="cast">🪄 Lancer</button>` : '',
                 conc ? `<button class="sp-conc${holds ? ' is-on' : ''}" title="${holds ? 'Arrêter la concentration' : 'Se concentrer sur ce sort'}">◈ ${holds ? 'Concentré' : 'Se concentrer'}</button>` : ''
             ].filter(Boolean).join('');
             return `<article class="spell${sp.prepared?' is-prepared':''}${holds?' is-concentrating':''}" data-si="${i}">
@@ -4702,6 +5248,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${sp.duration ? `<span class="tag">⏳ ${escAb(sp.duration)}</span>` : ''}
                 ${comps ? `<span class="tag comp">${comps}</span>` : ''}
                 ${spIsConc(sp) ? `<span class="tag conc">◈ Concentration</span>` : ''}
+                ${spEstRituel(sp) ? `<span class="tag rituel" title="Peut être lancé en rituel, sans dépenser d’emplacement">✧ Rituel</span>` : ''}
               </div>
               <div class="spell-body">${sp.desc || '<p class="folio-empty">Pas encore de description.</p>'}</div>
               ${c.m && c.mat ? `<div class="spell-notes">Matériel : ${escAb(c.mat)}</div>` : ''}
@@ -6814,7 +7361,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 let isExpandedClass = trait.pinned ? 'expanded' : '';
                 let caret = trait.pinned ? '' : '<span class="trait-caret">▸</span>';
                 let metaHtml = trait.level ? `<span class="trait-meta">Niv.${trait.level}</span>` : '';
-                let html = `<div class="trait-row" data-ti="${index}"><div class="trait-row-head" onclick="toggleTraitDesc(event, ${index})">${caret}${metaHtml}<span class="trait-name">${trait.name}</span>${trait.pinned ? '<span class="trait-pin">📌</span>' : ''}${getCrudControlsHTML(index, 'Trait')}</div><div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`;
+                // Une capacité limitée peut être liée à ce trait : la ligne montre
+                // alors ses charges restantes et le bouton qui en dépense une, sans
+                // qu'on ait à descendre jusqu'au module « Capacités limitées ».
+                const ai = abilities.findIndex(a => a && a.trait && a.trait === trait.name);
+                let lien = '';
+                if(ai !== -1) {
+                    const ab = abilities[ai];
+                    const reste = Math.max(0, ab.max - (ab.used ? ab.used.filter(Boolean).length : 0));
+                    lien = `<div class="trait-charges no-print">
+                        <span class="trait-charges-compte${reste === 0 ? ' is-empty' : ''}" title="Charges restantes de « ${escAb(ab.name)} »">${reste} / ${ab.max}</span>
+                        ${ab.de ? `<span class="trait-charges-de">${escAb(ab.de)}</span>` : ''}
+                        <button type="button" class="trait-utiliser" data-utiliser="${ai}"${reste === 0 ? ' disabled' : ''} title="${reste === 0 ? 'Plus aucune charge' : 'Dépenser une charge' + (ab.de ? ' et lancer ' + escAb(ab.de) : '')}">${ab.de ? '🎲' : '✦'} Utiliser</button>
+                    </div>`;
+                }
+                let html = `<div class="trait-row${ai !== -1 ? ' has-charges' : ''}" data-ti="${index}"><div class="trait-row-head" onclick="toggleTraitDesc(event, ${index})">${caret}${metaHtml}<span class="trait-name">${trait.name}</span>${trait.pinned ? '<span class="trait-pin">📌</span>' : ''}${getCrudControlsHTML(index, 'Trait')}</div>${lien}<div class="trait-desc ${isExpandedClass}" id="trait-desc-${index}">${trait.desc.replace(/\n/g, '<br>')}</div></div>`;
                 if(trait.type === 'class') listClass.innerHTML += html; else if(trait.type === 'race') listRace.innerHTML += html; else listFeat.innerHTML += html;
             });
             // Glisser-déposer sur les trois colonnes. Les lignes portent leur
@@ -6865,6 +7426,81 @@ document.addEventListener('DOMContentLoaded', () => {
         let traits = getStore('dnd-traits') || []; const traitModal = document.getElementById('trait-form-modal');
         let abilities = getStore('dnd-abilities') || [];
         function escAb(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        // ---------- Le dé d'une capacité ----------
+        // Rage, Inspiration bardique, Attaque sournoise, Arts martiaux… : beaucoup
+        // de capacités limitées portent un dé. On le saisit librement (« 1d6 »,
+        // « 2d8+2 »), ou on demande à la capacité de SUIVRE la table de sa classe —
+        // les données donnent la colonne et sa valeur à chaque niveau, le dé grandit
+        // alors tout seul à la montée de niveau.
+        const abDeValide = (expr) => !String(expr || '').trim() || !rollExpression(expr).error;
+
+        /** Les colonnes de progression qui contiennent un dé, pour les classes de
+         *  ce personnage. Asynchrone : elle lit les règles. */
+        async function abColonnesDes() {
+            if (!window.SRD || !window.SRD.category) return [];
+            let classes = [];
+            try {
+                await window.charger('multiclasse');
+                classes = window.Multiclasse.liste();
+            } catch (e) {
+                const nom = document.getElementById('char-class')?.value || '';
+                classes = nom ? [{ nom, niveau: parseInt(document.getElementById('char-level')?.value, 10) || 1 }] : [];
+            }
+            let cat = [];
+            try { cat = await window.SRD.category('classes'); } catch (e) { return []; }
+            const out = [];
+            classes.forEach(entree => {
+                const cls = (window.Multiclasse && window.Multiclasse.trouverClasse)
+                    ? window.Multiclasse.trouverClasse(cat, entree)
+                    : cat.find(c => c.id === entree.id);
+                if (!cls) return;
+                (cls.level_columns || []).forEach(col => {
+                    const valeurs = (cls.levels || []).map(r => col.field === 'class_specific'
+                        ? (r.class_specific || {})[col.key] : r[col.key]).filter(v => v != null);
+                    if (!valeurs.some(v => /^\d*d\d+$/.test(String(v)))) return;
+                    out.push({ classeId: cls.id, classeNom: cls.name, colonne: col.key,
+                               champ: col.field || null, label: col.label || col.key,
+                               niveau: entree.niveau });
+                });
+            });
+            return out;
+        }
+
+        /** La valeur du dé d'une colonne au niveau atteint dans cette classe. */
+        function abDeDeColonne(cls, col, niveau) {
+            const lignes = (cls.levels || []).filter(r => Number(r.level) <= niveau);
+            let valeur = '';
+            lignes.forEach(r => {
+                const v = col.champ === 'class_specific' ? (r.class_specific || {})[col.colonne] : r[col.colonne];
+                if (v != null && /^\d*d\d+$/.test(String(v))) valeur = String(v);
+            });
+            // « d6 » seul veut dire un dé : on l'écrit « 1d6 » pour le lanceur.
+            return valeur ? valeur.replace(/^d/, '1d') : '';
+        }
+
+        /** Remet à jour les dés qui suivent une table. Silencieuse : elle n'écrit
+         *  que si quelque chose a réellement changé (pas de synchro inutile). */
+        async function majDesAutos() {
+            const autos = abilities.filter(a => a && a.deAuto && a.deAuto.colonne);
+            if (!autos.length) return false;
+            let cat = [];
+            try { cat = await window.SRD.category('classes'); } catch (e) { return false; }
+            let classes = [];
+            try { await window.charger('multiclasse'); classes = window.Multiclasse.liste(); } catch (e) { classes = []; }
+            let bouge = false;
+            autos.forEach(ab => {
+                const cls = cat.find(c => c.id === ab.deAuto.classeId);
+                if (!cls) return;
+                const entree = classes.find(c => c.id === ab.deAuto.classeId);
+                const niveau = entree ? entree.niveau : (parseInt(document.getElementById('char-level')?.value, 10) || 1);
+                const de = abDeDeColonne(cls, ab.deAuto, niveau);
+                if (de && de !== ab.de) { ab.de = de; bouge = true; }
+            });
+            if (bouge) { setStore('dnd-abilities', abilities); renderAbilities(); renderTraits(); }
+            return bouge;
+        }
+        document.addEventListener('classes:change', () => { majDesAutos(); });
+
         // Texte de récupération — identique à celui des emplacements de sorts.
         function getAbilityRegenText(ab) {
             // Une capacité enregistrée avant que ces champs existent n'a ni type
@@ -6876,7 +7512,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(m === 'short_long') return `Court: ${fmt(ab.shortType, ab.shortAmount)} | Long: ${fmt(ab.longType, ab.longAmount)}`;
             return `Long: ${fmt(ab.longType, ab.longAmount)}`;
         }
-        // Chaque capacité : son nom, son compteur, et un jeton par usage.
+        // Chaque capacité : son nom, son compteur, un jeton par usage — et, si elle
+        // porte un dé, un bouton « Utiliser » qui dépense une charge ET lance le dé
+        // en 3D, consigné dans l'historique comme n'importe quel autre jet.
         function renderAbilities() {
             const list = document.getElementById('abilities-list'); if(!list) return;
             if(abilities.length === 0) { list.innerHTML = `<div class="compact-empty">Aucune capacité configurée.<br><small>Clique sur ⚙️ Gérer pour en ajouter.</small></div>`; return; }
@@ -6890,24 +7528,88 @@ document.addEventListener('DOMContentLoaded', () => {
                 // s'affichait comme un emplacement de niveau 3.
                 return `<div class="abil-row${available === 0 ? ' is-spent' : ''}">
                     <div class="abil-head">
-                        <span class="abil-name">${escAb(ab.name)}</span>
+                        <span class="abil-name">${escAb(ab.name)}${ab.trait ? `<span class="abil-lien" title="Liée au trait « ${escAb(ab.trait)} »">🔗</span>` : ''}</span>
+                        ${ab.de ? `<span class="abil-de" title="Le dé de cette capacité${ab.deAuto ? ' — il suit la table de ta classe' : ''}">${escAb(ab.de)}${ab.deAuto ? ' 📈' : ''}</span>` : ''}
                         <span class="abil-count${available === 0 ? ' is-empty' : ''}">${available} / ${ab.max}</span>
                     </div>
                     <div class="abil-pips">${cbHtml}</div>
                     <div class="abil-regen">${getAbilityRegenText(ab)}</div>
+                    ${ab.de ? `<button type="button" class="abil-utiliser no-print" data-utiliser="${index}"${available === 0 ? ' disabled' : ''} title="${available === 0 ? 'Plus aucune charge' : 'Dépenser une charge et lancer ' + escAb(ab.de)}">🎲 Utiliser</button>` : ''}
                 </div>`;
             }).join('');
-            document.querySelectorAll('.ability-charge-check').forEach(cb => {
+            list.querySelectorAll('.ability-charge-check').forEach(cb => {
                 cb.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.idx), i = parseInt(e.target.dataset.index);
                     if(!abilities[idx].used) abilities[idx].used = Array(abilities[idx].max).fill(false);
-                    abilities[idx].used[i] = e.target.checked;
-                    setStore('dnd-abilities', abilities); renderAbilities();
+                    const depense = e.target.checked;
+                    abilities[idx].used[i] = depense;
+                    setStore('dnd-abilities', abilities); renderAbilities(); renderTraits();
+                    // Dépenser une charge lance le dé ; la rendre, non.
+                    if(depense && abilities[idx].de) lancerDeCapacite(idx);
                 });
             });
         }
+
+        /** Lance le dé d'une capacité en 3D (repli sur un tirage instantané),
+         *  l'affiche et le consigne dans l'historique. */
+        async function lancerDeCapacite(index) {
+            const ab = abilities[index];
+            if(!ab || !ab.de) return null;
+            const res = rollExpression(ab.de);
+            if(res.error) {
+                if(window.showAppToast) window.showAppToast(`« ${ab.name} » : ${res.error}`, 'erreur');
+                return null;
+            }
+            // La 3D est un habillage : le résultat vient du tirage ci-dessus, comme
+            // partout ailleurs sur la fiche.
+            if(diceBoxReady && diceBox) {
+                try { await safeDiceRoll(ab.de.replace(/\s+/g, '')); } catch(e) { /* la 3D n'est jamais bloquante */ }
+            }
+            // `res.detail` porte déjà la notation (« 1d8 [5] ») : pas de doublon.
+            pushRollHistory(`✦ ${ab.name}`, res.total, res.detail, null);
+            if(window.showAppToast) window.showAppToast(`✦ ${ab.name} : ${res.total} (${ab.de})`, 'reussite');
+            return res;
+        }
+
+        /** Dépense la prochaine charge libre et lance le dé. Rend de quoi revenir
+         *  en arrière — une charge dépensée par erreur se rend. */
+        function utiliserCapacite(index) {
+            const ab = abilities[index];
+            if(!ab) return null;
+            if(!Array.isArray(ab.used)) ab.used = [];
+            while(ab.used.length < ab.max) ab.used.push(false);
+            const i = ab.used.findIndex(u => !u);
+            if(i === -1) {
+                if(window.showAppToast) window.showAppToast(`« ${ab.name} » : plus aucune charge.`, 'info');
+                return null;
+            }
+            ab.used[i] = true;
+            setStore('dnd-abilities', abilities);
+            renderAbilities(); renderTraits();
+            if(ab.de) lancerDeCapacite(index);
+            if(window.showUndoToast) window.showUndoToast(`✦ « ${ab.name} » — une charge dépensée`, () => {
+                ab.used[i] = false;
+                setStore('dnd-abilities', abilities);
+                renderAbilities(); renderTraits();
+            });
+            return { index, charge: i };
+        }
+        window.utiliserCapacite = utiliserCapacite;
+
+        // Un seul écouteur pour les deux modules : le bouton « Utiliser » existe
+        // aussi bien dans « Capacités limitées » que sur la ligne d'un trait lié.
+        document.body.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-utiliser]');
+            if(!b || b.disabled) return;
+            e.preventDefault();
+            utiliserCapacite(parseInt(b.dataset.utiliser, 10));
+        });
         // ---- Modale de configuration (calquée sur la modale des Emplacements de Sorts) ----
         let abilityConfigDraft = [];
+        // Les colonnes de progression qui portent un dé, pour la liste « Suit la
+        // table ». Remplies à l'ouverture de la modale : la lecture des règles est
+        // asynchrone, le rendu de la ligne ne l'est pas.
+        let abColonnesCache = [];
         const abilityConfigModal = document.getElementById('ability-config-modal');
         function abilityConfigRowHtml(ab, idx) {
             return `<div class="spell-slot-config-row ability-config-row" data-idx="${idx}">
@@ -6922,6 +7624,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     </select></label>
                     <button class="ab-cfg-del btn-del" title="Supprimer cette capacité">🗑</button>
                 </div>
+                <div class="spell-slot-config-details ab-cfg-extra">
+                    <label class="spell-slot-mini-field ab-cfg-de-field" title="« 1d6 », « 2d8+2 »… Laisse vide si cette capacité n'a pas de dé.">Dé
+                        <input class="ab-cfg-de" placeholder="ex : 1d6" value="${escAb(ab.de || '')}"${ab.deAuto ? ' readonly' : ''}></label>
+                    <label class="spell-slot-mini-field ab-cfg-auto-field" title="Le dé suit la table de progression de ta classe et grandit tout seul.">Suit la table
+                        <select class="ab-cfg-auto"><option value="">— non —</option>${abColonnesCache.map(c =>
+                            `<option value="${escAb(c.classeId + '|' + c.colonne)}"${(ab.deAuto && ab.deAuto.classeId === c.classeId && ab.deAuto.colonne === c.colonne) ? ' selected' : ''}>${escAb(c.label)} (${escAb(c.classeNom)})</option>`).join('')}</select></label>
+                    <label class="spell-slot-mini-field ab-cfg-trait-field" title="La ligne de ce trait affichera alors ses charges et un bouton « Utiliser ».">Trait lié
+                        <select class="ab-cfg-trait"><option value="">— aucun —</option>${traits.map(t =>
+                            `<option value="${escAb(t.name)}"${ab.trait === t.name ? ' selected' : ''}>${escAb(t.name)}</option>`).join('')}</select></label>
+                </div>
                 <div class="spell-slot-config-details">
                     <div class="spell-recovery-pill ab-cfg-short-block"><span>Court</span><select class="ab-cfg-short-type"><option value="all"${(ab.shortType || 'all') === 'all' ? ' selected' : ''}>Tout</option><option value="fixed"${ab.shortType === 'fixed' ? ' selected' : ''}>Partiel</option></select><input type="number" class="ab-cfg-short-amount" min="1" value="${ab.shortAmount || 1}" placeholder="Nb"></div>
                     <div class="spell-recovery-pill ab-cfg-long-block"><span>Long</span><select class="ab-cfg-long-type"><option value="all"${(ab.longType || 'all') === 'all' ? ' selected' : ''}>Tout</option><option value="fixed"${ab.longType === 'fixed' ? ' selected' : ''}>Partiel</option></select><input type="number" class="ab-cfg-long-amount" min="1" value="${ab.longAmount || 1}" placeholder="Nb"></div>
@@ -6935,7 +7647,12 @@ document.addEventListener('DOMContentLoaded', () => {
             list.querySelectorAll('.ability-config-row').forEach(row => {
                 const updateVisibility = () => {
                     const mode = row.querySelector('.ab-cfg-regen-mode').value;
-                    row.querySelector('.spell-slot-config-details').classList.toggle('hidden', mode === 'none');
+                    // Le second bloc seulement : le premier (dé, table, trait) reste
+                    // visible quelle que soit la récupération choisie.
+                    row.querySelector('.spell-slot-config-details:not(.ab-cfg-extra)').classList.toggle('hidden', mode === 'none');
+                    const auto = row.querySelector('.ab-cfg-auto');
+                    const de = row.querySelector('.ab-cfg-de');
+                    if (auto && de) { de.readOnly = !!auto.value; de.classList.toggle('is-auto', !!auto.value); }
                     row.querySelector('.ab-cfg-short-block').classList.toggle('hidden', !(mode === 'short' || mode === 'short_long'));
                     row.querySelector('.ab-cfg-long-block').classList.toggle('hidden', !(mode === 'long' || mode === 'short_long'));
                     row.querySelector('.ab-cfg-short-amount').classList.toggle('hidden', row.querySelector('.ab-cfg-short-type').value === 'all');
@@ -6949,6 +7666,8 @@ document.addEventListener('DOMContentLoaded', () => {
         function readAbilityConfigDraft() {
             const out = [];
             document.querySelectorAll('#ability-config-list .ability-config-row').forEach(row => {
+                const auto = String((row.querySelector('.ab-cfg-auto') || {}).value || '');
+                const [classeId, colonne] = auto.split('|');
                 out.push({
                     name: row.querySelector('.ab-cfg-name').value.trim(),
                     max: Math.max(1, Math.min(20, parseInt(row.querySelector('.ab-cfg-max').value) || 1)),
@@ -6956,15 +7675,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     shortType: row.querySelector('.ab-cfg-short-type').value,
                     shortAmount: Math.max(1, parseInt(row.querySelector('.ab-cfg-short-amount').value) || 1),
                     longType: row.querySelector('.ab-cfg-long-type').value,
-                    longAmount: Math.max(1, parseInt(row.querySelector('.ab-cfg-long-amount').value) || 1)
+                    longAmount: Math.max(1, parseInt(row.querySelector('.ab-cfg-long-amount').value) || 1),
+                    de: String((row.querySelector('.ab-cfg-de') || {}).value || '').trim(),
+                    deAuto: (classeId && colonne)
+                        ? Object.assign({ classeId, colonne },
+                            (abColonnesCache.find(c => c.classeId === classeId && c.colonne === colonne) || {}))
+                        : null,
+                    trait: String((row.querySelector('.ab-cfg-trait') || {}).value || '').trim()
                 });
             });
             return out;
         }
-        function openAbilityConfig() {
-            abilityConfigDraft = abilities.map(ab => ({ name: ab.name, max: ab.max, regenMode: ab.regenMode || 'long', shortType: ab.shortType || 'all', shortAmount: ab.shortAmount || 1, longType: ab.longType || 'all', longAmount: ab.longAmount || 1 }));
+        async function openAbilityConfig() {
+            abilityConfigDraft = abilities.map(ab => ({ name: ab.name, max: ab.max, regenMode: ab.regenMode || 'long', shortType: ab.shortType || 'all', shortAmount: ab.shortAmount || 1, longType: ab.longType || 'all', longAmount: ab.longAmount || 1, de: ab.de || '', deAuto: ab.deAuto || null, trait: ab.trait || '' }));
             renderAbilityConfig();
             if(abilityConfigModal) abilityConfigModal.classList.remove('hidden');
+            // Les colonnes de progression arrivent des règles : la modale s'ouvre
+            // tout de suite, la liste « Suit la table » se remplit juste après.
+            try {
+                const cols = await abColonnesDes();
+                if(cols.length) {
+                    abColonnesCache = cols;
+                    abilityConfigDraft = readAbilityConfigDraft();
+                    renderAbilityConfig();
+                }
+            } catch(e) { /* sans les règles, la saisie libre suffit */ }
         }
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-ability-config') openAbilityConfig(); });
         const btnAbCfgAdd = document.getElementById('btn-ability-config-add');
@@ -6980,8 +7715,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ab.used = used;
             });
             abilities = next;
+            // Un dé qui suit la table est recalculé tout de suite, et les traits
+            // liés se redessinent pour montrer leurs charges.
+            majDesAutos();
             setStore('dnd-abilities', abilities);
-            renderAbilities();
+            renderAbilities(); renderTraits();
             if(abilityConfigModal) abilityConfigModal.classList.add('hidden');
         });
         window.deleteAbility = (index) => window.deleteWithUndo(abilities, index, (abilities[index] || {}).name || 'cette capacité',
@@ -7166,6 +7904,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
         updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderBookCover(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderTraits(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
+
+        // ---------- Lier les capacités à leurs traits ----------
+        // Une fiche d'avant a souvent le même nom des deux côtés : « Rage » dans
+        // « Capacités limitées » ET dans « Capacités ». On propose de les relier —
+        // une seule fois, et seulement si le joueur le veut. Rien n'est fait dans
+        // son dos, et la réponse est retenue pour ne plus jamais redemander.
+        async function proposerLiaisons() {
+            if (getStore('dnd-liaisons-proposees', false)) return;
+            const paires = abilities
+                .map((ab, i) => ({ ab, i, trait: traits.find(t => t.name === ab.name) }))
+                .filter(p => p.trait && !p.ab.trait);
+            if (!paires.length) return;
+            setStore('dnd-liaisons-proposees', '1', false);   // on ne redemande pas, quelle que soit la réponse
+            const noms = paires.map(p => '« ' + p.ab.name + ' »').join(', ');
+            const ok = await window.Dialogue.confirmer({
+                titre: paires.length > 1 ? 'Relier ces capacités à leurs traits ?' : 'Relier cette capacité à son trait ?',
+                icone: '🔗', confirmer: 'Relier', annuler: 'Non merci',
+                message: `${noms} ${paires.length > 1 ? 'existent' : 'existe'} des deux côtés : dans « Capacités limitées » et dans « Capacités ».\n\n`
+                    + 'En les reliant, la ligne du trait affichera ses charges et un bouton « Utiliser ». Tu pourras défaire ce lien à tout moment dans ⚙️ Gérer.'
+            });
+            if (!ok) return;
+            paires.forEach(p => { abilities[p.i].trait = p.trait.name; });
+            setStore('dnd-abilities', abilities);
+            renderAbilities(); renderTraits();
+            if (window.showAppToast) window.showAppToast(`🔗 ${paires.length} capacité${paires.length > 1 ? 's reliées' : ' reliée'}.`, 'reussite');
+        }
+        // Après le premier affichage : la proposition ne retarde pas l'ouverture.
+        setTimeout(() => { proposerLiaisons(); majDesAutos(); }, 1200);
 
         // ===== ÉDITION DES RÈGLES DE CE PERSONNAGE (§ 2.1) =====
         // Le choix appartient au héros, pas au site : il est enregistré avec sa

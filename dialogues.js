@@ -8,6 +8,8 @@
 //   Dialogue.confirmer(o) → Promise<boolean>
 //   Dialogue.demander(o)  → Promise<string | null>     (null : annulé)
 //   Dialogue.informer(o)  → Promise<void>
+//   Dialogue.choisir(o)   → Promise<valeur | null>     (null : annulé)
+//   Dialogue.fenetre(o)   → Promise<résultat | annule> (contenu sur mesure)
 //
 // `o` est un texte (le message) ou un objet :
 //   confirmer : { titre, message, icone, confirmer, annuler, danger,
@@ -16,6 +18,19 @@
 //                 type: 'text' | 'number', min, max, obligatoire,
 //                 valider(texte) → message d'erreur ou '' , confirmer, annuler }
 //   informer  : { titre, message, icone, bouton, type: 'info' | 'erreur' | 'reussite' }
+//   choisir   : { titre, message, icone, confirmer, annuler, large,
+//                 valeur,                       — l'option cochée d'entrée
+//                 options: [{ valeur, titre, detail, note, ico, desactive }] }
+//   fenetre   : { titre, message, icone, confirmer, annuler, large, danger,
+//                 corps(boite) → Element|string,   — le contenu sur mesure
+//                 resultat(signaler) → valeur      — undefined : reste ouverte
+//                 annule }                         — ce que rend Échap / Annuler
+//
+// `fenetre` est la brique de base : elle ouvre une fenêtre au style du site
+// avec un contenu quelconque, et hérite du piège à focus, d'Échap, de la file
+// d'attente et de la feuille mobile. Les modules qui ont besoin d'une fenêtre
+// riche (choix d'un emplacement de sort, gestion des classes) s'appuient
+// dessus plutôt que de refaire un caisson à eux.
 //
 // Le focus reste piégé dans la fenêtre et revient à l'élément d'origine à la
 // fermeture. Échap annule, Entrée valide (sauf sur un bouton, qui fait son
@@ -52,6 +67,25 @@
     .dlg-saisie[aria-invalid="true"] { border-color: #b3261e; }
     .dlg-erreur { margin: -4px 0 12px; font-size: .88rem; color: #9b1c1c; }
     .dlg-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+    /* Contenu sur mesure (Dialogue.fenetre / Dialogue.choisir) */
+    .dlg.is-large { width: min(640px, 100%); }
+    .dlg-corps:not(:empty) { margin: 0 0 14px; }
+    .dlg-corps { font-family: 'Lora', Georgia, serif; font-size: .95rem; line-height: 1.5; }
+    .dlg-choix { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .dlg-choix-opt { display: block; position: relative; }
+    .dlg-choix-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .dlg-choix-carte { display: flex; align-items: center; gap: 11px; min-height: 46px; padding: 9px 12px; cursor: pointer;
+        border: 1px solid rgba(122, 40, 40, .28); border-radius: 11px; background: rgba(255, 255, 255, .45); transition: border-color .14s, background .14s; }
+    .dlg-choix-opt input:checked + .dlg-choix-carte { border-color: var(--accent-color, #C49B35); background: rgba(196, 155, 53, .16); box-shadow: inset 0 0 0 1px rgba(196, 155, 53, .5); }
+    .dlg-choix-opt input:focus-visible + .dlg-choix-carte { outline: 2px solid var(--accent-color, #C49B35); outline-offset: 2px; }
+    .dlg-choix-opt input:disabled + .dlg-choix-carte { opacity: .45; cursor: not-allowed; }
+    .dlg-choix-ico { flex: 0 0 auto; font-size: 1.15rem; line-height: 1; }
+    .dlg-choix-txt { flex: 1 1 auto; min-width: 0; }
+    .dlg-choix-txt b { display: block; font-family: 'Cinzel', Georgia, serif; font-size: .92rem; font-weight: 600; }
+    .dlg-choix-txt i { display: block; font-style: normal; font-size: .82rem; opacity: .78; }
+    .dlg-choix-note { flex: 0 0 auto; font-size: .78rem; opacity: .7; white-space: nowrap; }
+    body.theme-dark .dlg-choix-carte { background: rgba(255, 255, 255, .05); border-color: rgba(196, 155, 53, .26); }
+    body.theme-dark .dlg-choix-opt input:checked + .dlg-choix-carte { background: rgba(196, 155, 53, .2); }
     .dlg-btn { min-height: 44px; padding: 9px 18px; border-radius: 10px; font-family: 'Cinzel', Georgia, serif; font-weight: 600; font-size: .9rem; letter-spacing: .03em; cursor: pointer; }
     .dlg-principal { color: var(--accent-color, #C49B35); background: linear-gradient(180deg, var(--primary-hover, #9c3333), var(--primary-color, #7A2828)); border: 1px solid rgba(196, 155, 53, .45); }
     .dlg-principal:disabled { opacity: .45; cursor: not-allowed; }
@@ -103,9 +137,12 @@
     let numero = 0;
 
     /**
-     * cfg : { role, titre, message, icone, type, danger, champ, actif(v),
-     *         libelleValider, libelleAnnuler, annule, resultat(v, erreur) }
+     * cfg : { role, titre, message, icone, type, danger, large, champ, actif(v),
+     *         corps(boite), libelleValider, libelleAnnuler, annule,
+     *         resultat(v, erreur) }
      * `resultat` renvoie la valeur à tenir, ou `undefined` pour rester ouvert.
+     * `corps` reçoit la boîte et rend un élément (ou du HTML) posé entre le
+     * message et le champ : c'est par là que passent les fenêtres sur mesure.
      */
     function monter(cfg, tenir) {
         styles();
@@ -114,12 +151,13 @@
         const c = cfg.champ;
         const voile = document.createElement('div');
         voile.className = 'dlg-voile no-print';
-        voile.innerHTML = `<div class="dlg t-${cfg.type || 'info'}${cfg.danger ? ' is-danger' : ''}" role="${cfg.role || 'dialog'}" aria-modal="true" aria-labelledby="${id}-titre"${cfg.message ? ` aria-describedby="${id}-message"` : ''}>
+        voile.innerHTML = `<div class="dlg t-${cfg.type || 'info'}${cfg.danger ? ' is-danger' : ''}${cfg.large ? ' is-large' : ''}" role="${cfg.role || 'dialog'}" aria-modal="true" aria-labelledby="${id}-titre"${cfg.message ? ` aria-describedby="${id}-message"` : ''}>
             <div class="dlg-tete">
                 <span class="dlg-sceau" aria-hidden="true">${esc(cfg.icone)}</span>
                 <h2 class="dlg-titre" id="${id}-titre">${esc(cfg.titre)}</h2>
             </div>
             ${cfg.message ? `<p class="dlg-message" id="${id}-message">${esc(cfg.message)}</p>` : ''}
+            ${cfg.corps ? '<div class="dlg-corps"></div>' : ''}
             ${c ? `<div class="dlg-champ">
                 <label for="${id}-champ">${esc(c.etiquette)}</label>
                 <input id="${id}-champ" class="dlg-saisie" type="text" autocomplete="off" spellcheck="false" aria-describedby="${id}-erreur"${c.placeholder ? ` placeholder="${esc(c.placeholder)}"` : ''}>
@@ -135,6 +173,15 @@
         const erreur = voile.querySelector('.dlg-erreur');
         const principal = voile.querySelector('[data-dlg="valider"]');
         if (champ && c.valeur != null) champ.value = String(c.valeur);
+
+        // Contenu sur mesure : monté avant l'insertion dans la page, pour que la
+        // fenêtre n'apparaisse jamais à moitié remplie.
+        const corps = voile.querySelector('.dlg-corps');
+        if (corps && cfg.corps) {
+            const rendu = cfg.corps(boite);
+            if (rendu instanceof Node) corps.appendChild(rendu);
+            else if (rendu != null) corps.innerHTML = String(rendu);
+        }
 
         let fini = false;
         let observateur = null;      // suit la hauteur de la fenêtre : les messages se rangent au-dessus
@@ -206,7 +253,10 @@
         mesurer();
         if (window.ResizeObserver) { observateur = new ResizeObserver(mesurer); observateur.observe(boite); }
         majBouton();
-        (champ || principal).focus({ preventScroll: true });
+        // Le focus se pose sur ce qu'il y a à remplir : le champ, sinon la
+        // première commande du contenu sur mesure, sinon le bouton principal.
+        const premierDuCorps = corps ? corps.querySelector(FOCUSABLES) : null;
+        (champ || premierDuCorps || principal).focus({ preventScroll: true });
         if (champ && champ.value) champ.select();
     }
 
@@ -262,8 +312,64 @@
         }, tenir)).then(() => undefined);
     }
 
+    /** Fenêtre au contenu libre. `corps(boite)` rend l'élément à poser ;
+     *  `resultat(signaler)` rend la valeur à tenir, ou `undefined` pour rester
+     *  ouverte en affichant une erreur. Échap et Annuler rendent `annule`. */
+    function fenetre(o) {
+        const c = options(o, { titre: 'Fenêtre', confirmer: 'Valider', annuler: 'Annuler', annule: null });
+        return enFile((tenir) => monter({
+            role: c.danger ? 'alertdialog' : 'dialog',
+            titre: c.titre, message: c.message, icone: c.icone || '✦',
+            type: SCEAUX[c.type] ? c.type : 'info', danger: !!c.danger, large: !!c.large,
+            corps: typeof c.corps === 'function' ? c.corps : () => c.corps,
+            libelleValider: c.confirmer, libelleAnnuler: c.annuler, annule: c.annule,
+            resultat: (v, signaler) => (typeof c.resultat === 'function' ? c.resultat(signaler) : true)
+        }, tenir));
+    }
+
+    /** Choisir une option dans une liste. Rend la `valeur` retenue, ou null.
+     *  Les options désactivées restent visibles — savoir ce qu'on ne peut PAS
+     *  prendre vaut mieux qu'une liste qui rétrécit sans explication. */
+    function choisir(o) {
+        const c = options(o, { titre: 'Ton choix', confirmer: 'Valider', annuler: 'Annuler' });
+        const liste = (c.options || []).filter(Boolean);
+        if (!liste.length) return Promise.resolve(null);
+        const nom = 'dlg-choix-' + (numero + 1);
+        let boite = null;
+        const dispo = liste.filter(x => !x.desactive);
+        const defaut = dispo.some(x => String(x.valeur) === String(c.valeur))
+            ? String(c.valeur) : (dispo[0] ? String(dispo[0].valeur) : null);
+
+        return fenetre({
+            titre: c.titre, message: c.message, icone: c.icone || '✦',
+            confirmer: c.confirmer, annuler: c.annuler, large: !!c.large, annule: null,
+            corps() {
+                boite = document.createElement('div');
+                boite.setAttribute('role', 'radiogroup');
+                if (c.titre) boite.setAttribute('aria-label', c.titre);
+                boite.innerHTML = `<div class="dlg-choix">${liste.map((x, i) => {
+                    const v = String(x.valeur);
+                    return `<label class="dlg-choix-opt">
+                        <input type="radio" name="${nom}" value="${esc(v)}"${x.desactive ? ' disabled' : ''}${v === defaut ? ' checked' : ''}>
+                        <span class="dlg-choix-carte">
+                            ${x.ico ? `<span class="dlg-choix-ico" aria-hidden="true">${esc(x.ico)}</span>` : ''}
+                            <span class="dlg-choix-txt"><b>${esc(x.titre)}</b>${x.detail ? `<i>${esc(x.detail)}</i>` : ''}</span>
+                            ${x.note ? `<span class="dlg-choix-note">${esc(x.note)}</span>` : ''}
+                        </span></label>`;
+                }).join('')}</div>`;
+                return boite;
+            },
+            resultat(signaler) {
+                const coche = boite && boite.querySelector('input:checked');
+                if (!coche) { signaler('Choisis une option.'); return undefined; }
+                const trouve = liste.find(x => String(x.valeur) === coche.value);
+                return trouve ? trouve.valeur : coche.value;
+            }
+        });
+    }
+
     window.Dialogue = {
-        confirmer, demander, informer,
+        confirmer, demander, informer, choisir, fenetre,
         ouvert: () => !!document.querySelector('.dlg-voile:not(.sort)')
     };
 })();

@@ -16,7 +16,9 @@
 
     // Nom court → fichier, relatif à index.html.
     const MODULES = {
-        dialogues: 'dialogues.js'
+        dialogues: 'dialogues.js',
+        multiclasse: 'multiclasse.js',
+        'lancer-sort': 'lancer-sort.js'
     };
     const promesses = new Map();        // fichier -> promesse
 
@@ -73,5 +75,5 @@
     }
 
     window.charger = charger;
-    facade('Dialogue', 'dialogues', ['confirmer', 'demander', 'informer']);
+    facade('Dialogue', 'dialogues', ['confirmer', 'demander', 'informer', 'choisir', 'fenetre']);
 })();

@@ -415,6 +415,9 @@ async function loadUserDataIntoLocalStorage(userId) {
     // L'édition du personnage est une clé comme les autres : elle vient
     // d'arriver du cloud, on la remet en vigueur (edition.js).
     window.Edition?.relire();
+    // Les classes du personnage sont une cle comme les autres : la pastille
+    // multiclasse du champ Classe se remet d'accord avec ce qui vient d'arriver.
+    window.majPastilleClasses?.();
     if (typeof window.renderHomeScreen === 'function') window.renderHomeScreen();
 }
 
@@ -424,6 +427,9 @@ async function loadCharacterDataIntoLocalStorage(charId) {
         poserCleCloud(charId, key, value);
     });
     window.Edition?.relire();
+    // Les classes du personnage sont une cle comme les autres : la pastille
+    // multiclasse du champ Classe se remet d'accord avec ce qui vient d'arriver.
+    window.majPastilleClasses?.();
     return data;
 }
 
