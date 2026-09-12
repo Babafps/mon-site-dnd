@@ -145,9 +145,13 @@
         const txt = lecteur.texte('speed');
         const m = txt.match(/\d+(?:[.,]\d+)?/);
         const unite = /\b(ft|pieds?)\b/i.test(txt) ? 'ft' : 'm';
-        const sources = m ? [source('Vitesse de base', parseFloat(m[0].replace(',', '.')), 'base', true)] : [];
-        const r = resultat('vitesse', 'Vitesse', sources, ctx, { unite });
+        const base = m ? parseFloat(m[0].replace(',', '.')) : 0;
+        const sources = m ? [source('Vitesse de base', base, 'base', true)] : [];
+        // La base et l’unité voyagent dans le contexte : un état qui impose
+        // « Vitesse 0 » ou la réduit de moitié a besoin de les connaître.
+        const r = resultat('vitesse', 'Vitesse', sources, Object.assign({}, ctx, { base, unite }), { unite, base });
         if (!m && !r.sources.length) r.total = null;
+        else if (r.total < 0) r.total = 0;                 // une vitesse ne descend pas sous zéro
         return r;
     }
 

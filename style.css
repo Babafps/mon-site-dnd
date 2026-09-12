@@ -1969,31 +1969,6 @@ body.theme-dark .auth-forgot-hint { color: #c2b094; }
 }
 
 /* ============================================================
-   STATUS FX
-   ============================================================ */
-.status-fx-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 800; transition: all 0.5s ease; }
-.status-fx-labels { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; z-index: 801; pointer-events: none; }
-.status-fx-badge { background: rgba(0,0,0,0.75); color: white; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-family: 'Cinzel', serif; backdrop-filter: blur(4px); }
-.fx-blind { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 30%, rgba(0,0,0,0.84) 100%); animation: blind-pulse 3s ease-in-out infinite; }
-@keyframes blind-pulse { 0%,100%{opacity:0.85;} 50%{opacity:1;} }
-.fx-charm { background: radial-gradient(ellipse at center, rgba(255,100,160,0.12) 0%, rgba(255,50,120,0.25) 100%); animation: charm-float 4s ease-in-out infinite; }
-@keyframes charm-float { 0%,100%{opacity:0.7;} 50%{opacity:1;} }
-.fx-deaf { background: repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(128,128,128,0.06) 60px, rgba(128,128,128,0.06) 62px); }
-.fx-fright { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 20%, rgba(180,0,0,0.4) 100%); animation: fright-shake 0.5s ease-in-out infinite alternate; }
-@keyframes fright-shake { from{transform:translateX(-2px);} to{transform:translateX(2px);} }
-.fx-grap { outline: 3px solid rgba(46,204,113,0.5); outline-offset: -3px; animation: grap-blink 1.5s step-start infinite; }
-@keyframes grap-blink { 50%{outline-color:transparent;} }
-.fx-poison { background: radial-gradient(ellipse at bottom, rgba(39,174,96,0.25) 0%, rgba(0,80,0,0.15) 100%); animation: poison-pulse 2.5s ease-in-out infinite; }
-@keyframes poison-pulse { 0%,100%{opacity:0.6;} 50%{opacity:1;} }
-.fx-prone { background: linear-gradient(to top, rgba(100,60,0,0.35) 0%, transparent 50%); }
-.fx-restrain { background: linear-gradient(to right, rgba(100,100,100,0.2) 0%, transparent 15%, transparent 85%, rgba(100,100,100,0.2) 100%); animation: restrain-tight 3s ease-in-out infinite; }
-@keyframes restrain-tight { 0%,100%{opacity:0.7;} 50%{opacity:1;} }
-.fx-stun { background: radial-gradient(ellipse at center, rgba(241,196,15,0.15) 0%, rgba(52,73,94,0.3) 100%); animation: stun-spin 8s linear infinite; }
-@keyframes stun-spin { from{filter:hue-rotate(0deg);} to{filter:hue-rotate(360deg);} }
-.fx-uncon { background: rgba(0,0,0,0.76); animation: uncon-breathe 4s ease-in-out infinite; }
-@keyframes uncon-breathe { 0%,100%{opacity:0.75;} 50%{opacity:0.88;} }
-
-/* ============================================================
    PREPARED SPELLS
    ============================================================ */
 .prepared-level-group { margin-bottom: 12px; }
@@ -2023,7 +1998,7 @@ body.theme-dark .auth-forgot-hint { color: #c2b094; }
 @media print {
     @page { margin: 1.2cm 1.4cm; size: A4; }
     html, body { padding: 0 !important; margin: 0 !important; background: white !important; background-image: none !important; color: #1a0800 !important; font-size: 8.5pt !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .no-print, .settings-container, #btn-toggle-dice, #dice-drawer, #concentration-glow, #status-fx-overlay, #status-fx-labels, #quick-roll-toast, #btn-go-home, .item-controls, .dynamic-box .add-form, .dynamic-box form, .dynamic-box .spell-form, .tabs-nav, .cat-tab-add, .cat-tab-edit, .category-tabs, .btn-pin, .attune-check, .currency-pay-form, #btn-add-custom-condition, #custom-conditions-container *, .collapse-icon, .modal-overlay, #widget-calculator, #widget-initiative, #widget-macros, .btn-rest-roll, .btn-rest-finish, .btn-close-modal, #btn-open-grimoire, #btn-open-spell-add, #btn-open-spell-slots-modal, #btn-open-prepare-spells, #btn-open-trait-modal, #btn-open-ability-modal, #btn-open-inventory, #btn-open-attack-modal, #btn-open-journal, #btn-clear-note, #btn-edit-custom, #custom-layout-manager, .custom-tabs-nav, #btn-global-search-trigger { display: none !important; }
+    .no-print, .settings-container, #btn-toggle-dice, #dice-drawer, #concentration-glow, #status-fx, #sfx-invisible, #quick-roll-toast, #btn-go-home, .item-controls, .dynamic-box .add-form, .dynamic-box form, .dynamic-box .spell-form, .tabs-nav, .cat-tab-add, .cat-tab-edit, .category-tabs, .btn-pin, .attune-check, .currency-pay-form,  *, .collapse-icon, .modal-overlay, #widget-calculator, #widget-initiative, #widget-macros, .btn-rest-roll, .btn-rest-finish, .btn-close-modal, #btn-open-grimoire, #btn-open-spell-add, #btn-open-spell-slots-modal, #btn-open-prepare-spells, #btn-open-trait-modal, #btn-open-ability-modal, #btn-open-inventory, #btn-open-attack-modal, #btn-open-journal, #btn-clear-note, #btn-edit-custom, #custom-layout-manager, .custom-tabs-nav, #btn-global-search-trigger { display: none !important; }
     .screen-view { min-height: 0 !important; }
     #home-screen, #login-screen, #loading-screen { display: none !important; }
     #app-screen { display: block !important; }
@@ -2967,7 +2942,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     /* Les flous d'arrière-plan (backdrop-filter) sont parmi les effets les plus
        coûteux sur GPU mobile — les fonds sont déjà quasi opaques, on les coupe. */
     .btn-hamburger, .settings-dropdown, .home-container, #dice-drawer,
-    #quick-roll-toast, .modal-overlay, .auth-fullscreen, .status-fx-badge { backdrop-filter: none; }
+    #quick-roll-toast, .modal-overlay, .auth-fullscreen { backdrop-filter: none; }
     /* Pas de souris = pas d'effets de survol : évite les « sauts » et repeints au toucher */
     .dynamic-box:hover, .full-width-notes:hover, .mini-stat-box:hover,
     .btn-dice:hover, .btn-hp-quick:hover, .rollable:hover,
@@ -8894,4 +8869,157 @@ body.theme-dark .rules-ed-note { color: #b6a484; }
 }
 @media print {
     .rules-ed-note { display: none !important; }
+}
+
+/* =====================================================
+   ÉTATS DU PERSONNAGE (§ 2.3, 2.4) — etats.js
+   Les pastilles sont la vue ; les cases à cocher, cachées, restent la
+   mémoire de la fiche. Tout le bloc est `.no-print` : la fiche officielle
+   est dessinée à part (print-sheet.js).
+   ===================================================== */
+.conditions-track { display: block; width: 100%; margin-top: 6px; }
+
+.etats-pastilles {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    min-height: 30px; margin-bottom: 6px;
+}
+.etats-vide { font-size: .78rem; font-style: italic; color: #9a8a70; }
+body.theme-dark .etats-vide { color: #b6a484; }
+
+.etat-pastille {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 4px 3px 9px; border-radius: 999px;
+    border: 1px solid rgba(122, 40, 40, .28);
+    background: linear-gradient(160deg, rgba(255, 255, 255, .92), rgba(250, 243, 224, .92));
+    font-family: 'Cinzel', Georgia, serif; font-size: .76rem; font-weight: 700;
+    color: var(--text-color); cursor: default; max-width: 100%;
+}
+.etat-pastille:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.etat-pastille.est-perso { border-style: dashed; border-color: rgba(196, 155, 53, .6); }
+.etat-ico { font-size: .95rem; line-height: 1; }
+.etat-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etat-niv {
+    min-width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px; background: var(--primary-color); color: #f6ead0; font-size: .68rem;
+}
+.etat-x, .etat-pm {
+    min-width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; color: #8a6a5a; font-size: .82rem; line-height: 1; cursor: pointer;
+}
+.etat-x:hover, .etat-pm:hover { background: rgba(122, 40, 40, .14); color: var(--primary-color); }
+.etat-x:focus-visible, .etat-pm:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+body.theme-dark .etat-pastille { background: linear-gradient(160deg, #32281f, #271f19); color: #ece3d2; border-color: rgba(196, 155, 53, .3); }
+body.theme-dark .etat-x, body.theme-dark .etat-pm { color: #c9b795; }
+
+.etats-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.etats-actions .btn-small { flex: 0 0 auto; }
+
+/* ---- La bulle : survol au bureau, appui long au doigt ---- */
+.etat-bulle {
+    position: fixed; z-index: 10050; max-width: min(320px, calc(100vw - 24px));
+    padding: 8px 11px; border-radius: 10px;
+    background: rgba(30, 22, 17, .96); color: #f3e9d6;
+    border: 1px solid rgba(196, 155, 53, .45);
+    font-family: 'Lora', Georgia, serif; font-size: .78rem; line-height: 1.45;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .35);
+    opacity: 0; transform: translateY(4px); transition: opacity .16s ease, transform .16s ease;
+    pointer-events: none;
+}
+.etat-bulle.est-on { opacity: 1; transform: translateY(0); }
+
+/* ---- Le choix rapide « ＋ État » ---- */
+.etat-menu {
+    position: fixed; z-index: 10040; width: min(260px, calc(100vw - 24px));
+    max-height: min(60vh, 420px); overflow-y: auto;
+    padding: 6px; border-radius: 12px;
+    background: var(--widget-bg, #fff); border: 1px solid var(--soft-border);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
+}
+body.theme-dark .etat-menu { background: #2a221b; border-color: rgba(196, 155, 53, .3); }
+.etat-choix {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px;
+    padding: 6px 9px; border: 0; border-radius: 8px; background: transparent;
+    color: var(--text-color); font-family: 'Lora', Georgia, serif; font-size: .85rem;
+    text-align: left; cursor: pointer;
+}
+.etat-choix:hover { background: rgba(122, 40, 40, .10); }
+.etat-choix:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+body.theme-dark .etat-choix { color: #ece3d2; }
+body.theme-dark .etat-choix:hover { background: rgba(196, 155, 53, .16); }
+.etat-menu-vide { margin: 8px; font-size: .8rem; font-style: italic; color: #9a8a70; }
+.etat-menu-bas { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--soft-border); }
+.etat-choix.est-lien { font-size: .8rem; color: var(--primary-color); }
+body.theme-dark .etat-choix.est-lien { color: var(--accent-color); }
+
+/* ---- Le widget « 📖 Tous les états » ---- */
+.etats-box {
+    max-width: 680px; width: min(680px, calc(100vw - 24px)); max-height: min(86vh, 900px);
+    display: flex; flex-direction: column;
+    background-color: var(--sheet-bg-color, #FAF3E0);
+}
+body.theme-dark .etats-box { background-color: #241d17; }
+.etats-lede { margin: 0 0 10px; font-size: .82rem; color: #7a6a55; }
+body.theme-dark .etats-lede { color: #b6a484; }
+.etats-liste { overflow-y: auto; flex: 1 1 auto; padding-right: 4px; }
+.etats-chargement { font-style: italic; color: #9a8a70; }
+.etats-sous-titre { margin: 18px 0 8px; font-family: 'Cinzel', serif; font-size: .95rem; color: var(--primary-color); }
+body.theme-dark .etats-sous-titre { color: var(--accent-color); }
+
+.etat-fiche { padding: 10px 0; border-bottom: 1px solid var(--soft-border); }
+.etat-fiche:last-of-type { border-bottom: 0; }
+.etat-fiche.est-perso { border-left: 3px dashed rgba(196, 155, 53, .55); padding-left: 10px; }
+.etat-fiche-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.etat-fiche-h h3 { flex: 1 1 auto; margin: 0; font-family: 'Cinzel', serif; font-size: .98rem; color: var(--primary-color); }
+body.theme-dark .etat-fiche-h h3 { color: var(--accent-color); }
+.etat-fiche-txt { margin-top: 5px; font-size: .82rem; line-height: 1.55; }
+.etat-fiche-txt p { margin: 0 0 6px; }
+.etat-fiche-txt p:last-child { margin-bottom: 0; }
+
+.etat-inter {
+    display: inline-flex; align-items: center; gap: 7px; min-height: 32px;
+    padding: 4px 11px 4px 5px; border-radius: 999px;
+    border: 1px solid var(--soft-border); background: rgba(255, 255, 255, .7);
+    color: var(--text-color); font-family: 'Cinzel', serif; font-size: .74rem; cursor: pointer;
+}
+.etat-inter span { width: 26px; height: 15px; border-radius: 999px; background: #c9bfae; position: relative; transition: background .2s ease; }
+.etat-inter span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .2s ease; }
+.etat-inter.est-on { border-color: transparent; background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: #f6ead0; }
+.etat-inter.est-on span { background: rgba(255, 255, 255, .45); }
+.etat-inter.est-on span::after { transform: translateX(11px); }
+.etat-inter:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+body.theme-dark .etat-inter { background: #2a221b; color: #ece3d2; }
+body.theme-dark .etat-inter.est-on { background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: #f6ead0; }
+
+.etat-suppr { min-width: 32px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: .95rem; }
+.etat-suppr:hover { background: rgba(192, 57, 43, .14); }
+.etat-suppr:focus-visible { outline: 2px solid #c0392b; outline-offset: 1px; }
+
+.etat-niveaux { display: inline-flex; align-items: center; gap: 4px; }
+.etat-niveaux b { min-width: 24px; text-align: center; font-family: 'Cinzel', serif; font-size: 1rem; color: var(--primary-color); }
+body.theme-dark .etat-niveaux b { color: var(--accent-color); }
+.etat-niveaux .etat-pm { border: 1px solid var(--soft-border); }
+
+.etats-perso-form {
+    flex: 0 0 auto; margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid var(--soft-border); display: flex; flex-direction: column; gap: 4px;
+}
+.etats-perso-form h3 { margin: 0 0 4px; font-family: 'Cinzel', serif; font-size: .92rem; color: var(--primary-color); }
+body.theme-dark .etats-perso-form h3 { color: var(--accent-color); }
+.etats-perso-form label { font-size: .72rem; font-weight: 700; color: #7a6a55; }
+body.theme-dark .etats-perso-form label { color: #b6a484; }
+.etats-perso-form input { width: 100%; }
+.etats-perso-form .btn-small { align-self: flex-start; margin-top: 6px; }
+
+body.etats-panneau-ouvert { overflow: hidden; }
+
+@media (max-width: 700px) {
+    .etats-box { width: 100%; max-width: none; max-height: 92vh; }
+    .etat-pastille { font-size: .72rem; }
+    .etats-actions .btn-small { flex: 1 1 auto; }
+    /* Au doigt, la bulle s'installe en bas de l'écran : elle ne suit pas le
+       pouce et reste lisible en entier. */
+    .etat-bulle { left: 12px !important; right: 12px; max-width: none; width: auto; }
+}
+@media print {
+    .etat-bulle, .etat-menu, .etats-panneau { display: none !important; }
 }

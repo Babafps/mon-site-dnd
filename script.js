@@ -216,37 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // EFFETS VISUELS ET ÉTATS
     // ==========================================
-    const conditionsMap = {
-        'cond-blind': { class: 'fx-blind', label: 'Aveuglé', icon: '👁️' },
-        'cond-charm': { class: 'fx-charm', label: 'Charmé', icon: '💖' },
-        'cond-deaf': { class: 'fx-deaf', label: 'Assourdi', icon: '🙉' },
-        'cond-fright': { class: 'fx-fright', label: 'Effrayé', icon: '👻' },
-        'cond-grap': { class: 'fx-grap', label: 'Empoigné', icon: '✊' },
-        'cond-pois': { class: 'fx-poison', label: 'Empoisonné', icon: '🧪' },
-        'cond-prone': { class: 'fx-prone', label: 'À terre', icon: '⏬' },
-        'cond-restr': { class: 'fx-restrain', label: 'Entravé', icon: '⛓️' },
-        'cond-stun': { class: 'fx-stun', label: 'Étourdi', icon: '💫' },
-        'cond-uncon': { class: 'fx-uncon', label: 'Inconscient', icon: '💤' }
-    };
-
+    // Le catalogue des états, les pastilles, le widget « Tous les états » et
+    // les effets sur le moteur de calcul vivent dans etats.js. Ce point
+    // d’entrée garde son nom : toute la fiche l’appelle déjà dès qu’un état
+    // change, et les voiles plein écran (effets.js) suivent derrière.
     function updateStatusEffects() {
-        const overlay = document.getElementById('status-fx-overlay');
-        const labelsContainer = document.getElementById('status-fx-labels');
-        if(!overlay) return;
-        let activeClasses = [];
-        let activeLabels = [];
-        Object.keys(conditionsMap).forEach(id => {
-            const cb = document.getElementById(id);
-            if(cb && cb.checked) {
-                activeClasses.push(conditionsMap[id].class);
-                activeLabels.push(`<span class="status-fx-badge">${conditionsMap[id].icon} ${conditionsMap[id].label}</span>`);
-            }
-        });
-        overlay.className = 'status-fx-overlay ' + activeClasses.join(' ');
-        if(activeClasses.length > 0) overlay.classList.remove('hidden');
-        else overlay.classList.add('hidden');
-        
-        if(labelsContainer) labelsContainer.innerHTML = activeLabels.join('');
+        if (window.Etats) window.Etats.rendre();
+        else if (window.StatusFX) window.StatusFX.refresh();
     }
 
     // ==========================================
@@ -3949,10 +3925,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.addEventListener('click', (e) => { const span = e.target.closest('.skill-mod'); if(!span || !span.id || !span.id.startsWith('skill-val-')) return; const skillId = span.id.replace('skill-val-', ''); if(!(skillId in skillNameById)) return; const current = parseInt(getStore('dnd-sheet-skill-bonus-' + skillId, false)) || 0; window.Dialogue.demander({ titre: 'Bonus manuel', etiquette: `« ${skillNameById[skillId]} »`, message: 'Ajouté au calcul automatique (ex : 1 ou -2). Vide ou 0 pour le retirer.', type: 'number', valeur: current || '', placeholder: '0' }).then((raw) => { if(raw === null) return; const n = String(raw).trim() === '' ? 0 : parseInt(raw, 10); if(isNaN(n)) return; setStore('dnd-sheet-skill-bonus-' + skillId, n, false); updateStatsAndSkills(); }); });
         const spellCastingAbility = document.getElementById('spellcasting-ability'); if(spellCastingAbility) spellCastingAbility.addEventListener('change', () => { setStore('dnd-sheet-spellcasting-ability', spellCastingAbility.value, false); updateAutoMagicStats(); });
 
-        let customConditions = getStore('dnd-custom-conditions') || []; const customCondContainer = document.getElementById('custom-conditions-container'); const customCondInput = document.getElementById('input-custom-condition'); const btnAddCustomCond = document.getElementById('btn-add-custom-condition');
-        function renderCustomConditions() { if(!customCondContainer) return; customCondContainer.innerHTML = ''; customConditions.forEach((cond, i) => { customCondContainer.innerHTML += `<div style="display:flex; align-items:center; gap:5px; margin-bottom:4px; background:rgba(255,255,255,0.5); padding:4px 8px; border-radius:4px; border:1px dashed rgba(138,28,28,0.25);"><input type="checkbox" id="custom-cond-${i}" ${cond.active ? 'checked' : ''} onchange="toggleCustomCond(${i})" style="transform:scale(1.2); cursor:pointer;"><label style="flex:1; cursor:pointer; font-weight:bold; color:var(--text-color);" for="custom-cond-${i}">${cond.name}</label><span style="color:#e74c3c; cursor:pointer; font-weight:bold; padding:0 5px;" onclick="deleteCustomCond(${i})">X</span></div>`; }); }
-        if(btnAddCustomCond && customCondInput) { btnAddCustomCond.addEventListener('click', () => { let val = customCondInput.value.trim(); if(val) { customConditions.push({name: val, active: false}); setStore('dnd-custom-conditions', customConditions); customCondInput.value = ''; renderCustomConditions(); } }); }
-        window.toggleCustomCond = (i) => { customConditions[i].active = !customConditions[i].active; setStore('dnd-custom-conditions', customConditions); updateStatusEffects(); }; window.deleteCustomCond = (i) => { customConditions.splice(i, 1); setStore('dnd-custom-conditions', customConditions); renderCustomConditions(); updateStatusEffects(); };
+        // Les états personnalisés (`dnd-custom-conditions`) sont rendus par
+        // etats.js, avec les autres, sous forme de pastilles. Le format du
+        // stockage n’a pas changé : { name, active } y gagne seulement une
+        // description facultative.
 
         function updateHpVisuals() {
             const hpCurrentInput = document.getElementById('hp-current'); const hpMaxInput = document.getElementById('hp-max');
@@ -7189,7 +7165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(levelInput && getStore('dnd-sheet-prof-bonus', false) === null) { const prof = Math.floor(((parseInt(levelInput.value) || 1) - 1) / 4) + 2; const pInp = document.getElementById('prof-bonus'); if(pInp) pInp.value = prof; }
         if(spellCastingAbility) spellCastingAbility.value = getStore('dnd-sheet-spellcasting-ability', false) || "";
         
-        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderBookCover(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderCustomConditions(); renderTraits(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
+        updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderBookCover(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderTraits(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
 
         // ===== ÉDITION DES RÈGLES DE CE PERSONNAGE (§ 2.1) =====
         // Le choix appartient au héros, pas au site : il est enregistré avec sa

@@ -4,8 +4,9 @@
 // Deux familles, toutes deux déclenchées par TA fiche, sans réseau :
 //   · RollFX : la pluie d'étincelles d'un 20 naturel, la secousse d'un 1 (les
 //     séries de trois 20 ou de trois 1 vivent dans secrets.js) ;
-//   · les voiles d'état plein écran — empoisonné, aveuglé, effrayé, en feu,
-//     étourdi, à terre — qui suivent les conditions cochées sur la fiche.
+//   · les voiles d'état plein écran — charmé, invisible, pétrifié, empoisonné,
+//     aveuglé, effrayé, en feu, étourdi, à terre — qui suivent les états en
+//     cours sur la fiche (etats.js).
 //
 // Ils vivaient dans l'ancien module de partie en ligne, retiré du site ; ces
 // effets, eux, servaient aussi en solo.
@@ -74,6 +75,18 @@
     window.RollFX = { crit, fumble, jet };
 
     // ---------- Voiles d'état plein écran ----------
+    //
+    // Un voile est une SURIMPRESSION : il ne touche jamais au contenu de la
+    // fiche, ne capte aucun clic (`pointer-events: none`) et disparaît si le
+    // joueur coupe l'interrupteur « Effets d'état plein écran » du menu ☰.
+    // Un seul voile à la fois : le plus grave l'emporte.
+    //
+    // Invisible fait exception : ce n'est pas un voile mais la fiche elle-même
+    // qui s'efface, avec un liseré hachuré. Il peut donc se cumuler avec un
+    // voile — on peut être invisible ET empoisonné.
+    //
+    // Tout s'éteint sous `prefers-reduced-motion` : les cœurs de Charmé ne
+    // tombent plus, les pulsations s'arrêtent, les teintes restent.
     const CLE = 'dnd-fx-fullscreen';
     let voilesStyles = false;
     function stylesVoiles() {
@@ -81,60 +94,168 @@
         injecter(`
         #status-fx { position: fixed; inset: 0; pointer-events: none; z-index: 9960; opacity: 0; transition: opacity .6s ease; }
         #status-fx.on { opacity: 1; }
+        #status-fx::before, #status-fx::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
         #status-fx.fx-poison { box-shadow: inset 0 0 150px 40px rgba(70,150,40,.42); background: radial-gradient(ellipse at 50% 50%, rgba(90,170,50,0) 55%, rgba(60,130,30,.18)); animation: sfxPulse 3.4s ease-in-out infinite; }
         #status-fx.fx-fire { box-shadow: inset 0 0 150px 45px rgba(200,70,20,.5); background: radial-gradient(ellipse at 50% 100%, rgba(255,120,30,.22), rgba(0,0,0,0) 55%); animation: sfxFlicker .5s ease-in-out infinite; }
         #status-fx.fx-fear { box-shadow: inset 0 0 170px 60px rgba(120,10,10,.55); animation: sfxPulse 2.2s ease-in-out infinite; }
         #status-fx.fx-blind { box-shadow: inset 0 0 250px 130px rgba(0,0,0,.9); background: rgba(0,0,0,.35); }
         #status-fx.fx-stun { box-shadow: inset 0 0 160px 55px rgba(120,110,60,.5); filter: saturate(.6); animation: sfxPulse 1.6s ease-in-out infinite; }
         #status-fx.fx-down { box-shadow: inset 0 0 230px 110px rgba(0,0,0,.82); background: rgba(20,20,25,.4); }
+
+        /* Charmé : une teinte rosée, et des cœurs qui montent doucement. */
+        #status-fx.fx-charme { box-shadow: inset 0 0 170px 55px rgba(233,80,150,.34); background: radial-gradient(ellipse at 50% 110%, rgba(255,140,190,.20), rgba(255,140,190,0) 60%); }
+        .sfx-coeur { position: absolute; bottom: -8vh; font-size: var(--t,18px); line-height: 1; opacity: 0; will-change: transform, opacity;
+                     animation: sfxCoeur var(--d,9s) linear var(--r,0s) infinite; }
+        @keyframes sfxCoeur {
+            0%   { transform: translateY(0) rotate(-8deg) scale(.85); opacity: 0; }
+            12%  { opacity: .85; }
+            88%  { opacity: .55; }
+            100% { transform: translateY(-118vh) rotate(10deg) scale(1.05); opacity: 0; }
+        }
+
+        /* Pétrifié : la couleur s'en va, la pierre se fendille. La fiche reste
+           lisible — on grise ce qui est derrière, on ne le recouvre pas. */
+        #status-fx.fx-petrifie {
+            box-shadow: inset 0 0 200px 70px rgba(60,58,55,.5);
+            background: rgba(138,134,128,.26);
+            -webkit-backdrop-filter: grayscale(.92) contrast(.96);
+            backdrop-filter: grayscale(.92) contrast(.96);
+        }
+        #status-fx.fx-petrifie::after {
+            opacity: .4;
+            background:
+                linear-gradient(103deg, transparent 49.7%, rgba(30,28,26,.55) 49.85%, rgba(30,28,26,.55) 50.1%, transparent 50.25%),
+                linear-gradient(58deg,  transparent 29.7%, rgba(30,28,26,.4) 29.85%, rgba(30,28,26,.4) 30.05%, transparent 30.2%),
+                linear-gradient(-72deg, transparent 69.7%, rgba(30,28,26,.45) 69.85%, rgba(30,28,26,.45) 70.05%, transparent 70.2%),
+                linear-gradient(24deg,  transparent 79.8%, rgba(30,28,26,.3) 79.9%, rgba(30,28,26,.3) 80.05%, transparent 80.2%),
+                repeating-linear-gradient(117deg, rgba(255,255,255,.05) 0 2px, transparent 2px 26px);
+        }
+
+        /* Invisible : la fiche s'efface, un liseré hachuré dit qu'elle est là. */
+        body.fx-invisible #app-screen { opacity: .5; transition: opacity .5s ease; }
+        body.fx-invisible #app-screen > .sheet-container,
+        body.fx-invisible #app-screen > .app-main { position: relative; }
+        #sfx-invisible {
+            position: fixed; inset: 10px; pointer-events: none; z-index: 9955; border-radius: 14px;
+            border: 2px dashed rgba(150,180,210,.55);
+            background: repeating-linear-gradient(135deg, rgba(160,190,220,.07) 0 8px, transparent 8px 18px);
+            opacity: 0; transition: opacity .5s ease;
+        }
+        #sfx-invisible.on { opacity: 1; }
+
         @keyframes sfxPulse { 0%,100% { opacity: .72; } 50% { opacity: 1; } }
         @keyframes sfxFlicker { 0%,100% { opacity: .8; } 25% { opacity: 1; } 50% { opacity: .7; } 75% { opacity: .95; } }
-        @media (prefers-reduced-motion: reduce) { #status-fx { animation: none !important; } }`);
+        @media (prefers-reduced-motion: reduce) {
+            #status-fx, #status-fx.on { animation: none !important; }
+            .sfx-coeur { display: none !important; }
+            body.fx-invisible #app-screen, #sfx-invisible { transition: none !important; }
+        }
+        /* Rien de tout cela ne s'imprime, et la fiche retrouve son opacité. */
+        @media print {
+            #status-fx, #sfx-invisible { display: none !important; }
+            body.fx-invisible #app-screen { opacity: 1 !important; }
+        }`);
     }
 
-    /** Les conditions cochées sur la fiche, en minuscules. */
-    function mesConditions() {
-        const out = [];
+    /** Les états en cours : identifiants du SRD, et noms des états personnalisés. */
+    function mesEtats() {
+        if (window.Etats && typeof window.Etats.actifs === 'function') {
+            const a = window.Etats.actifs();
+            return {
+                ids: a.filter(e => !e.perso).map(e => e.srd),
+                noms: a.map(e => String(e.nom || '').toLowerCase())
+            };
+        }
+        // Repli : les cases de la fiche, si etats.js n'est pas chargé.
+        const ids = [];
         try {
-            document.querySelectorAll('#conditions-track-container input[type="checkbox"]:checked, #custom-conditions-container input[type="checkbox"]:checked').forEach(cb => {
-                const lbl = (cb.parentElement ? cb.parentElement.textContent : '').replace(/\s+/g, ' ').trim();
-                if (lbl) out.push(lbl.toLowerCase());
-            });
+            document.querySelectorAll('#conditions-track-container input[type="checkbox"]:checked')
+                .forEach(cb => { if (cb.id) ids.push(cb.id); });
         } catch (e) {}
-        return out;
+        return { ids: ids, noms: [] };
     }
 
     /** Un seul voile à la fois : le plus grave l'emporte. */
-    function effetPour(conds) {
-        const a = (kw) => conds.some(c => c.indexOf(kw) !== -1);
-        if (a('inconscient')) return 'fx-down';
-        if (a('pétrifi') || a('petrifi') || a('paralys')) return 'fx-stun';
-        if (a('aveugl')) return 'fx-blind';
-        if (a('feu') || a('enflamm') || a('brûl') || a('brul')) return 'fx-fire';
-        if (a('empoisonn') || a('poison') || a('intoxiqu')) return 'fx-poison';
-        if (a('effray') || a('terroris') || a('apeur') || a('épouvant') || a('epouvant')) return 'fx-fear';
-        if (a('étourdi') || a('etourdi') || a('assomm') || a('neutralis')) return 'fx-stun';
-        if (a('à terre') || a('a terre')) return 'fx-down';
+    function effetPour(etats) {
+        const a = (id) => etats.ids.indexOf(id) !== -1;
+        const mot = (kw) => etats.noms.some(n => n.indexOf(kw) !== -1);
+        if (a('unconscious')) return 'fx-down';
+        if (a('petrified')) return 'fx-petrifie';
+        if (a('paralyzed')) return 'fx-stun';
+        if (a('blinded')) return 'fx-blind';
+        // « en feu » n'est pas un état du SRD : il vient des états personnalisés.
+        if (mot('feu') || mot('enflamm') || mot('brûl') || mot('brul')) return 'fx-fire';
+        if (a('poisoned') || mot('intoxiqu')) return 'fx-poison';
+        if (a('frightened') || mot('terroris') || mot('apeur') || mot('épouvant')) return 'fx-fear';
+        if (a('stunned') || a('incapacitated') || mot('assomm')) return 'fx-stun';
+        if (a('charmed')) return 'fx-charme';
+        if (a('prone')) return 'fx-down';
         return null;
     }
 
     function actifs() { try { return localStorage.getItem(CLE) !== '0'; } catch (e) { return true; } }
 
+    /** Les cœurs de Charmé — jamais sous mouvement réduit. */
+    function coeurs(ov, on) {
+        const dedans = ov.querySelector('.sfx-coeurs');
+        if (!on || calme()) { if (dedans) dedans.remove(); return; }
+        if (dedans) return;
+        const boite = document.createElement('div');
+        boite.className = 'sfx-coeurs';
+        boite.style.cssText = 'position:absolute; inset:0; overflow:hidden;';
+        const SIGNES = ['💗', '💖', '💕', '🩷'];
+        for (let i = 0; i < 14; i++) {
+            const c = document.createElement('span');
+            c.className = 'sfx-coeur';
+            c.setAttribute('aria-hidden', 'true');
+            c.textContent = SIGNES[i % SIGNES.length];
+            c.style.left = (4 + Math.random() * 92).toFixed(1) + '%';
+            c.style.setProperty('--t', (14 + Math.random() * 16).toFixed(0) + 'px');
+            c.style.setProperty('--d', (8 + Math.random() * 7).toFixed(1) + 's');
+            c.style.setProperty('--r', (-Math.random() * 12).toFixed(1) + 's');
+            boite.appendChild(c);
+        }
+        ov.appendChild(boite);
+    }
+
+    /** Invisible : la fiche s'efface. Ce n'est pas un voile, elle reste utilisable. */
+    function invisible(on) {
+        document.body.classList.toggle('fx-invisible', !!on);
+        let cadre = document.getElementById('sfx-invisible');
+        if (!on) { if (cadre) cadre.classList.remove('on'); return; }
+        stylesVoiles();
+        if (!cadre) {
+            cadre = document.createElement('div');
+            cadre.id = 'sfx-invisible';
+            cadre.className = 'no-print';
+            cadre.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(cadre);
+        }
+        void cadre.offsetWidth;
+        cadre.classList.add('on');
+    }
+
     function maj() {
         const app = document.getElementById('app-screen');
         const surFiche = !!(app && !app.classList.contains('hidden'));
+        const permis = surFiche && actifs();
+        const etats = permis ? mesEtats() : { ids: [], noms: [] };
         let ov = document.getElementById('status-fx');
-        const effet = (surFiche && actifs()) ? effetPour(mesConditions()) : null;
+
+        invisible(permis && etats.ids.indexOf('invisible') !== -1);
+
+        const effet = permis ? effetPour(etats) : null;
         if (!effet) {
             // Retrait : les voiles animés pilotent l'opacité par keyframes ; retirer
             // seulement « on » laissait le voile affiché. On coupe d'abord l'animation.
-            if (ov) { ov.style.animation = 'none'; ov.classList.remove('on'); }
+            if (ov) { ov.style.animation = 'none'; ov.classList.remove('on'); coeurs(ov, false); }
             return;
         }
         stylesVoiles();
-        if (!ov) { ov = document.createElement('div'); ov.id = 'status-fx'; ov.className = 'no-print'; document.body.appendChild(ov); }
+        if (!ov) { ov = document.createElement('div'); ov.id = 'status-fx'; ov.className = 'no-print'; ov.setAttribute('aria-hidden', 'true'); document.body.appendChild(ov); }
         ov.style.animation = '';
         ov.className = 'no-print ' + effet;
+        coeurs(ov, effet === 'fx-charme');
         void ov.offsetWidth;            // rejoue la transition au changement d'effet
         ov.classList.add('on');
     }
@@ -147,7 +268,7 @@
             if (window.showAppToast) window.showAppToast(t.checked ? '💥 Effets d’état plein écran activés' : '🚫 Effets d’état plein écran désactivés');
             return;
         }
-        if (t.type === 'checkbox' && t.closest && t.closest('#conditions-track-container, #custom-conditions-container')) maj();
+        if (t.type === 'checkbox' && t.closest && t.closest('#conditions-track-container')) maj();
     });
     document.addEventListener('screen:change', maj);
 
