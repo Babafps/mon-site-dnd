@@ -71,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
         /** Lecture / écriture d'une clé JSON de la fiche active, avec les mêmes
          *  règles que le reste du site (synchronisation cloud, événements). */
         get: (key) => getStore(key),
+        /** Lecture brute (texte non analysé) : bonus manuels, nombres saisis. */
+        raw: (key) => getStore(key, false),
         set: (key, value) => setStore(key, value),
         list: () => charactersList.slice(),
         meta: () => charactersList.find(c => c.id === ACTIVE_CHAR_ID) || null,
@@ -271,19 +273,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.THEME_COLOR_KEYS = THEME_COLORS.map(e => e[0]);
     applyTheme();
 
-    // --- Toast applicatif élégant (remplace certains alert) ---
-    window.showAppToast = function(msg, bg = '#27ae60') {
-        let t = document.getElementById('app-toast');
-        if(!t) {
-            t = document.createElement('div'); t.id = 'app-toast'; t.className = 'no-print';
-            t.style.cssText = 'position:fixed; bottom:92px; left:50%; transform:translateX(-50%) translateY(20px); padding:12px 24px; border-radius:30px; font-family:"Cinzel",serif; font-size:1rem; font-weight:bold; color:#fff; z-index:6000; box-shadow:0 8px 28px rgba(0,0,0,0.45); opacity:0; transition:opacity 0.3s, transform 0.3s; pointer-events:none; text-align:center; max-width:90vw; border:1px solid rgba(196,155,53,0.5);';
-            document.body.appendChild(t);
-        }
-        t.style.background = bg; t.textContent = msg;
-        requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; });
-        clearTimeout(t._timer);
-        t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(20px)'; }, 2800);
-    };
+    // --- Toasts : window.showAppToast vient de toasts.js, chargé avant ce fichier
+    //     (parchemin, file d'attente, types réussite / erreur / info). ---
 
     // --- Suppression annulable ---
     // Remplace le couple « confirm() puis c'est perdu » par une suppression
@@ -302,13 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
         label.className = 'undo-label'; label.textContent = msg;
         const btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'undo-btn'; btn.textContent = '↩ Annuler';
-        const hide = () => { t.classList.remove('is-on'); };
+        const hide = () => { t.classList.remove('is-on'); document.body.classList.remove('undo-visible'); };
         btn.addEventListener('click', () => { clearTimeout(t._timer); hide(); try { onUndo(); } catch (e) { console.warn(e); } });
         t.appendChild(label); t.appendChild(btn);
         // Reflow forcé plutôt que requestAnimationFrame : rAF ne se déclenche pas
         // dans un onglet en arrière-plan, le toast resterait alors invisible.
         void t.offsetWidth;
         t.classList.add('is-on');
+        // Les toasts montent au-dessus de cette barre (style.css, .tst-pile-bas).
+        document.body.classList.add('undo-visible');
         t._timer = setTimeout(hide, delay);
     };
 
@@ -3818,12 +3811,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function getModifier(score) { return Math.floor((score - 10) / 2); }
-        function updateAutoMagicStats() { const abilityEl = document.getElementById('spellcasting-ability'); const profEl = document.getElementById('prof-bonus'); if(!abilityEl || !profEl) return; const ability = abilityEl.value; const prof = parseInt(profEl.value) || 2; if (ability && ability !== 'none') { const statEl = document.getElementById(`stat-${ability}`); if(!statEl) return; const score = parseInt(statEl.value) || 10; const mod = getModifier(score); document.getElementById('spell-modifier').value = mod >= 0 ? `+${mod}` : mod; document.getElementById('spell-save-dc').value = 8 + prof + mod; document.getElementById('spell-attack-bonus').value = prof + mod; setStore('dnd-sheet-spell-save-dc', 8 + prof + mod, false); setStore('dnd-sheet-spell-attack-bonus', prof + mod, false); setStore('dnd-sheet-spell-modifier', mod, false); } }
+        // Les totaux de la fiche viennent du moteur de calcul (calcul.js) : l'affichage,
+        // les jets et « D'où vient ce chiffre ? » lisent la même somme de sources.
+        function signedNum(n) { return n >= 0 ? `+${n}` : n; }
+        function updateAutoMagicStats() {
+            const abilityEl = document.getElementById('spellcasting-ability'); const profEl = document.getElementById('prof-bonus'); if(!abilityEl || !profEl) return;
+            const mod = window.Calcul.valeur('mod-sorts'); if(!mod) return;   // aucune caractéristique d'incantation : les champs restent tels quels
+            const dd = window.Calcul.valeur('dd-sorts').total; const atk = window.Calcul.valeur('attaque-sorts').total;
+            document.getElementById('spell-modifier').value = signedNum(mod.total); document.getElementById('spell-save-dc').value = dd; document.getElementById('spell-attack-bonus').value = atk;
+            setStore('dnd-sheet-spell-save-dc', dd, false); setStore('dnd-sheet-spell-attack-bonus', atk, false); setStore('dnd-sheet-spell-modifier', mod.total, false);
+        }
         function updateSkillProfBtn(skillId) { const hiddenInput = document.getElementById('prof-' + skillId); const btn = document.getElementById('profbtn-' + skillId); if(!hiddenInput || !btn) return; const level = parseInt(hiddenInput.value) || 0; if(level === 0) { btn.textContent = '○'; btn.classList.remove('prof-active', 'exp-active'); btn.title = 'Clic : ajouter maîtrise'; } else if(level === 1) { btn.textContent = '●'; btn.classList.add('prof-active'); btn.classList.remove('exp-active'); btn.title = 'Maîtrise — clic : expertise'; } else { btn.textContent = '★'; btn.classList.remove('prof-active'); btn.classList.add('exp-active'); btn.title = 'Expertise — clic : retirer'; } }
 
         function updateStatsAndSkills() {
-            const profEl = document.getElementById('prof-bonus'); if(!profEl) return; const profBonus = parseInt(profEl.value) || 2;
-            skillsMap.forEach(attr => { const statEl = document.getElementById(`stat-${attr.id}`); const modEl = document.getElementById(`mod-${attr.id}`); if(statEl && modEl) { const score = parseInt(statEl.value) || 10; const mod = getModifier(score); modEl.textContent = mod >= 0 ? `+${mod}` : mod; attr.skills.forEach(skill => { const hiddenInput = document.getElementById(`prof-${skill.id}`); const profLevel = hiddenInput ? (parseInt(hiddenInput.value) || 0) : 0; const bonus = profLevel === 2 ? profBonus * 2 : (profLevel === 1 ? profBonus : 0); const manual = parseInt(getStore('dnd-sheet-skill-bonus-' + skill.id, false)) || 0; const totalMod = mod + bonus + manual; const valEl = document.getElementById(`skill-val-${skill.id}`); if(valEl) { valEl.textContent = totalMod >= 0 ? `+${totalMod}` : totalMod; valEl.classList.toggle('manual-bonus', manual !== 0); valEl.title = manual !== 0 ? `Bonus manuel ${manual > 0 ? '+' + manual : manual} inclus — clic pour modifier` : 'Clic : bonus manuel (ex : Touche-à-tout)'; } }); } });
+            const profEl = document.getElementById('prof-bonus'); if(!profEl) return;
+            skillsMap.forEach(attr => {
+                const statEl = document.getElementById(`stat-${attr.id}`); const modEl = document.getElementById(`mod-${attr.id}`); if(!statEl || !modEl) return;
+                modEl.textContent = signedNum(window.Calcul.valeur('carac:' + attr.id).total);
+                attr.skills.forEach(skill => {
+                    const valEl = document.getElementById(`skill-val-${skill.id}`); if(!valEl) return;
+                    const r = window.Calcul.valeur('competence:' + skill.id); if(!r) return;
+                    valEl.textContent = signedNum(r.total);
+                    valEl.classList.toggle('manual-bonus', r.manuel !== 0);
+                    valEl.title = r.manuel !== 0 ? `Bonus manuel ${r.manuel > 0 ? '+' + r.manuel : r.manuel} inclus — clic pour modifier` : 'Clic : bonus manuel (ex : Touche-à-tout)';
+                });
+            });
             updateAutoMagicStats();
             updatePassivePerception();
         }
@@ -3833,9 +3845,8 @@ document.addEventListener('DOMContentLoaded', () => {
         function updatePassivePerception() {
             const el = document.getElementById('passive-perception'); if(!el) return;
             if(getStore('dnd-sheet-passive-perception-auto', false) === 'false') return; // override manuel : on n'écrase pas
-            const percSpan = document.getElementById('skill-val-perception');
-            const mod = percSpan ? (parseInt(percSpan.textContent, 10) || 0) : 0;
-            const val = 10 + mod;
+            const passive = window.Calcul.valeur('passif:perception');
+            const val = passive ? passive.total : 10;
             if(String(el.value) !== String(val)) { el.value = val; setStore('dnd-sheet-passive-perception', val, false); }
         }
         const passivePercEl = document.getElementById('passive-perception');
@@ -5134,50 +5145,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const isMagicWeapon = (atk) => hasVal(atk.rarity) || !!atk.reqAttune
             || weaponPowers(atk).length > 0 || extraDamages(atk).length > 0;
 
-        // ---------- Auto-calcul du toucher et des dégâts ----------
-        // Le bonus au toucher d'une arme, c'est modificateur de carac + maîtrise,
-        // et les dégâts ajoutent le même modificateur. La seule subtilité de la
-        // règle : « finesse » laisse le choix, donc on prend la meilleure des deux.
+        // ---------- Toucher et dégâts : le moteur de calcul ----------
+        // Carac (Force ; Dextérité à distance ; la meilleure des deux avec
+        // « finesse » ou le mode « la meilleure »), maîtrise et bonus de l'arme
+        // sont additionnés par calcul.js. Ces raccourcis gardent les noms
+        // utilisés partout dans la fiche.
         const ABIL_SHORT = { str: 'For', dex: 'Dex' };
-        const statMod = (id) => {
-            const el = document.getElementById('stat-' + id);
-            return getModifier(parseInt(el && el.value, 10) || 10);
-        };
-        const profBonus = () => parseInt((document.getElementById('prof-bonus') || {}).value, 10) || 2;
-        const hasProp = (atk, rx) => rx.test(String(atk.props || ''));
+        const statMod = (id) => window.Calcul.valeur('carac:' + id).total;
+        const profBonus = () => window.Calcul.maitrise();
 
         /** Type d'arme : corps à corps, distance ou lancer. Déduit si non renseigné. */
-        function weaponType(atk) {
-            if (atk.wtype) return atk.wtype;
-            if (hasProp(atk, /lanc/i)) return 'thrown';
-            if (hasProp(atk, /munition|portée/i)) return 'ranged';
-            // « 24/96 m » ou « 30 m » sans allonge : c'est une arme de tir.
-            if (/\d\s*\/\s*\d/.test(String(atk.range || ''))) return 'ranged';
-            return 'melee';
-        }
-        /** Caractéristique effectivement utilisée par l'arme. */
-        function weaponAbility(atk) {
-            const mode = atk.autoAbility || 'manual';
-            if (mode === 'str' || mode === 'dex') return mode;
-            // « La meilleure des deux » : le choix de la finesse, mais imposé
-            // quelle que soit l'arme — pratique pour un moine ou une aptitude
-            // maison qui l'autorise sur une arme qui n'a pas la propriété.
-            if (mode === 'best') return statMod('dex') >= statMod('str') ? 'dex' : 'str';
-            if (mode !== 'auto') return null;
-            if (hasProp(atk, /finesse/i)) return statMod('dex') >= statMod('str') ? 'dex' : 'str';
-            return weaponType(atk) === 'ranged' ? 'dex' : 'str';
-        }
+        function weaponType(atk) { return window.Calcul.typeArme(atk); }
+        /** Caractéristique effectivement utilisée par l'arme, ou null en saisie manuelle. */
+        function weaponAbility(atk) { return window.Calcul.caracArme(atk); }
         /** Bonus au toucher calculé, ou null si l'arme est en saisie manuelle. */
-        function autoHitBonus(atk) {
-            const ab = weaponAbility(atk); if (!ab) return null;
-            const extra = parseMod(atk.hitExtra || 0);
-            return statMod(ab) + (atk.noProf ? 0 : profBonus()) + extra;
-        }
+        function autoHitBonus(atk) { const r = window.Calcul.arme(atk); return r && r.toucher ? r.toucher.total : null; }
         /** Modificateur de dégâts ajouté aux dés, ou null en manuel. */
-        function autoDmgMod(atk) {
-            const ab = weaponAbility(atk); if (!ab) return null;
-            return statMod(ab) + parseMod(atk.dmgExtra || 0);
-        }
+        function autoDmgMod(atk) { const r = window.Calcul.arme(atk); return r && r.degats ? r.degats.total : null; }
         /** Le bonus affiché et joué : calculé si l'auto est actif, sinon la saisie. */
         function hitBonusOf(atk) {
             const auto = autoHitBonus(atk);

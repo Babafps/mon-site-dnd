@@ -25,6 +25,11 @@ tools/srd/rapport-divergences-*.txt
 # Graphe de connaissance, si tu le génères ici (refait par `graphify update .`)
 graphify-out/
 
+# Tests de bout en bout (tests/) : dépendances et rapports, régénérables
+tests/node_modules/
+tests/test-results/
+tests/playwright-report/
+
 
 # ---------- Système / éditeurs ----------
 Thumbs.db

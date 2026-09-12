@@ -8683,3 +8683,71 @@ body.theme-dark .pjw-stepbtn.is-on { background: #2a221b; color: var(--accent-co
     .pjw, #pj-wizard { animation: none; }
     .pjw-opt:hover { transform: none; }
 }
+
+/* =====================================================
+   TOASTS SUR PARCHEMIN (toasts.js)
+   Messages de l'application en bas, murmures des secrets en haut. Même
+   rouleau : le type d'un message (réussite, info, erreur) teinte son sceau,
+   l'humeur d'un secret teinte tout le parchemin.
+   ===================================================== */
+.tst-pile {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    width: min(460px, calc(100vw - 28px)); pointer-events: none;
+}
+.tst-pile-haut { top: 16px; z-index: 100030; }
+.tst-pile-bas { bottom: 92px; z-index: 100020; flex-direction: column-reverse; transition: bottom .25s ease; }
+/* La barre « Annuler » d'une suppression occupe le même endroit : les messages montent au-dessus. */
+body.undo-visible .tst-pile-bas { bottom: 158px; }
+.tst {
+    --m1: #f6ead0; --m2: #dcc592; --m-encre: #3a2612; --m-bord: #8a6420; --m-sceau: #7a2828;
+    position: relative; width: 100%; box-sizing: border-box;
+    display: flex; align-items: center; gap: 14px; padding: 12px 20px 12px 12px;
+    pointer-events: auto; cursor: pointer; text-align: left;
+    color: var(--m-encre); background: linear-gradient(180deg, var(--m1), var(--m2));
+    border: 1px solid var(--m-bord); border-radius: 6px;
+    box-shadow: 0 16px 36px rgba(0,0,0,.45), inset 0 0 24px rgba(0,0,0,.14);
+    transform-origin: 50% 0; animation: tstIn .55s cubic-bezier(.2,.9,.3,1.2) both;
+}
+.tst::before, .tst::after {
+    content: ''; position: absolute; left: -7px; right: -7px; height: 9px; border-radius: 6px;
+    background: linear-gradient(180deg, var(--m-bord), rgba(0,0,0,.45)); box-shadow: 0 2px 4px rgba(0,0,0,.3);
+}
+.tst::before { top: -5px; }
+.tst::after { bottom: -5px; }
+.tst-sceau {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 1.2rem; font-weight: 700; line-height: 1; color: #fff6e0;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.35), transparent 45%), var(--m-sceau);
+    box-shadow: 0 0 0 3px rgba(0,0,0,.15), 0 4px 10px rgba(0,0,0,.35);
+}
+.tst-texte { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tst-titre { font-family: 'Cinzel', Georgia, serif; font-size: .66rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; opacity: .72; }
+.tst-phrase { font-family: 'Lora', Georgia, serif; font-style: italic; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.tst.sort { animation: tstOut .38s ease-in forwards; }
+.tst-pile-bas .tst { transform-origin: 50% 100%; animation-name: tstInBas; }
+.tst-pile-bas .tst.sort { animation-name: tstOutBas; }
+/* Types des messages de l'application */
+.tst.t-reussite { --m-sceau: #3d7a3d; }
+.tst.t-erreur { --m1: #f6e0d6; --m2: #deb8a4; --m-bord: #9b2f35; --m-sceau: #8a1c26; }
+/* Humeurs des secrets */
+.tst.h-nuit { --m1: #232a5a; --m2: #11153a; --m-encre: #ece9ff; --m-bord: #9189e0; --m-sceau: #3a3f86; }
+.tst.h-sang { --m1: #420f16; --m2: #1e0508; --m-encre: #fde6e3; --m-bord: #c24a54; --m-sceau: #8a1c26; }
+.tst.h-or { --m1: #402e10; --m2: #1c1306; --m-encre: #fff2d2; --m-bord: #e6bc58; --m-sceau: #b8862a; }
+.tst.h-arcane { --m1: #12305a; --m2: #08172c; --m-encre: #e4f3ff; --m-bord: #74bcff; --m-sceau: #2a5c9a; }
+.tst.h-poison { --m1: #17361d; --m2: #08190c; --m-encre: #e8ffe2; --m-bord: #94e070; --m-sceau: #2f6a2a; }
+@keyframes tstIn { 0% { opacity: 0; transform: translateY(-14px) scaleY(.15); } 55% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@keyframes tstOut { to { opacity: 0; transform: translateY(-10px) scaleY(.4); } }
+@keyframes tstInBas { 0% { opacity: 0; transform: translateY(14px) scaleY(.15); } 55% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@keyframes tstOutBas { to { opacity: 0; transform: translateY(10px) scaleY(.4); } }
+@media (max-width: 700px) {
+    .tst-pile { gap: 12px; }
+    .tst { padding: 10px 16px 10px 10px; gap: 12px; }
+    .tst-sceau { width: 36px; height: 36px; font-size: 1.05rem; }
+    .tst-phrase { font-size: .93rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tst, .tst.sort, .tst-pile-bas .tst, .tst-pile-bas .tst.sort { animation: none !important; }
+    .tst-pile-bas { transition: none; }
+}
+@media print { .tst-pile { display: none !important; } }

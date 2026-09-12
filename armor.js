@@ -23,7 +23,6 @@
     const KEY = 'dnd-armor';
     const KINDS = { light: 'Légère', medium: 'Intermédiaire', heavy: 'Lourde', shield: 'Bouclier' };
     const SRD_KIND = { Light: 'light', Medium: 'medium', Heavy: 'heavy', Shield: 'shield' };
-    const TRAINING = { light: 'prof-armor-light', medium: 'prof-armor-med', heavy: 'prof-armor-heavy', shield: 'prof-armor-shield' };
     const UNARMORED = {
         base:      { label: 'Sans armure',                    formule: '10 + Dex' },
         barbarian: { label: 'Défense sans armure (Barbare)',  formule: '10 + Dex + Con, bouclier permis' },
@@ -49,8 +48,6 @@
         return arr.filter(x => { const k = fold(x); if (!k || seen.has(k)) return false; seen.add(k); return true; });
     };
     const val = (id) => ($(id) || {}).value || '';
-    const score = (k) => num(val('stat-' + k), 10);
-    const modOf = (k) => Math.floor((score(k) - 10) / 2);
     const toast = (m) => { if (window.showAppToast) window.showAppToast(m); };
     const sameSlot = (a, b) => (a.kind === 'shield') === (b.kind === 'shield');
 
@@ -97,48 +94,17 @@
         return d.armors.filter(a => a.equipped).flatMap(a => Array.isArray(a[k]) ? a[k] : splitList(a[k]));
     }
     const effective = (d, k) => uniq([...(d.defenses[k] || []), ...granted(d, k)]);
-    const trained = (kind) => { const el = $(TRAINING[kind]); return !el || el.checked; };
 
+    // Le calcul lui-même vit dans le moteur commun (calcul.js) : la CA, ses
+    // sources et ses avertissements sortent du même endroit que les compétences
+    // et les attaques. Ce widget ne fait que les montrer.
     function compute(d) {
-        const dex = modOf('dex');
-        const body = d.armors.find(a => a.equipped && a.kind !== 'shield') || null;
-        const shield = d.armors.find(a => a.equipped && a.kind === 'shield') || null;
-        const parts = [], warn = [];
-        let total;
-        if (body) {
-            total = num(body.base, 10);
-            parts.push({ label: body.name || 'Armure', value: total, base: true });
-            if (body.kind === 'light') { total += dex; parts.push({ label: 'Dextérité', value: dex }); }
-            else if (body.kind === 'medium') {
-                const cap = body.dexMax === '' || body.dexMax == null ? 2 : num(body.dexMax, 2);
-                const part = Math.min(dex, cap);
-                total += part; parts.push({ label: `Dextérité (max ${cap})`, value: part });
-            }
-            if (body.isMagic && num(body.magic)) { total += num(body.magic); parts.push({ label: 'Magie', value: num(body.magic) }); }
-            if (num(body.strMin) && score('str') < num(body.strMin)) warn.push(`Force ${score('str')} sous les ${body.strMin} requis : Vitesse réduite de 3 m.`);
-            if (body.stealthDis) warn.push('Désavantage aux tests de Dextérité (Discrétion).');
-            if (!trained(body.kind)) warn.push(`Pas de formation aux armures ${KINDS[body.kind].toLowerCase()}s (module Maîtrises) : Désavantage aux tests de Force et de Dextérité, et pas de sorts.`);
-        } else if (d.unarmored === 'barbarian') {
-            total = 10 + dex + modOf('con');
-            parts.push({ label: 'Base', value: 10, base: true }, { label: 'Dextérité', value: dex }, { label: 'Constitution', value: modOf('con') });
-        } else if (d.unarmored === 'monk' && !shield) {
-            total = 10 + dex + modOf('wis');
-            parts.push({ label: 'Base', value: 10, base: true }, { label: 'Dextérité', value: dex }, { label: 'Sagesse', value: modOf('wis') });
-        } else if (d.unarmored === 'custom') {
-            total = num(d.customBase, 10) + dex;
-            parts.push({ label: 'Base', value: num(d.customBase, 10), base: true }, { label: 'Dextérité', value: dex });
-        } else {
-            total = 10 + dex;
-            parts.push({ label: 'Base', value: 10, base: true }, { label: 'Dextérité', value: dex });
-            if (d.unarmored === 'monk') warn.push('La Défense sans armure du Moine ne s’applique pas avec un bouclier.');
-        }
-        if (shield) {
-            const b = num(shield.base, 2) + (shield.isMagic ? num(shield.magic) : 0);
-            total += b; parts.push({ label: shield.name || 'Bouclier', value: b });
-            if (!trained('shield')) warn.push('Pas de formation au bouclier (module Maîtrises) : il n’apporte normalement pas son bonus.');
-        }
-        d.misc.forEach(m => { const v = num(m.value); if (v) { total += v; parts.push({ label: m.label || 'Bonus', value: v }); } });
-        return { total, parts, warn, body, shield };
+        const r = window.Calcul.ca(d);
+        return {
+            total: r.total,
+            parts: r.sources.map(s => ({ label: s.libelle, value: s.valeur, base: !!s.base })),
+            warn: r.avertissements, body: r.armure, shield: r.bouclier
+        };
     }
 
     // ---------- Écriture sur la fiche ----------

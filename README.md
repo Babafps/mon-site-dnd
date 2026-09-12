@@ -22,11 +22,12 @@ inertes.
 
 | Dossier | Contenu |
 |---|---|
-| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` + `secrets-plus.js` + `secrets-absurdes.js` (trophées du compte et petits secrets)… |
+| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `calcul.js` (moteur de calcul : chaque total en sources nommées), `toasts.js` (messages sur parchemin), `charger.js` (modules chargés à la demande) + `dialogues.js` (confirmer, demander, informer), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` + `secrets-plus.js` + `secrets-absurdes.js` (trophées du compte et petits secrets)… |
 | `data/srd/` | La base de règles générée — sorts, monstres, objets, équipement, classes, races, états. Voir son `README.md`. |
 | `tools/srd/` | Les scripts Python qui régénèrent `data/srd/` depuis le PDF officiel. |
 | `docs/` | Migration Supabase et cahier des charges en cours. |
 | `lib/dice-box/` | Moteur de dés 3D, servi en local (un Web Worker ne peut pas venir d'un autre domaine). |
+| `tests/` | Tests de bout en bout (Playwright), isolés : leur propre `package.json`, Supabase simulé, rien de chargé par le site. Voir `tests/LISEZMOI.md`. |
 
 ## Configuration
 
