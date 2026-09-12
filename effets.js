@@ -4,9 +4,10 @@
 // Deux familles, toutes deux déclenchées par TA fiche, sans réseau :
 //   · RollFX : la pluie d'étincelles d'un 20 naturel, la secousse d'un 1 (les
 //     séries de trois 20 ou de trois 1 vivent dans secrets.js) ;
-//   · les voiles d'état plein écran — charmé, invisible, pétrifié, empoisonné,
-//     aveuglé, effrayé, en feu, étourdi, à terre — qui suivent les états en
-//     cours sur la fiche (etats.js).
+//   · les voiles d'état plein écran : UNE COUCHE PAR ÉTAT, cumulables, qui
+//     suivent les états en cours sur la fiche (etats.js). Chaque état a son
+//     coin d'écran et son langage propre — teinte, particules, givre,
+//     chaînes, paupières — pour qu'on les distingue tous d'un coup d'œil.
 //
 // Ils vivaient dans l'ancien module de partie en ligne, retiré du site ; ces
 // effets, eux, servaient aussi en solo.
@@ -76,53 +77,201 @@
 
     // ---------- Voiles d'état plein écran ----------
     //
-    // Un voile est une SURIMPRESSION : il ne touche jamais au contenu de la
-    // fiche, ne capte aucun clic (`pointer-events: none`) et disparaît si le
-    // joueur coupe l'interrupteur « Effets d'état plein écran » du menu ☰.
-    // Un seul voile à la fois : le plus grave l'emporte.
+    // UNE COUCHE PAR ÉTAT, et elles se superposent : trois états actifs, ce
+    // sont trois effets visibles en même temps. Pour qu'ils ne se noient pas
+    // les uns dans les autres, chacun occupe une PLACE différente de l'écran —
+    // les bords, le bas, le haut, un coin — ou un canal différent (teinte,
+    // particules, désaturation). On ne voit jamais deux brouillards identiques.
     //
-    // Invisible fait exception : ce n'est pas un voile mais la fiche elle-même
-    // qui s'efface, avec un liseré hachuré. Il peut donc se cumuler avec un
-    // voile — on peut être invisible ET empoisonné.
+    // Une couche est une SURIMPRESSION : elle ne touche pas au contenu de la
+    // fiche et ne capte aucun clic (`pointer-events: none`). L'interrupteur
+    // « Effets d'état » du menu ☰ les éteint toutes.
     //
-    // Tout s'éteint sous `prefers-reduced-motion` : les cœurs de Charmé ne
-    // tombent plus, les pulsations s'arrêtent, les teintes restent.
+    // Invisible fait exception : ce n'est pas une surimpression mais la fiche
+    // elle-même qui s'efface — elle se cumule donc naturellement au reste.
+    //
+    // Sous `prefers-reduced-motion`, plus aucune particule ni pulsation : les
+    // teintes et les formes restent, immobiles.
     const CLE = 'dnd-fx-fullscreen';
+
+    // L'ordre compte : c'est l'ordre de peinture. Pétrifié passe en premier
+    // parce qu'il grise ce qui est DERRIÈRE lui (backdrop-filter) — les
+    // couches suivantes gardent donc leurs couleurs.
+    const COUCHES = ['petrified', 'blinded', 'unconscious', 'exhaustion', 'frightened',
+                     'deafened', 'prone', 'poisoned', 'restrained', 'grappled',
+                     'paralyzed', 'stunned', 'charmed', 'incapacitated', 'invisible', 'fire'];
+    const PARTICULES = {
+        charmed:  { n: 14, signes: ['💗', '💖', '💕'], classe: 'sfx-coeur' },
+        poisoned: { n: 12, signes: ['●'],              classe: 'sfx-bulle' },
+        stunned:  { n: 9,  signes: ['✦', '✧'],         classe: 'sfx-etoile' }
+    };
+
     let voilesStyles = false;
     function stylesVoiles() {
         if (voilesStyles) return; voilesStyles = true;
         injecter(`
-        #status-fx { position: fixed; inset: 0; pointer-events: none; z-index: 9960; opacity: 0; transition: opacity .6s ease; }
-        #status-fx.on { opacity: 1; }
-        #status-fx::before, #status-fx::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
-        #status-fx.fx-poison { box-shadow: inset 0 0 150px 40px rgba(70,150,40,.42); background: radial-gradient(ellipse at 50% 50%, rgba(90,170,50,0) 55%, rgba(60,130,30,.18)); animation: sfxPulse 3.4s ease-in-out infinite; }
-        #status-fx.fx-fire { box-shadow: inset 0 0 150px 45px rgba(200,70,20,.5); background: radial-gradient(ellipse at 50% 100%, rgba(255,120,30,.22), rgba(0,0,0,0) 55%); animation: sfxFlicker .5s ease-in-out infinite; }
-        #status-fx.fx-fear { box-shadow: inset 0 0 170px 60px rgba(120,10,10,.55); animation: sfxPulse 2.2s ease-in-out infinite; }
-        #status-fx.fx-blind { box-shadow: inset 0 0 250px 130px rgba(0,0,0,.9); background: rgba(0,0,0,.35); }
-        #status-fx.fx-stun { box-shadow: inset 0 0 160px 55px rgba(120,110,60,.5); filter: saturate(.6); animation: sfxPulse 1.6s ease-in-out infinite; }
-        #status-fx.fx-down { box-shadow: inset 0 0 230px 110px rgba(0,0,0,.82); background: rgba(20,20,25,.4); }
+        #status-fx { position: fixed; inset: 0; pointer-events: none; z-index: 9960; overflow: hidden; }
+        .sfx-c { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .5s ease; }
+        .sfx-c.on { opacity: 1; }
+        .sfx-c::before, .sfx-c::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
 
-        /* Charmé : une teinte rosée, et des cœurs qui montent doucement. */
-        #status-fx.fx-charme { box-shadow: inset 0 0 170px 55px rgba(233,80,150,.34); background: radial-gradient(ellipse at 50% 110%, rgba(255,140,190,.20), rgba(255,140,190,0) 60%); }
-        .sfx-coeur { position: absolute; bottom: -8vh; font-size: var(--t,18px); line-height: 1; opacity: 0; will-change: transform, opacity;
-                     animation: sfxCoeur var(--d,9s) linear var(--r,0s) infinite; }
-        @keyframes sfxCoeur {
-            0%   { transform: translateY(0) rotate(-8deg) scale(.85); opacity: 0; }
-            12%  { opacity: .85; }
-            88%  { opacity: .55; }
-            100% { transform: translateY(-118vh) rotate(10deg) scale(1.05); opacity: 0; }
+        /* — Aveuglé : l'obscurité se referme, il ne reste qu'une lucarne. — */
+        .sfx-blinded::before {
+            background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 22%, rgba(0,0,0,.55) 54%, rgba(0,0,0,.88) 100%);
+            animation: sfxRespire 3.4s ease-in-out infinite;
         }
 
-        /* Pétrifié : la couleur s'en va, la pierre se fendille. La fiche reste
-           lisible — on grise ce qui est derrière, on ne le recouvre pas. */
-        #status-fx.fx-petrifie {
-            box-shadow: inset 0 0 200px 70px rgba(60,58,55,.5);
-            background: rgba(138,134,128,.26);
+        /* — Inconscient : deux paupières noires qui se ferment. — */
+        .sfx-unconscious::before {
+            inset: auto 0 auto 0; top: 0; height: 42vh; transform-origin: top;
+            background: linear-gradient(to bottom, rgba(0,0,0,.93), rgba(0,0,0,0));
+            animation: sfxPaupiere 5s ease-in-out infinite;
+        }
+        .sfx-unconscious::after {
+            inset: auto 0 0 0; height: 42vh; transform-origin: bottom;
+            background: linear-gradient(to top, rgba(0,0,0,.93), rgba(0,0,0,0));
+            animation: sfxPaupiere 5s ease-in-out infinite;
+        }
+
+        /* — Épuisement : une poussière brune, de plus en plus lourde. — */
+        .sfx-exhaustion::before {
+            background: radial-gradient(ellipse at 50% 50%, rgba(90,70,45,0) 30%, rgba(70,52,32,.95) 100%);
+            opacity: calc(.13 * var(--n, 1));
+        }
+        .sfx-exhaustion::after {
+            inset: auto 0 0 0; height: 26vh;
+            background: linear-gradient(to top, rgba(60,44,26,.5), rgba(60,44,26,0));
+            opacity: calc(.16 * var(--n, 1));
+            animation: sfxRespire 6s ease-in-out infinite;
+        }
+
+        /* — Effrayé : un battement rouge sombre, rapide. — */
+        .sfx-frightened::before {
+            box-shadow: inset 0 0 170px 70px rgba(125,8,8,.62);
+            animation: sfxPeur 1.5s ease-in-out infinite;
+        }
+
+        /* — Assourdi : le son s'éteint aux deux oreilles, ondes arrêtées net. — */
+        .sfx-deafened::before, .sfx-deafened::after {
+            top: 0; bottom: 0; width: 25vw;
+            background:
+                repeating-radial-gradient(circle at 0% 50%, rgba(188,214,246,0) 0 22px, rgba(188,214,246,.7) 22px 27px, rgba(188,214,246,0) 27px 52px),
+                linear-gradient(to right, rgba(48,62,90,.6), rgba(48,62,90,0));
+            animation: sfxOuate 3s ease-in-out infinite;
+        }
+        .sfx-deafened::before { left: 0; right: auto; }
+        .sfx-deafened::after { right: 0; left: auto; transform: scaleX(-1); }
+
+        /* — À terre : le sol monte, l'horizon bascule. — */
+        .sfx-prone::before {
+            inset: auto 0 0 0; height: 52vh;
+            background: linear-gradient(to top, rgba(68,40,10,.88), rgba(96,60,20,.38) 48%, rgba(96,60,20,0));
+        }
+        .sfx-prone::after {
+            inset: auto 0 51vh 0; height: 3px;
+            background: linear-gradient(to right, transparent, rgba(200,150,70,.9), transparent);
+        }
+
+        /* — Empoisonné : une mare verte au fond, des bulles qui remontent. — */
+        .sfx-poisoned::before {
+            inset: auto 0 0 0; height: 40vh;
+            background: linear-gradient(to top, rgba(36,110,28,.6), rgba(56,140,40,.10) 60%, rgba(56,140,40,0));
+            animation: sfxRespire 3.2s ease-in-out infinite;
+        }
+        .sfx-bulle {
+            position: absolute; bottom: -6vh; width: var(--t,12px); height: var(--t,12px);
+            border-radius: 50%; background: radial-gradient(circle at 35% 32%, rgba(200,255,180,.95), rgba(60,150,40,.45) 70%, rgba(40,110,25,.15));
+            box-shadow: 0 0 8px rgba(90,200,60,.5);
+            animation: sfxMonte var(--d,7s) linear var(--r,0s) infinite;
+        }
+
+        /* — Entravé : des chaînes tendues le long des bords. — */
+        .sfx-restrained::before, .sfx-restrained::after {
+            top: 0; bottom: 0; width: clamp(26px, 7vw, 52px);
+            background:
+                repeating-radial-gradient(circle at 50% 0, rgba(46,50,60,0) 0 13px, rgba(46,50,60,.92) 13px 18px, rgba(46,50,60,0) 18px 38px),
+                linear-gradient(to right, rgba(34,38,48,.55), rgba(34,38,48,0));
+            background-size: 52px 38px, 100% 100%;
+        }
+        .sfx-restrained::before { left: 0; right: auto; }
+        .sfx-restrained::after { right: 0; left: auto; transform: scaleX(-1); }
+
+        /* — Agrippé : deux poignes vertes qui se resserrent. — */
+        .sfx-grappled::before, .sfx-grappled::after {
+            top: 12vh; bottom: 12vh; width: 17vw;
+            animation: sfxPoigne 2.4s ease-in-out infinite;
+        }
+        .sfx-grappled::before { left: 0; right: auto; transform-origin: left center;
+            background: linear-gradient(to right, rgba(22,104,48,.85), rgba(30,130,62,.3) 52%, rgba(30,130,62,0)); }
+        .sfx-grappled::after { right: 0; left: auto; transform-origin: right center;
+            background: linear-gradient(to left, rgba(22,104,48,.85), rgba(30,130,62,.3) 52%, rgba(30,130,62,0)); }
+
+        /* — Paralysé : le givre prend les coins, des arcs bleus figés. — */
+        .sfx-paralyzed::before {
+            background:
+                radial-gradient(farthest-side at 0% 0%, rgba(38,132,205,.62), rgba(38,132,205,0)),
+                radial-gradient(farthest-side at 100% 0%, rgba(38,132,205,.62), rgba(38,132,205,0)),
+                radial-gradient(farthest-side at 0% 100%, rgba(38,132,205,.62), rgba(38,132,205,0)),
+                radial-gradient(farthest-side at 100% 100%, rgba(38,132,205,.62), rgba(38,132,205,0));
+            background-size: 40% 40%; background-repeat: no-repeat;
+            background-position: left top, right top, left bottom, right bottom;
+        }
+        .sfx-paralyzed::after {
+            background:
+                linear-gradient(84deg, transparent 47.6%, rgba(120,200,255,.85) 47.9%, rgba(120,200,255,.85) 48.2%, transparent 48.5%),
+                linear-gradient(-68deg, transparent 27.6%, rgba(120,200,255,.6) 27.9%, rgba(120,200,255,.6) 28.15%, transparent 28.4%),
+                linear-gradient(112deg, transparent 72.6%, rgba(120,200,255,.6) 72.9%, rgba(120,200,255,.6) 73.15%, transparent 73.4%);
+            animation: sfxArc 2.2s steps(1, end) infinite;
+        }
+
+        /* — Étourdi : des étoiles tournent au-dessus de la tête. — */
+        .sfx-stunned::before {
+            inset: 0 0 auto 0; height: 38vh;
+            background: linear-gradient(to bottom, rgba(226,152,16,.5), rgba(226,152,16,0));
+            animation: sfxRespire 2s ease-in-out infinite;
+        }
+        .sfx-etoile {
+            position: absolute; top: 12vh; left: 50%; font-size: var(--t,30px); line-height: 1;
+            color: #ffc21f; text-shadow: 0 0 14px rgba(255,180,20,1), 0 0 3px rgba(120,70,0,.8);
+            transform-origin: 0 0;
+            animation: sfxTourne var(--d,3s) linear var(--r,0s) infinite;
+        }
+
+        /* — Charmé : une lueur rose, des cœurs qui montent. — */
+        .sfx-charmed::before {
+            background: radial-gradient(ellipse at 50% 115%, rgba(255,120,180,.42), rgba(255,120,180,0) 62%);
+            box-shadow: inset 0 0 150px 45px rgba(233,80,150,.3);
+            animation: sfxRespire 4s ease-in-out infinite;
+        }
+        .sfx-coeur {
+            position: absolute; bottom: -8vh; font-size: var(--t,18px); line-height: 1;
+            animation: sfxMonte var(--d,9s) linear var(--r,0s) infinite;
+        }
+
+        /* — Neutralisé : un sceau d'interdiction, en haut à gauche. — */
+        .sfx-incapacitated::before {
+            inset: 0 0 auto 0; height: 18vh;
+            background: linear-gradient(to bottom, rgba(170,20,20,.3), rgba(170,20,20,0));
+        }
+        .sfx-incapacitated::after {
+            right: auto; bottom: auto; top: 10vh; left: 3vw;
+            width: clamp(64px, 13vw, 104px); height: clamp(64px, 13vw, 104px); border-radius: 50%;
+            border: clamp(6px, 1.2vw, 9px) solid rgba(200,35,35,.8);
+            background: linear-gradient(135deg, transparent 45.5%, rgba(200,35,35,.8) 45.5%, rgba(200,35,35,.8) 54.5%, transparent 54.5%);
+            animation: sfxRespire 2.6s ease-in-out infinite;
+        }
+
+        /* — Pétrifié : la couleur s'en va, la pierre se fendille. — */
+        .sfx-petrified {
             -webkit-backdrop-filter: grayscale(.92) contrast(.96);
             backdrop-filter: grayscale(.92) contrast(.96);
         }
-        #status-fx.fx-petrifie::after {
-            opacity: .4;
+        .sfx-petrified::before {
+            background: rgba(138,134,128,.24);
+            box-shadow: inset 0 0 200px 70px rgba(60,58,55,.45);
+        }
+        .sfx-petrified::after {
+            opacity: .42;
             background:
                 linear-gradient(103deg, transparent 49.7%, rgba(30,28,26,.55) 49.85%, rgba(30,28,26,.55) 50.1%, transparent 50.25%),
                 linear-gradient(58deg,  transparent 29.7%, rgba(30,28,26,.4) 29.85%, rgba(30,28,26,.4) 30.05%, transparent 30.2%),
@@ -131,39 +280,60 @@
                 repeating-linear-gradient(117deg, rgba(255,255,255,.05) 0 2px, transparent 2px 26px);
         }
 
-        /* Invisible : la fiche s'efface, un liseré hachuré dit qu'elle est là. */
-        body.fx-invisible #app-screen { opacity: .5; transition: opacity .5s ease; }
-        body.fx-invisible #app-screen > .sheet-container,
-        body.fx-invisible #app-screen > .app-main { position: relative; }
-        #sfx-invisible {
-            position: fixed; inset: 10px; pointer-events: none; z-index: 9955; border-radius: 14px;
-            border: 2px dashed rgba(150,180,210,.55);
+        /* — Invisible : un liseré hachuré ; la fiche, elle, s'efface. — */
+        .sfx-invisible::before {
+            inset: 10px; border-radius: 14px;
+            border: 2px dashed rgba(150,190,225,.6);
             background: repeating-linear-gradient(135deg, rgba(160,190,220,.07) 0 8px, transparent 8px 18px);
-            opacity: 0; transition: opacity .5s ease;
         }
-        #sfx-invisible.on { opacity: 1; }
+        body.fx-invisible #app-screen { opacity: .5; transition: opacity .5s ease; }
 
-        @keyframes sfxPulse { 0%,100% { opacity: .72; } 50% { opacity: 1; } }
-        @keyframes sfxFlicker { 0%,100% { opacity: .8; } 25% { opacity: 1; } 50% { opacity: .7; } 75% { opacity: .95; } }
+        /* — « En feu » : un état personnalisé courant. — */
+        .sfx-fire::before {
+            background: radial-gradient(ellipse at 50% 100%, rgba(255,120,30,.3), rgba(0,0,0,0) 55%);
+            box-shadow: inset 0 0 150px 45px rgba(200,70,20,.5);
+            animation: sfxFlamme .5s ease-in-out infinite;
+        }
+
+        @keyframes sfxRespire { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+        @keyframes sfxPeur    { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+        @keyframes sfxOuate   { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+        @keyframes sfxFlamme  { 0%,100% { opacity: .8; } 25% { opacity: 1; } 50% { opacity: .7; } 75% { opacity: .95; } }
+        @keyframes sfxPaupiere { 0%,100% { transform: scaleY(.82); } 50% { transform: scaleY(1); } }
+        @keyframes sfxPoigne  { 0%,100% { transform: scaleX(.82); opacity: .75; } 50% { transform: scaleX(1); opacity: 1; } }
+        @keyframes sfxArc     { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
+        @keyframes sfxMonte {
+            0%   { transform: translateY(0) rotate(-8deg) scale(.85); opacity: 0; }
+            12%  { opacity: .9; }
+            88%  { opacity: .55; }
+            100% { transform: translateY(-118vh) rotate(10deg) scale(1.05); opacity: 0; }
+        }
+        @keyframes sfxTourne {
+            from { transform: rotate(0deg) translateX(var(--x,90px)) rotate(0deg); }
+            to   { transform: rotate(360deg) translateX(var(--x,90px)) rotate(-360deg); }
+        }
+
         @media (prefers-reduced-motion: reduce) {
-            #status-fx, #status-fx.on { animation: none !important; }
-            .sfx-coeur { display: none !important; }
-            body.fx-invisible #app-screen, #sfx-invisible { transition: none !important; }
+            .sfx-c, .sfx-c::before, .sfx-c::after { animation: none !important; }
+            .sfx-coeur, .sfx-bulle, .sfx-etoile { display: none !important; }
+            .sfx-c { transition: none !important; }
+            body.fx-invisible #app-screen { transition: none !important; }
         }
         /* Rien de tout cela ne s'imprime, et la fiche retrouve son opacité. */
         @media print {
-            #status-fx, #sfx-invisible { display: none !important; }
+            #status-fx { display: none !important; }
             body.fx-invisible #app-screen { opacity: 1 !important; }
         }`);
     }
 
-    /** Les états en cours : identifiants du SRD, et noms des états personnalisés. */
+    /** Les états en cours : identifiants du SRD, niveaux, et noms des états personnalisés. */
     function mesEtats() {
         if (window.Etats && typeof window.Etats.actifs === 'function') {
             const a = window.Etats.actifs();
             return {
                 ids: a.filter(e => !e.perso).map(e => e.srd),
-                noms: a.map(e => String(e.nom || '').toLowerCase())
+                noms: a.map(e => String(e.nom || '').toLowerCase()),
+                epuisement: (a.find(e => e.srd === 'exhaustion') || {}).niveau || 0
             };
         }
         // Repli : les cases de la fiche, si etats.js n'est pas chargé.
@@ -172,100 +342,103 @@
             document.querySelectorAll('#conditions-track-container input[type="checkbox"]:checked')
                 .forEach(cb => { if (cb.id) ids.push(cb.id); });
         } catch (e) {}
-        return { ids: ids, noms: [] };
+        return { ids: ids, noms: [], epuisement: 0 };
     }
 
-    /** Un seul voile à la fois : le plus grave l'emporte. */
-    function effetPour(etats) {
-        const a = (id) => etats.ids.indexOf(id) !== -1;
+    /** Toutes les couches à afficher — pas une seule : elles se cumulent. */
+    function couchesPour(etats) {
         const mot = (kw) => etats.noms.some(n => n.indexOf(kw) !== -1);
-        if (a('unconscious')) return 'fx-down';
-        if (a('petrified')) return 'fx-petrifie';
-        if (a('paralyzed')) return 'fx-stun';
-        if (a('blinded')) return 'fx-blind';
-        // « en feu » n'est pas un état du SRD : il vient des états personnalisés.
-        if (mot('feu') || mot('enflamm') || mot('brûl') || mot('brul')) return 'fx-fire';
-        if (a('poisoned') || mot('intoxiqu')) return 'fx-poison';
-        if (a('frightened') || mot('terroris') || mot('apeur') || mot('épouvant')) return 'fx-fear';
-        if (a('stunned') || a('incapacitated') || mot('assomm')) return 'fx-stun';
-        if (a('charmed')) return 'fx-charme';
-        if (a('prone')) return 'fx-down';
-        return null;
+        const voulues = COUCHES.filter(id => etats.ids.indexOf(id) !== -1);
+        // « En feu » n'est pas un état du SRD : il vient des états personnalisés.
+        if (mot('feu') || mot('enflamm') || mot('brûl') || mot('brul')) voulues.push('fire');
+        return voulues;
     }
 
     function actifs() { try { return localStorage.getItem(CLE) !== '0'; } catch (e) { return true; } }
 
-    /** Les cœurs de Charmé — jamais sous mouvement réduit. */
-    function coeurs(ov, on) {
-        const dedans = ov.querySelector('.sfx-coeurs');
-        if (!on || calme()) { if (dedans) dedans.remove(); return; }
-        if (dedans) return;
-        const boite = document.createElement('div');
-        boite.className = 'sfx-coeurs';
-        boite.style.cssText = 'position:absolute; inset:0; overflow:hidden;';
-        const SIGNES = ['💗', '💖', '💕', '🩷'];
-        for (let i = 0; i < 14; i++) {
-            const c = document.createElement('span');
-            c.className = 'sfx-coeur';
-            c.setAttribute('aria-hidden', 'true');
-            c.textContent = SIGNES[i % SIGNES.length];
-            c.style.left = (4 + Math.random() * 92).toFixed(1) + '%';
-            c.style.setProperty('--t', (14 + Math.random() * 16).toFixed(0) + 'px');
-            c.style.setProperty('--d', (8 + Math.random() * 7).toFixed(1) + 's');
-            c.style.setProperty('--r', (-Math.random() * 12).toFixed(1) + 's');
-            boite.appendChild(c);
+    /** Les particules d'une couche — jamais sous mouvement réduit. */
+    function particules(couche, id) {
+        const p = PARTICULES[id];
+        if (!p || calme()) return;
+        for (let i = 0; i < p.n; i++) {
+            const el = document.createElement('span');
+            el.className = p.classe;
+            el.setAttribute('aria-hidden', 'true');
+            if (id !== 'poisoned') el.textContent = p.signes[i % p.signes.length];
+            if (id === 'stunned') {
+                // Les étoiles tournent autour d'un centre, à des rayons différents.
+                el.style.setProperty('--x', (75 + Math.random() * 95).toFixed(0) + 'px');
+                el.style.setProperty('--t', (24 + Math.random() * 16).toFixed(0) + 'px');
+                el.style.setProperty('--d', (2.4 + Math.random() * 1.8).toFixed(1) + 's');
+                el.style.setProperty('--r', (-Math.random() * 3).toFixed(1) + 's');
+            } else {
+                el.style.left = (4 + Math.random() * 92).toFixed(1) + '%';
+                el.style.setProperty('--t', (id === 'poisoned' ? 7 + Math.random() * 14 : 14 + Math.random() * 16).toFixed(0) + 'px');
+                el.style.setProperty('--d', (6 + Math.random() * 8).toFixed(1) + 's');
+                el.style.setProperty('--r', (-Math.random() * 12).toFixed(1) + 's');
+            }
+            couche.appendChild(el);
         }
-        ov.appendChild(boite);
-    }
-
-    /** Invisible : la fiche s'efface. Ce n'est pas un voile, elle reste utilisable. */
-    function invisible(on) {
-        document.body.classList.toggle('fx-invisible', !!on);
-        let cadre = document.getElementById('sfx-invisible');
-        if (!on) { if (cadre) cadre.classList.remove('on'); return; }
-        stylesVoiles();
-        if (!cadre) {
-            cadre = document.createElement('div');
-            cadre.id = 'sfx-invisible';
-            cadre.className = 'no-print';
-            cadre.setAttribute('aria-hidden', 'true');
-            document.body.appendChild(cadre);
-        }
-        void cadre.offsetWidth;
-        cadre.classList.add('on');
     }
 
     function maj() {
         const app = document.getElementById('app-screen');
         const surFiche = !!(app && !app.classList.contains('hidden'));
         const permis = surFiche && actifs();
-        const etats = permis ? mesEtats() : { ids: [], noms: [] };
-        let ov = document.getElementById('status-fx');
+        const etats = permis ? mesEtats() : { ids: [], noms: [], epuisement: 0 };
+        const voulues = permis ? couchesPour(etats) : [];
 
-        invisible(permis && etats.ids.indexOf('invisible') !== -1);
+        // Invisible : la fiche elle-même s'efface, en plus des couches.
+        document.body.classList.toggle('fx-invisible', voulues.indexOf('invisible') !== -1);
 
-        const effet = permis ? effetPour(etats) : null;
-        if (!effet) {
-            // Retrait : les voiles animés pilotent l'opacité par keyframes ; retirer
-            // seulement « on » laissait le voile affiché. On coupe d'abord l'animation.
-            if (ov) { ov.style.animation = 'none'; ov.classList.remove('on'); coeurs(ov, false); }
+        let boite = document.getElementById('status-fx');
+        if (!voulues.length) {
+            if (boite) boite.remove();
             return;
         }
         stylesVoiles();
-        if (!ov) { ov = document.createElement('div'); ov.id = 'status-fx'; ov.className = 'no-print'; ov.setAttribute('aria-hidden', 'true'); document.body.appendChild(ov); }
-        ov.style.animation = '';
-        ov.className = 'no-print ' + effet;
-        coeurs(ov, effet === 'fx-charme');
-        void ov.offsetWidth;            // rejoue la transition au changement d'effet
-        ov.classList.add('on');
+        if (!boite) {
+            boite = document.createElement('div');
+            boite.id = 'status-fx';
+            boite.className = 'no-print';
+            boite.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(boite);
+        }
+        // Ce qui n'a plus lieu d'être s'en va…
+        [...boite.children].forEach(c => {
+            const id = c.dataset.etat;
+            if (voulues.indexOf(id) === -1) c.remove();
+        });
+        // …et ce qui manque arrive, dans l'ordre de peinture voulu.
+        voulues.forEach(id => {
+            let c = boite.querySelector(`[data-etat="${id}"]`);
+            if (!c) {
+                c = document.createElement('div');
+                c.className = 'sfx-c sfx-' + id;
+                c.dataset.etat = id;
+                boite.appendChild(c);
+                particules(c, id);
+                void c.offsetWidth;                  // joue la transition d'arrivée
+                c.classList.add('on');
+            }
+            if (id === 'exhaustion') c.style.setProperty('--n', etats.epuisement || 1);
+        });
+    }
+
+    /** L'interrupteur vit à deux endroits du menu : les deux disent la même chose. */
+    function syncInterrupteurs(on) {
+        document.querySelectorAll('#toggle-status-fx, [data-fx-etats]').forEach(el => {
+            if (el.checked !== on) el.checked = on;
+        });
     }
 
     document.addEventListener('change', (e) => {
         const t = e.target; if (!t) return;
-        if (t.id === 'toggle-status-fx') {
+        if (t.id === 'toggle-status-fx' || (t.dataset && t.dataset.fxEtats !== undefined)) {
             try { localStorage.setItem(CLE, t.checked ? '1' : '0'); } catch (err) {}
+            syncInterrupteurs(t.checked);
             maj();
-            if (window.showAppToast) window.showAppToast(t.checked ? '💥 Effets d’état plein écran activés' : '🚫 Effets d’état plein écran désactivés');
+            if (window.showAppToast) window.showAppToast(t.checked ? '💥 Effets d’état activés' : '🚫 Effets d’état désactivés');
             return;
         }
         if (t.type === 'checkbox' && t.closest && t.closest('#conditions-track-container')) maj();
@@ -273,8 +446,7 @@
     document.addEventListener('screen:change', maj);
 
     function init() {
-        const caseMenu = document.getElementById('toggle-status-fx');
-        if (caseMenu) caseMenu.checked = actifs();
+        syncInterrupteurs(actifs());
         // La fiche remplit ses conditions pendant son propre chargement : on
         // laisse passer ce tour avant le premier calcul.
         setTimeout(maj, 0);
