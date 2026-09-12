@@ -72,10 +72,14 @@
                    + 'à l’exception de ce que la loi permet (courte citation, copie privée).' },
                 { p: 'Les règles du jeu affichées proviennent du System Reference Document 5.1 '
                    + '(édition 2014) et du System Reference Document 5.2.1 (édition 2024), publiés en '
-                   + 'version française par Wizards of the Coast sous licence Creative Commons Attribution 4.0 '
-                   + '(CC BY 4.0). Cette licence autorise l’usage, la modification et la '
-                   + 'redistribution, y compris commerciale, à condition de citer la source — ce que '
-                   + 'fait le pied de la page Règles.' },
+                   + 'version française officielle par Wizards of the Coast sous licence Creative Commons '
+                   + 'Attribution 4.0 (CC BY 4.0). Cette licence autorise l’usage, la modification et la '
+                   + 'redistribution, y compris commerciale, à condition de citer la source. La déclaration '
+                   + 'ci-dessous est celle que le document officiel exige, mot pour mot ; le site l’affiche '
+                   + 'aussi sous chaque fiche de règle, au pied de la page Règles et sur l’impression.' },
+                // Texte recopié du document, jamais réécrit : il vit dans edition.js.
+                { note: (window.Edition && window.Edition.attribution('2024'))
+                     || 'Cette œuvre inclut du matériel issu du System Reference Document 5.2.1.' },
                 { p: 'Dungeons & Dragons, D&D et les logos associés sont des marques de Wizards of the '
                    + 'Coast LLC. Ce site n’est ni édité, ni approuvé, ni soutenu par Wizards of the '
                    + 'Coast. Le contenu du Manuel des Joueurs qui ne figure pas dans le SRD n’est pas '

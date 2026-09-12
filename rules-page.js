@@ -202,12 +202,17 @@
             + `${c.icon} ${esc(window.SRD.categoryLabel(c.id))}</button>`).join('');
     }
 
+    // Le pied de page porte l’attribution EXACTE du document (edition.js), et rien
+    // d’autre au sujet de Wizards of the Coast : le SRD 5.2.1 demande de n’ajouter
+    // aucune autre attribution. La mention « compatible 5e », elle, est autorisée.
     function renderFoot() {
-        const doc = window.SRD.getEdition() === '2024' ? '5.2.1' : '5.1';
-        $('rules-foot').innerHTML =
-            `Contenu du <b>System Reference Document ${doc}</b> (version française officielle) — `
-            + `Wizards of the Coast, sous licence <a href="https://creativecommons.org/licenses/by/4.0/deed.fr" target="_blank" rel="noopener">CC-BY-4.0</a>. `
-            + `Compatible avec la 5<sup>e</sup> édition ; ce site n'est pas un produit officiel D&amp;D.`;
+        const ed = window.SRD.getEdition();
+        const doc = ed === '2024' ? '5.2.1' : '5.1';
+        $('rules-foot').innerHTML = window.Edition
+            ? window.Edition.attributionHtml(ed)
+              + `<span class="rules-foot-compat">Compatible avec la 5<sup>e</sup> édition.</span>`
+            : `Contenu du <b>System Reference Document ${doc}</b> (version française officielle) — `
+              + `Wizards of the Coast, sous licence <a href="https://creativecommons.org/licenses/by/4.0/deed.fr" target="_blank" rel="noopener">CC-BY-4.0</a>.`;
     }
 
     function showListMessage(msg) {
@@ -227,6 +232,25 @@
         { id: '2024', label: '5.5e (2024)', available: true }
     ];
     const EDITION_KEY = 'dnd-srd-edition';
+
+    /** Quand une fiche est ouverte, on le dit : lire l’autre édition ici ne la change pas. */
+    function majNoteEdition() {
+        const wrap = $('rules-wrap') || document.querySelector('#rules-screen .rules-wrap');
+        if (!wrap || !window.Edition) return;
+        let note = $('rules-ed-note');
+        const perso = (() => { try { return localStorage.getItem('dnd-active-char'); } catch (e) { return null; } })();
+        const sienne = perso ? window.Edition.du(perso) : null;
+        const lue = window.SRD.getEdition();
+        if (!sienne || sienne === lue) { if (note) note.remove(); return; }
+        if (!note) {
+            note = document.createElement('p');
+            note.id = 'rules-ed-note';
+            note.className = 'rules-ed-note no-print';
+            wrap.insertBefore(note, $('rules-cats'));
+        }
+        note.textContent = 'Tu lis les règles ' + lue + ' — ton personnage, lui, joue en '
+            + sienne + '. Son édition se change dans les options de sa fiche.';
+    }
     const editionAvailable = (ed) => !!(EDITIONS.find(e => e.id === ed) || {}).available;
 
     function initEditionPicker() {
@@ -238,6 +262,7 @@
         if (!editionAvailable(saved)) saved = EDITIONS.find(e => e.available).id;
         sel.value = saved;
         if (saved !== window.SRD.getEdition()) window.SRD.setEdition(saved);
+        majNoteEdition();
 
         EDITIONS.filter(e => !e.available).forEach(e => {
             const opt = sel.querySelector(`option[value="${e.id}"]`);
@@ -253,8 +278,11 @@
                     + `Le SRD officiel de cette édition n'est publié qu'en anglais : il doit être traduit avant d'être intégré.</div>`;
                 return;
             }
-            try { localStorage.setItem(EDITION_KEY, ed); } catch (e) {}
-            window.SRD.setEdition(ed);
+            // Feuilleter n’est pas jouer : on change ce qu’on LIT, jamais l’édition du
+            // personnage ouvert. En quittant cet écran, edition.js remet la sienne.
+            if (window.Edition) window.Edition.consulter(ed);
+            else { try { localStorage.setItem(EDITION_KEY, ed); } catch (e) {} window.SRD.setEdition(ed); }
+            majNoteEdition();
             currentCat = null; metaCat = null; meta = {};
             renderCats();
             renderFoot();
@@ -455,11 +483,15 @@
             const parent = e.parent_name && e.parent
                 ? `<p class="rules-detail-sub"><a href="#" class="rw-link" data-cat="${cat}" data-id="${esc(e.parent)}">↑ ${esc(e.parent_name)}</a></p>`
                 : '';
+            // La pastille dit sous quelles règles cette fiche est lue ; l’attribution,
+            // d’où vient le texte — exigée mot pour mot par la licence du SRD (edition.js).
+            const ed = window.SRD.getEdition();
             box.innerHTML = trail
-                + `<h2>${esc(e.name || name)}</h2>`
+                + `<h2>${esc(e.name || name)}${window.Edition ? ' ' + window.Edition.badge(ed) : ''}</h2>`
                 + (sub ? `<p class="rules-detail-sub">${esc(sub)}</p>` : '')
                 + parent
-                + window.SRD.renderEntry(cat, e);
+                + window.SRD.renderEntry(cat, e)
+                + (window.Edition ? `<p class="rw-attrib">${window.Edition.attributionHtml(ed)}</p>` : '');
             // Les secrets des monstres (secrets-monde.js) écoutent l'ouverture d'une fiche.
             document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat, id, box } }));
             if (window.matchMedia('(max-width: 859px)').matches) {
@@ -476,6 +508,18 @@
         lastScreen = fromScreen || (document.getElementById('app-screen') &&
             !document.getElementById('app-screen').classList.contains('hidden') ? 'app-screen' : 'home-screen');
         viewMode = localStorage.getItem('dnd-rules-view') || 'list';
+        // On ouvre sur l’édition en vigueur : celle du personnage si une fiche est
+        // ouverte, la dernière consultée sinon (§ 2.1 — « filtre par défaut »).
+        if (window.Edition) {
+            const ed = window.Edition.active();
+            if (window.SRD.getEdition() !== ed) {
+                window.SRD.setEdition(ed);
+                currentCat = null; metaCat = null; meta = {};
+                renderCats(); renderFoot();
+            }
+            const sel = $('rules-edition'); if (sel) sel.value = ed;
+            majNoteEdition();
+        }
         window.navTo('rules-screen');
         if (cat) { openCategory(cat).then(() => { if (id) openEntry(cat, id, '', ''); }); }
         else if (!currentCat) openCategory('spells');

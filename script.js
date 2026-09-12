@@ -209,6 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     function jsonSafe(raw) { try { return JSON.parse(raw); } catch (e) { return raw; } }
 
+    // Les règles de CE personnage (edition.js). Sans le module — page réduite,
+    // test isolé — on garde le comportement d’avant : les règles 2024.
+    const edition2024 = () => (window.Edition ? window.Edition.est2024() : true);
+
     // ==========================================
     // EFFETS VISUELS ET ÉTATS
     // ==========================================
@@ -2981,12 +2985,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 readEl.innerHTML = `<div class="lvup-read-head">
                         <b>${escAb(s.name)}</b>
                         <span class="lvup-read-sub">${escAb(spRankLabel(parseInt(s.level, 10) || 0))}
-                            · ${escAb(SP_SCHOOL_FR[s.school] || s.school || '')}</span>
+                            · ${escAb(SP_SCHOOL_FR[s.school] || s.school || '')}
+                            ${window.Edition ? window.Edition.badge(window.SRD.getEdition()) : ''}</span>
                         <span class="lvup-read-act">${act}
                             <button type="button" class="lvup-mini lvup-read-close" aria-label="Fermer la lecture">✕</button>
                         </span>
                     </div>
-                    <div class="rw-body lvup-read-body">${window.SRD.renderEntry('spells', s)}</div>`;
+                    <div class="rw-body lvup-read-body">${window.SRD.renderEntry('spells', s)}
+                        ${window.Edition ? `<p class="rw-attrib">${window.Edition.attributionHtml(window.SRD.getEdition())}</p>` : ''}</div>`;
             };
 
             const render = () => {
@@ -5232,7 +5238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         /** La botte que le manuel 2024 attribue à cette arme du SRD, ou null.
          *  Les armes du SRD 2024 la portent elles-mêmes (`mastery`) ; la table
          *  ci-dessus ne sert qu'aux armes 2014, qui n'en ont pas. */
-        const botteDuSrd = (w) => (w && ((BOTTES[w.mastery] && w.mastery) || BOTTE_PAR_ARME[w.id])) || null;
+        const botteDuSrd = (w) => (edition2024() && w && ((BOTTES[w.mastery] && w.mastery) || BOTTE_PAR_ARME[w.id])) || null;
 
         // ---------- Dégâts additionnels et capacités, en nombre libre ----------
         // Une arme ne portait qu'UN type de dégâts bonus (bonusDmg/bonusDmgType).
@@ -5572,7 +5578,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="gear-go atk-roll">${saveMode ? '💥 Dégâts' : '⚔️ Attaquer'}</button>
                         ${saveMode ? '' : `<button class="gear-chip atk-opts" title="Avantage, désavantage, critique" aria-expanded="false">⚙</button>`}
                         ${pouvoirs.length ? `<button class="gear-chip atk-powers" title="Utiliser une capacité">✨ ${pouvoirs.length}</button>` : ''}
-                        ${bottesDe(atk).map(k => `<span class="gear-tag is-botte" title="${escAb(BOTTES[k].effet)}">⚔ ${escAb(BOTTES[k].nom)}</span>`).join('')}
+                        ${edition2024() ? bottesDe(atk).map(k => `<span class="gear-tag is-botte" title="${escAb(BOTTES[k].effet)}">⚔ ${escAb(BOTTES[k].nom)}</span>`).join('') : ''}
                         ${hit}${dmg}${grip}${res}
                         ${extra ? `<button class="gear-more" title="Voir le détail" aria-expanded="false">▾</button>` : ''}
                         <div class="gear-tools">
@@ -7185,6 +7191,45 @@ document.addEventListener('DOMContentLoaded', () => {
         
         updateCategorySelects(); updateStatsAndSkills(); renderAbilities(); renderBookCover(); renderAttacks(); renderSpellSlots(); renderInventory(); renderMacros(); renderCompanions(); renderCustomConditions(); renderTraits(); updateStatusEffects(); makeRollablesFocusable(); renderRollHistory(); renderCurrencyTotal();
 
+        // ===== ÉDITION DES RÈGLES DE CE PERSONNAGE (§ 2.1) =====
+        // Le choix appartient au héros, pas au site : il est enregistré avec sa
+        // fiche et le suit d’un appareil à l’autre (edition.js). Changer d’édition
+        // n’efface RIEN de ce qui est saisi : seules les règles appliquées
+        // changent, et les bottes d’armes cessent d’être affichées hors 2024.
+        function majMenuEdition() {
+            const boite = document.getElementById('menu-edition-box');
+            if (!boite || !window.Edition) return;
+            const ed = window.Edition.active();
+            boite.querySelectorAll('.menu-ed').forEach(b => {
+                const on = b.dataset.edition === ed;
+                b.classList.toggle('is-on', on);
+                b.setAttribute('aria-checked', on ? 'true' : 'false');
+            });
+            const note = document.getElementById('menu-edition-hint');
+            if (note && !window.Edition.choisie()) {
+                note.textContent = 'Cette fiche a été créée avant le choix d’édition : elle suit les règles '
+                    + ed + '. Choisis pour la fixer.';
+            }
+        }
+        document.addEventListener('click', (e) => {
+            const b = e.target.closest('#menu-edition-box .menu-ed'); if (!b || !window.Edition) return;
+            const ed = b.dataset.edition, avant = window.Edition.active();
+            if (ed === avant && window.Edition.choisie()) return;
+            window.Dialogue.confirmer({
+                titre: 'Passer aux règles ' + ed + ' ?',
+                message: 'Rien n’est effacé sur ta fiche. Ce qui change : les tables de montée de niveau, '
+                       + 'les fiches de règles consultées, l’impression'
+                       + (ed === '2024' ? ' — et les bottes d’armes réapparaissent.'
+                                        : ' — et les bottes d’armes cessent d’être affichées, sans être perdues.'),
+                confirmer: 'Passer en ' + ed, annuler: 'Garder ' + avant, icone: '📜'
+            }).then(ok => {
+                if (!ok || !window.Edition.definir(ed)) return;
+                window.showAppToast('📜 Cette fiche suit désormais les règles ' + ed, 'reussite');
+            });
+        });
+        document.addEventListener('edition:change', () => { majMenuEdition(); renderAttacks(); });
+        majMenuEdition();
+
         // ===== RACCOURCIS CLAVIER (#22) — personnalisables =====
         // Ignorés dès qu'on saisit du texte (champ, zone de texte, éditeur riche).
         function isTyping(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)); }
@@ -7307,14 +7352,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const modal = document.getElementById('rule-widget-modal');
                 if (!titleEl || !modal) return;
                 titleEl.textContent = res.name;
-                if (catEl) catEl.textContent = res.subtitle || res.categoryLabel || '';
+                // La pastille dit sous quelles règles cette fiche est lue : les mêmes
+                // entrées ne disent pas la même chose en 2014 et en 2024.
+                if (catEl) catEl.innerHTML = escAb(res.subtitle || res.categoryLabel || '')
+                    + (window.Edition ? ' ' + window.Edition.badge(window.SRD.getEdition()) : '');
                 if (bodyEl) bodyEl.innerHTML = '<p style="font-style:italic; color:#888;">Chargement…</p>';
                 modal.classList.remove('hidden');
                 try {
                     const e = await window.SRD.entry(res.category, res.id);
                     if (!e) throw new Error('introuvable');
+                    // L'attribution que la licence du SRD impose, mot pour mot (edition.js).
                     if (bodyEl) bodyEl.innerHTML = window.SRD.renderEntry(res.category, e)
-                        + `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`;
+                        + (window.Edition
+                            ? `<p class="rw-attrib">${window.Edition.attributionHtml(window.SRD.getEdition())}</p>`
+                            : `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`);
                     document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat: res.category, id: res.id, box: bodyEl } }));
                 } catch (err) {
                     if (bodyEl) bodyEl.innerHTML = `<p style="color:#c0392b;">Impossible de charger cette fiche.<br><small>${escAb(err.message)}</small></p>`;

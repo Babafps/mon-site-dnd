@@ -412,6 +412,9 @@ async function loadUserDataIntoLocalStorage(userId) {
 
     localStorage.setItem('dnd-character-list', JSON.stringify(characters));
 
+    // L'édition du personnage est une clé comme les autres : elle vient
+    // d'arriver du cloud, on la remet en vigueur (edition.js).
+    window.Edition?.relire();
     if (typeof window.renderHomeScreen === 'function') window.renderHomeScreen();
 }
 
@@ -420,6 +423,7 @@ async function loadCharacterDataIntoLocalStorage(charId) {
     Object.entries(data).forEach(([key, value]) => {
         poserCleCloud(charId, key, value);
     });
+    window.Edition?.relire();
     return data;
 }
 

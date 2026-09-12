@@ -36,6 +36,9 @@
     const toast = (m) => { if (window.showAppToast) window.showAppToast(m); };
     const onSheet = () => { const a = $('app-screen'); return !!a && !a.classList.contains('hidden'); };
     const is2024 = () => !!(window.SRD && window.SRD.getEdition && window.SRD.getEdition() === '2024');
+    // L'édition retenue dans l'assistant. Elle pilote les listes (SRD y est
+    // posé par Edition.consulter) et n'est écrite sur le personnage qu'à la fin.
+    const edWiz = () => wiz.data.edition || (window.Edition ? window.Edition.active() : '2024');
     const raceWord = () => (is2024() ? 'Espèce' : 'Race');
 
     function setField(id, value) {
@@ -119,7 +122,7 @@
         try { auto = localStorage.getItem(AUTO_KEY) !== 'false'; } catch (e) {}
         return {
             step: 0, auto, skipped: new Set(), confirm: false,
-            data: { name: '', level: 1, alignment: '' },
+            data: { name: '', level: 1, alignment: '', edition: '' },
             ids: { cls: '', sub: '', race: '', subrace: '', bg: '' },
             focus: null, compare: [],
             method: 'standard', base: {}, pool: null, addBonuses: true,
@@ -494,6 +497,7 @@
             <label class="pjw-lbl" for="pjw-name">Nom du personnage</label>
             <input id="pjw-name" class="pjw-in pjw-in-xl" data-field="name" value="${esc(wiz.data.name)}" placeholder="Thorgrim, Lyra Vent-d’Argent…" autocomplete="off">
             <p class="pjw-note">Tout reste modifiable ensuite, directement sur la fiche.</p>
+            ${editionChoice()}
             <div class="pjw-card-auto">
                 <b>⚙️ Remplissage automatique : ${wiz.auto ? 'activé' : 'désactivé'}</b><br>
                 ${wiz.auto
@@ -503,6 +507,25 @@
             </div>
             <p class="pjw-note">Ton contenu personnel (classes, espèces, sorts créés dans « Mon contenu ») est proposé comme le contenu officiel.</p>
         </section>`;
+    }
+
+    /** Les règles de ce héros : 2014 ou 2024. Présélection 2024 pour un nouveau
+     *  personnage ; une fiche qui a déjà choisi garde son choix. Le reste du site
+     *  (loupe, montée de niveau, impression, bottes d'armes) suivra. */
+    function editionChoice() {
+        if (!window.Edition) return '';
+        const cur = edWiz();
+        const opt = (id, titre, sous) =>
+            `<button type="button" class="pjw-ed${id === cur ? ' is-on' : ''}" data-pick="edition" data-id="${id}"
+                     role="radio" aria-checked="${id === cur}"><b>${titre}</b><small>${sous}</small></button>`;
+        return `<div class="pjw-edbox">
+            <span class="pjw-lbl">Édition des règles</span>
+            <div class="pjw-eds" role="radiogroup" aria-label="Édition des règles">
+                ${opt('2024', 'Règles 2024', 'Espèces, dons d’origine, bottes d’armes')}
+                ${opt('2014', 'Règles 2014', 'Races, historiques classiques')}
+            </div>
+            <p class="pjw-note">Elle vaut pour ce personnage seul, et se change plus tard dans les options de la fiche.</p>
+        </div>`;
     }
 
     // ---------- Étape 2 : niveau ----------
@@ -885,7 +908,39 @@
     // =====================================================
     const currentKey = () => (steps()[wiz.step] || {}).key;
 
+    function pickEdition(id) {
+        if (!window.Edition || window.Edition.EDITIONS.indexOf(id) === -1 || id === edWiz()) return;
+        const perdus = [];
+        if (wiz.ids.cls) perdus.push('la classe');
+        if (wiz.ids.race || wiz.ids.bg) perdus.push('l’origine');
+        if (wiz.skills.length) perdus.push('les compétences');
+        if (wiz.spells.length) perdus.push('les sorts');
+        const poser = async () => {
+            wiz.data.edition = id;
+            window.Edition.consulter(id, false);      // rien n'est enregistré avant la fin
+            wiz.lists = {}; wiz.spellCache = {};
+            wiz.ids = { cls: '', sub: '', race: '', subrace: '', bg: '' };
+            wiz.skills = []; wiz.expertise = []; wiz.spells = [];
+            wiz.gear = { cls: 'A', bg: 'A', extra: [] };
+            wiz.focus = null; wiz.compare = [];
+            await load(['classes', 'races', 'backgrounds', 'feats', 'equipment']);
+            render();
+        };
+        if (!perdus.length) { poser(); return; }
+        window.Dialogue.confirmer({
+            titre: 'Changer d’édition ?',
+            message: 'Les règles ' + id + ' ne proposent pas les mêmes classes, origines et sorts : '
+                   + perdus.join(', ') + ' ' + (perdus.length > 1 ? 'seront remis' : 'sera remis') + ' à zéro.',
+            confirmer: 'Passer en ' + id, annuler: 'Garder ' + edWiz(), icone: '📜'
+        }).then(ok => { if (ok) poser(); });
+    }
+
     function pick(kind, id) {
+        // Changer d'édition change les DONNÉES : classes, espèces, historiques et
+        // sorts n'ont pas les mêmes identifiants d'une édition à l'autre. On repart
+        // donc des listes de la nouvelle édition, en prévenant si des choix seraient
+        // perdus. Le nom, le niveau et les caractéristiques, eux, restent.
+        if (kind === 'edition') { pickEdition(id); return; }
         switch (kind) {
             case 'level': wiz.data.level = num(id, 1); break;
             case 'class':
@@ -1072,6 +1127,10 @@
         const skip = (k) => wiz.skipped.has(k);
         const c = cls(), s = sub(), r = race(), sr = subrace(), b = bg(), l = L();
 
+        // L'édition d'abord : le reste de la fiche (bottes d'armes, loupe,
+        // impression) doit se lire avec les bonnes règles dès la fermeture.
+        if (window.Edition && wiz.data.edition) window.Edition.definir(wiz.data.edition);
+
         if (!skip('name') && wiz.data.name.trim()) setField('char-name', wiz.data.name.trim());
         if (!skip('level')) setField('char-level', l);
         if (!skip('class') && c) { setField('char-class', c.name); if (s) setField('char-subclass', s.name); }
@@ -1191,6 +1250,8 @@
         $('pj-resume')?.remove();
     }
     function unmount() {
+        // Quitter sans appliquer : SRD retrouve l'édition du personnage.
+        window.Edition?.appliquer(true);
         $('pj-wizard')?.remove();
         root = null;
         lastStep = -1;
@@ -1208,12 +1269,20 @@
     }
 
     /** Reprend ce que la fiche contient déjà : relancer l'assistant ne repart pas de zéro. */
-    async function startWizard() {
+    async function startWizard(neuve) {
         if (!onSheet()) { toast('Ouvre une fiche de personnage pour lancer l’assistant.'); return; }
         if (!window.SRD) { toast('Les règles ne sont pas chargées : réessaie dans un instant.'); return; }
         wiz = newState();
         mount();
         root.querySelector('.pjw').innerHTML = '<div class="pjw-loading">Ouverture du grimoire…</div>';
+        // L'édition AVANT les listes : ce sont elles qui en dépendent. Une fiche
+        // neuve part sur la 2024 ; une fiche qui a déjà choisi garde son choix ;
+        // une fiche d'avant garde l'édition qu'on lui a déduite (edition.js).
+        if (window.Edition) {
+            wiz.data.edition = window.Edition.choisie() ? window.Edition.active()
+                             : (neuve ? window.Edition.NOUVELLE : window.Edition.active());
+            window.Edition.consulter(wiz.data.edition, false);
+        }
         await load(['classes', 'races', 'backgrounds', 'feats', 'equipment']);
         const val = (id) => String(($(id) || {}).value || '').trim();
         wiz.data.name = val('char-name');
@@ -1273,7 +1342,7 @@
             if (!onSheet()) return;
             let pending = false;
             try { pending = !!localStorage.getItem(WIZ_FLAG); if (pending) localStorage.removeItem(WIZ_FLAG); } catch (e) {}
-            if (pending) startWizard();                 // fiche fraîchement créée → assistant
+            if (pending) startWizard(true);             // fiche fraîchement créée → assistant
             else offerResume();                         // fiche inachevée → reprise proposée
         }, 900);
     });

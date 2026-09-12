@@ -81,10 +81,22 @@ Toute redistribution doit conserver ces mentions :
 > ("SRD 5.1") by Wizards of the Coast LLC, licensed under the Creative Commons
 > Attribution 4.0 International License.
 
-> This work includes material from the System Reference Document 5.2.1
-> ("SRD 5.2.1") by Wizards of the Coast LLC, available at
-> https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative
-> Commons Attribution 4.0 International License.
+> Cette œuvre inclut du matériel issu du System Reference Document 5.2.1
+> (« SRD 5.2.1 ») de Wizards of the Coast LLC, disponible à l’adresse
+> https://www.dndbeyond.com/srd. Le SRD 5.2.1 est régi par la Licence Creative
+> Commons Attribution 4.0 International, disponible à l’adresse
+> https://creativecommons.org/licenses/by/4.0/legalcode.
+
+La déclaration 5.2.1 ci-dessus est recopiée **mot pour mot** de la page
+« Informations légales » du PDF français officiel
+(`FR_SRD_CC_v5.2.1.pdf`, celui que télécharge `tools/srd/srd52_pdf.py`) : c’est la
+traduction publiée par Wizards, pas une traduction du projet. Le même document
+demande de **n’ajouter aucune autre attribution** à Wizards of the Coast, tout en
+autorisant la mention « compatible avec la cinquième édition ».
+
+Le site l’affiche sous chaque fiche de règle, au pied de la page Règles, dans les
+mentions légales et sur l’impression (`edition.js`, seul endroit où ce texte est
+écrit).
 
 Ce projet n'est **pas** un produit officiel Dungeons & Dragons et n'est ni
 approuvé ni soutenu par Wizards of the Coast.

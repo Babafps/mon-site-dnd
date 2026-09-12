@@ -8820,3 +8820,78 @@ body.maj-visible .tst-pile-haut { top: 76px; }
     .maj-texte { flex: 1; min-width: 0; }
 }
 @media print { .maj-bandeau { display: none !important; } }
+
+/* =====================================================
+   ÉDITION DES RÈGLES (2014 / 2024) — edition.js
+   La pastille dit sous quelles règles on lit, l'attribution dit d'où
+   vient le texte. Les deux s'impriment : ce sont des mentions légales,
+   pas de la décoration.
+   ===================================================== */
+.edition-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 9px; border-radius: 999px;
+    border: 1px solid rgba(196, 155, 53, .55);
+    background: rgba(196, 155, 53, .16);
+    font-family: 'Cinzel', Georgia, serif; font-size: .68rem; font-weight: 700;
+    letter-spacing: .04em; color: #7a6320; white-space: nowrap; vertical-align: middle;
+}
+.edition-badge[data-ed="2024"] { border-color: rgba(41, 128, 185, .5); background: rgba(41, 128, 185, .14); color: #245f8c; }
+body.theme-dark .edition-badge { color: #e3c982; border-color: rgba(196, 155, 53, .45); }
+body.theme-dark .edition-badge[data-ed="2024"] { color: #8fc4ea; border-color: rgba(120, 180, 230, .45); }
+
+/* L'attribution exacte exigée par la licence du SRD. Discrète, jamais tronquée. */
+.rw-attrib {
+    margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--soft-border);
+    font-size: .66rem; line-height: 1.5; color: #9a8a70; font-style: normal;
+}
+.rw-attrib a { color: inherit; text-decoration: underline; }
+body.theme-dark .rw-attrib { color: #b6a484; }
+
+/* Bottes d'armes : règles 2024 seulement (§ 2.1). Le stockage, lui, est
+   intact — repasser en 2024 les fait réapparaître telles quelles. */
+html:not([data-edition="2024"]) .afs-bottes-f,
+html:not([data-edition="2024"]) #atkq-botte-row { display: none !important; }
+
+/* ---- Assistant : le choix de l'édition, à l'étape du nom ---- */
+.pjw-edbox { margin-top: 16px; }
+.pjw-eds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pjw-ed {
+    display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; text-align: left;
+    border-radius: 10px; border: 1px solid var(--soft-border); background: rgba(255,255,255,.7);
+    cursor: pointer; color: var(--text-color); transition: var(--transition-smooth);
+}
+.pjw-ed b { font-family: 'Cinzel', serif; font-size: .95rem; }
+.pjw-ed small { font-size: .72rem; opacity: .8; line-height: 1.35; }
+.pjw-ed:hover { border-color: var(--accent-color); }
+.pjw-ed.is-on { background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: #f6ead0; border-color: transparent; box-shadow: var(--shadow-crimson); }
+.pjw-ed:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+body.theme-dark .pjw-ed { background: #2a221b; color: #ece3d2; }
+body.theme-dark .pjw-ed.is-on { background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: #f6ead0; }
+
+/* ---- Options de la fiche : l'édition de CE personnage ---- */
+.menu-eds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 2px 0 4px; }
+.menu-ed {
+    padding: 8px 6px; border-radius: 9px; border: 1px solid var(--soft-border);
+    background: rgba(255,255,255,.65); color: var(--text-color); cursor: pointer;
+    font-family: 'Cinzel', Georgia, serif; font-size: .78rem; font-weight: 700;
+}
+.menu-ed.is-on { background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: #f6ead0; border-color: transparent; }
+.menu-ed:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+body.theme-dark .menu-ed { background: #2a221b; color: #ece3d2; }
+body.theme-dark .menu-ed.is-on { background: linear-gradient(160deg, var(--primary-hover), var(--primary-color)); color: #f6ead0; }
+
+/* ---- Page Règles : consultation seule quand une fiche est ouverte ---- */
+.rules-ed-note {
+    margin: 0; padding: 6px 12px; font-size: .72rem; color: #8a7a60;
+    background: rgba(196, 155, 53, .10); border-bottom: 1px solid var(--soft-border);
+}
+body.theme-dark .rules-ed-note { color: #b6a484; }
+.rules-detail .edition-badge { margin-left: 8px; }
+.rules-foot-compat { display: block; margin-top: 3px; opacity: .85; }
+
+@media (max-width: 700px) {
+    .pjw-eds { grid-template-columns: 1fr; }
+}
+@media print {
+    .rules-ed-note { display: none !important; }
+}

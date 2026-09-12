@@ -766,7 +766,12 @@
         getEdition: () => edition,
         getLang: () => lang,
         categoryLabel,
+        // Le TEXTE de l'attribution appartient à edition.js : il est recopié mot
+        // pour mot du document officiel et sert partout (loupe, page Règles,
+        // impression, mentions légales). Repli sur la forme courte si le module
+        // n'est pas là (page réduite, test isolé).
         get attribution() {
+            if (window.Edition && typeof window.Edition.attribution === 'function') return window.Edition.attribution(edition);
             return `SRD ${edition === '2024' ? '5.2.1' : '5.1'} (Wizards of the Coast) — CC-BY-4.0`;
         }
     };

@@ -280,19 +280,34 @@
             document.body.appendChild(frame);
             const d = frame.contentDocument;
             d.open();
+            // Les images font 1508 x 1936 : à 198 mm de large elles occupent 254 mm
+            // de haut, et laissent une bande blanche en bas de chaque page. C'est
+            // là que va l'attribution du SRD, exigée par la licence (edition.js),
+            // avec l'édition sous laquelle la fiche est jouée.
             d.write('<!DOCTYPE html><html><head><title>' + (title || 'Fiche de personnage') + '</title><style>'
                 + '@page { size: A4 portrait; margin: 6mm; }'
                 + 'html,body { margin:0; padding:0; }'
-                + 'img { display:block; width:100%; height:auto; page-break-after:always; break-after:page; }'
-                + 'img:last-child { page-break-after:auto; break-after:auto; }'
+                + '.pg { page-break-after:always; break-after:page; }'
+                + '.pg:last-of-type { page-break-after:auto; break-after:auto; }'
+                + '.pg img { display:block; width:100%; height:auto; }'
+                + '.pg p { margin: 2mm 0 0; font: 5.5pt/1.3 Arial, Helvetica, sans-serif; color:#555; text-align:center; }'
+                + '.pg b { font-weight: 700; }'
                 + '</style></head><body></body></html>');
             d.close();
+            const ed = window.Edition ? window.Edition.active() : null;
+            const mention = ed
+                ? '<b>Règles ' + ed + '</b> — ' + window.Edition.attribution(ed)
+                : '';
             let loaded = 0;
             canvases.forEach(c => {
+                const page = d.createElement('div');
+                page.className = 'pg';
                 const img = d.createElement('img');
                 img.onload = () => { if (++loaded === canvases.length) setTimeout(go, 60); };
                 img.src = c.toDataURL('image/jpeg', 0.92);
-                d.body.appendChild(img);
+                page.appendChild(img);
+                if (mention) { const p = d.createElement('p'); p.innerHTML = mention; page.appendChild(p); }
+                d.body.appendChild(page);
             });
             function go() {
                 try { frame.contentWindow.focus(); frame.contentWindow.print(); resolve(true); }

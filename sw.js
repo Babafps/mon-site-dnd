@@ -15,7 +15,7 @@
 // `srd-data-v1` appartient à srd-data.js (les règles hors connexion) : on n'y
 // touche jamais, ni pour écrire ni pour purger.
 // =====================================================
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = 'dnd-companion-' + VERSION;
 const DELAI_RESEAU = 2500;
 
@@ -26,7 +26,7 @@ const ESSENTIEL = [
     './', './index.html',
     './style.css', './themes.css', './music-player.css',
     './toasts.js', './charger.js', './dialogues.js', './auth.js', './effets.js',
-    './srd-data.js', './srd-autocomplete.js', './calcul.js', './script.js',
+    './srd-data.js', './edition.js', './srd-autocomplete.js', './calcul.js', './script.js',
     './armor.js', './fiche-layout.js', './menu.js',
     './manifest.webmanifest', './IMG/logo-192.png', './favicon-32.png'
 ];

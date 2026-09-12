@@ -58,6 +58,12 @@
     };
     let lecteur = lecteurFiche;
 
+    // ---------- L’édition en vigueur ----------
+    // Les règles de CE personnage (edition.js). Elle voyage dans le contexte
+    // remis aux fournisseurs : un module greffé n’a pas à aller la chercher,
+    // et un total sait sous quelles règles il a été calculé.
+    const edition = () => (window.Edition ? window.Edition.active() : '2024');
+
     // ---------- Sources et résultats ----------
     const fournisseurs = [];
     function source(libelle, valeur, origine, base) {
@@ -68,9 +74,10 @@
     /** Sources ajoutées par les modules greffés (effets, états…) pour une clé donnée. */
     function supplements(cle, ctx) {
         const out = [];
+        const c = Object.assign({ edition: edition() }, ctx || {});
         fournisseurs.forEach(fn => {
             try {
-                (fn(cle, ctx || {}, lecteur) || []).forEach(s => {
+                (fn(cle, c, lecteur) || []).forEach(s => {
                     if (s && Number.isFinite(Number(s.valeur))) out.push(source(s.libelle, s.valeur, s.origine || 'effet'));
                 });
             } catch (e) { console.warn('[calcul] une source greffée a échoué :', e); }
@@ -80,7 +87,7 @@
     function resultat(cle, libelle, sources, ctx, extra) {
         const toutes = sources.concat(supplements(cle, ctx));
         return Object.assign({
-            cle, libelle,
+            cle, libelle, edition: edition(),
             total: toutes.reduce((t, s) => t + s.valeur, 0),
             sources: toutes,
             avertissements: []
@@ -282,6 +289,8 @@
     window.Calcul = {
         ORIGINES, CARACS, ABREGE, NOM,
         modificateur, signe, lireMod,
+        /** Les règles sous lesquelles le moteur compte en ce moment. */
+        edition,
         /** Le bonus de maîtrise lu sur la fiche. */
         maitrise: () => lecteur.maitrise(),
         valeur, detail, arme, typeArme, caracArme,
