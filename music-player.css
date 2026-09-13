@@ -600,3 +600,30 @@
     .music-show-tab { right: 10px; max-width: 200px; padding: 5px 14px 4px; font-size: 0.72rem; }
     #music-tab-title { max-width: 120px; }
 }
+
+/* ---- Reprendre après un rechargement (LOT 6.11) ---- */
+.music-btn.music-btn-reprendre {
+    width: auto; min-width: 0; padding: 0 12px; border-radius: 999px;
+    font-family: 'Cinzel', serif; font-size: .78rem; font-weight: 700; white-space: nowrap;
+    background: var(--accent-color, #C49B35); color: #2a1a0e;
+    animation: musiqueAppel 1.8s ease-in-out infinite;
+}
+.music-btn.music-btn-reprendre[hidden] { display: none; }
+@keyframes musiqueAppel { 50% { box-shadow: 0 0 0 5px rgba(196,155,53,.28); } }
+@media (prefers-reduced-motion: reduce) { .music-btn.music-btn-reprendre { animation: none; } }
+
+/* ---- Téléphone : deux rangées sous 640 px (LOT 6.11) ----
+   Sur une seule ligne, la barre dépassait l'écran de 375 px : la file
+   d'attente et le bouton pour cacher le lecteur étaient hors d'atteinte.
+   Rangée 1 : la piste et ses réglages ; rangée 2 : la lecture et la progression. */
+@media (max-width: 640px) {
+    .music-player-bar { height: auto; flex-wrap: wrap; row-gap: 2px; column-gap: 6px; padding: 6px 8px 5px; }
+    .music-drag-grip { order: 0; }
+    .music-track-info { order: 1; flex: 1 1 0; min-width: 0; }
+    #music-track-title { max-width: none; }
+    .music-controls-right { order: 2; gap: 0; }
+    .music-controls-center { order: 3; }
+    .music-progress-area { order: 4; flex: 1 1 120px; min-width: 0; gap: 5px; }
+    .music-player-bar .music-btn { padding: 7px 7px; }
+    #music-volume-bar { width: 48px; }
+}

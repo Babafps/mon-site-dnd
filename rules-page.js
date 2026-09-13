@@ -14,6 +14,7 @@
 
     let built = false;
     let currentCat = null;
+    let listeCourante = null;   // 'favoris' | 'recents' quand l'une de ces listes est affichée
     let currentList = [];       // entrées de l'index pour la catégorie courante
     let rulesTrail = [];        // fil d'Ariane dans l'arbre des règles
     let lastScreen = 'home-screen';
@@ -25,6 +26,66 @@
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => window.SRD.esc(s);
+
+    // ---------- Favoris et fiches consultées (LOT 6.5) ----------
+    // Deux listes par appareil, hors personnage : l'étoile d'une fiche (page
+    // Règles comme loupe de la fiche) et les 20 dernières fiches ouvertes.
+    // Chaque entrée garde son édition : une fiche 2014 se rouvre en 2014.
+    const CLE_FAVORIS = 'dnd-regles-favoris', CLE_RECENTS = 'dnd-regles-recents', MAX_RECENTS = 20;
+    const lireListe = (cle) => {
+        try { const v = JSON.parse(localStorage.getItem(cle) || '[]'); return Array.isArray(v) ? v.filter(x => x && x.cat && x.id) : []; }
+        catch (e) { return []; }
+    };
+    const ecrireListe = (cle, liste) => { try { localStorage.setItem(cle, JSON.stringify(liste)); } catch (e) {} };
+    const memeFiche = (a, b) => a.cat === b.cat && String(a.id) === String(b.id) && (a.ed || '') === (b.ed || '');
+    const fiche = (f) => ({ cat: String(f.cat), id: String(f.id), nom: String(f.nom || ''), sub: String(f.sub || ''), ed: String(f.ed || '') });
+
+    const Favoris = {
+        liste: () => lireListe(CLE_FAVORIS),
+        recents: () => lireListe(CLE_RECENTS),
+        est: (f) => lireListe(CLE_FAVORIS).some(x => memeFiche(x, f)),
+        /** Ajoute ou retire ; rend vrai si la fiche est désormais en favori. */
+        basculer(f) {
+            const liste = lireListe(CLE_FAVORIS);
+            const i = liste.findIndex(x => memeFiche(x, f));
+            if (i >= 0) liste.splice(i, 1); else liste.unshift(fiche(f));
+            ecrireListe(CLE_FAVORIS, liste);
+            document.dispatchEvent(new CustomEvent('regles:favoris', { detail: { fiche: fiche(f), favori: i < 0 } }));
+            return i < 0;
+        },
+        consulter(f) {
+            if (!f || !f.cat || !f.id) return;
+            const liste = lireListe(CLE_RECENTS).filter(x => !memeFiche(x, f));
+            liste.unshift(Object.assign(fiche(f), { quand: Date.now() }));
+            ecrireListe(CLE_RECENTS, liste.slice(0, MAX_RECENTS));
+        },
+        /** Le bouton étoile d'une fiche, à poser dans son titre. */
+        etoile(f) {
+            const on = Favoris.est(f);
+            const libelle = on ? 'Retirer des favoris' : 'Ajouter aux favoris';
+            return `<button type="button" class="rw-etoile no-print" data-cat="${esc(f.cat)}" data-id="${esc(f.id)}"`
+                + ` data-nom="${esc(f.nom || '')}" data-sub="${esc(f.sub || '')}" data-ed="${esc(f.ed || '')}"`
+                + ` aria-pressed="${on}" aria-label="${libelle}" title="${libelle}">${on ? '★' : '☆'}</button>`;
+        }
+    };
+    window.ReglesFavoris = Favoris;
+
+    // Toutes les étoiles du site passent ici : page Règles et loupe de la fiche.
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('.rw-etoile');
+        if (!b) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const on = Favoris.basculer({ cat: b.dataset.cat, id: b.dataset.id, nom: b.dataset.nom, sub: b.dataset.sub, ed: b.dataset.ed });
+        const libelle = on ? 'Retirer des favoris' : 'Ajouter aux favoris';
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        b.setAttribute('aria-label', libelle);
+        b.title = libelle;
+        b.textContent = on ? '★' : '☆';
+        if (window.showAppToast) window.showAppToast(on ? '★ Fiche ajoutée à tes favoris' : '☆ Fiche retirée de tes favoris', 'info');
+        const ecran = document.getElementById('rules-screen');
+        if (listeCourante === 'favoris' && ecran && !ecran.classList.contains('hidden')) ouvrirListe('favoris');
+    });
 
     // ---------- Libellés ----------
     // Les données gardent les identifiants anglais (communs à toutes les
@@ -147,7 +208,8 @@
         $('rules-cats').addEventListener('click', (e) => {
             const b = e.target.closest('.rules-cat'); if (!b) return;
             $('rules-search').value = '';
-            openCategory(b.dataset.cat);
+            if (b.dataset.liste) ouvrirListe(b.dataset.liste);
+            else openCategory(b.dataset.cat);
         });
 
         $('rules-back').addEventListener('click', () => window.navTo(lastScreen));
@@ -165,6 +227,7 @@
             const res = await window.SRD.search(q, { limit: 120 });
             if (mine !== token) return;
             currentCat = null;
+            listeCourante = null;
             setFilterBar(null);
             document.querySelectorAll('.rules-cat.is-on').forEach(b => b.classList.remove('is-on'));
             renderList(res, `${res.length} résultat${res.length > 1 ? 's' : ''} pour « ${esc(q)} »`);
@@ -173,7 +236,7 @@
         // Clic sur une entrée de la liste ou d'une ligne de tableau
         $('rules-list').addEventListener('click', (e) => {
             const row = e.target.closest('.rules-item, .rules-trow');
-            if (row) { openEntry(row.dataset.cat, row.dataset.id, row.dataset.name, row.dataset.sub); return; }
+            if (row) { lireEnEdition(row.dataset.ed); openEntry(row.dataset.cat, row.dataset.id, row.dataset.name, row.dataset.sub); return; }
             const th = e.target.closest('.rules-th[data-sort]');
             if (th) { toggleSort(th.dataset.sort); }
         });
@@ -197,7 +260,10 @@
 
     // Les libellés (« Races » / « Espèces ») et la licence dépendent de l'édition.
     function renderCats() {
-        $('rules-cats').innerHTML = window.SRD.CATEGORIES.map(c =>
+        // Les deux listes personnelles d'abord : elles valent toutes éditions confondues.
+        const listes = [['favoris', '★', 'Favoris'], ['recents', '🕘', 'Consultées récemment']].map(([id, ico, nom]) =>
+            `<button type="button" class="rules-cat rules-cat-liste${listeCourante === id ? ' is-on' : ''}" data-liste="${id}">${ico} ${nom}</button>`).join('');
+        $('rules-cats').innerHTML = listes + window.SRD.CATEGORIES.map(c =>
             `<button type="button" class="rules-cat${c.id === currentCat ? ' is-on' : ''}" data-cat="${c.id}">`
             + `${c.icon} ${esc(window.SRD.categoryLabel(c.id))}</button>`).join('');
     }
@@ -379,7 +445,7 @@
         const list = $('rules-list');
         if (!items.length) { showListMessage('Aucun résultat.'); return; }
         list.innerHTML = `<div class="rules-list-head">${heading}</div>`
-            + items.map(it => `<button type="button" class="rules-item" data-cat="${it.category}" data-id="${esc(it.id)}" data-name="${esc(it.name)}" data-sub="${esc(it.subtitle || '')}">
+            + items.map(it => `<button type="button" class="rules-item" data-cat="${it.category}" data-id="${esc(it.id)}" data-name="${esc(it.name)}" data-sub="${esc(it.subtitle || '')}"${it.ed ? ` data-ed="${esc(it.ed)}"` : ''}>
                     <span class="rules-item-name">${it.icon || ''} ${esc(it.name)}${it.perso ? ' <span class="rw-perso">perso</span>' : ''}</span>
                     ${it.subtitle ? `<span class="rules-item-sub">${esc(it.subtitle)}</span>` : ''}
                 </button>`).join('');
@@ -438,6 +504,7 @@
 
     async function openCategory(cat) {
         currentCat = cat;
+        listeCourante = null;
         rulesTrail = [];
         document.querySelectorAll('.rules-cat').forEach(b => b.classList.toggle('is-on', b.dataset.cat === cat));
         showListMessage('Chargement…');
@@ -456,6 +523,41 @@
             setFilterBar(null);
             showListMessage(err.diagnostic || err.message);
         }
+    }
+
+    // ---------- Les listes personnelles (LOT 6.5) ----------
+    /** Passe la LECTURE dans l'édition d'une fiche enregistrée — jamais le personnage. */
+    function lireEnEdition(ed) {
+        if (!ed || ed === window.SRD.getEdition() || !editionAvailable(ed)) return;
+        if (window.Edition) window.Edition.consulter(ed);
+        else window.SRD.setEdition(ed);
+        const sel = $('rules-edition'); if (sel) sel.value = ed;
+        metaCat = null; meta = {};
+        renderCats(); renderFoot(); majNoteEdition();
+    }
+
+    function ouvrirListe(nom) {
+        build();
+        listeCourante = nom === 'recents' ? 'recents' : 'favoris';
+        currentCat = null;
+        rulesTrail = [];
+        setFilterBar(null);
+        $('rules-body').classList.remove('is-table');
+        document.querySelectorAll('.rules-cat').forEach(b => b.classList.toggle('is-on', b.dataset.liste === listeCourante));
+        const entrees = listeCourante === 'favoris' ? Favoris.liste() : Favoris.recents();
+        if (!entrees.length) {
+            showListMessage(listeCourante === 'favoris'
+                ? 'Aucun favori pour l’instant. Touche l’étoile ☆ d’une fiche pour la retrouver ici.'
+                : 'Aucune fiche consultée sur cet appareil pour l’instant.');
+            return;
+        }
+        const icone = (cat) => (window.SRD.CATEGORIES.find(c => c.id === cat) || {}).icon || '';
+        const items = entrees.map(x => ({
+            id: x.id, name: x.nom || x.id, category: x.cat, icon: icone(x.cat), ed: x.ed,
+            subtitle: [x.sub, x.ed ? 'règles ' + x.ed : ''].filter(Boolean).join(' · ')
+        }));
+        const titre = listeCourante === 'favoris' ? '★ Favoris' : '🕘 Consultées récemment';
+        renderList(items, `${titre} — ${items.length} fiche${items.length > 1 ? 's' : ''}`);
     }
 
     // ---------- Fiche détaillée ----------
@@ -487,13 +589,14 @@
             // d’où vient le texte — exigée mot pour mot par la licence du SRD (edition.js).
             const ed = window.SRD.getEdition();
             box.innerHTML = trail
-                + `<h2>${esc(e.name || name)}${window.Edition ? ' ' + window.Edition.badge(ed) : ''}</h2>`
+                + `<h2>${esc(e.name || name)}${window.Edition ? ' ' + window.Edition.badge(ed) : ''}${Favoris.etoile({ cat, id, nom: e.name || name, sub, ed })}</h2>`
                 + (sub ? `<p class="rules-detail-sub">${esc(sub)}</p>` : '')
                 + parent
                 + window.SRD.renderEntry(cat, e)
                 + (window.Edition ? `<p class="rw-attrib">${window.Edition.attributionHtml(ed)}</p>` : '');
             // Les secrets des monstres (secrets-monde.js) écoutent l'ouverture d'une fiche.
             document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat, id, box } }));
+            Favoris.consulter({ cat, id, nom: e.name || name, sub, ed });
             if (window.matchMedia('(max-width: 859px)').matches) {
                 box.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
@@ -526,7 +629,7 @@
         setTimeout(() => $('rules-search')?.focus(), 60);
     }
 
-    window.RulesPage = { open };
+    window.RulesPage = { open, ouvrirListe };
 
     // Bouton d'accueil (l'écran existe déjà dans index.html)
     document.addEventListener('DOMContentLoaded', () => {

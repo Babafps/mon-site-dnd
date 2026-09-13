@@ -133,10 +133,50 @@ window.SupaAuth = {
             .eq('id', charId).eq('user_id', this.currentUser.id);
     },
 
+    /** Vrai si le cloud a accepté. Avec le droit à la corbeille, la base en fait
+     *  une mise à la corbeille (docs/corbeille.sql). */
     async deleteCharacter(charId) {
-        if (!this.currentUser) return;
-        await _supabase.from('characters')
+        if (!this.currentUser) return false;
+        const { error } = await _supabase.from('characters')
             .delete().eq('id', charId).eq('user_id', this.currentUser.id);
+        if (error) { console.warn('deleteCharacter:', error); return false; }
+        return true;
+    },
+
+    // ---------- La corbeille (LOT 6.1, docs/corbeille.sql) ----------
+    // C'est la base qui décide si une suppression est définitive. Tant que la
+    // migration n'est pas appliquée, ses fonctions n'existent pas : on le retient
+    // (`corbeilleDisponible = false`) et l'accueil garde la suppression définitive
+    // confirmée. Une panne réseau, elle, est levée : rien n'a été fait.
+    corbeilleDisponible: null,
+
+    async _rpcCorbeille(nom, args) {
+        const { data, error } = await _supabase.rpc(nom, args || {});
+        if (error) {
+            if (error.code === 'PGRST202' || error.code === '42883' || /could not find the function/i.test(error.message || '')) {
+                this.corbeilleDisponible = false;
+                return null;
+            }
+            throw error;
+        }
+        this.corbeilleDisponible = true;
+        return data;
+    },
+    /** 'corbeille' | 'sans-droit' | 'introuvable', ou null sans la migration. */
+    async mettreALaCorbeille(charId) {
+        return this.currentUser ? this._rpcCorbeille('personnage_supprimer', { p_id: charId }) : null;
+    },
+    /** [{ id, name, level, class, deleted_at, purge_at }], ou null sans la migration. */
+    async chargerCorbeille() {
+        return this.currentUser ? this._rpcCorbeille('personnages_corbeille') : [];
+    },
+    /** 'restaure' | 'quota' | 'introuvable', ou null sans la migration. */
+    async restaurerPersonnage(charId) {
+        return this.currentUser ? this._rpcCorbeille('personnage_restaurer', { p_id: charId }) : null;
+    },
+    /** 'supprime' | 'introuvable', ou null sans la migration. */
+    async supprimerDefinitivement(charId) {
+        return this.currentUser ? this._rpcCorbeille('personnage_supprimer_definitivement', { p_id: charId }) : null;
     },
 
     async loadCharacterData(charId) {

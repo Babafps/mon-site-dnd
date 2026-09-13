@@ -25,14 +25,220 @@
     <!-- (Three.js retiré le 14 juil. 2026 : il ne servait qu'à l'Atelier de dés, supprimé — ~600 Ko économisés au chargement) -->
 </head>
 <body>
+<script>
+// =====================================================
+// Démarrage — avant le tout premier affichage (LOT 6)
+//
+// Ce qui ne peut pas attendre les scripts de la page :
+//   · le thème (clair, sombre ou auto), sinon la page s'afficherait une
+//     fraction de seconde dans le mauvais ton ;
+//   · le confort de lecture (taille du texte, police dyslexie), par appareil ;
+//   · le personnage désigné par l'adresse (?perso=…), pour que le bouton
+//     retour du navigateur ramène à l'accueil ;
+//   · la transition du livre quand on ouvre une fiche ou qu'on la referme.
+// Rien ici ne touche au réseau ni aux données d'une fiche.
+// =====================================================
+(function () {
+    'use strict';
+    const html = document.documentElement, body = document.body;
+    const ls = {
+        get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+        del: (k) => { try { localStorage.removeItem(k); } catch (e) {} }
+    };
+    const calme = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+    const emettre = (nom, detail) => { try { document.dispatchEvent(new CustomEvent(nom, { detail })); } catch (e) {} };
 
-<div id="loading-screen" class="auth-fullscreen">
-    <div class="auth-card" style="text-align:center;">
-        <div class="auth-logo"><img src="IMG/logo-192.png" alt="Bones &amp; Blades" width="192" height="192"></div>
-        <h2 style="font-family:'Cinzel',serif; color:var(--primary-color); margin-bottom:20px;">Chargement…</h2>
-        <div class="auth-spinner"></div>
+    // ---------- Thème : clair, sombre ou auto ----------
+    // `dnd-theme-mode` remplace l'interrupteur `dnd-theme-darkmode`, qui reste
+    // écrit pour les versions encore en cache. Sans préférence : un joueur qui a
+    // déjà des personnages sur cet appareil a toujours vu le mode clair, on le
+    // lui garde ; un nouveau joueur suit son appareil.
+    const systeme = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    const MODES = ['clair', 'sombre', 'auto'];
+    function modeTheme() {
+        let m = ls.get('dnd-theme-mode');
+        if (MODES.includes(m)) return m;
+        const ancien = ls.get('dnd-theme-darkmode');
+        m = ancien === 'true' ? 'sombre' : ancien === 'false' ? 'clair'
+          : (ls.get('dnd-character-list') !== null || ls.get('dnd-active-char') !== null) ? 'clair' : 'auto';
+        ls.set('dnd-theme-mode', m);
+        return m;
+    }
+    const estSombre = () => { const m = modeTheme(); return m === 'sombre' || (m === 'auto' && !!(systeme && systeme.matches)); };
+    function appliquerTheme() { const on = estSombre(); body.classList.toggle('theme-dark', on); return on; }
+    function definirTheme(m) {
+        if (!MODES.includes(m)) return;
+        ls.set('dnd-theme-mode', m);
+        ls.set('dnd-theme-darkmode', String(estSombre()));
+        emettre('theme:change', { mode: m, sombre: appliquerTheme() });
+    }
+    if (systeme) {
+        const suivre = () => {
+            if (modeTheme() !== 'auto') return;
+            ls.set('dnd-theme-darkmode', String(estSombre()));
+            emettre('theme:change', { mode: 'auto', sombre: appliquerTheme() });
+        };
+        if (systeme.addEventListener) systeme.addEventListener('change', suivre);
+        else if (systeme.addListener) systeme.addListener(suivre);
+    }
+
+    // ---------- Confort de lecture (par appareil, jamais à l'impression) ----------
+    const tailleTexte = () => { const t = parseInt(ls.get('dnd-theme-texte'), 10); return t >= 90 && t <= 130 ? t : 100; };
+    const dyslexie = () => ls.get('dnd-theme-dyslexie') === '1';
+    function appliquerConfort() {
+        const t = tailleTexte();
+        if (t === 100) html.style.removeProperty('--taille-texte'); else html.style.setProperty('--taille-texte', t + '%');
+        html.classList.toggle('police-dyslexie', dyslexie());
+    }
+    function definirTexte(v) {
+        const t = Math.round(Math.max(90, Math.min(130, parseInt(v, 10) || 100)) / 5) * 5;
+        if (t === 100) ls.del('dnd-theme-texte'); else ls.set('dnd-theme-texte', String(t));
+        appliquerConfort();
+        emettre('confort:change', { texte: t, dyslexie: dyslexie() });
+    }
+    function definirDyslexie(on) {
+        if (on) ls.set('dnd-theme-dyslexie', '1'); else ls.del('dnd-theme-dyslexie');
+        appliquerConfort();
+        emettre('confort:change', { texte: tailleTexte(), dyslexie: !!on });
+    }
+
+    // ---------- Le personnage de l'adresse ----------
+    // `?perso=<id>` désigne la fiche ouverte. Le stockage (`dnd-active-char`)
+    // reste ce que lit le reste du site : on l'accorde ici à l'adresse, sauf au
+    // rechargement, où il fait foi (plusieurs gestes changent de fiche, puis
+    // rechargent). Un identifiant absent de la liste des personnages est ignoré :
+    // ouvrir une fiche dont les données ne sont pas sur l'appareil enverrait des
+    // valeurs vides au cloud.
+    const PARAM = 'perso';
+    function persoConnu(id) {
+        if (!id || !/^[\w-]{1,80}$/.test(id)) return false;
+        try {
+            const liste = JSON.parse(ls.get('dnd-character-list') || '[]');
+            return Array.isArray(liste) && liste.some(c => c && c.id === id);
+        } catch (e) { return false; }
+    }
+    function adresse(id) {
+        const u = new URL(location.href);
+        if (id) u.searchParams.set(PARAM, id); else u.searchParams.delete(PARAM);
+        return u.pathname + u.search + u.hash;
+    }
+    function typeNavigation() {
+        try { const n = performance.getEntriesByType('navigation')[0]; if (n && n.type) return n.type; } catch (e) {}
+        return 'navigate';
+    }
+    function resoudrePerso(type) {
+        let demande = null;
+        try { demande = new URLSearchParams(location.search).get(PARAM); } catch (e) {}
+        if (type !== 'reload') {
+            if (demande) { if (persoConnu(demande)) ls.set('dnd-active-char', demande); else ls.del('dnd-active-char'); }
+            else if (type === 'back_forward') ls.del('dnd-active-char');
+        }
+        const actif = ls.get('dnd-active-char') || '';
+        const voulue = adresse(actif);
+        if (voulue !== location.pathname + location.search + location.hash) {
+            try { history.replaceState(history.state, '', voulue); } catch (e) {}
+        }
+        html.setAttribute('data-perso', actif);
+        return actif;
+    }
+
+    // ---------- La transition du livre ----------
+    // L'écran de chargement recouvre la page pendant l'envoi et la navigation :
+    // plus de page blanche entre l'accueil et la fiche. `preparer` (facultatif)
+    // s'exécute pendant ce temps — l'envoi de la file de synchro, par exemple.
+    const PHRASES = [
+        'On aiguise les épées…', 'Le barde accorde son luth. Encore.', 'On dépoussière ton grimoire…',
+        'Le MJ cache ses notes derrière son écran.', 'On compte les pièces de cuivre, une par une.',
+        'Le nain réclame une chope avant de partir.', 'On range les parchemins par ordre alphabétique… presque.',
+        'L’elfe a encore perdu la notion du temps.', 'Le roublard jure qu’il n’a rien pris.',
+        'On déroule la carte… à l’envers.', 'Le paladin polit son armure. Minutieusement.',
+        'Le magicien relit la liste des composantes.', 'Le druide discute avec une plante verte.',
+        'On allume les torches du donjon.', 'Le clerc prie pour que le réseau tienne.',
+        'Le rôdeur suit la piste du chargement.', 'L’occultiste relit les petites lignes de son pacte.',
+        'Le moine médite sur la barre de progression.', 'L’ensorceleur jure que c’était voulu.',
+        'Le guerrier attend son tour avec impatience.', 'On vérifie l’encombrement de ton sac.',
+        'On recoud la bourse percée.', 'Initiative ! Tout le monde lance… sauf la page.',
+        'Les dés prennent leur élan.', 'On nourrit le familier avant de partir.',
+        'L’aubergiste prépare la note. Salée.', 'Le barbare cherche la porte. Il a trouvé le mur.',
+        'On relit la règle de la lutte. Courage.', 'Une potion de soins, et on repart.',
+        'Les runes s’illuminent une à une.', 'Le halfelin entame son second petit-déjeuner.',
+        'On négocie avec le garde de la ville.', 'La lanterne sourde refuse de s’allumer.',
+        'On cire les bottes pour la longue route.'
+    ];
+    function phrase() {
+        const el = document.getElementById('chargement-phrase');
+        if (!el) return;
+        let i = Math.floor(Math.random() * PHRASES.length);
+        if (PHRASES[i] === el.textContent) i = (i + 1) % PHRASES.length;
+        el.textContent = PHRASES[i];
+    }
+    function nettoyerTransition() {
+        const ecran = document.getElementById('loading-screen');
+        if (ecran && ecran.classList.contains('est-transition')) {
+            ecran.classList.remove('est-transition', 'est-ouverture', 'est-fermeture');
+            ecran.classList.add('hidden');
+        }
+    }
+    function aller(id, preparer) {
+        const cible = adresse(id || '');
+        try { sessionStorage.setItem('bnb-transition', id ? 'ouvre' : 'ferme'); } catch (e) {}
+        const ecran = document.getElementById('loading-screen');
+        if (ecran) {
+            phrase();
+            ecran.classList.remove('hidden', 'est-ouverture', 'est-fermeture');
+            ecran.classList.add('est-transition', id ? 'est-ouverture' : 'est-fermeture');
+        }
+        const pause = new Promise(ok => setTimeout(ok, ecran && !calme() && !document.hidden ? 460 : 0));
+        const travail = Promise.resolve().then(() => (typeof preparer === 'function' ? preparer() : null)).catch(() => {});
+        Promise.all([pause, travail]).then(() => location.assign(cible));
+    }
+
+    appliquerTheme();
+    appliquerConfort();
+    let arrivee = null;
+    try { arrivee = sessionStorage.getItem('bnb-transition'); sessionStorage.removeItem('bnb-transition'); } catch (e) {}
+    if (arrivee === 'ouvre' || arrivee === 'ferme') {
+        html.classList.add('arrivee-' + arrivee);
+        document.addEventListener('screen:change', function fin(e) {
+            const id = e.detail && e.detail.id;
+            if (id !== 'app-screen' && id !== 'home-screen' && id !== 'login-screen') return;
+            document.removeEventListener('screen:change', fin);
+            setTimeout(() => html.classList.remove('arrivee-ouvre', 'arrivee-ferme'), 700);
+        });
+    }
+    resoudrePerso(typeNavigation());
+    // Page rendue par le cache d'historique (retour, avancer) : ses scripts ne se
+    // relancent pas. On retire le voile du départ, et si la page ne montre pas le
+    // personnage que désigne son adresse, on la recharge.
+    window.addEventListener('pageshow', (e) => {
+        if (!e.persisted) return;
+        const avant = html.getAttribute('data-perso') || '';
+        nettoyerTransition();
+        if (resoudrePerso('back_forward') !== avant) location.reload();
+    });
+
+    window.Demarrage = {
+        modeTheme, estSombre, definirTheme, appliquerTheme,
+        tailleTexte, dyslexie, definirTexte, definirDyslexie,
+        adresse, aller, phrase,
+        phrases: () => PHRASES.slice()
+    };
+})();
+</script>
+
+<div id="loading-screen" class="auth-fullscreen chargement" role="status" aria-live="polite">
+    <div class="auth-card chargement-carte">
+        <svg class="chargement-d20" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <polygon class="d20-face" points="50,4 90,27 90,73 50,96 10,73 10,27"/>
+            <path class="d20-arete" d="M50 25 L74 66 L26 66 Z M50 4 L50 25 M10 27 L50 25 M90 27 L50 25 M10 27 L26 66 M10 73 L26 66 M90 27 L74 66 M90 73 L74 66 M50 96 L26 66 M50 96 L74 66"/>
+            <text x="50" y="57" text-anchor="middle">20</text>
+        </svg>
+        <h2 class="chargement-titre">Chargement…</h2>
+        <p class="chargement-phrase" id="chargement-phrase">Les dés prennent leur élan.</p>
     </div>
 </div>
+<script>window.Demarrage && window.Demarrage.phrase();</script>
 
 <div id="login-screen" class="auth-fullscreen hidden">
     <div class="auth-card">
@@ -86,6 +292,7 @@
             <summary><span class="menu-ico" aria-hidden="true">🧩</span><span class="menu-cat-txt"><b>Ma fiche</b><small>Carte de héros, boutons flottants</small></span></summary>
             <div class="menu-cat-body">
                 <button type="button" id="btn-menu-hero-card" class="btn-menu-item">🃏 Créer ma carte de héros</button>
+                <button type="button" id="btn-menu-seance" class="btn-menu-item">📅 Prochaine séance</button>
                 <div id="menu-edition-box">
                     <span class="menu-label">Édition des règles</span>
                     <div class="menu-eds" role="radiogroup" aria-label="Édition des règles de ce personnage">
@@ -108,9 +315,20 @@
         </details>
 
         <details class="menu-cat" data-cat="apparence">
-            <summary><span class="menu-ico" aria-hidden="true">🎨</span><span class="menu-cat-txt"><b>Apparence</b><small>Mode nuit, couleurs, image de fond</small></span></summary>
+            <summary><span class="menu-ico" aria-hidden="true">🎨</span><span class="menu-cat-txt"><b>Apparence</b><small>Mode nuit, lecture, couleurs, fond</small></span></summary>
             <div class="menu-cat-body">
-                <label class="toggle-label menu-toggle"><input type="checkbox" id="toggle-dark-mode"> <span>🌙 Mode nuit</span></label>
+                <span class="menu-label" id="menu-theme-label">🌙 Mode nuit</span>
+                <div class="menu-eds menu-themes" role="radiogroup" aria-labelledby="menu-theme-label">
+                    <button type="button" class="menu-ed" data-theme-mode="clair" role="radio" aria-checked="false">Clair</button>
+                    <button type="button" class="menu-ed" data-theme-mode="sombre" role="radio" aria-checked="false">Sombre</button>
+                    <button type="button" class="menu-ed" data-theme-mode="auto" role="radio" aria-checked="false">Auto</button>
+                </div>
+                <p class="menu-hint" id="menu-theme-hint">Auto suit le réglage de ton appareil, même quand il change.</p>
+                <span class="menu-label">Confort de lecture</span>
+                <label class="menu-range" for="confort-texte"><span>Taille du texte</span><output id="confort-texte-val" for="confort-texte">100 %</output></label>
+                <input type="range" id="confort-texte" min="90" max="130" step="5" value="100" aria-describedby="confort-hint">
+                <label class="toggle-label menu-toggle"><input type="checkbox" id="confort-dyslexie"> <span>🔤 Police adaptée à la dyslexie</span></label>
+                <p class="menu-hint" id="confort-hint">Réglés pour cet appareil. Les cartes de héros et l’impression ne changent pas.</p>
                 <label class="toggle-label menu-toggle" title="Chaque état actif dessine son propre effet à l'écran : cœurs roses du Charmé, givre du Paralysé, chaînes de l'Entravé… Ils se cumulent."><input type="checkbox" id="toggle-status-fx" checked> <span>💥 Effets d'état à l'écran</span></label>
                 <span class="menu-label">Couleurs</span>
                 <div class="menu-colors">
@@ -190,6 +408,11 @@
             <button id="btn-create-char" class="btn home-create">＋ Créer un personnage</button>
             <button id="btn-open-rules" class="btn home-rules" type="button">📖 Règles du jeu</button>
             <label id="char-show-archived-wrap" class="home-archived-toggle hidden"><input type="checkbox" id="char-show-archived"> Afficher les archivés<span id="char-archived-count"></span></label>
+            <details id="home-corbeille" class="home-corbeille no-print" hidden>
+                <summary><span aria-hidden="true">🗑</span> Corbeille <span class="corb-nb"></span></summary>
+                <p class="corb-aide">Chaque personnage y reste 30 jours, puis il est effacé pour de bon, avec toute sa fiche.</p>
+                <ul class="corb-liste"></ul>
+            </details>
         </div>
     </div>
 </div>
@@ -342,12 +565,13 @@
 
     <!-- Barre de navigation basse (affichage téléphone) : bandeau vital + 5 sections -->
     <nav id="mobile-nav" class="no-print" aria-label="Navigation de la fiche">
-        <button id="mob-vitals" type="button" title="Aller au combat">
+        <button id="mob-vitals" type="button" title="Soins et dégâts" aria-haspopup="dialog">
             <span class="mob-vitals-hp">❤️
                 <span class="mob-vitals-track"><span id="mob-vitals-trail" aria-hidden="true"></span><span id="mob-vitals-fill"></span><span id="mob-vitals-shield" aria-hidden="true" hidden></span></span>
                 <span id="mob-vitals-text">– / –</span>
             </span>
             <span class="mob-vitals-ca">🛡️ <b id="mob-vitals-ca-val">–</b></span>
+            <span class="mob-vitals-extra" aria-hidden="true"><span id="mob-vitals-conc" class="mob-vitals-conc" hidden>🧠</span><span id="mob-vitals-etats" class="mob-vitals-etats"></span></span>
         </button>
         <div class="mobile-nav-tabs">
             <button class="mob-tab" type="button" data-msec="perso"><span class="mob-tab-ic">🧝</span><span class="mob-tab-lb">Perso</span></button>

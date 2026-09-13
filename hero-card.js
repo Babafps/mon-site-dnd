@@ -1118,6 +1118,8 @@
         modal.classList.add('hidden');
         document.body.classList.remove('hc2-ouvert');
         jetonVignettes++;
+        // La fiche repeint alors la vignette de l'accueil (style ou devise changés).
+        document.dispatchEvent(new CustomEvent('carte:fermee'));
     }
 
     async function rendre() {
@@ -1235,8 +1237,32 @@
         if (e.target.closest('#btn-hero-card, #btn-menu-hero-card')) { e.preventDefault(); ouvrir(); }
     });
 
+    // =====================================================
+    // LA VIGNETTE DE L'ACCUEIL (LOT 6.3)
+    // Un petit aperçu de la carte dans le style choisi, avec les teintes de ce
+    // style : l'accueil habille la carte du personnage sans charger l'atelier.
+    // Rien tant que le joueur n'a pas choisi de style.
+    // =====================================================
+    async function vignette() {
+        const style = lire('dnd-hero-style');
+        if (!style || !STYLES.some(x => x.id === style && disponible(x))) return null;
+        const dc = donnees();
+        const echelle = 0.25;
+        const c = document.createElement('canvas');
+        c.width = Math.round(W * echelle); c.height = Math.round(H * echelle);
+        const brute = lire('dnd-hero-arme') || 'auto';
+        const arme = brute === 'auto' || brute === 'aucune' ? brute : parseInt(brute, 10);
+        dessiner(c, dc, { style, devise: lire('dnd-hero-devise') || '', arme, echelle }, await preparer(dc));
+        const t = teintes(palette(style));
+        let image = '';
+        // Un portrait venu d'une autre origine « salit » le canvas : pas de vignette, pas d'erreur.
+        try { image = c.toDataURL('image/jpeg', 0.8); } catch (e) { return null; }
+        return { style, image, or: rgb(t.or), f1: rgb(t.f1), f2: rgb(t.f2), date: Date.now() };
+    }
+
     window.HeroCard = {
         open: ouvrir,
+        vignette,
         ajouterStyles,
         annoncer,
         /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */

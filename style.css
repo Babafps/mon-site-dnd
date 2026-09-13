@@ -9747,3 +9747,191 @@ a.mention:hover, a.mention:focus-visible { text-decoration: underline; }
 .search-commande.is-premiere { box-shadow: inset 3px 0 0 var(--accent-color); }
 body.theme-dark .search-commande { background: linear-gradient(120deg, rgba(196,155,53,.2), rgba(40,32,26,.92)); }
 .search-result-item:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+/* ============================================================
+   LOT 6 — DÉMARRAGE : CHARGEMENT, LIVRE, THÈME, CONFORT DE LECTURE
+   Les classes sont posées par le script de démarrage d'index.html
+   (window.Demarrage). Rien de tout cela ne s'imprime.
+   ============================================================ */
+
+/* --- Confort de lecture : réglé par appareil, jamais à l'impression --- */
+@font-face { font-family: 'OpenDyslexic'; src: url('fonts/OpenDyslexic-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'OpenDyslexic'; src: url('fonts/OpenDyslexic-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@media screen {
+    /* Presque toutes les tailles de cette feuille sont en rem : la racine les porte toutes. */
+    html { font-size: var(--taille-texte, 100%); }
+    html.police-dyslexie body,
+    html.police-dyslexie body :where(:not(svg, svg *, canvas)) { font-family: 'OpenDyslexic', 'Comic Sans MS', Verdana, sans-serif !important; }
+}
+
+/* --- Écran de chargement : un d20 qui roule, une phrase au hasard --- */
+.chargement-carte { position: relative; overflow: hidden; width: min(340px, calc(100vw - 32px)); text-align: center; perspective: 1400px; }
+.chargement-d20 { display: block; width: 88px; height: 88px; margin: 2px auto 12px; color: var(--primary-color); transform-origin: 50% 52%; animation: chargementRoule 2.8s cubic-bezier(.45,.05,.3,1) infinite; }
+.chargement-d20 .d20-face { fill: rgba(196,155,53,.14); stroke: currentColor; stroke-width: 3.2; stroke-linejoin: round; }
+.chargement-d20 .d20-arete { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; opacity: .6; }
+.chargement-d20 text { font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 19px; fill: currentColor; }
+.chargement-titre { margin: 0 0 6px; font-family: 'Cinzel', Georgia, serif; font-size: 1.2rem; letter-spacing: .04em; color: var(--primary-color); }
+.chargement-phrase { margin: 0; min-height: 2.9em; font-style: italic; font-size: .95rem; line-height: 1.45; color: #5d4a38; }
+body.theme-dark .chargement-d20, body.theme-dark .chargement-titre { color: var(--accent-color); }
+body.theme-dark .chargement-phrase { color: #cdbb9c; }
+@keyframes chargementRoule {
+    0% { transform: rotate(0deg) scale(1); }
+    45% { transform: rotate(250deg) scale(.9); }
+    62% { transform: rotate(372deg) scale(1.05); }
+    72%, 100% { transform: rotate(360deg) scale(1); }
+}
+
+/* --- Le livre : ouvrir un personnage, revenir à l'accueil --- */
+.chargement-carte::before {
+    content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit;
+    background: radial-gradient(circle at 50% 42%, rgba(196,155,53,.3) 0 13%, transparent 14%),
+                linear-gradient(135deg, var(--primary-hover, #9c3333), var(--primary-color, #7A2828) 58%, #3e1313);
+    box-shadow: inset 0 0 0 3px rgba(196,155,53,.6), inset 0 0 0 9px rgba(0,0,0,.22);
+    transform-origin: 0 50%; backface-visibility: hidden; opacity: 0;
+}
+#loading-screen.est-transition { z-index: 99990; animation: chargementFondu .22s ease-out both; }
+#loading-screen.est-ouverture .chargement-carte::before,
+html.arrivee-ferme #loading-screen .chargement-carte::before { animation: livreOuvre .55s cubic-bezier(.3,.7,.2,1) .05s both; }
+#loading-screen.est-fermeture .chargement-carte::before { animation: livreFerme .4s cubic-bezier(.5,0,.6,1) both; }
+@keyframes chargementFondu { from { opacity: 0; } }
+@keyframes livreOuvre { 0% { opacity: 1; transform: rotateY(0deg); } 99% { opacity: 1; } 100% { opacity: 0; transform: rotateY(-172deg); } }
+@keyframes livreFerme { 0% { opacity: 1; transform: rotateY(-172deg); } 100% { opacity: 1; transform: rotateY(0deg); } }
+/* À l'arrivée, l'écran se dévoile en fondu — l'opacité seule : un transform
+   ferait dériver les boutons fixes de la fiche pendant l'animation. */
+html.arrivee-ouvre #app-screen:not(.hidden), html.arrivee-ferme #home-screen:not(.hidden) { animation: chargementFondu .3s ease-out both; }
+/* Navigateurs qui savent enchaîner deux pages : un fondu plutôt qu'un blanc. */
+@view-transition { navigation: auto; }
+@media (prefers-reduced-motion: reduce) {
+    @view-transition { navigation: none; }
+    .chargement-d20, #loading-screen.est-transition, .chargement-carte::before,
+    html.arrivee-ouvre #app-screen, html.arrivee-ferme #home-screen { animation: none !important; }
+    .chargement-carte::before { opacity: 0 !important; }
+}
+@media print { #loading-screen { display: none !important; } }
+
+/* --- Menu ☰ : mode nuit à trois positions, confort de lecture --- */
+.menu-eds.menu-themes { grid-template-columns: repeat(3, 1fr); }
+.menu-range { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: .86rem; cursor: pointer; }
+.menu-range output { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--primary-color); }
+body.theme-dark .menu-range output { color: var(--accent-color); }
+#confort-texte { display: block; width: 100%; min-height: 32px; margin: 0; accent-color: var(--primary-color); }
+body.theme-dark #confort-texte { accent-color: var(--accent-color); }
+
+/* --- Corbeille des personnages (LOT 6.1) --- */
+.home-corbeille { margin-top: 18px; border: 1px dashed rgba(122,40,40,.35); border-radius: var(--radius-sm); background: rgba(255,252,240,.55); text-align: left; }
+.home-corbeille[hidden] { display: none; }
+.home-corbeille > summary { cursor: pointer; padding: 10px 14px; font-family: 'Cinzel', serif; font-weight: 700; font-size: .92rem; color: var(--primary-color); }
+.home-corbeille > summary:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.corb-aide { margin: 0 14px 8px; font-size: .8rem; font-style: italic; color: #7a6a55; }
+.corb-liste { list-style: none; margin: 0; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+.corb-ligne { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.035); }
+.corb-info { display: flex; flex-direction: column; min-width: 0; }
+.corb-nom { font-family: 'Cinzel', serif; overflow-wrap: anywhere; }
+.corb-info small { font-size: .78rem; color: #7a6a55; }
+.corb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.corb-actions button { min-height: 40px; }
+.corb-actions .corb-effacer { background: transparent; color: #9b1c1c; border: 1px solid rgba(155,28,28,.55); box-shadow: none; }
+.corb-actions .corb-effacer:hover { background: rgba(155,28,28,.08); }
+body.theme-dark .home-corbeille { background: rgba(255,255,255,.04); border-color: rgba(196,155,53,.3); }
+body.theme-dark .home-corbeille > summary { color: var(--accent-color); }
+body.theme-dark .corb-aide, body.theme-dark .corb-info small { color: #b6a484; }
+body.theme-dark .corb-ligne { background: rgba(255,255,255,.05); }
+body.theme-dark .corb-actions .corb-effacer, body.theme-dark .corb-actions .corb-effacer:hover { background: transparent; color: #ff9b8f; border-color: rgba(255,155,143,.45); }
+@media (max-width: 480px) { .corb-actions { width: 100%; } .corb-actions button { flex: 1; } }
+
+/* ============================================================
+   LOT 6.3 — CARTES DE L'ACCUEIL : STYLE DE HÉROS, OUVERTURE, SÉANCE
+   ============================================================ */
+.char-card-vignette { flex: 0 0 auto; width: 46px; height: 58px; object-fit: cover; border-radius: 5px; border: 1px solid rgba(var(--carte-or, 196,155,53), .6); box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+.char-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; min-width: 0; font-family: 'Lora', serif; font-weight: normal; font-size: .74rem; color: #8a7560; }
+.char-ouvert:empty { display: none; }
+.char-info > .char-name, .char-info > .char-sub, .char-info > .char-meta { max-width: 100%; }
+.char-seance { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-weight: 700; font-size: .72rem; white-space: nowrap; background: rgba(122,40,40,.1); color: var(--primary-color); }
+.char-seance[hidden] { display: none; }
+.char-card.seance-proche .char-seance { background: var(--primary-color); color: #f6ead0; }
+body.theme-dark .char-card .char-info .char-meta span.char-ouvert { color: #97866c !important; }
+body.theme-dark .char-card .char-info .char-meta span.char-seance { background: rgba(196,155,53,.16); color: var(--accent-color) !important; }
+body.theme-dark .char-card.seance-proche .char-info .char-meta span.char-seance { background: var(--accent-color); color: #2a1a0e !important; }
+
+.char-card.a-style,
+.char-card.a-style:hover,
+body.theme-dark .char-card.a-style,
+body.theme-dark .char-card.a-style:hover {
+    background: linear-gradient(115deg, rgb(var(--carte-f1)) 0%, rgb(var(--carte-f2)) 100%);
+    border-color: rgba(var(--carte-or), .5);
+}
+.char-card.a-style:hover, body.theme-dark .char-card.a-style:hover { border-color: rgb(var(--carte-or)); box-shadow: 0 6px 18px rgba(0,0,0,.35), 0 0 0 1px rgba(var(--carte-or), .35); }
+body.theme-dark .char-card.a-style .char-info .char-name,
+.char-card.a-style .char-info .char-name { color: rgb(var(--carte-or)) !important; }
+body.theme-dark .char-card.a-style .char-info span.char-sub,
+body.theme-dark .char-card.a-style .char-info .char-meta span.char-ouvert,
+.char-card.a-style .char-info .char-sub,
+.char-card.a-style .char-info .char-ouvert { color: rgba(var(--carte-or), .8) !important; }
+body.theme-dark .char-card.a-style .char-info .char-meta span.char-seance,
+.char-card.a-style .char-info .char-seance { background: rgba(var(--carte-or), .16); color: rgb(var(--carte-or)) !important; }
+body.theme-dark .char-card.a-style.seance-proche .char-info .char-meta span.char-seance,
+.char-card.a-style.seance-proche .char-info .char-seance { background: rgb(var(--carte-or)); color: rgb(var(--carte-f2)) !important; }
+.char-card.a-style .char-act, body.theme-dark .char-card.a-style .char-act { color: rgba(var(--carte-or), .85); }
+
+/* --- Prochaine séance : la fenêtre (LOT 6.4) --- */
+.seance-form { display: flex; flex-direction: column; gap: 10px; }
+.seance-ligne { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seance-champ { display: flex; flex-direction: column; gap: 4px; }
+.seance-champ > span { font-family: 'Cinzel', Georgia, serif; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.seance-case { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.seance-apercu { margin: 0; font-style: italic; font-size: .88rem; }
+.seance-agenda { display: flex; flex-wrap: wrap; gap: 8px; }
+.seance-agenda .dlg-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+@media (max-width: 420px) { .seance-ligne { grid-template-columns: 1fr; } .seance-agenda .dlg-btn { flex: 1 1 100%; } }
+
+/* ============================================================
+   LOT 6.5 — RÈGLES : FAVORIS ET FICHES CONSULTÉES
+   ============================================================ */
+.rw-etoile {
+    display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+    min-width: 36px; min-height: 36px; margin-left: 8px; padding: 0 6px;
+    border: 1px solid rgba(196,155,53,.5); border-radius: 999px; background: transparent;
+    color: #9a7420; font-size: 1.15rem; line-height: 1; cursor: pointer;
+    transition: transform .15s ease, background .15s ease;
+}
+.rw-etoile[aria-pressed="true"] { background: rgba(196,155,53,.2); color: #a8780a; }
+.rw-etoile:hover { transform: scale(1.08); }
+.rw-etoile:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+body.theme-dark .rw-etoile { color: var(--accent-color); border-color: rgba(196,155,53,.45); }
+body.theme-dark .rw-etoile[aria-pressed="true"] { background: rgba(196,155,53,.24); }
+.rules-cat.rules-cat-liste { border-style: dashed; }
+#rules-detail h2 { overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .rw-etoile { transition: none; } .rw-etoile:hover { transform: none; } }
+@media print { .rw-etoile { display: none !important; } }
+
+/* ============================================================
+   LOT 6.9 — BANDEAU VITAL MOBILE : SOINS ET DÉGÂTS, CONCENTRATION, ÉTATS
+   ============================================================ */
+.mob-vitals-extra { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.mob-vitals-extra:empty { display: none; }
+.mob-vitals-conc { font-size: .95rem; filter: drop-shadow(0 0 3px var(--concentration-color)); }
+.mob-vitals-conc[hidden] { display: none; }
+.mob-vitals-etats { display: inline-flex; align-items: center; gap: 1px; }
+.mob-etat { font-size: .9rem; line-height: 1; }
+.mob-etat-plus { font-size: .68rem; font-weight: 700; padding: 0 3px; border-radius: 999px; background: rgba(196,155,53,.25); }
+
+.pvr { display: flex; flex-direction: column; gap: 10px; }
+.pvr-etat { margin: 0; text-align: center; font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700; }
+.pvr-rapides { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pvr-rapide { min-height: 44px; border-radius: 10px; border: 1px solid rgba(122,40,40,.3); background: rgba(255,255,255,.5); font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 1rem; color: inherit; cursor: pointer; }
+.pvr-champ { display: flex; flex-direction: column; gap: 4px; }
+.pvr-champ > span { font-family: 'Cinzel', Georgia, serif; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.pvr-montant { font-size: 1.3rem !important; text-align: center; }
+.pvr-montant[aria-invalid="true"] { border-color: #b3261e !important; }
+.pvr-aide { margin: -4px 0 0; min-height: 1.1em; font-size: .85rem; color: #9b1c1c; }
+.pvr-gros { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pvr-btn { min-height: 64px; border-radius: 14px; border: 0; font-family: 'Cinzel', Georgia, serif; font-size: 1.1rem; font-weight: 700; color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+.pvr-btn span { font-size: 1.6rem; vertical-align: -2px; margin-right: 4px; }
+.pvr-degats { background: linear-gradient(180deg, #c0392b, #8a1c1c); }
+.pvr-soin { background: linear-gradient(180deg, #3d8b57, #25613a); }
+.pvr-btn:focus-visible, .pvr-rapide:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 2px; }
+.pvr-note { margin: 0; font-size: .78rem; font-style: italic; opacity: .8; }
+.pvr-combat { align-self: center; min-height: 40px; }
+body.theme-dark .pvr-rapide { background: rgba(255,255,255,.06); border-color: rgba(196,155,53,.3); }
+body.theme-dark .pvr-aide { color: #ff9b8f; }
+@media (prefers-reduced-motion: reduce) { .pvr-btn { box-shadow: none; } }

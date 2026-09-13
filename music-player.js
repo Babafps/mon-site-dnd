@@ -1,6 +1,12 @@
 // =====================================================
 // MUSIC PLAYER MODULE — Fantasy Theme
 // Fichiers locaux + URLs directes + YouTube
+//
+// La file est gardée (LOT 6.11) : pistes, piste en cours, position, volume,
+// boucle et aléatoire survivent au rechargement — ouvrir une fiche recharge
+// la page. Les fichiers locaux vont dans le coffre de l'appareil (coffre.js).
+// Un navigateur n'autorise pas une page à relancer le son toute seule : si la
+// reprise automatique est refusée, un bouton « Reprendre ▶ » attend le joueur.
 // =====================================================
 
 (function () {
@@ -26,6 +32,15 @@
     let ytReadyTimeout = null;
     let seekInterval = null;
     let dragSrcIndex = -1;
+    let pendingYTStart = 0;
+
+    // Persistance (LOT 6.11)
+    const CLE_ETAT = 'dnd-musique';
+    const POIDS_MAX_FICHIER = 80 * 1024 * 1024;     // au-delà, le fichier n'est pas gardé
+    let restauration = false;       // pendant la restauration, rien n'est écrit
+    let quitte = false;             // la page part : la position ne bouge plus
+    let reprise = null;             // { id, position, lecture } : la piste à relancer
+    let minuteurSauvegarde = null;
 
     // DOM
     let audioEl, seekBar, volumeBar;
@@ -101,6 +116,7 @@
 
             <!-- Contrôles -->
             <div class="music-controls-center">
+                <button id="music-btn-reprendre" class="music-btn music-btn-reprendre" type="button" title="Reprendre la musique là où elle s’était arrêtée" hidden>Reprendre ▶</button>
                 <button id="music-btn-prev"    class="music-btn" title="Précédent">⏮</button>
                 <button id="music-btn-play"    class="music-btn music-btn-play" title="Lecture / Pause">▶</button>
                 <button id="music-btn-next"    class="music-btn" title="Suivant">⏭</button>
@@ -200,6 +216,7 @@
             applyVolume();
             updateVolumeBar();
             updateVolumeIcon();
+            sauverBientot();
         });
 
         // --- Boutons ---
@@ -222,10 +239,141 @@
             if (e.key === 'Enter') addFromUrl();
         });
 
-        // Sauvegarde propre avant de quitter
+        // Avant de quitter : l'état d'abord (la position est encore juste), puis on coupe YouTube.
         window.addEventListener('beforeunload', () => {
+            sauver();
+            quitte = true;
             if (currentType === 'youtube' && ytPlayer && ytPlayerReady) ytPlayer.stopVideo();
         });
+        // Sur téléphone, un onglet qu'on quitte passe par pagehide, jamais par beforeunload.
+        window.addEventListener('pagehide', sauver);
+        window.addEventListener('pageshow', (e) => { if (e.persisted) quitte = false; });
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sauver(); });
+        setInterval(() => { if (isPlaying) sauver(); }, 5000);
+        document.getElementById('music-btn-reprendre').addEventListener('click', () => lancerReprise(false));
+
+        restaurer();
+    }
+
+    // =====================================================
+    // PERSISTANCE (LOT 6.11)
+    // =====================================================
+    function sauver() {
+        if (restauration || quitte || !audioEl) return;
+        try {
+            const courant = currentIndex >= 0 ? queue[currentIndex] : null;
+            let position = 0;
+            if (reprise) position = reprise.position;
+            else if (currentType === 'audio') position = audioEl.currentTime || 0;
+            else if (currentType === 'youtube' && ytPlayerReady && ytPlayer && ytPlayer.getCurrentTime) position = ytPlayer.getCurrentTime() || 0;
+            localStorage.setItem(CLE_ETAT, JSON.stringify({
+                v: 1,
+                // Un fichier trop lourd pour le coffre n'est pas gardé : il faudra le rajouter.
+                file: queue.filter(t => !t.volatile).map(t => ({
+                    id: t.id, type: t.type, title: t.title, badge: t.badge,
+                    videoId: t.videoId || undefined, src: t.fichier ? undefined : t.src, fichier: !!t.fichier
+                })),
+                courant: courant && !courant.volatile ? courant.id : null,
+                position: Math.round(position * 10) / 10,
+                lecture: !!(isPlaying || (reprise && reprise.lecture)),
+                volume, muet: isMuted, boucle: loopMode, aleatoire: isShuffle
+            }));
+        } catch (e) { /* stockage plein : la file ne sera simplement pas gardée */ }
+    }
+    function sauverBientot() {
+        clearTimeout(minuteurSauvegarde);
+        minuteurSauvegarde = setTimeout(sauver, 300);
+    }
+
+    async function restaurer() {
+        let etat = null;
+        try { etat = JSON.parse(localStorage.getItem(CLE_ETAT) || 'null'); } catch (e) {}
+        if (!etat || !Array.isArray(etat.file)) return;
+        restauration = true;
+        try {
+            if (Number.isFinite(Number(etat.volume))) volume = Math.max(0, Math.min(1, Number(etat.volume)));
+            isMuted = !!etat.muet;
+            volumeBar.value = isMuted ? 0 : Math.round(volume * 100);
+            applyVolume(); updateVolumeBar(); updateVolumeIcon();
+            loopMode = [0, 1, 2].includes(etat.boucle) ? etat.boucle : 0;
+            majBoutonBoucle();
+            isShuffle = !!etat.aleatoire;
+            shuffleBtn.classList.toggle('active', isShuffle);
+
+            const pistes = etat.file
+                .filter(t => t && t.id && (t.type === 'youtube'
+                    ? /^[a-zA-Z0-9_-]{11}$/.test(t.videoId || '')
+                    : (t.fichier || /^https?:\/\//i.test(t.src || ''))))
+                .map(t => ({
+                    id: String(t.id), type: t.type === 'youtube' ? 'youtube' : 'audio',
+                    title: String(t.title || 'Piste'), badge: String(t.badge || ''),
+                    videoId: t.videoId, src: t.fichier ? '' : t.src, fichier: !!t.fichier
+                }));
+            const locales = pistes.filter(t => t.fichier);
+            if (locales.length) {
+                try {
+                    await window.charger('coffre');
+                    for (const t of locales) {
+                        const blob = await window.Coffre.lire('musique', t.id);
+                        if (blob) t.src = URL.createObjectURL(blob); else t.perdue = true;
+                    }
+                } catch (e) { locales.forEach(t => { t.perdue = true; }); }
+            }
+            const perdues = pistes.filter(t => t.perdue).length;
+            queue = pistes.filter(t => !t.perdue);
+            currentIndex = queue.findIndex(t => t.id === etat.courant);
+            if (isShuffle) buildShuffleOrder();
+            renderQueue();
+            if (perdues) showToast(`⚠️ ${perdues} fichier(s) local(aux) à rajouter à la file`, '#c0392b');
+            if (currentIndex >= 0) {
+                const t = queue[currentIndex];
+                trackTitle.textContent = t.title;
+                trackSource.textContent = t.badge;
+                if (t.type === 'youtube') loadYTApi();
+                reprise = { id: t.id, position: Math.max(0, Number(etat.position) || 0), lecture: !!etat.lecture };
+            }
+        } finally {
+            restauration = false;
+        }
+        // La musique jouait : on tente de la relancer. Si le navigateur refuse, le bouton attend.
+        if (reprise && reprise.lecture) lancerReprise(true);
+        nettoyerCoffre();
+    }
+
+    /** Les fichiers du coffre qui ne sont plus dans la file. */
+    function nettoyerCoffre() {
+        if (!window.charger) return;
+        window.charger('coffre').then(() => window.Coffre.cles('musique')).then(cles => {
+            const gardes = new Set(queue.filter(t => t.fichier).map(t => t.id));
+            cles.filter(k => !gardes.has(k)).forEach(k => { window.Coffre.effacer('musique', k).catch(() => {}); });
+        }).catch(() => {});
+    }
+
+    function montrerReprise(r) {
+        reprise = r;
+        const b = document.getElementById('music-btn-reprendre');
+        if (b) b.hidden = false;
+        if (playerBar) playerBar.classList.add('music-a-reprendre');
+        const onglet = document.getElementById('music-tab-title');
+        if (onglet && playerBar && playerBar.classList.contains('music-bar-hidden')) onglet.textContent = '▶ Reprendre';
+        sauverBientot();
+    }
+    function masquerReprise() {
+        reprise = null;
+        const b = document.getElementById('music-btn-reprendre');
+        if (b) b.hidden = true;
+        if (playerBar) playerBar.classList.remove('music-a-reprendre');
+    }
+    /** Relance la piste gardée, à sa position. `auto` : tentative sans geste du joueur. */
+    function lancerReprise(auto) {
+        const r = reprise;
+        if (!r) return;
+        const i = queue.findIndex(t => t.id === r.id);
+        masquerReprise();
+        if (i < 0) return;
+        currentIndex = i;
+        playTrack(queue[i], r.position, auto);
+        renderQueue();
     }
 
     // =====================================================
@@ -247,19 +395,22 @@
                 onReady() {
                     ytPlayerReady = true;
                     clearTimeout(ytReadyTimeout);
-                    if (pendingYTVideoId) { const id = pendingYTVideoId; pendingYTVideoId = null; playYTVideo(id); }
+                    if (pendingYTVideoId) { const id = pendingYTVideoId; pendingYTVideoId = null; playYTVideo(id, pendingYTStart); }
                 },
                 onStateChange(ev) {
                     if (ev.data === YT.PlayerState.PLAYING) {
                         isPlaying = true;
                         playBtn.textContent = '⏸';
                         playerBar.classList.add('music-playing');
+                        masquerReprise();
                         startYTSeekPoll();
+                        sauverBientot();
                     } else if (ev.data === YT.PlayerState.PAUSED) {
                         isPlaying = false;
                         playBtn.textContent = '▶';
                         playerBar.classList.remove('music-playing');
                         stopSeekPoll();
+                        sauverBientot();
                     } else if (ev.data === YT.PlayerState.ENDED) {
                         stopSeekPoll();
                         onTrackEnded();
@@ -277,9 +428,10 @@
 
     // Lance une vidéo YouTube de façon robuste : si le player n'est pas encore prêt,
     // la vidéo est mise en attente et démarrée dès l'événement onReady.
-    function playYTVideo(videoId) {
+    function playYTVideo(videoId, depart) {
         if (!ytPlayerReady || !ytPlayer) {
             pendingYTVideoId = videoId;
+            pendingYTStart = depart || 0;
             loadYTApi();
             clearTimeout(ytReadyTimeout);
             ytReadyTimeout = setTimeout(() => {
@@ -288,7 +440,7 @@
             return;
         }
         try {
-            ytPlayer.loadVideoById(videoId);
+            ytPlayer.loadVideoById(depart > 0 ? { videoId, startSeconds: depart } : videoId);
             ytPlayer.setVolume((isMuted ? 0 : volume) * 100);
             // Relance la lecture si la politique d'autoplay du navigateur l'a bloquée
             setTimeout(() => {
@@ -339,6 +491,7 @@
     // =====================================================
     function togglePlay() {
         if (queue.length === 0) { openAddPanel(); return; }
+        if (reprise) { lancerReprise(false); return; }
         if (currentIndex < 0)   { playAtIndex(0); return; }
 
         if (currentType === 'audio') {
@@ -353,6 +506,7 @@
         isPlaying = false;
         playBtn.textContent = '▶';
         playerBar.classList.remove('music-playing');
+        sauverBientot();
     }
 
     function resumeAudio() {
@@ -360,6 +514,7 @@
         isPlaying = true;
         playBtn.textContent = '⏸';
         playerBar.classList.add('music-playing');
+        sauverBientot();
     }
 
     function prevTrack() {
@@ -389,6 +544,7 @@
         seekBar.value = 0;
         updateSeekFill();
         timeCurrent.textContent = '0:00';
+        sauverBientot();
     }
 
     function getNextIdx() {
@@ -414,16 +570,19 @@
 
     function playAtIndex(idx) {
         if (idx < 0 || idx >= queue.length) return;
+        masquerReprise();
         currentIndex = idx;
         playTrack(queue[idx]);
         renderQueue();
+        sauverBientot();
     }
 
     function playCurrentTrack() {
         if (currentIndex >= 0 && currentIndex < queue.length) playTrack(queue[currentIndex]);
     }
 
-    function playTrack(track) {
+    /** `depart` : position de départ (s). `auto` : relance sans geste du joueur (rechargement). */
+    function playTrack(track, depart, auto) {
         stopAllPlayback();
 
         trackTitle.textContent  = track.title;
@@ -436,16 +595,32 @@
         if (track.type === 'youtube') {
             currentType = 'youtube';
             loadYTApi();
-            playYTVideo(track.videoId);
+            playYTVideo(track.videoId, depart);
+            // YouTube ne dit pas qu'il a refusé de démarrer : on regarde où il en est.
+            if (auto) setTimeout(() => {
+                if (currentIndex < 0 || queue[currentIndex] !== track || isPlaying) return;
+                montrerReprise({ id: track.id, position: depart || 0, lecture: true });
+            }, 3500);
         } else {
             currentType = 'audio';
             audioEl.src = track.src;
             audioEl.volume = isMuted ? 0 : volume;
+            audioEl.loop = (loopMode === 2);
+            if (depart > 0) {
+                audioEl.addEventListener('loadedmetadata', () => {
+                    try { audioEl.currentTime = Math.min(depart, Math.max(0, (audioEl.duration || depart) - 0.25)); } catch (e) {}
+                }, { once: true });
+            }
             audioEl.play().then(() => {
                 isPlaying = true;
                 playBtn.textContent = '⏸';
                 playerBar.classList.add('music-playing');
+                masquerReprise();
+                sauverBientot();
             }).catch(err => {
+                // Relancer le son sans geste du joueur est interdit : on le lui propose.
+                if (err && err.name === 'NotAllowedError') { montrerReprise({ id: track.id, position: depart || 0, lecture: true }); return; }
+                if (err && err.name === 'AbortError') return;
                 console.error(err);
                 showToast('⚠️ Impossible de lire ce fichier.', '#c0392b');
             });
@@ -484,6 +659,7 @@
         applyVolume();
         updateVolumeIcon();
         updateVolumeBar();
+        sauverBientot();
     }
 
     function updateVolumeIcon() {
@@ -506,19 +682,25 @@
     // =====================================================
     function cycleLoop() {
         loopMode = (loopMode + 1) % 3;
+        majBoutonBoucle();
+        sauverBientot();
+    }
+
+    function majBoutonBoucle() {
         const icons  = ['🔁', '🔁', '🔂'];
         const titles = ['Pas de boucle', 'Boucle — tout', 'Boucle — piste'];
         loopBtn.textContent = icons[loopMode];
         loopBtn.title       = titles[loopMode];
         loopBtn.classList.toggle('active', loopMode > 0);
         // Pour l'audio natif, loop one = boucle HTML
-        if (currentType === 'audio') audioEl.loop = (loopMode === 2);
+        if (audioEl) audioEl.loop = (loopMode === 2);
     }
 
     function toggleShuffle() {
         isShuffle = !isShuffle;
         shuffleBtn.classList.toggle('active', isShuffle);
         if (isShuffle) buildShuffleOrder();
+        sauverBientot();
     }
 
     function buildShuffleOrder() {
@@ -732,6 +914,7 @@
         urlEl.value = ''; titleEl.value = '';
         renderQueue();
         if (isShuffle) buildShuffleOrder();
+        sauverBientot();
 
         if (currentIndex < 0) { playAtIndex(queue.length - 1); closeAddPanel(); }
         else showToast('✅ Ajouté à la file', '#27ae60');
@@ -742,16 +925,29 @@
         if (!files.length) return;
         const wasEmpty = queue.length === 0;
 
+        let tropLourds = 0;
         files.forEach(file => {
             const src = URL.createObjectURL(file);
             const name = file.name.replace(/\.[^/.]+$/, '');
             const ext  = file.name.split('.').pop().toUpperCase();
-            queue.push({ id: uid(), type: 'audio', src, title: name, badge: `📁 ${ext}` });
+            const track = { id: uid(), type: 'audio', src, title: name, badge: `📁 ${ext}` };
+            // Gardé dans le coffre de l'appareil pour survivre au rechargement, sauf s'il est trop lourd.
+            if (file.size <= POIDS_MAX_FICHIER && window.charger) {
+                track.fichier = true;
+                window.charger('coffre').then(() => window.Coffre.ecrire('musique', track.id, file))
+                    .catch(() => { track.fichier = false; track.volatile = true; sauverBientot(); });
+            } else {
+                track.volatile = true;
+                tropLourds++;
+            }
+            queue.push(track);
         });
+        if (tropLourds) showToast(`⚠️ ${tropLourds} fichier(s) trop lourd(s) pour être gardé(s) : à rajouter après un rechargement`, '#c0392b');
 
         ev.target.value = '';
         renderQueue();
         if (isShuffle) buildShuffleOrder();
+        sauverBientot();
 
         if (wasEmpty) { playAtIndex(0); closeAddPanel(); }
         else showToast(`✅ ${files.length} fichier(s) ajouté(s)`, '#27ae60');
@@ -852,6 +1048,7 @@
                 if (v && queue[idx]) {
                     queue[idx].title = v;
                     if (idx === currentIndex && trackTitle) trackTitle.textContent = v;
+                    sauverBientot();
                 }
             }
             renderQueue();
@@ -866,6 +1063,9 @@
     }
 
     function removeTrack(idx) {
+        const piste = queue[idx];
+        if (piste && piste.fichier && window.Coffre) window.Coffre.effacer('musique', piste.id).catch(() => {});
+        if (piste && reprise && reprise.id === piste.id) masquerReprise();
         // Libérer les blob URLs créés localement
         if (queue[idx]?.src?.startsWith('blob:')) URL.revokeObjectURL(queue[idx].src);
 
@@ -884,6 +1084,7 @@
         queue.splice(idx, 1);
         if (isShuffle) buildShuffleOrder();
         renderQueue();
+        sauverBientot();
     }
 
     // =====================================================
@@ -921,6 +1122,7 @@
 
         if (isShuffle) buildShuffleOrder();
         renderQueue();
+        sauverBientot();
     }
 
     function onDragEnd() {

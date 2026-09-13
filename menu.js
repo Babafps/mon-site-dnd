@@ -34,6 +34,8 @@
                     if (d) d.open = true;
                 }
                 menu.scrollTop = 0;
+                // Mode nuit et confort de lecture : leurs commandes se chargent à la demande.
+                if (window.charger) window.charger('confort').catch(() => {});
                 setTimeout(() => menu.querySelector('.menu-close')?.focus({ preventScroll: true }), 40);
             }
             wasOpen = open;

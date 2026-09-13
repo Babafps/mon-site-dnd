@@ -84,6 +84,11 @@
                    + 'Coast LLC. Ce site n’est ni édité, ni approuvé, ni soutenu par Wizards of the '
                    + 'Coast. Le contenu du Manuel des Joueurs qui ne figure pas dans le SRD n’est pas '
                    + 'fourni ici : chacun saisit le sien dans son contenu personnel, qui reste privé.' },
+                { p: 'La police OpenDyslexic, proposée dans le menu pour faciliter la lecture, est '
+                   + 'distribuée sous licence SIL Open Font License 1.1 — Copyright (c) 2019-07-29, '
+                   + 'Abbie Gonzalez, avec le nom de police réservé « OpenDyslexic » ; Copyright (c) '
+                   + '12/2012 - 2019. Le texte complet de la licence accompagne les fichiers de la police '
+                   + '(fonts/OFL.txt).' },
 
                 { h: 'Contenu signalé' },
                 { p: 'Pour signaler un contenu illicite ou une atteinte à vos droits, écrivez à '

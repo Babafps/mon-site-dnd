@@ -26,7 +26,10 @@
         bourse: 'bourse.js',
         macros: 'macros.js',
         bestiaire: 'bestiaire.js',
-        carnet: 'carnet.js'
+        carnet: 'carnet.js',
+        confort: 'confort.js',
+        coffre: 'coffre.js',
+        seance: 'seance.js'
     };
     const promesses = new Map();        // fichier -> promesse
 

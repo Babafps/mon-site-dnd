@@ -37,9 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ouvrir une fiche, revenir à l'accueil… : chaque navigation recharge la page.
     // On tente donc l'envoi AVANT de partir. Rien n'est perdu si le réseau manque :
     // la file de synchro est déjà écrite sur le disque (auth.js).
+    // La page d'arrivée est celle du personnage désormais actif (`?perso=…`) : le
+    // bouton retour du navigateur ramène d'où l'on vient. Pendant l'envoi,
+    // l'écran de chargement recouvre la page (script de démarrage, index.html).
     function rechargerApresEnvoi() {
-        Promise.resolve(window.SyncQueue ? window.SyncQueue.quitter() : null)
-            .then(() => location.reload(), () => location.reload());
+        const envoyer = () => (window.SyncQueue ? window.SyncQueue.quitter() : null);
+        if (window.Demarrage) { window.Demarrage.aller(DB.get('dnd-active-char'), envoyer); return; }
+        Promise.resolve(envoyer()).then(() => location.reload(), () => location.reload());
     }
 
     let ACTIVE_CHAR_ID = DB.get('dnd-active-char');
@@ -182,6 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try { (JSON.parse(DB.get('dnd-character-list') || '[]') || []).forEach(add); } catch (e) {}
             if (user) {
                 try { ((await window.SupaAuth.loadCharacters()) || []).forEach(add); } catch (e) {}
+                // La corbeille aussi (LOT 6.1) : ces personnages existent encore.
+                try { ((window.SupaAuth.chargerCorbeille ? await window.SupaAuth.chargerCorbeille() : null) || []).forEach(add); } catch (e) {}
             }
             DB.keys().forEach(k => {
                 const i = k.indexOf('_dnd-');
@@ -196,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     name: c.name || data['dnd-sheet-char-name'] || 'Sans nom',
                     level: c.level != null ? c.level : (parseInt(data['dnd-sheet-char-level'], 10) || 1),
                     class: c.class || data['dnd-sheet-char-class'] || '',
+                    ...(c.deleted_at ? { deleted_at: c.deleted_at } : {}),
                     data
                 });
             }
@@ -308,11 +315,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // --- Mode Nuit (fiche) ---
-    const toggleDarkMode = document.getElementById('toggle-dark-mode');
-    function applyDarkMode(on) { document.body.classList.toggle('theme-dark', on); if(toggleDarkMode) toggleDarkMode.checked = on; }
-    applyDarkMode(DB.get('dnd-theme-darkmode') === 'true');
-    if(toggleDarkMode) toggleDarkMode.addEventListener('change', (e) => { DB.set('dnd-theme-darkmode', e.target.checked); applyDarkMode(e.target.checked); });
+    // --- Mode nuit : clair, sombre ou auto ---
+    // Posé avant le premier affichage par le script de démarrage (index.html,
+    // window.Demarrage), qui suit aussi l'appareil en mode auto. Les commandes du
+    // menu ☰ vivent dans confort.js, chargé à l'ouverture du menu.
 
     // --- Préférences d'affichage des modules (menu ☰) ---
     // Câblées ICI, hors des branches accueil / fiche, pour être utilisables depuis les
@@ -437,6 +443,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (settingsDropdown) settingsDropdown.classList.add('hidden');
         if (window.__openPlayerShortcuts) { window.__openPlayerShortcuts(); return; }
         if (window.showAppToast) window.showAppToast('Ouvre une fiche pour régler les raccourcis.', '#7a6050');
+    });
+
+    // 📅 Prochaine séance (LOT 6.4) : celle du personnage ouvert. À l'accueil,
+    // chaque carte a la sienne dans son menu « ⋯ ».
+    document.getElementById('btn-menu-seance')?.addEventListener('click', () => {
+        if (settingsDropdown) settingsDropdown.classList.add('hidden');
+        if (!ACTIVE_CHAR_ID) { window.showAppToast('Ouvre une fiche, ou passe par le menu ⋯ de sa carte à l’accueil.', 'info'); return; }
+        const nom = (document.getElementById('char-name')?.value || '').trim();
+        window.charger('seance').then(() => window.Seance.editer(ACTIVE_CHAR_ID, nom))
+            .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
     });
 
     // Export / import d'UNE fiche : le format vit dans sheet-io.js, l'écran
@@ -862,6 +878,227 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.showAppToast) window.showAppToast('📄 « ' + newName + ' » créé');
         }
 
+        // ===== SUPPRIMER UN PERSONNAGE, ET LA CORBEILLE (LOT 6.1) =====
+        // C'est la BASE qui tranche (docs/corbeille.sql) : avec le droit à la
+        // corbeille, le personnage y dort 30 jours, restaurable ; sans lui, la
+        // suppression est définitive — on fait alors retaper son nom. Un
+        // personnage seulement local (sans compte) suit ce second chemin.
+        const droitCorbeille = () => !!(window.Ent && (window.Ent.has('abonnement') || window.Ent.has('corbeille')));
+        const nomAffiche = (c) => String((c && c.name) || '').trim() || 'Sans nom';
+
+        /** Retire un personnage de l'accueil. `donnees` : efface aussi sa fiche locale et sa file d'envoi. */
+        function oublierPersonnage(id, donnees) {
+            charactersList = charactersList.filter(char => char.id !== id);
+            DB.set('dnd-character-list', JSON.stringify(charactersList));
+            if (!donnees) return;
+            DB.keys().forEach(k => { if (k.startsWith(id + '_')) DB.remove(k); });
+            // Une file d'envoi orpheline relancerait l'envoi, sans fin, vers un personnage disparu.
+            DB.remove('dnd-file-sync_' + id);
+            delete charMeta[id]; saveCharMeta();
+            if (window.charger) window.charger('coffre').then(() => window.Coffre.effacer('vignettes', id)).catch(() => {});
+        }
+        const confirmerDefinitif = (nom) => window.Dialogue.confirmer({
+            titre: 'Supprimer ce personnage ?', danger: true, icone: '🗑', confirmer: 'Supprimer définitivement',
+            message: `« ${nom} » et toute sa fiche seront effacés. C’est sans retour en arrière.`,
+            saisie: { attendu: nom, etiquette: 'Retape son nom pour confirmer' }
+        });
+        const signalerPanne = () => window.Dialogue.informer({
+            titre: 'Suppression impossible', type: 'erreur',
+            message: 'Le serveur ne répond pas : rien n’a été supprimé. Vérifie ta connexion, puis réessaie.'
+        });
+
+        async function supprimerPersonnage(c) {
+            const nom = nomAffiche(c);
+            const auth = window.SupaAuth;
+            const connecte = !!(auth && auth.currentUser);
+            const corbeille = connecte && droitCorbeille() && auth.corbeilleDisponible !== false;
+            const ok = corbeille
+                ? await window.Dialogue.confirmer({
+                    titre: 'Mettre à la corbeille ?', icone: '🗑', confirmer: 'Mettre à la corbeille',
+                    message: `« ${nom} » quitte ta liste et reste 30 jours dans la corbeille, en bas de l’accueil. Tu peux le restaurer jusque-là.`
+                })
+                : await confirmerDefinitif(nom);
+            if (!ok) return;
+            if (!connecte) {
+                oublierPersonnage(c.id, true);
+                renderCharacterList();
+                window.showAppToast(`🗑 « ${nom} » a été supprimé`, 'info');
+                return;
+            }
+            // Ce qui attend encore part d'abord : la corbeille garde la dernière version.
+            if (window.SyncQueue) await window.SyncQueue.quitter();
+            let issue;
+            try { issue = await auth.mettreALaCorbeille(c.id); }
+            catch (e) { signalerPanne(); return; }
+            if (issue === 'corbeille') {
+                oublierPersonnage(c.id, false);
+                // La fiche locale n'est gardée que si des modifications attendent encore le réseau.
+                const reste = window.SyncQueue ? Object.keys(window.SyncQueue.attente(c.id)).length : 0;
+                if (!reste) DB.keys().forEach(k => { if (k.startsWith(c.id + '_')) DB.remove(k); });
+                renderCharacterList();
+                majCorbeille();
+                window.showAppToast(`🗑 « ${nom} » est dans la corbeille pour 30 jours`, 'info');
+                return;
+            }
+            if (issue !== 'introuvable') {
+                // Le serveur ne reconnaît pas le droit (ou la migration manque) : suppression définitive.
+                if (corbeille && !await confirmerDefinitif(nom)) return;
+                if (!await auth.deleteCharacter(c.id)) { signalerPanne(); return; }
+            }
+            oublierPersonnage(c.id, true);
+            renderCharacterList();
+            window.showAppToast(`🗑 « ${nom} » a été supprimé`, 'info');
+        }
+
+        let jetonCorbeille = 0;
+        const joursRestants = (iso) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
+        /** La section « Corbeille » de l'accueil : invisible tant qu'elle est vide. */
+        async function majCorbeille() {
+            const boite = document.getElementById('home-corbeille');
+            const auth = window.SupaAuth;
+            if (!boite) return;
+            if (!auth || !auth.currentUser || !auth.chargerCorbeille) { boite.hidden = true; return; }
+            const jeton = ++jetonCorbeille;
+            let liste;
+            try { liste = await auth.chargerCorbeille(); }
+            catch (e) { return; }                       // hors ligne : l'affichage précédent reste
+            if (jeton !== jetonCorbeille) return;
+            const ul = boite.querySelector('.corb-liste');
+            if (!liste || !liste.length) { boite.hidden = true; if (ul) ul.innerHTML = ''; return; }
+            boite.hidden = false;
+            const nb = boite.querySelector('.corb-nb');
+            if (nb) nb.textContent = '(' + liste.length + ')';
+            ul.innerHTML = '';
+            liste.forEach(c => {
+                const nom = nomAffiche(c);
+                const j = joursRestants(c.purge_at);
+                const quand = j <= 0 ? 'effacé définitivement aujourd’hui' : j === 1 ? 'effacé définitivement demain' : `effacé définitivement dans ${j} jours`;
+                const li = document.createElement('li');
+                li.className = 'corb-ligne';
+                li.innerHTML = `<div class="corb-info"><b class="corb-nom">${escChar(nom)}</b>`
+                    + `<small>Niveau ${escChar(c.level || 1)}${c.class ? ' · ' + escChar(c.class) : ''} — ${quand}</small></div>`
+                    + `<div class="corb-actions"><button type="button" class="btn-small corb-restaurer">↩ Restaurer</button>`
+                    + `<button type="button" class="btn-small corb-effacer">Supprimer définitivement</button></div>`;
+                const restaurer = li.querySelector('.corb-restaurer'), effacer = li.querySelector('.corb-effacer');
+                restaurer.setAttribute('aria-label', 'Restaurer ' + nom);
+                effacer.setAttribute('aria-label', 'Supprimer définitivement ' + nom);
+                restaurer.addEventListener('click', () => restaurerPersonnage(c));
+                effacer.addEventListener('click', () => effacerDeLaCorbeille(c));
+                ul.appendChild(li);
+            });
+        }
+
+        async function restaurerPersonnage(c) {
+            const auth = window.SupaAuth, nom = nomAffiche(c);
+            let issue;
+            try { issue = await auth.restaurerPersonnage(c.id); }
+            catch (e) {
+                window.Dialogue.informer({ titre: 'Restauration impossible', type: 'erreur', message: 'Le serveur ne répond pas. Vérifie ta connexion, puis réessaie.' });
+                return;
+            }
+            if (issue === 'quota') {
+                const q = window.Ent ? window.Ent.characterQuota() : { max: 3 };
+                const voir = await window.Dialogue.confirmer({
+                    titre: 'Maximum de fiches synchronisées', icone: '☁', confirmer: 'Voir les tarifs', annuler: 'Fermer',
+                    message: `Ton compte synchronise déjà ${q.max} fiches, le maximum sans abonnement. Supprime d’abord un autre personnage pour faire de la place.`
+                });
+                if (voir && window.Pricing) window.Pricing.open();
+                return;
+            }
+            if (issue === 'restaure') {
+                window.showAppToast(`↩ « ${nom} » est de retour`, 'reussite');
+                // La liste et la fiche reviennent du cloud, comme à la connexion.
+                if (window.loadUserDataIntoLocalStorage) await window.loadUserDataIntoLocalStorage(auth.currentUser.id);
+            }
+            majCorbeille();
+        }
+
+        async function effacerDeLaCorbeille(c) {
+            const nom = nomAffiche(c);
+            if (!await confirmerDefinitif(nom)) return;
+            let issue;
+            try { issue = await window.SupaAuth.supprimerDefinitivement(c.id); }
+            catch (e) { signalerPanne(); return; }
+            if (issue === 'supprime' || issue === 'introuvable') {
+                oublierPersonnage(c.id, true);
+                window.showAppToast(`🗑 « ${nom} » a été supprimé définitivement`, 'info');
+            }
+            majCorbeille();
+        }
+
+        // ===== CARTES DE L'ACCUEIL (LOT 6.3 / 6.4) =====
+        // Le style de carte de héros choisi (une vignette mise en cache par la
+        // fiche, dans le coffre de l'appareil), la dernière ouverture, et le
+        // compte à rebours de la prochaine séance.
+        const formatRelatif = (() => { try { return new Intl.RelativeTimeFormat('fr', { numeric: 'auto' }); } catch (e) { return null; } })();
+        function ouvertIlYa(ts) {
+            if (!ts || !formatRelatif) return '';
+            const ecart = Date.now() - ts;
+            if (ecart < 60000) return 'ouvert à l’instant';
+            if (ecart < 3600000) return 'ouvert ' + formatRelatif.format(-Math.round(ecart / 60000), 'minute');
+            const a = new Date(), b = new Date(ts);
+            const jours = Math.round((new Date(a.getFullYear(), a.getMonth(), a.getDate()) - new Date(b.getFullYear(), b.getMonth(), b.getDate())) / 86400000);
+            if (jours <= 0) return 'ouvert ' + formatRelatif.format(-Math.round(ecart / 3600000), 'hour');
+            if (jours < 45) return jours === 1 ? 'ouvert hier' : 'ouvert il y a ' + jours + ' jours';
+            return 'ouvert ' + formatRelatif.format(-Math.round(jours / 30), 'month');
+        }
+
+        function ouvrirSeance(c) {
+            window.charger('seance').then(() => window.Seance.editer(c.id, nomAffiche(c)))
+                .then(change => { if (change) renderCharacterList(); })
+                .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+        }
+
+        let jetonCartes = 0, minuteurSeances = null;
+        function habillerCartes(liste) {
+            const jeton = ++jetonCartes;
+            const listDiv = document.getElementById('character-list');
+            const carte = (id) => listDiv ? [...listDiv.querySelectorAll('.char-card')].find(x => x.dataset.id === id) : null;
+            if (!window.charger) return;
+
+            if (liste.length) window.charger('coffre').then(() => Promise.all(liste.map(c =>
+                window.Coffre.lire('vignettes', c.id).then(v => ({ c, v }), () => ({ c, v: null }))
+            ))).then(res => {
+                if (jeton !== jetonCartes) return;
+                res.forEach(({ c, v }) => {
+                    const el = carte(c.id);
+                    if (!el || !v || !v.image) return;
+                    el.classList.add('a-style');
+                    el.style.setProperty('--carte-or', v.or);
+                    el.style.setProperty('--carte-f1', v.f1);
+                    el.style.setProperty('--carte-f2', v.f2);
+                    const img = document.createElement('img');
+                    img.className = 'char-card-vignette';
+                    img.src = v.image; img.alt = ''; img.width = 46; img.height = 58;
+                    const avatar = el.querySelector('.char-card-avatar');
+                    if (avatar) avatar.replaceWith(img);
+                });
+            }).catch(() => {});
+
+            clearInterval(minuteurSeances); minuteurSeances = null;
+            const avecSeance = liste.filter(c => { const b = DB.get(c.id + '_dnd-seance'); return b && b !== 'undefined'; });
+            if (!avecSeance.length) return;
+            window.charger('seance').then(() => {
+                if (jeton !== jetonCartes) return;
+                const peindre = () => avecSeance.forEach(c => {
+                    const el = carte(c.id);
+                    const badge = el && el.querySelector('.char-seance');
+                    if (!badge) return;
+                    const l = window.Seance.libelle(window.Seance.lire(c.id));
+                    badge.hidden = !l;
+                    badge.textContent = l ? '📅 ' + l.court : '';
+                    badge.title = l ? l.long : '';
+                    el.classList.toggle('seance-proche', !!(l && (l.enCours || l.jours <= 1)));
+                });
+                peindre();
+                // Le compte à rebours avance tant que l'accueil est affiché.
+                minuteurSeances = setInterval(() => {
+                    const accueil = document.getElementById('home-screen');
+                    if (jeton === jetonCartes && accueil && !accueil.classList.contains('hidden')) peindre();
+                }, 60000);
+            }).catch(() => {});
+        }
+
         function renderCharacterList() {
             const listDiv = document.getElementById('character-list');
             if (!listDiv) return;
@@ -908,6 +1145,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const archived = !!metaOf(c.id).archived;
                 const card = document.createElement('div');
                 card.className = 'char-card' + (archived ? ' is-archived' : '');
+                card.dataset.id = c.id;
                 // Vignette du perso : l'avatar est stocké sous `{charId}_dnd-avatar`
                 // (chargé en localStorage pour local ET Supabase → dispo dès l'accueil).
                 const avatarSrc = DB.get(c.id + '_dnd-avatar');
@@ -917,16 +1155,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const info = document.createElement('div'); info.className = 'char-info';
                 info.innerHTML = `<span class="char-name">${escChar(c.name)}</span>`
-                    + `<span class="char-sub">Niveau ${c.level || 1}${c.class ? ' · ' + escChar(c.class) : ''}${archived ? ' · archivé' : ''}</span>`;
+                    + `<span class="char-sub">Niveau ${c.level || 1}${c.class ? ' · ' + escChar(c.class) : ''}${archived ? ' · archivé' : ''}</span>`
+                    + `<span class="char-meta"><span class="char-ouvert">${escChar(ouvertIlYa(metaOf(c.id).lastOpened))}</span><span class="char-seance" hidden></span></span>`;
 
-                const openChar = async () => {
+                const openChar = () => {
                     metaOf(c.id).lastOpened = Date.now(); saveCharMeta();
                     DB.set('dnd-active-char', c.id);
                     // L'envoi d'abord : sinon le cloud, relu juste après, pourrait
                     // renvoyer une version plus ancienne que ce qui attend ici.
-                    if (window.SyncQueue) await window.SyncQueue.quitter();
-                    if (window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); }
-                    location.reload();
+                    const preparer = async () => {
+                        if (window.SyncQueue) await window.SyncQueue.quitter();
+                        if (window.SupaAuth?.currentUser && window.loadCharacterDataIntoLocalStorage) { await window.loadCharacterDataIntoLocalStorage(c.id); }
+                    };
+                    // Le livre s'ouvre pendant ce temps : plus de page blanche (LOT 6.2).
+                    if (window.Demarrage) window.Demarrage.aller(c.id, preparer);
+                    else preparer().then(() => location.reload());
                 };
                 // La carte entière ouvre le personnage : ouvrir = 1 clic.
                 card.onclick = openChar;
@@ -963,21 +1206,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     menu.appendChild(b);
                 };
                 addItem('📄  Dupliquer', () => duplicateCharacter(c));
+                addItem('📅  Prochaine séance', () => ouvrirSeance(c));
                 addItem(archived ? '📂  Désarchiver' : '🗄️  Archiver', () => {
                     metaOf(c.id).archived = !archived; saveCharMeta(); syncCharMetaCloud(c.id); renderCharacterList();
                 });
-                addItem('🗑  Supprimer', async () => {
-                    if (!await window.Dialogue.confirmer({
-                        titre: 'Supprimer ce personnage ?', danger: true, confirmer: 'Supprimer',
-                        message: `« ${c.name} » et toute sa fiche seront effacés. C'est sans retour en arrière.`
-                    })) return;
-                    if (window.SupaAuth?.currentUser) { await window.SupaAuth.deleteCharacter(c.id); }
-                    charactersList = charactersList.filter(char => char.id !== c.id);
-                    DB.set('dnd-character-list', JSON.stringify(charactersList));
-                    DB.keys().forEach(k => { if (k.startsWith(c.id + '_')) DB.remove(k); });
-                    delete charMeta[c.id]; saveCharMeta();
-                    renderCharacterList();
-                }, 'is-danger');
+                addItem('🗑  Supprimer', () => supprimerPersonnage(c), 'is-danger');
 
                 menuBtn.onclick = (e) => {
                     e.stopPropagation();
@@ -991,6 +1224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.appendChild(thumb); card.appendChild(info); card.appendChild(actions);
                 listDiv.appendChild(card);
             });
+            habillerCartes(visible);
         }
 
         const charSortSelect = document.getElementById('char-sort-select');
@@ -1008,6 +1242,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (Array.isArray(parsed)) { charactersList = parsed; hydrateCharMetaFromCloud(parsed); }
             } catch (e) {}
             renderCharacterList();
+            majCorbeille();
         };
     } else { 
         let quillNewJournal = new Quill('#new-journal-content', { theme: 'snow' });
@@ -1258,6 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const r = window.Calcul ? window.Calcul.valeur('ca') : null;
                 ca.textContent = (r && r.total != null) ? r.total : (document.getElementById('armor-class')?.value || '–');
             }
+            if (typeof majBandeauMobile === 'function') majBandeauMobile();
         }
 
         function renderMobileSheet() {
@@ -1303,7 +1539,123 @@ document.addEventListener('DOMContentLoaded', () => {
         // Câblage de l'affichage téléphone : onglets bas, bandeau vital, chevron d'en-tête, bascule au redimensionnement
         document.querySelectorAll('#mobile-nav .mob-tab').forEach(btn => btn.addEventListener('click', () => switchMobileTab(btn.dataset.msec)));
         const mobVitalsBtn = document.getElementById('mob-vitals');
-        if (mobVitalsBtn) mobVitalsBtn.addEventListener('click', () => switchMobileTab('combat'));
+        // Toucher le bandeau vital (LOT 6.9) : de gros boutons − et + avec un montant,
+        // sans quitter la section en cours. « Aller au combat » reste à un geste.
+        if (mobVitalsBtn) mobVitalsBtn.addEventListener('click', ouvrirPvRapides);
+        function ouvrirPvRapides() {
+            if (!window.Dialogue) { switchMobileTab('combat'); return; }
+            let corps = null;
+            const lirePv = () => ({
+                cur: parseInt(document.getElementById('hp-current')?.value) || 0,
+                max: parseInt(document.getElementById('hp-max')?.value) || 0,
+                temp: parseInt(document.getElementById('hp-temp')?.value) || 0
+            });
+            const majEtat = () => {
+                if (!corps) return;
+                const p = lirePv();
+                corps.querySelector('.pvr-etat').textContent = `${p.cur} / ${p.max} PV` + (p.temp > 0 ? ` · ${p.temp} temporaires` : '');
+            };
+            const appliquer = (sens) => {
+                const champ = corps.querySelector('.pvr-montant');
+                const n = Math.abs(parseInt(String(champ.value).replace(/[^\d]/g, ''), 10) || 0);
+                if (!n) {
+                    champ.setAttribute('aria-invalid', 'true');
+                    corps.querySelector('.pvr-aide').textContent = 'Indique d’abord un montant.';
+                    champ.focus();
+                    return;
+                }
+                champ.removeAttribute('aria-invalid');
+                corps.querySelector('.pvr-aide').textContent = '';
+                applyHpDelta(sens * n);
+                champ.value = '';
+                majEtat();
+            };
+            window.Dialogue.fenetre({
+                titre: 'Points de vie', icone: '❤', confirmer: 'Fermer', annuler: null, annule: false,
+                corps(boite) {
+                    corps = document.createElement('div');
+                    corps.className = 'pvr';
+                    corps.innerHTML = `
+                        <p class="pvr-etat" aria-live="polite"></p>
+                        <div class="pvr-rapides" role="group" aria-label="Montants rapides">${[1, 2, 5, 10].map(n => `<button type="button" class="pvr-rapide" data-n="${n}">${n}</button>`).join('')}</div>
+                        <label class="pvr-champ"><span>Montant</span><input type="text" inputmode="numeric" autocomplete="off" class="dlg-saisie pvr-montant" placeholder="8"></label>
+                        <p class="pvr-aide" role="alert"></p>
+                        <div class="pvr-gros">
+                            <button type="button" class="pvr-btn pvr-degats" data-sens="-1"><span aria-hidden="true">−</span> Dégâts</button>
+                            <button type="button" class="pvr-btn pvr-soin" data-sens="1"><span aria-hidden="true">+</span> Soin</button>
+                        </div>
+                        <p class="pvr-note">Les PV temporaires encaissent les dégâts d’abord. Au clavier : « -8 » puis Entrée inflige 8, « 8 » soigne 8.</p>
+                        <button type="button" class="btn-small pvr-combat">⚔️ Aller au combat</button>`;
+                    const champ = corps.querySelector('.pvr-montant');
+                    corps.addEventListener('click', (e) => {
+                        const rapide = e.target.closest('.pvr-rapide');
+                        if (rapide) { champ.value = rapide.dataset.n; champ.removeAttribute('aria-invalid'); corps.querySelector('.pvr-aide').textContent = ''; return; }
+                        const gros = e.target.closest('.pvr-btn');
+                        if (gros) { appliquer(parseInt(gros.dataset.sens, 10)); return; }
+                        if (e.target.closest('.pvr-combat')) {
+                            boite.querySelector('[data-dlg="valider"]').click();
+                            switchMobileTab('combat');
+                        }
+                    });
+                    // Entrée dans le champ : le signe décide, comme dans la fiche (LOT 1.4).
+                    champ.addEventListener('keydown', (e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const m = String(champ.value).replace(/\s+/g, '').match(/^([+−-]?)(\d+)$/);
+                        if (!m) { appliquer(1); return; }
+                        applyHpDelta((m[1] === '-' || m[1] === '−' ? -1 : 1) * parseInt(m[2], 10));
+                        champ.value = '';
+                        majEtat();
+                    });
+                    majEtat();
+                    return corps;
+                },
+                resultat: () => true
+            });
+        }
+
+        // Le bandeau montre aussi la concentration et les états actifs (LOT 6.9).
+        const escBandeau = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        function majBandeauMobile() {
+            const btn = document.getElementById('mob-vitals');
+            if (!btn) return;
+            const cb = document.getElementById('is-concentrating');
+            const enConc = !!(cb && cb.checked);
+            const sort = enConc ? (getStore('dnd-concentration-spell', false) || '') : '';
+            const conc = document.getElementById('mob-vitals-conc');
+            if (conc) conc.hidden = !enConc;
+            const actifs = window.Etats ? window.Etats.actifs() : [];
+            const etats = document.getElementById('mob-vitals-etats');
+            if (etats) {
+                etats.innerHTML = actifs.slice(0, 2).map(e => `<span class="mob-etat">${escBandeau(e.icone)}</span>`).join('')
+                    + (actifs.length > 2 ? `<span class="mob-etat-plus">+${actifs.length - 2}</span>` : '');
+            }
+            const cur = parseInt(document.getElementById('hp-current')?.value) || 0;
+            const max = parseInt(document.getElementById('hp-max')?.value) || 0;
+            const temp = parseInt(document.getElementById('hp-temp')?.value) || 0;
+            btn.setAttribute('aria-label', `Points de vie : ${cur} sur ${max}`
+                + (temp > 0 ? `, ${temp} temporaires` : '')
+                + (enConc ? ', concentration' + (sort ? ' sur ' + sort : '') : '')
+                + (actifs.length ? ', états : ' + actifs.map(e => e.nom + (e.niveau ? ' ' + e.niveau : '')).join(', ') : '')
+                + '. Ouvrir les soins et les dégâts.');
+        }
+        // Les pastilles d'états (etats.js) et la classe de concentration du corps de page
+        // changent par plusieurs chemins : on observe le résultat plutôt que chaque geste.
+        (function brancherBandeau() {
+            let dernier = '';
+            const verifier = () => {
+                const cle = (document.body.classList.contains('concentrating-mode') ? 'c' : '') + '|' + (document.getElementById('etats-pastilles')?.textContent || '');
+                if (cle !== dernier) { dernier = cle; majBandeauMobile(); }
+            };
+            if (window.MutationObserver) {
+                new MutationObserver(verifier).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+                const pastilles = document.getElementById('etats-pastilles');
+                if (pastilles) new MutationObserver(verifier).observe(pastilles, { childList: true, subtree: true, characterData: true });
+            }
+            document.getElementById('is-concentrating')?.addEventListener('change', majBandeauMobile);
+            setTimeout(majBandeauMobile, 0);
+        })();
         const mobHeaderToggle = document.getElementById('mob-header-toggle');
         if (mobHeaderToggle) mobHeaderToggle.addEventListener('click', () => {
             const header = document.querySelector('.sheet-header'); if (!header) return;
@@ -9458,20 +9810,50 @@ document.addEventListener('DOMContentLoaded', () => {
         // Actions disponibles + touche par défaut. La touche peut être changée par le joueur
         // (stockée dans `dnd-shortcuts-player`, préférence GLOBALE non liée au personnage).
         const PLAYER_SC_ACTIONS = [
-            { id: 'dice', def: 'd', label: 'Ouvrir / fermer le plateau de dés', run: () => document.getElementById('btn-toggle-dice')?.click() },
+            // `cible` : le bouton qui fait la même chose. Sa bulle d'aide et son
+            // attribut aria-keyshortcuts affichent la touche, et la suivent si elle change.
+            { id: 'dice', def: 'd', label: 'Ouvrir / fermer le plateau de dés', cible: '#btn-toggle-dice', run: () => document.getElementById('btn-toggle-dice')?.click() },
             { id: 'roll', def: 'r', label: 'Lancer un d20', run: () => quickD20('normal') },
             { id: 'adv', def: 'a', label: 'Lancer un d20 avec avantage', run: () => quickD20('adv') },
             { id: 'dis', def: 'e', label: 'Lancer un d20 avec désavantage', run: () => quickD20('dis') },
-            { id: 'grimoire', def: 'g', label: 'Ouvrir le grimoire', run: () => document.getElementById('btn-open-grimoire')?.click() },
-            { id: 'restShort', def: 'c', label: 'Repos court', run: () => document.getElementById('btn-short-rest')?.click() },
-            { id: 'restLong', def: 'l', label: 'Repos long', run: () => document.getElementById('btn-long-rest')?.click() },
-            { id: 'search', def: 'f', label: 'Recherche globale', run: () => document.getElementById('btn-global-search-trigger')?.click() },
-            { id: 'help', def: '?', label: 'Afficher cette aide', run: () => openShortcutsModal() },
+            { id: 'grimoire', def: 'g', label: 'Ouvrir le grimoire', cible: '#btn-open-grimoire', run: () => document.getElementById('btn-open-grimoire')?.click() },
+            { id: 'restShort', def: 'c', label: 'Repos court', cible: '#btn-short-rest', run: () => document.getElementById('btn-short-rest')?.click() },
+            { id: 'restLong', def: 'l', label: 'Repos long', cible: '#btn-long-rest', run: () => document.getElementById('btn-long-rest')?.click() },
+            { id: 'search', def: 'f', label: 'Recherche globale', cible: '#btn-global-search-trigger', run: () => document.getElementById('btn-global-search-trigger')?.click() },
+            // LOT 6.10
+            { id: 'degats', def: 'x', label: 'Infliger des dégâts (tape le montant, puis Entrée)', cible: '#btn-hp-damage', run: () => preparerMontantPv('-') },
+            { id: 'soin', def: 's', label: 'Soigner (tape le montant, puis Entrée)', cible: '#btn-hp-heal', run: () => preparerMontantPv('+') },
+            { id: 'inspiration', def: 'i', label: 'Utiliser l’inspiration', cible: '#btn-utiliser-inspiration', run: () => {
+                if (caseInspiration() && caseInspiration().checked) utiliserInspiration();
+                else window.showAppToast('✦ Tu n’as pas d’inspiration à utiliser pour l’instant.', 'info');
+            } },
+            { id: 'mort', def: 'm', label: 'Jet contre la mort', cible: '#btn-jet-mort', run: () => document.getElementById('btn-jet-mort')?.click() },
+            { id: 'etats', def: 't', label: 'Tous les états', cible: '#btn-etats-tous', run: () => { if (window.Etats) window.Etats.ouvrirTous(); else document.getElementById('btn-etats-tous')?.click(); } },
+            { id: 'help', def: '?', label: 'Afficher cette aide', cible: '#btn-shortcuts', run: () => openShortcutsModal() },
         ];
         // ⚠️ hasOwnProperty (et non `saved[id] || def`) : une touche VOLONTAIREMENT libérée est stockée
         // à '' — avec `||` elle serait retombée sur sa valeur par défaut et aurait recréé le conflit.
-        function playerShortcutMap() { let saved = {}; try { saved = JSON.parse(DB.get('dnd-shortcuts-player') || '{}'); } catch (e) {} const m = {}; PLAYER_SC_ACTIONS.forEach(a => { const has = Object.prototype.hasOwnProperty.call(saved, a.id); m[a.id] = String(has ? saved[a.id] : a.def).toLowerCase(); }); return m; }
-        function savePlayerShortcutMap(m) { DB.set('dnd-shortcuts-player', JSON.stringify(m)); }
+        // Une touche déjà prise par le joueur n'est jamais reprise par une action ajoutée
+        // plus tard : la nouvelle action reste alors sans touche, à régler dans l'éditeur.
+        function playerShortcutMap() {
+            let saved = {};
+            try { saved = JSON.parse(DB.get('dnd-shortcuts-player') || '{}') || {}; } catch (e) {}
+            const m = {};
+            const prises = new Set();
+            PLAYER_SC_ACTIONS.forEach(a => {
+                if (!Object.prototype.hasOwnProperty.call(saved, a.id)) return;
+                m[a.id] = String(saved[a.id]).toLowerCase();
+                if (m[a.id]) prises.add(m[a.id]);
+            });
+            PLAYER_SC_ACTIONS.forEach(a => {
+                if (Object.prototype.hasOwnProperty.call(m, a.id)) return;
+                const k = String(a.def).toLowerCase();
+                m[a.id] = prises.has(k) ? '' : k;
+                if (m[a.id]) prises.add(k);
+            });
+            return m;
+        }
+        function savePlayerShortcutMap(m) { DB.set('dnd-shortcuts-player', JSON.stringify(m)); majInfobullesRaccourcis(); }
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             const appScreen = document.getElementById('app-screen');
@@ -9519,8 +9901,56 @@ document.addEventListener('DOMContentLoaded', () => {
         }, true);
         function openShortcutsModal() { scCaptureId = null; renderShortcutsEditor(); document.getElementById('shortcuts-modal')?.classList.remove('hidden'); }
         window.__openPlayerShortcuts = openShortcutsModal;   // exposé : le bouton ☰ est câblé au niveau global (voir plus haut)
+
+        /** Dégâts ou soin au clavier : le champ de PV rapides, le signe déjà posé. */
+        function preparerMontantPv(signe) {
+            const champ = document.getElementById('hp-quick-amount');
+            if (!champ) return;
+            if (isMobileView()) switchMobileTab('combat');
+            const calme = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            champ.scrollIntoView({ block: 'center', behavior: calme ? 'auto' : 'smooth' });
+            champ.value = signe;
+            champ.focus({ preventScroll: true });
+            try { champ.setSelectionRange(signe.length, signe.length); } catch (e) {}
+        }
+
+        /** La touche de chaque action, dans la bulle et l'attribut aria-keyshortcuts de son bouton. */
+        function majInfobullesRaccourcis() {
+            const map = playerShortcutMap();
+            PLAYER_SC_ACTIONS.forEach(a => {
+                if (!a.cible) return;
+                document.querySelectorAll(a.cible).forEach(el => {
+                    if (el.dataset.titreBase === undefined) el.dataset.titreBase = el.getAttribute('title') || '';
+                    const base = el.dataset.titreBase || a.label;
+                    const k = map[a.id];
+                    if (k) {
+                        el.setAttribute('aria-keyshortcuts', k === '?' ? 'Shift+?' : k.toUpperCase());
+                        el.title = base + ' (raccourci : ' + keyLabel(k) + ')';
+                    } else {
+                        el.removeAttribute('aria-keyshortcuts');
+                        el.title = base;
+                    }
+                });
+            });
+        }
+        majInfobullesRaccourcis();
+
+        // ===== VIGNETTE DE LA CARTE DE HÉROS, POUR L'ACCUEIL (LOT 6.3) =====
+        // L'accueil ne charge pas l'atelier : il montre un petit aperçu, peint
+        // ici quand la fiche est au repos, et rangé dans le coffre de l'appareil.
+        function rafraichirVignette() {
+            if (!window.HeroCard || !window.HeroCard.vignette || !window.charger) return;
+            const id = ACTIVE_CHAR_ID;
+            window.HeroCard.vignette()
+                .then(v => (v ? window.charger('coffre').then(() => window.Coffre.ecrire('vignettes', id, v)) : null))
+                .catch(() => {});
+        }
+        const auRepos = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 200));
+        setTimeout(() => auRepos(rafraichirVignette), 3000);
+        document.addEventListener('carte:exportee', rafraichirVignette);
+        document.addEventListener('carte:fermee', rafraichirVignette);
         document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => { scCaptureId = null; document.getElementById('shortcuts-modal')?.classList.add('hidden'); });
-        document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => { DB.remove('dnd-shortcuts-player'); renderShortcutsEditor(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
+        document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => { DB.remove('dnd-shortcuts-player'); renderShortcutsEditor(); majInfobullesRaccourcis(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
         
         // Migration sans perte : les fiches d'avant ne connaissent que le TOTAL
         // d'initiative. On en déduit la part manuelle (total − modificateur de DEX).
@@ -9588,6 +10018,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             ? `<p class="rw-attrib">${window.Edition.attributionHtml(window.SRD.getEdition())}</p>`
                             : `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`);
                     document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat: res.category, id: res.id, box: bodyEl } }));
+                    // L'étoile et la liste des fiches consultées : les mêmes que la page Règles (LOT 6.5).
+                    if (window.ReglesFavoris) {
+                        const fiche = { cat: res.category, id: res.id, nom: e.name || res.name, sub: res.subtitle || res.categoryLabel || '', ed: window.SRD.getEdition() };
+                        titleEl.innerHTML = escAb(fiche.nom) + ' ' + window.ReglesFavoris.etoile(fiche);
+                        window.ReglesFavoris.consulter(fiche);
+                    }
                 } catch (err) {
                     if (bodyEl) bodyEl.innerHTML = `<p style="color:#c0392b;">Impossible de charger cette fiche.<br><small>${escAb(err.message)}</small></p>`;
                 }
