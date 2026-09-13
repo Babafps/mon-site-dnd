@@ -641,11 +641,14 @@
         document.addEventListener('edition:change', () => {
             nomsRecales = '';
             rendre();
+            if (window.SheetApi && window.SheetApi.refresh) window.SheetApi.refresh();
             if (panneau) remplirPanneau();
         });
 
-        // Le moteur de calcul : l'épuisement et les « Vitesse 0 ».
+        // Le moteur de calcul : l'épuisement et les « Vitesse 0 ». La fiche a déjà
+        // dessiné ses totaux sans ce fournisseur : on les recalcule une fois branché.
         if (window.Calcul && window.Calcul.fournisseur) window.Calcul.fournisseur(sourcesEtats);
+        if (window.SheetApi && window.SheetApi.refresh) window.SheetApi.refresh();
 
         rendre();
     }

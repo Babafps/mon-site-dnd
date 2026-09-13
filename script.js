@@ -82,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
         /** Lecture brute (texte non analysé) : bonus manuels, nombres saisis. */
         raw: (key) => getStore(key, false),
         set: (key, value) => setStore(key, value),
+        /** Écriture brute (texte), comme les champs de la fiche. */
+        setRaw: (key, value) => setStore(key, value, false),
         list: () => charactersList.slice(),
         meta: () => charactersList.find(c => c.id === ACTIVE_CHAR_ID) || null,
 
@@ -1233,20 +1235,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         window.__switchMobileTab = switchMobileTab;
 
-        function updateMobileVitals() {
+        function updateMobileVitals(anim) {
             const fill = document.getElementById('mob-vitals-fill'); if (!fill) return;
             const current = parseInt(document.getElementById('hp-current')?.value) || 0;
             const maxRaw = parseInt(document.getElementById('hp-max')?.value) || 0;
             const temp = parseInt(document.getElementById('hp-temp')?.value) || 0;
             const ratio = maxRaw > 0 ? Math.max(0, Math.min(1, current / maxRaw)) : 0;
-            fill.style.width = (ratio * 100) + '%';
+            // Même dessin que la barre de la fiche (LOT 4.5) : bouclier, traînée, chiffres qui s'envolent.
+            const g = geometriePv(current, temp, maxRaw);
+            fill.style.width = (g.plein * 100) + '%';
             fill.classList.remove('hp-mid', 'hp-low');
             if (maxRaw > 0 && ratio <= 0.25) fill.classList.add('hp-low');
             else if (maxRaw > 0 && ratio <= 0.5) fill.classList.add('hp-mid');
+            const bouclier = document.getElementById('mob-vitals-shield');
+            if (bouclier) { bouclier.hidden = !(temp > 0 && maxRaw > 0); bouclier.style.left = (g.plein * 100) + '%'; bouclier.style.width = (g.bouclier * 100) + '%'; }
+            poserTrainee(document.getElementById('mob-vitals-trail'), g, anim && anim.avant, !!anim);
+            if (anim) envolerPv(document.getElementById('mob-vitals'), anim.delta);
             const text = document.getElementById('mob-vitals-text');
             if (text) text.textContent = maxRaw > 0 ? `${current}/${maxRaw}${temp > 0 ? ' +' + temp : ''}` : '– / –';
             const ca = document.getElementById('mob-vitals-ca-val');
-            if (ca) ca.textContent = document.getElementById('armor-class')?.value || '–';
+            if (ca) {
+                const r = window.Calcul ? window.Calcul.valeur('ca') : null;
+                ca.textContent = (r && r.total != null) ? r.total : (document.getElementById('armor-class')?.value || '–');
+            }
         }
 
         function renderMobileSheet() {
@@ -1363,7 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!clean) return { error: 'Entre une expression (ex : 2d6+3).' };
             if (!/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(clean)) return { error: 'Expression invalide (ex : 2d6+3).' };
             const parts = clean.match(/[+-]?(?:\d*d\d+|\d+)/g) || [];
-            let total = 0, des = 0; const bits = [];
+            let total = 0, des = 0, fixe = 0; const bits = [], groupes = [];
             for (const part of parts) {
                 const sign = part.startsWith('-') ? -1 : 1;
                 const body = part.replace(/^[+-]/, '');
@@ -1376,33 +1387,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     des += n;
                     total += sign * rolls.reduce((a, b) => a + b, 0);
                     bits.push((sign < 0 ? '−' : '') + n + 'd' + faces + ' [' + rolls.join(', ') + ']');
+                    groupes.push({ signe: sign, faces, des: rolls });
                 } else {
                     const v = parseInt(body, 10) || 0;
                     total += sign * v;
+                    fixe += sign * v;
                     bits.push((sign < 0 ? '−' : '+') + v);
                 }
             }
             // Les secrets aiment les grosses poignées de dés (secrets-plus.js : l'averse).
             if (des) document.dispatchEvent(new CustomEvent('des:lances', { detail: { nombre: des } }));
-            return { total, detail: bits.join(' ') };
+            // `groupes` et `fixe` : les dés un par un, pour la carte de résultat (jets.js).
+            return { total, detail: bits.join(' '), expr: clean, groupes, fixe };
         }
         function runExpression(expr) {
             const out = document.getElementById('expr-result'); if (!out) return;
             const res = rollExpression(expr);
             if (res.error) { out.innerHTML = `<span class="expr-err">⚠️ ${res.error}</span>`; return; }
             out.innerHTML = `<span class="expr-total">${res.total}</span><span class="expr-detail">${res.detail}</span>`;
-            pushRollHistory('🎲 ' + expr, res.total, res.detail, null);
+            const texte = String(expr).trim();
+            consignerExpression(texte, res, { titre: texte });
         }
         const exprInput = document.getElementById('expr-input');
         const btnExprRoll = document.getElementById('btn-expr-roll');
         if (btnExprRoll && exprInput) btnExprRoll.addEventListener('click', () => runExpression(exprInput.value));
         if (exprInput) exprInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runExpression(exprInput.value); } });
 
-        // ===== HISTORIQUE DES JETS =====
-        function pushRollHistory(name, total, detail, nat) {
+        // ===== HISTORIQUE DES JETS (LOT 4.2) =====
+        // 100 lignes par personnage. Chaque ligne garde les champs d'avant
+        // (name, total, detail, nat) — une version plus ancienne du site les lit
+        // toujours — et, dans `jet`, la forme REJOUABLE du jet : ce que montre la
+        // carte de résultat et ce que rejoue « Relancer » (format : jets.js).
+        // Les sources nommées n'y sont pas : le détail texte les résume, et
+        // l'historique voyage avec la fiche.
+        const HISTORIQUE_MAX = 100;
+        function pushRollHistory(name, total, detail, nat, jet) {
             let hist = getStore('dnd-roll-history') || [];
-            hist.unshift({ name, total, detail, nat, ts: Date.now() });
-            if (hist.length > 40) hist = hist.slice(0, 40);
+            const entree = { name, total, detail, nat, ts: Date.now() };
+            if (jet) {
+                const forme = JSON.parse(JSON.stringify(jet));
+                if (forme.d20) delete forme.d20.sources;
+                entree.jet = forme;
+            }
+            // Les statistiques de dés comptent chaque d20 avant que la ligne rejoigne l'historique.
+            compterD20(desD20DeLigne(entree), hist);
+            hist.unshift(entree);
+            if (hist.length > HISTORIQUE_MAX) hist = hist.slice(0, HISTORIQUE_MAX);
             setStore('dnd-roll-history', hist);
             renderRollHistory();
             // Tout jet de d20 passe par ici avec son dé naturel : c'est donc d'ici que
@@ -1412,18 +1442,329 @@ document.addEventListener('DOMContentLoaded', () => {
             // Les exploits au long cours comptent les jets (exploits-suivi.js).
             document.dispatchEvent(new CustomEvent('jet:consigne', { detail: { nat } }));
         }
+        // ===== STATISTIQUES DES D20 (LOT 4.15) =====
+        // Chaque d20 lancé compte, le dé écarté compris : il a roulé. Clé de fiche
+        // `dnd-stats-d20` : { compte: [20 effectifs], total, max: { '20', '1' },
+        // serie: { v, n }, depuis }. L'historique ne garde que 100 lignes : le compte
+        // démarre avec ce qu'il contient, puis continue au-delà. La fenêtre (graphe,
+        // χ²) vit dans stats-des.js, chargé à la demande.
+        function desD20DeLigne(h) {
+            const j = h && h.jet;
+            if (j) {
+                const out = [];
+                if (j.d20 && Array.isArray(j.d20.des)) j.d20.des.forEach(v => out.push(v));
+                if (j.lancer && Array.isArray(j.lancer.lignes)) j.lancer.lignes.forEach(l => (l.groupes || []).forEach(g => {
+                    if (parseInt(g.faces, 10) === 20) (g.des || []).forEach(v => out.push(v));
+                }));
+                return out.map(v => parseInt(v, 10)).filter(v => v >= 1 && v <= 20);
+            }
+            return (h && typeof h.nat === 'number' && h.nat >= 1 && h.nat <= 20) ? [h.nat] : [];
+        }
+        function statsVides() { return { compte: Array(20).fill(0), total: 0, max: { '20': 0, '1': 0 }, serie: { v: null, n: 0 }, depuis: Date.now() }; }
+        function ajouterAuxStats(s, valeurs) {
+            valeurs.forEach(v => {
+                s.compte[v - 1]++; s.total++;
+                if (v === 20 || v === 1) {
+                    s.serie = (s.serie && s.serie.v === v) ? { v, n: s.serie.n + 1 } : { v, n: 1 };
+                    s.max[String(v)] = Math.max(s.max[String(v)] || 0, s.serie.n);
+                } else s.serie = { v: null, n: 0 };
+            });
+            return s;
+        }
+        function lireStatsD20(histAvant) {
+            const s = getStore('dnd-stats-d20');
+            if (s && Array.isArray(s.compte) && s.compte.length === 20) return s;
+            // Première fois : ce que l'historique garde, du plus ancien au plus récent.
+            const hist = histAvant || getStore('dnd-roll-history') || [];
+            const amorce = statsVides();
+            const chrono = hist.slice().reverse();
+            if (chrono.length && chrono[0] && chrono[0].ts) amorce.depuis = chrono[0].ts;
+            chrono.forEach(h => ajouterAuxStats(amorce, desD20DeLigne(h)));
+            return amorce;
+        }
+        function compterD20(valeurs, histAvant) {
+            if (!valeurs || !valeurs.length) return;
+            setStore('dnd-stats-d20', ajouterAuxStats(lireStatsD20(histAvant), valeurs));
+        }
+        // La liste vit dans le tiroir de dés : tiroir fermé, on attend son
+        // ouverture pour la dessiner (et charger le module des jets).
+        let historiqueAJour = false;
         function renderRollHistory() {
             const list = document.getElementById('roll-history-list'); if (!list) return;
+            const tiroir = document.getElementById('dice-drawer');
+            if (tiroir && !tiroir.classList.contains('open')) { historiqueAJour = false; return; }
+            historiqueAJour = true;
             const hist = getStore('dnd-roll-history') || [];
-            if (!hist.length) { list.innerHTML = `<div class="roll-history-empty">Aucun jet pour l'instant.</div>`; return; }
-            list.innerHTML = hist.map(h => {
-                const cls = h.nat === 20 ? ' is-crit' : (h.nat === 1 ? ' is-fumble' : '');
-                const t = new Date(h.ts); const hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
-                return `<div class="roll-history-item${cls}"><span class="rh-name">${h.name}<span class="rh-detail"> — ${h.detail || ''}</span></span><span class="rh-total">${h.total}</span><span class="rh-detail">${hh}</span></div>`;
-            }).join('');
+            avecJets(J => J.rendreHistorique(hist, list), () => {
+                // Module introuvable (hors ligne avant tout chargement) : la liste simple d'avant.
+                list.innerHTML = hist.length
+                    ? hist.map(h => `<div class="roll-history-item"><span class="rh-name">${escAb(h.name)}<span class="rh-detail"> — ${escAb(h.detail || '')}</span></span><span class="rh-total">${escAb(h.total)}</span></div>`).join('')
+                    : `<div class="roll-history-empty">Aucun jet pour l'instant.</div>`;
+            });
         }
+        const tiroirDes = document.getElementById('dice-drawer');
+        if (tiroirDes) new MutationObserver(() => {
+            if (tiroirDes.classList.contains('open') && !historiqueAJour) renderRollHistory();
+        }).observe(tiroirDes, { attributes: true, attributeFilter: ['class'] });
         const btnClearHist = document.getElementById('btn-clear-roll-history');
-        if (btnClearHist) btnClearHist.addEventListener('click', () => { setStore('dnd-roll-history', []); renderRollHistory(); });
+        if (btnClearHist) btnClearHist.addEventListener('click', () => {
+            const avant = getStore('dnd-roll-history') || [];
+            if (!avant.length) return;
+            setStore('dnd-roll-history', []); renderRollHistory();
+            // Vider n'est plus définitif : quelques secondes pour se raviser.
+            window.showUndoToast('Historique des jets vidé', () => { setStore('dnd-roll-history', avant); renderRollHistory(); });
+        });
+
+        // ===== LA CARTE DE RÉSULTAT (LOT 4.1) =====
+        // Tous les jets finissent sur UNE carte (jets.js, chargé à la demande).
+        // Le bonus d'un d20 est celui que la fiche affiche ; son détail vient du
+        // moteur de calcul (calcul.js), qui produit ce même affichage.
+        /** Appelle le module des jets ; `repli` s'il ne peut pas se charger. */
+        function avecJets(fn, repli) {
+            const pret = window.Jets ? Promise.resolve()
+                : (window.charger ? window.charger('jets') : Promise.reject(new Error('charger.js absent')));
+            return pret.then(() => fn(window.Jets)).catch((e) => { console.warn('[jets]', e); if (repli) repli(); });
+        }
+        function montrerJet(jet) {
+            avecJets(J => J.montrer(jet), () => { if (window.showAppToast) window.showAppToast(`${jet.titre} : ${jet.total}`); });
+        }
+        const MODE_TXT = { adv: ' (avantage)', dis: ' (désavantage)' };
+        /** Le d20 gardé : le plus haut avec l'avantage, le plus bas avec le désavantage. */
+        const d20Garde = (mode, r1, r2) => (r2 == null ? r1 : (mode === 'adv' ? Math.max(r1, r2) : (mode === 'dis' ? Math.min(r1, r2) : r1)));
+
+        // ===== AVANTAGE, EFFETS ET INSPIRATION AU MOMENT D'UN D20 (LOT 4.7, 4.8) =====
+        // Les effets actifs (effets-actifs.js) et l'inspiration 2014 donnent l'avantage
+        // ou le désavantage. « Avantage et désavantage » (rules.json, les deux éditions) :
+        // plusieurs avantages ne font lancer qu'un second d20, et « si les circonstances
+        // vous octroient l'avantage tout en vous imposant le désavantage », le jet n'a
+        // ni l'un ni l'autre. `cle` : la clé du moteur (calcul.js), ou 'mort'.
+        function preparerD20(advMode, cle) {
+            const notes = [];
+            let adv = advMode === 'adv', dis = advMode === 'dis';
+            const fx = (cle && window.EffetsActifs) ? window.EffetsActifs.pourJet(cle) : { des: [], avantage: [], desavantage: [] };
+            if (fx.avantage.length) { adv = true; notes.push('Avantage : ' + fx.avantage.join(', ') + '.'); }
+            if (fx.desavantage.length) { dis = true; notes.push('Désavantage : ' + fx.desavantage.join(', ') + '.'); }
+            // 2014 : l'inspiration dépensée attend « un jet d'attaque, un jet de sauvegarde ou un test ».
+            if (cle && inspirationAvantageEnAttente()) {
+                consommerInspirationAvantage();
+                adv = true; notes.push('Inspiration : avantage.');
+            }
+            if (adv && dis) notes.push('Avantage et désavantage s’annulent : un seul d20.');
+            return { mode: adv && dis ? 'normal' : (adv ? 'adv' : (dis ? 'dis' : 'normal')), notes, des: fx.des };
+        }
+        /** Les dés en plus des effets (Bénédiction…) : lancés, ajoutés au bonus, nommés. */
+        function desEffets(des) {
+            const sources = []; let total = 0;
+            (des || []).forEach(d => {
+                const res = rollExpression(String(d.expr));
+                if (res.error) return;
+                total += res.total;
+                sources.push({ libelle: `${d.libelle} (${String(d.expr).replace(/^-/, '−')})`, valeur: res.total, origine: 'effet' });
+            });
+            return { total, sources };
+        }
+
+        // ===== L'INSPIRATION (LOT 4.7) =====
+        // Un jeton lumineux remplace la case, qui reste dans la page : l'impression
+        // (print-sheet.js), l'export (`dnd-sheet-heroic-inspiration`) et le compteur
+        // d'exploit (exploits-suivi.js, événement « change ») la lisent comme avant.
+        // « Utiliser » suit l'édition du personnage :
+        //   · 2014, « Recourir à l'inspiration » : « vous recevez l'avantage au jet de dés
+        //     correspondant » — l'avantage attend le prochain d20 de ce genre ;
+        //   · 2024, « Inspiration héroïque » : « rejouer aussitôt tout dé que vous venez de
+        //     lancer, à condition de conserver ce nouveau jet », et avec deux d20 « vous ne
+        //     pouvez relancer ou remplacer qu'un seul dé. Vous choisissez lequel ».
+        function caseInspiration() { return document.getElementById('heroic-inspiration'); }
+        function inspirationAvantageEnAttente() { return getStore('dnd-inspiration-avantage', false) === '1'; }
+        function consommerInspirationAvantage() { setStore('dnd-inspiration-avantage', '', false); majJetonInspiration(); }
+        function majJetonInspiration() {
+            const c = caseInspiration(), jeton = document.getElementById('jeton-inspiration');
+            if (!c || !jeton) return;
+            const on = c.checked;
+            jeton.classList.toggle('is-on', on);
+            jeton.setAttribute('aria-pressed', on ? 'true' : 'false');
+            jeton.setAttribute('aria-label', on ? 'Inspiration : tu l’as. Clic pour la retirer' : 'Inspiration : absente. Clic pour l’obtenir');
+            jeton.title = on ? 'Tu as l’inspiration' : 'Pas d’inspiration';
+            const utiliser = document.getElementById('btn-utiliser-inspiration');
+            if (utiliser) utiliser.hidden = !on;
+            const attente = document.getElementById('jeton-avantage');
+            if (attente) attente.hidden = !inspirationAvantageEnAttente();
+        }
+        function poserInspiration(on) {
+            const c = caseInspiration();
+            if (c && c.checked !== on) { c.checked = on; c.dispatchEvent(new Event('change', { bubbles: true })); }
+            majJetonInspiration();
+        }
+        async function utiliserInspiration() {
+            const c = caseInspiration();
+            if (!c || !c.checked) return;
+            const ed = window.Edition ? window.Edition.active() : '2024';
+            if (ed === '2014') {
+                poserInspiration(false);
+                setStore('dnd-inspiration-avantage', '1', false);
+                majJetonInspiration();
+                document.dispatchEvent(new CustomEvent('inspiration:utilisee', { detail: { edition: ed } }));
+                window.showUndoToast('Inspiration dépensée : avantage au prochain jet d’attaque, de sauvegarde ou test', () => {
+                    setStore('dnd-inspiration-avantage', '', false); poserInspiration(true);
+                });
+                return;
+            }
+            await relancerUnDeDuDernierJet();
+        }
+        async function relancerUnDeDuDernierJet() {
+            const hist = getStore('dnd-roll-history') || [];
+            const h = hist[0], j = h && h.jet;
+            const informer = (m) => window.Dialogue.informer({ titre: 'Inspiration héroïque', icone: '✦', message: m });
+            if (!j) return informer('Aucun jet récent à rejouer : lance d’abord le dé, puis utilise ton inspiration.');
+            if (j.type === 'des-de-vie') return informer('Les dés de vie ont déjà rendu leurs points de vie : relance-les à la main si tu veux les rejouer.');
+            if (j.type === 'mort') return informer('Ce jet contre la mort a déjà coché ses cases : corrige-les à la main avant de le rejouer.');
+            const options = [];
+            if (j.d20 && Array.isArray(j.d20.des)) {
+                const ig = Math.max(0, j.d20.des.indexOf(j.d20.garde));
+                j.d20.des.forEach((v, i) => options.push({ valeur: 'd20:' + i, ico: '⬡', titre: `d20 : ${v}`, faces: 20,
+                    detail: j.d20.des.length > 1 ? (i === ig ? 'le dé gardé' : 'le dé écarté') : 'le d20 du jet' }));
+            }
+            if (j.lancer) (j.lancer.lignes || []).forEach((l, li) => (l.groupes || []).forEach((g, gi) => (g.des || []).forEach((v, di) => {
+                options.push({ valeur: `l:${li}:${gi}:${di}`, ico: '◇', titre: `d${g.faces} : ${v}`, faces: parseInt(g.faces, 10) || 6,
+                    detail: (l.libelle ? l.libelle + ' · ' : '') + (j.lancer.etiquette || 'Résultat') });
+            })));
+            if (!options.length) return informer('Le dernier jet ne comporte aucun dé à rejouer.');
+            let choix = options[0].valeur;
+            if (options.length > 1) {
+                choix = await window.Dialogue.choisir({
+                    titre: 'Rejouer un dé — ' + (j.titre || h.name), icone: '✦', confirmer: 'Rejouer', annuler: 'Garder mon inspiration',
+                    message: 'Un seul dé est rejoué, et le nouveau résultat est conservé.', options
+                });
+                if (choix == null) return;
+            }
+            const opt = options.find(x => x.valeur === choix);
+            let nouveau = null;
+            if (diceBoxReady && diceBox) {
+                try { const r = await safeDiceRoll([`1d${opt.faces}`]); const v = r.map(d => d.value).find(x => typeof x === 'number'); if (v) nouveau = v; } catch (e) { /* la 3D n'est jamais bloquante */ }
+            }
+            if (!nouveau) nouveau = Math.floor(Math.random() * opt.faces) + 1;
+            const jet = JSON.parse(JSON.stringify(j));
+            let ancien;
+            if (choix.startsWith('d20:')) {
+                const i = parseInt(choix.slice(4), 10), des = jet.d20.des;
+                ancien = des[i]; des[i] = nouveau;
+                jet.d20.garde = des.length < 2 ? des[0] : (jet.d20.mode === 'adv' ? Math.max(...des) : (jet.d20.mode === 'dis' ? Math.min(...des) : des[0]));
+                jet.total = jet.d20.garde + (Number(jet.d20.bonus) || 0);
+                jet.critique = jet.d20.garde >= (jet.d20.seuilCritique || 20);
+                jet.echec = jet.d20.garde === 1;
+            } else {
+                const [, li, gi, di] = choix.split(':').map(Number);
+                const l = jet.lancer.lignes[li], g = l.groupes[gi];
+                ancien = g.des[di]; g.des[di] = nouveau;
+                l.total = (l.groupes || []).reduce((t, x) => t + (x.signe < 0 ? -1 : 1) * (x.des || []).reduce((a, b) => a + b, 0), 0) + (Number(l.fixe) || 0);
+                jet.lancer.total = jet.lancer.lignes.reduce((t, x) => t + (x.erreur ? 0 : (Number(x.total) || 0)), 0);
+                if (!jet.d20) jet.total = jet.lancer.total;
+            }
+            jet.notes = (jet.notes || []).concat([`Inspiration héroïque : le ${ancien} rejoué donne ${nouveau}.`]);
+            const entree = Object.assign({}, h, { jet, total: jet.total, detail: `${h.detail || ''} · inspiration : ${ancien} → ${nouveau}` });
+            if (jet.d20) entree.nat = jet.d20.garde;
+            hist[0] = entree;
+            setStore('dnd-roll-history', hist);
+            renderRollHistory();
+            poserInspiration(false);
+            if (opt.faces === 20) {
+                compterD20([nouveau]);
+                if (jet.d20 && window.RollFX && window.RollFX.jet) window.RollFX.jet(jet.d20.garde);
+                document.dispatchEvent(new CustomEvent('jet:consigne', { detail: { nat: jet.d20 ? jet.d20.garde : null } }));
+            }
+            montrerJet(jet);
+            document.dispatchEvent(new CustomEvent('inspiration:utilisee', { detail: { edition: '2024', ancien, nouveau } }));
+        }
+
+        /** Décrit un jet de d20 (format : jets.js). */
+        function jetD20(o) {
+            const des = o.r2 == null ? [o.r1] : [o.r1, o.r2];
+            const garde = d20Garde(o.mode, o.r1, o.r2);
+            const bonus = Number(o.bonus) || 0;
+            const seuil = Math.min(20, Math.max(2, parseInt(o.seuilCritique, 10) || 20));
+            return {
+                type: o.type || 'd20', titre: o.titre || 'Jet', sousTitre: o.sousTitre || '',
+                d20: { mode: o.mode || 'normal', des, garde, bonus, seuilCritique: seuil, sources: o.sources || [] },
+                total: garde + bonus,
+                critique: garde >= seuil, echec: garde === 1,
+                notes: o.notes || [], avertissements: o.avertissements || [],
+                edition: window.Edition ? window.Edition.active() : undefined,
+                rejouer: o.rejouer || null
+            };
+        }
+        /** Une ligne de dés de la carte, à partir d'un résultat de rollExpression. */
+        function ligneLancer(res, extra) {
+            if (res.error) return { erreur: res.error };
+            return Object.assign({ expr: res.expr, total: res.total, groupes: res.groupes || [], fixe: res.fixe || 0 }, extra || {});
+        }
+        /** « d20 : 14 · +3 DEX · +2 maîtrise (avantage) » — le détail texte de l'historique. */
+        function detailD20(jet) {
+            const d = jet.d20;
+            const src = (window.Calcul && d.sources.length) ? window.Calcul.detail({ sources: d.sources })
+                : (d.bonus ? (d.bonus > 0 ? '+' : '') + d.bonus : '');
+            return `d20 : ${d.garde}${src ? ' · ' + src : ''}${MODE_TXT[d.mode] || ''}`;
+        }
+        /** Consigne une expression de dés (lanceur, macro, dégâts de compagnon) et montre sa carte. */
+        function consignerExpression(expr, res, o) {
+            const opt = o || {};
+            const titre = opt.titre || expr;
+            const jet = {
+                type: opt.type || 'expression', titre, sousTitre: opt.sousTitre || '',
+                lancer: { etiquette: opt.etiquette || 'Résultat', nature: opt.nature || 'resultat', total: res.total, lignes: [ligneLancer(res)] },
+                total: res.total, notes: opt.notes || [],
+                rejouer: opt.rejouer === null ? null : (opt.rejouer || { t: 'expression', expr, titre, sousTitre: opt.sousTitre || '', nom: opt.nom || '' })
+            };
+            pushRollHistory(opt.nom || ('🎲 ' + expr), res.total, res.detail, null, jet);
+            montrerJet(jet);
+            return jet;
+        }
+
+        // « Relancer », depuis l'historique (jets.js) : la fiche rejoue le jet avec
+        // ses valeurs d'AUJOURD'HUI — une arme améliorée depuis compte son nouveau
+        // bonus. Une attaque ou un sort se retrouve par sa place, sinon par son nom.
+        window.SheetRolls = {
+            relancer(r) {
+                if (!r || typeof r !== 'object') return false;
+                const mode = (r.mode === 'adv' || r.mode === 'dis') ? r.mode : 'normal';
+                const introuvable = (quoi) => { window.showAppToast(`${quoi} n’est plus sur la fiche.`, 'erreur'); return false; };
+                const retrouver = (liste, i, nom) => ((liste[i] && liste[i].name === nom) ? i : liste.findIndex(x => x && x.name === nom));
+                switch (r.t) {
+                    case 'lancable':
+                        lancerLancable(r.cible || 'none', r.nom || 'Jet', r.jet || '', mode);
+                        return true;
+                    case 'attaque': {
+                        const i = retrouver(attacks, r.index, r.nom);
+                        if (i < 0) return introuvable(`« ${r.nom || 'Cette attaque'} »`);
+                        rollAttackEntry(i, r.part || 'full', { advMode: mode, versatile: !!r.versatile, crit: !!r.crit });
+                        return true;
+                    }
+                    case 'sort': {
+                        const i = retrouver(spells, r.index, r.nom);
+                        if (i < 0) return introuvable(`« ${r.nom || 'Ce sort'} »`);
+                        castSpell(i, r.part || 'cast', { advMode: mode, sansEmplacement: true, relance: true });
+                        return true;
+                    }
+                    case 'expression': {
+                        const res = rollExpression(r.expr);
+                        if (res.error) { window.showAppToast('⚠️ ' + res.error, 'erreur'); return false; }
+                        consignerExpression(String(r.expr), res, { titre: r.titre, sousTitre: r.sousTitre, nom: r.nom, rejouer: r });
+                        return true;
+                    }
+                    case 'plateau': {
+                        const des = (Array.isArray(r.des) ? r.des : []).map(f => parseInt(f, 10)).filter(f => f >= 2 && f <= 100);
+                        if (!des.length) return false;
+                        dicePool = des; renderDicePool(); executeRoll(mode);
+                        return true;
+                    }
+                    case 'attaque-libre':
+                        window.SheetApi.lancerAttaqueLibre(Object.assign({}, r, { mode }));
+                        return true;
+                    case 'compagnon':
+                        return relancerCompagnon(r, mode) || introuvable('Ce compagnon');
+                }
+                return false;
+            }
+        };
 
         const avatarInput = document.getElementById('avatar-file-input'); const avatarPreview = document.getElementById('main-avatar-preview'); const avatarHeader = document.getElementById('header-avatar'); const avatarPlaceholder = document.getElementById('avatar-placeholder');
         function loadAvatar() { const savedAvatar = getStore('dnd-avatar', false); if(savedAvatar && avatarPreview && avatarPlaceholder && avatarHeader) { avatarPreview.src = savedAvatar; avatarPreview.classList.remove('hidden'); avatarPlaceholder.classList.add('hidden'); avatarHeader.style.backgroundImage = `url("${savedAvatar}")`; } const rc = document.getElementById('btn-recrop-avatar'); if(rc) rc.style.display = savedAvatar ? '' : 'none'; }
@@ -1529,9 +1870,57 @@ document.addEventListener('DOMContentLoaded', () => {
             window.addEventListener('resize', () => { if(diceDrawer.classList.contains('drawer-left')) return; btnToggleDice.style.left = (window.innerWidth - btnToggleDice.offsetWidth) + 'px'; });
         }
 
-        let dicePool = []; const dicePoolDisplay = document.getElementById('dice-pool'); const quickToast = document.getElementById('quick-roll-toast');
-        document.querySelectorAll('.btn-dice').forEach(btn => { btn.addEventListener('click', (e) => { dicePool.push(parseInt(e.target.getAttribute('data-faces'))); renderDicePool(); }); });
-        function renderDicePool() { if(!dicePoolDisplay) return; dicePoolDisplay.innerHTML = ''; dicePool.forEach((faces, index) => { const dieDiv = document.createElement('div'); dieDiv.className = 'die-icon'; dieDiv.textContent = `d${faces}`; dieDiv.onclick = () => { dicePool.splice(index, 1); renderDicePool(); }; dicePoolDisplay.appendChild(dieDiv); }); }
+        let dicePool = []; const dicePoolDisplay = document.getElementById('dice-pool');
+        // Le plateau (LOT 4.11) : les dés sont regroupés par type — « 3d6 + 1d8 » — avec
+        // − et + pour chaque groupe. La réserve reste une liste de faces, rangée par
+        // taille : le lancer et « Relancer » la lisent comme avant.
+        function ajouterAuPlateau(faces) {
+            const f = parseInt(faces, 10); if (!(f >= 2)) return;
+            const i = dicePool.findIndex(x => x > f);
+            if (i === -1) dicePool.push(f); else dicePool.splice(i, 0, f);
+        }
+        function retirerDuPlateau(faces) { const i = dicePool.lastIndexOf(parseInt(faces, 10)); if (i !== -1) dicePool.splice(i, 1); }
+        let dernierGeste = 0;
+        document.querySelectorAll('.btn-dice').forEach(btn => { btn.addEventListener('click', (e) => { ajouterAuPlateau(e.currentTarget.getAttribute('data-faces')); renderDicePool(); }); });
+        function renderDicePool() {
+            if(!dicePoolDisplay) return;
+            const groupes = [];
+            dicePool.forEach(f => { const g = groupes.find(x => x.faces === f); if (g) g.n++; else groupes.push({ faces: f, n: 1 }); });
+            dicePoolDisplay.innerHTML = groupes.map((g, i) => `${i ? '<span class="pool-sep" aria-hidden="true">+</span>' : ''}<span class="pool-groupe" data-faces="${g.faces}">`
+                + `<button type="button" class="pool-pm" data-pool="-1" aria-label="Retirer un d${g.faces}">−</button>`
+                + `<span class="die-icon">${g.n}d${g.faces}</span>`
+                + `<button type="button" class="pool-pm" data-pool="1" aria-label="Ajouter un d${g.faces}">+</button></span>`).join('');
+            dicePoolDisplay.setAttribute('aria-label', groupes.length ? 'Dés sélectionnés : ' + groupes.map(g => `${g.n}d${g.faces}`).join(' + ') : 'Aucun dé sélectionné');
+        }
+        if (dicePoolDisplay) dicePoolDisplay.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-pool]'); if (!b || Date.now() - dernierGeste < 400) return;
+            const faces = b.closest('.pool-groupe').dataset.faces, sens = b.dataset.pool;
+            if (sens === '1') ajouterAuPlateau(faces); else retirerDuPlateau(faces);
+            renderDicePool();
+            const meme = dicePoolDisplay.querySelector(`.pool-groupe[data-faces="${faces}"] [data-pool="${sens}"]`);
+            if (meme) meme.focus();
+        });
+        // Lancer d'un geste (LOT 4.14) : un coup de doigt (ou de souris) sur la zone des dés
+        // sélectionnés les jette. dice-box n'accepte ni direction ni force par lancer — sa
+        // méthode roll(notation, { theme, themeColor, newStartPoint }) n'a rien d'autre
+        // (lib/dice-box/dice-box.es.js) : le geste déclenche donc un lancer normal. Le tiroir
+        // est exclu du balayage entre onglets mobiles (SWIPE_IGNORE) : aucun conflit.
+        (function brancherGeste() {
+            const zone = document.querySelector('#dice-drawer .dice-pool-wrapper');
+            if (!zone) return;
+            let depart = null;
+            zone.addEventListener('pointerdown', (e) => { if (e.button != null && e.button !== 0) return; depart = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+            zone.addEventListener('pointerup', (e) => {
+                if (!depart) return;
+                const dx = e.clientX - depart.x, dy = e.clientY - depart.y, dt = performance.now() - depart.t;
+                depart = null;
+                if (Math.hypot(dx, dy) < 45 || dt > 600 || !dicePool.length) return;
+                dernierGeste = Date.now();
+                zone.classList.remove('is-lance'); void zone.offsetWidth; zone.classList.add('is-lance');
+                executeRoll();
+            });
+            zone.addEventListener('pointercancel', () => { depart = null; });
+        })();
         
         const btnToggleCurrency = document.getElementById('btn-toggle-currency');
         const currencyRules = document.getElementById('currency-inline-rules');
@@ -1559,6 +1948,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         let diceThemeColor = DB.get('dnd-dice-theme-color') || '#7A2828';
         let diceThemeRandom = DB.get('dnd-dice-theme-random') === 'true';
+        // Couleur propre à un personnage (LOT 4.12) : { couleur, aleatoire } dans SA fiche
+        // (clé `dnd-des-couleur`, synchronisée). Absente : le réglage de l'appareil.
+        function couleurDesPerso() { const c = getStore('dnd-des-couleur'); return (c && typeof c === 'object' && (c.couleur || c.aleatoire)) ? c : null; }
         function currentDiceThemeColor() {
             // Prison des dés (secrets.js) : le dé neuf impose sa couleur pour quelques jets.
             const relais = window.Secrets && window.Secrets.couleurDeRelais && window.Secrets.couleurDeRelais();
@@ -1566,6 +1958,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const mat = currentDiceMaterial();
             // Une matière impose sa teinte : c'est elle qu'on a achetée.
             if (mat.color) return mat.color;
+            // Ce héros a sa couleur : elle passe avant le réglage de l'appareil.
+            const perso = couleurDesPerso();
+            if (perso) return perso.aleatoire ? DICE_THEMES[Math.floor(Math.random() * DICE_THEMES.length)].color : perso.couleur;
             if (diceThemeRandom) return DICE_THEMES[Math.floor(Math.random() * DICE_THEMES.length)].color;
             return diceThemeColor;
         }
@@ -1661,6 +2056,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let diceWarmupDone = false;
         function warmupDiceBox() { if (diceWarmupDone) return; diceWarmupDone = true; initDiceBox(); }
         ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, warmupDiceBox, { once: true, passive: true }));
+        // La carte de résultat (jets.js) arrive au premier geste, jamais au premier affichage.
+        let jetsPrecharges = false;
+        const prechargerJets = () => { if (jetsPrecharges || !window.charger) return; jetsPrecharges = true; window.charger('jets').catch(() => { jetsPrecharges = false; }); };
+        ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, prechargerJets, { once: true, passive: true }));
         if ('requestIdleCallback' in window) requestIdleCallback(warmupDiceBox, { timeout: 5000 }); else setTimeout(warmupDiceBox, 3000);
 
         // Accès SÉRIALISÉ à dice-box : un seul lancer 3D à la fois (sinon roll() peut ne
@@ -1685,10 +2084,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Dispatcher : utilise la 3D si elle est prête, sinon l'animation 2D (aucune régression)
-        async function executeRoll() {
+        async function executeRoll(modeForce) {
             if (dicePool.length === 0) return;
             const advModeNode = document.querySelector(`input[name="roll-mode"]:checked`);
-            const advMode = advModeNode ? advModeNode.value : 'normal';
+            // « Relancer » impose le mode d'origine ; le bouton « Lancer ! » suit le sélecteur.
+            const advMode = modeForce || (advModeNode ? advModeNode.value : 'normal');
             const poolSnapshot = [...dicePool];
             dicePool = [];
             renderDicePool();
@@ -1756,16 +2156,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (resultsBox) { resultsBox.innerHTML = resultsHTML; }
             if (totalBox) totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`;
-            consignerPoolRoll(poolSnapshot, poolTotal, finalScores);
+            consignerPoolRoll(poolSnapshot, poolTotal, finalScores, advMode);
         }
         // Consigne un lancer du PLATEAU DE DÉS dans l'historique. Un d20 lancé seul y
         // compte comme un d20 naturel : l'historique en tire les effets (20, 1, série).
         // Point de passage UNIQUE des deux chemins (3D et repli 2D).
-        function consignerPoolRoll(poolSnapshot, poolTotal, scores) {
+        // Le plateau affiche lui-même son résultat : pas de carte, mais une ligne
+        // rejouable (les dés et le mode, que « Relancer » remet sur le plateau).
+        function consignerPoolRoll(poolSnapshot, poolTotal, scores, advMode) {
             const nat = (poolSnapshot.length === 1 && poolSnapshot[0] === 20) ? scores[0] : null;
             const label = poolSnapshot.map(f => 'd' + f).join(' + ');
             document.dispatchEvent(new CustomEvent('plateau:lance', { detail: { des: poolSnapshot.slice(), scores: scores.slice() } }));
-            pushRollHistory('🎲 ' + label, poolTotal, scores.join(' + '), nat);
+            const mode = advMode || 'normal';
+            const jet = {
+                type: 'plateau', titre: label, sousTitre: 'Plateau de dés' + (MODE_TXT[mode] || ''),
+                lancer: { etiquette: 'Résultat', nature: 'resultat', total: poolTotal,
+                          lignes: [{ groupes: poolSnapshot.map((f, i) => ({ signe: 1, faces: f, des: [scores[i]] })), fixe: 0, total: poolTotal }] },
+                total: poolTotal, rejouer: { t: 'plateau', des: poolSnapshot.slice(), mode }
+            };
+            pushRollHistory('🎲 ' + label, poolTotal, scores.join(' + '), nat, jet);
         }
 
         // --- Repli : animation 2D (culbute CSS + chiffres qui défilent) ---
@@ -1818,12 +2227,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (totalBox) setTimeout(() => { totalBox.innerHTML = `Total : <span class="total-number">${poolTotal}</span>`; }, Math.min(350, poolSnapshot.length * 60 + 120));
-            consignerPoolRoll(poolSnapshot, poolTotal, finalScores);
+            consignerPoolRoll(poolSnapshot, poolTotal, finalScores, advMode);
         }
 
         if(document.getElementById('btn-roll')) document.getElementById('btn-roll').addEventListener('click', () => executeRoll());
 
         // --- Panneau de sélection du thème des dés 3D ---
+        // La couleur vaut pour tous les héros de l'appareil, ou pour CE héros seul
+        // (LOT 4.12). Une matière achetée garde toujours sa teinte (currentDiceThemeColor).
         (function setupDiceThemePanel() {
             const btn = document.getElementById('btn-dice-theme');
             const panel = document.getElementById('dice-theme-panel');
@@ -1833,60 +2244,77 @@ document.addEventListener('DOMContentLoaded', () => {
             const customApply = document.getElementById('btn-dice-theme-custom');
             if (!btn || !panel || !swatches) return;
 
-            function persist() {
-                DB.set('dnd-dice-theme-color', diceThemeColor);
-                DB.set('dnd-dice-theme-random', diceThemeRandom ? 'true' : 'false');
+            const effectif = () => {
+                const p = couleurDesPerso();
+                return p ? { couleur: p.couleur || diceThemeColor, aleatoire: !!p.aleatoire, perso: true }
+                         : { couleur: diceThemeColor, aleatoire: diceThemeRandom, perso: false };
+            };
+            function choisir(couleur, aleatoire) {
+                if (couleurDesPerso()) setStore('dnd-des-couleur', { couleur: couleur || effectif().couleur, aleatoire: !!aleatoire });
+                else {
+                    if (couleur) diceThemeColor = couleur;
+                    diceThemeRandom = !!aleatoire;
+                    DB.set('dnd-dice-theme-color', diceThemeColor);
+                    DB.set('dnd-dice-theme-random', diceThemeRandom ? 'true' : 'false');
+                }
+                synchroniser();
             }
-            function renderSwatches() {
+            function synchroniser() {
+                const e = effectif();
+                panel.querySelectorAll('input[name="dice-theme-portee"]').forEach(r => { r.checked = r.value === (e.perso ? 'perso' : 'global'); });
+                if (randomCb) randomCb.checked = e.aleatoire;
+                if (customColor) customColor.value = /^#([0-9a-f]{6})$/i.test(e.couleur) ? e.couleur : '#7A2828';
                 swatches.innerHTML = '';
                 DICE_THEMES.forEach(t => {
                     const el = document.createElement('button');
-                    const isActive = !diceThemeRandom && t.color.toLowerCase() === diceThemeColor.toLowerCase();
+                    el.type = 'button';
+                    const isActive = !e.aleatoire && t.color.toLowerCase() === String(e.couleur).toLowerCase();
                     el.className = 'dice-swatch' + (isActive ? ' active' : '');
+                    el.setAttribute('aria-pressed', isActive ? 'true' : 'false');
                     el.style.setProperty('--swatch', t.color);
                     el.title = t.name;
                     el.innerHTML = `<span class="dice-swatch-face">20</span><span class="dice-swatch-name">${t.name}</span>`;
-                    el.addEventListener('click', () => {
-                        diceThemeColor = t.color; diceThemeRandom = false;
-                        if (randomCb) randomCb.checked = false;
-                        if (customColor) customColor.value = t.color;
-                        persist(); renderSwatches();
-                    });
+                    el.addEventListener('click', () => choisir(t.color, false));
                     swatches.appendChild(el);
                 });
+                const mat = currentDiceMaterial();
+                const note = panel.querySelector('.dice-theme-matiere');
+                if (note) { note.hidden = !mat.color; note.textContent = mat.color ? `Tes dés en ${mat.name} gardent leur teinte.` : ''; }
             }
-            renderSwatches();
-            if (customColor) customColor.value = /^#([0-9a-f]{6})$/i.test(diceThemeColor) ? diceThemeColor : '#7A2828';
-            if (randomCb) randomCb.checked = diceThemeRandom;
+            synchroniser();
 
-            btn.addEventListener('click', (e) => { e.stopPropagation(); panel.classList.toggle('hidden'); });
-            if (randomCb) randomCb.addEventListener('change', () => {
-                diceThemeRandom = randomCb.checked; persist(); renderSwatches();
-            });
-            if (customApply && customColor) customApply.addEventListener('click', () => {
-                diceThemeColor = customColor.value; diceThemeRandom = false;
-                if (randomCb) randomCb.checked = false;
-                persist(); renderSwatches();
+            btn.addEventListener('click', (e) => { e.stopPropagation(); panel.classList.toggle('hidden'); if (!panel.classList.contains('hidden')) synchroniser(); });
+            if (randomCb) randomCb.addEventListener('change', () => choisir(null, randomCb.checked));
+            if (customApply && customColor) customApply.addEventListener('click', () => choisir(customColor.value, false));
+            panel.addEventListener('change', (e) => {
+                if (e.target.name !== 'dice-theme-portee') return;
+                if (e.target.value === 'perso') setStore('dnd-des-couleur', { couleur: diceThemeColor, aleatoire: diceThemeRandom });
+                else setStore('dnd-des-couleur', null);
+                synchroniser();
             });
         })();
 
         // (L'Atelier de peinture de dés a été retiré le 13 juil. 2026 — fonctionnalité supprimée à la demande de Charlie ;
         //  le bloc mort de ~356 lignes et le chargement CDN de Three.js ont été nettoyés lors de l'audit du 14 juil. 2026.)
 
-        // --- Jet de caractéristique : affiche le résultat dans la bulle ---
-        function showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2) {
-            if(!quickToast) return;
-            let secondDieHTML = '';
-            if(advMode === 'adv') { const kept = Math.max(roll1, roll2); const dropped = Math.min(roll1, roll2); secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#f1c40f; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Avantage)</span></div>`; }
-            else if(advMode === 'dis') { const kept = Math.min(roll1, roll2); const dropped = Math.max(roll1, roll2); secondDieHTML = `<div style="font-size:0.85rem; color:#aaa; margin-top:4px;">🎲 <span style="color:#e67e22; font-weight:bold;">${kept}</span> <span style="text-decoration:line-through; color:#666;">${dropped}</span> <span style="color:#aaa;">(Désavantage)</span></div>`; }
-            const total = finalRoll + mod; const critText = finalRoll === 20 ? " 🟢 CRIT" : (finalRoll === 1 ? " 🔴 ÉCHEC" : ""); const modStr = mod >= 0 ? `+${mod}` : mod;
-            quickToast.innerHTML = `${name} : ${finalRoll} ${modStr} = <span style="color:#f1c40f; font-size:2rem;">${total}</span>${critText}${secondDieHTML}`;
-            quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            clearTimeout(quickToast._t); quickToast._t = setTimeout(() => { quickToast.classList.add('hidden'); }, 4000);
-            // Historique — c'est lui qui célèbre un 20 ou un 1 naturel
-            const advTxt = advMode === 'adv' ? ' (avantage)' : (advMode === 'dis' ? ' (désavantage)' : '');
+        // --- Jet de d20 de la fiche (caractéristique, compétence, sauvegarde, initiative…) ---
+        // `o` : { type, sources, avertissements, sousTitre, notes, rejouer } — ce qui
+        // décrit le jet sur la carte de résultat (jets.js) et dans l'historique.
+        function showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2, o) {
+            const opt = o || {};
+            const jet = jetD20({
+                type: opt.type || 'd20', titre: name, sousTitre: opt.sousTitre, mode: advMode,
+                r1: roll1, r2: advMode === 'normal' ? null : roll2, bonus: mod,
+                sources: opt.sources, avertissements: opt.avertissements, notes: opt.notes,
+                rejouer: opt.rejouer === undefined ? { t: 'lancable', cible: 'none', nom: name, jet: '', mode: advMode } : opt.rejouer
+            });
             if (advMode !== 'normal' && roll2 != null) document.dispatchEvent(new CustomEvent('jet:paire', { detail: { r1: roll1, r2: roll2, mode: advMode } }));
-            pushRollHistory(name, total, `d20 : ${finalRoll} ${modStr}${advTxt}`, finalRoll);
+            // Un jet qui agit sur la fiche (contre la mort) écrit ses notes avant l'affichage.
+            if (typeof opt.avantAffichage === 'function') opt.avantAffichage(jet);
+            // Historique — c'est lui qui célèbre un 20 ou un 1 naturel
+            pushRollHistory(name, jet.total, detailD20(jet), finalRoll, jet);
+            montrerJet(jet);
+            return jet;
         }
 
         // Lance 1 ou 2 d20 réels en 3D (via dice-box) et renvoie les valeurs obtenues
@@ -1900,7 +2328,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Jet de caractéristique : un vrai dé 3D roule (comme dans le plateau),
         // avec repli sur un tirage aléatoire instantané si la 3D est indisponible.
-        async function performAbilityRoll(name, mod, advMode) {
+        async function performAbilityRoll(name, mod, advMode, o) {
+            // Effets actifs et inspiration : avantage, désavantage et dés en plus (LOT 4.7, 4.8).
+            const prep = preparerD20(advMode, o && o.cle);
+            advMode = prep.mode;
             const n = advMode === 'normal' ? 1 : 2;
             let roll1, roll2 = null, used3d = false;
             if(diceBoxReady && diceBox) {
@@ -1911,7 +2342,11 @@ document.addEventListener('DOMContentLoaded', () => {
             let finalRoll = roll1;
             if(advMode === 'adv') finalRoll = Math.max(roll1, roll2);
             else if(advMode === 'dis') finalRoll = Math.min(roll1, roll2);
-            showAbilityRollResult(name, finalRoll, mod, advMode, roll1, roll2);
+            const extra = desEffets(prep.des);
+            const opt = Object.assign({}, o || {});
+            if (extra.sources.length) opt.sources = (opt.sources || []).concat(extra.sources);
+            if (prep.notes.length) opt.notes = (opt.notes || []).concat(prep.notes);
+            return showAbilityRollResult(name, finalRoll, mod + extra.total, advMode, roll1, roll2, opt);
         }
 
         // Accessibilité clavier : les libellés « à lancer » (.rollable) deviennent des boutons
@@ -1932,20 +2367,56 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.body.addEventListener('click', (e) => {
+            // Une macro porte aussi la classe « rollable » (focus, style) : elle
+            // passe en premier — sinon on lançait un d20 au lieu de sa formule.
+            const macroBtn = e.target.closest('.macro-btn');
+            if(macroBtn) { lancerMacro(macroBtn.getAttribute('data-name'), macroBtn.getAttribute('data-formula')); return; }
             const el = e.target.closest('.rollable');
             if(el) {
-                const name = el.getAttribute('data-name'); const targetId = el.getAttribute('data-target'); let mod = 0; if(targetId !== "none") { const targetEl = document.getElementById(targetId); if(targetEl) mod = parseInt(targetEl.textContent || targetEl.value) || 0; }
                 const advModeNode = document.querySelector('input[name="roll-mode"]:checked'); const advMode = advModeNode ? advModeNode.value : 'normal';
-                performAbilityRoll(name, mod, advMode);
-                return;
-            }
-            const macroBtn = e.target.closest('.macro-btn');
-            if(macroBtn) {
-                let formula = macroBtn.getAttribute('data-formula'); let name = macroBtn.getAttribute('data-name'); let total = 0; let rolls = []; let parts = formula.replace(/\s+/g, '').split(/(?=[+-])/); if(parts[0] && !parts[0].startsWith('+') && !parts[0].startsWith('-')) parts[0] = '+' + parts[0];
-                parts.forEach(part => { if(!part) return; let sign = part.startsWith('-') ? -1 : 1; part = part.substring(1); if(part.includes('d')) { let [count, faces] = part.split('d'); count = parseInt(count) || 1; faces = parseInt(faces); for(let i=0; i<count; i++) { let r = Math.floor(Math.random() * faces) + 1; total += (r * sign); rolls.push(`${sign < 0 ? '-' : '+'}${r}`); } } else { let val = parseInt(part); if(!isNaN(val)) { total += (val * sign); rolls.push(`${sign < 0 ? '-' : '+'}${val}`); } } });
-                if(quickToast) { quickToast.innerHTML = `<span style="font-size:1rem;">${name}</span><br>= <span style="color:#f1c40f; font-size:2rem;">${total}</span> <br><span style="font-size:0.8rem; color:#ccc;">(${rolls.join(' ')})</span>`; quickToast.classList.remove('hidden'); quickToast.style.animation = 'none'; quickToast.offsetHeight; quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'; setTimeout(() => { quickToast.classList.add('hidden'); }, 4500); }
+                lancerLancable(el.getAttribute('data-target') || 'none', el.getAttribute('data-name') || 'Jet', el.getAttribute('data-jet') || '', advMode);
             }
         });
+
+        /** Ce que désigne un libellé « à lancer » de la fiche (son data-target) :
+         *  type de jet, clé du moteur, bonus affiché et sources nommées. */
+        function lireLancable(cible, nom, genre) {
+            let type = 'd20', cle = null, m;
+            if (genre === 'mort') type = 'mort';
+            else if ((m = /^mod-(\w+)$/.exec(cible))) { type = 'carac'; cle = 'carac:' + m[1]; }
+            else if ((m = /^skill-val-save-(\w+)$/.exec(cible))) { type = 'sauvegarde'; cle = 'sauvegarde:' + m[1]; }
+            else if ((m = /^skill-val-([\w-]+)$/.exec(cible))) { type = 'competence'; cle = 'competence:' + m[1]; }
+            else if (cible === 'initiative') { type = 'initiative'; cle = 'initiative'; }
+            else if (cible === 'spell-attack-bonus') { type = 'sort'; cle = 'attaque-sorts'; }
+            const r = (cle && window.Calcul) ? window.Calcul.valeur(cle) : null;
+            // Le moteur (calcul.js) fait foi : c'est lui qui produit l'affichage de la
+            // fiche, états et épuisement compris. Sans lui (bonus d'attaque des sorts
+            // saisi à la main), la valeur lue sur la fiche devient une source unique.
+            const el = (!r && cible && cible !== 'none') ? document.getElementById(cible) : null;
+            const lu = el ? (parseInt(el.textContent || el.value) || 0) : 0;
+            const sources = r ? r.sources : (lu ? [{ libelle: 'valeur de la fiche', valeur: lu, origine: 'manuel' }] : []);
+            const avertissements = (r && Array.isArray(r.avertissements) ? r.avertissements : [])
+                .concat(cle && window.Etats && window.Etats.avertissements ? window.Etats.avertissements(cle) : []);
+            return { type, cle, bonus: r ? r.total : lu, sources, avertissements, titre: (nom === 'Sauvegarde' && r) ? r.libelle : nom };
+        }
+        /** Lance ce que désigne un libellé « à lancer ». */
+        function lancerLancable(cible, nom, genre, advMode) {
+            const l = lireLancable(cible, nom, genre);
+            return performAbilityRoll(l.titre, l.bonus, advMode, {
+                type: l.type, sources: l.sources, avertissements: l.avertissements,
+                cle: l.type === 'mort' ? 'mort' : l.cle,
+                avantAffichage: l.type === 'mort' ? appliquerJetContreLaMort : null,
+                sousTitre: l.type === 'sort' ? 'Attaque de sort' : '',
+                rejouer: { t: 'lancable', cible, nom, jet: genre || '', mode: advMode }
+            });
+        }
+        /** Une macro : sa formule, lancée comme une expression. */
+        function lancerMacro(nom, formule) {
+            const res = rollExpression(formule);
+            if (res.error) { window.showAppToast('⚠️ ' + res.error, 'erreur'); return; }
+            const titre = nom || formule;
+            consignerExpression(String(formule), res, { titre, sousTitre: 'Macro · ' + formule, nom: '🎲 ' + titre });
+        }
 
         let invCategories = getStore('dnd-inv-categories') || []; let atkCategories = getStore('dnd-atk-categories') || [];
         function updateCategorySelects() { const buildOptions = (cats) => `<option value="Général">Général</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); let invSel = document.getElementById('inv-category'); if(invSel) invSel.innerHTML = buildOptions(invCategories); let atkSel = document.getElementById('new-atk-category'); if(atkSel) atkSel.innerHTML = buildOptions(atkCategories); let itemSel = document.getElementById('new-item-category'); if(itemSel) itemSel.innerHTML = buildOptions(invCategories); }   // (edit-inv-category retiré : l'ancienne fenêtre d'édition du sac n'existe plus, l'édition est inline)
@@ -3893,6 +4364,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (document.getElementById('levelup-plan')) return;
+            if (getStore('dnd-forme-active')) {
+                window.Dialogue.informer({ titre: 'Reprends ta forme d’abord', icone: '🐾',
+                    message: 'Tu es sous une autre forme : ses caractéristiques s’affichent à la place des tiennes. Reprends ta forme avant de monter de niveau.' });
+                return;
+            }
             btnLevelUp.disabled = true;
             try {
                 openLevelUpScreen(await buildLevelUpPlan(lvl));
@@ -3933,6 +4409,39 @@ document.addEventListener('DOMContentLoaded', () => {
         // tableau — maîtrises, capacités, inventaire, emplacements de sorts —
         // passe par ici : c'est le seul endroit qui connaît ces structures.
         window.SheetApi = {
+            /** Une attaque hors de la liste (bête de Forme sauvage…) : toucher et dégâts sur la carte.
+             *  o : { nom, bonus, degats: [{ expr, type }], sousTitre, mode } */
+            async lancerAttaqueLibre(o) {
+                const a = o || {};
+                const advNode = document.querySelector('input[name="roll-mode"]:checked');
+                const choisi = a.mode || (advNode ? advNode.value : 'normal');
+                const d = await rollD20With(choisi, 'attaque');
+                const base = parseInt(a.bonus, 10) || 0;
+                const crit = d.nat === 20;
+                const rejouer = { t: 'attaque-libre', nom: a.nom || 'Attaque', bonus: base, degats: a.degats || [], sousTitre: a.sousTitre || '', mode: choisi };
+                const jet = jetD20({ type: 'attaque', titre: a.nom || 'Attaque', sousTitre: a.sousTitre || 'Jet d’attaque', mode: d.mode, r1: d.roll1, r2: d.roll2,
+                    bonus: base + d.extra.total, sources: [{ libelle: 'bonus du profil', valeur: base, origine: 'manuel' }].concat(d.extra.sources), rejouer });
+                const lignes = []; let total = 0;
+                (a.degats || []).forEach(x => {
+                    const res = rollExpression(crit ? doubleDice(x.expr) : x.expr);
+                    if (res.error) return;
+                    total += res.total; lignes.push(ligneLancer(res, { type: x.type || '' }));
+                });
+                if (lignes.length) jet.lancer = { etiquette: 'Dégâts', nature: 'degats', total, lignes };
+                jet.notes = d.notes.concat(crit && lignes.length ? ['Dés de dégâts doublés.'] : []);
+                pushRollHistory('⚔️ ' + (a.nom || 'Attaque'), jet.total, `toucher ${jet.total} (d20 : ${d.nat})` + (lignes.length ? ` · dégâts ${total}` : ''), d.nat, jet);
+                montrerJet(jet);
+                if (lignes.length) document.dispatchEvent(new CustomEvent('degats:jet', { detail: { total } }));
+                return jet;
+            },
+            /** Les statistiques des d20 de ce personnage (stats-des.js). */
+            statsD20() { return lireStatsD20(); },
+            /** Remet les statistiques à zéro, ou les rétablit (`avant`). Rend l'état remplacé. */
+            remettreStatsD20(avant) {
+                const actuel = lireStatsD20();
+                setStore('dnd-stats-d20', (avant && Array.isArray(avant.compte)) ? avant : statsVides());
+                return actuel;
+            },
             /** level : 0 aucune · 1 maîtrise · 2 expertise */
             setSkillProf(skillId, level) {
                 const hidden = document.getElementById('prof-' + skillId);
@@ -4086,7 +4595,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (added) { setStore('dnd-spells', spells); renderGrimoire(); }
                 return added;
             },
-            refresh() { updateStatsAndSkills(); }
+            /** Recalcule les totaux affichés (caractéristiques, compétences, magie,
+             *  Perception passive, initiative, CA et Vitesse effectives) après un
+             *  changement que le moteur voit mais que la fiche n'a pas saisi : un état,
+             *  l'épuisement, l'édition, un effet actif, une forme. */
+            refresh() { updateStatsAndSkills(); majValeursEffectives(); }
         };
 
         // Célébration plein écran. Remplace l'alerte système : monter de niveau
@@ -4322,7 +4835,112 @@ document.addEventListener('DOMContentLoaded', () => {
         // stockage n’a pas changé : { name, active } y gagne seulement une
         // description facultative.
 
-        function updateHpVisuals() {
+        // ===== JETS CONTRE LA MORT (LOT 4.6) =====
+        // « Lancez un d20. Si le dé donne un résultat de 10 ou plus, c'est une réussite.
+        //   Dans le cas contraire, c'est un échec. […] À la troisième réussite, vous êtes
+        //   stabilisé. Au troisième échec, vous mourez. » « Lorsque vous obtenez un 1 […]
+        //   cela vaut pour deux échecs. Si vous obtenez un 20 […] vous récupérez 1 point de
+        //   vie. » « Ces compteurs sont remis à zéro […] lorsque vous récupérez au moins un
+        //   point de vie. » « Si vous subissez des dégâts alors que vous êtes à 0 point de
+        //   vie, vous subissez un échec. » (rules.json, 2014 et 2024 : mêmes règles.)
+        function casesMort(k) { return k === 's' ? ['death-s1', 'death-s2', 'death-s3'] : ['death-f1', 'death-f2', 'death-f3']; }
+        function compterCasesMort(k) { return casesMort(k).filter(id => document.getElementById(id)?.checked).length; }
+        function poserCasesMort(k, n) {
+            casesMort(k).forEach((id, i) => {
+                const c = document.getElementById(id); if (!c) return;
+                const on = i < n;
+                if (c.checked !== on) { c.checked = on; c.dispatchEvent(new Event('change', { bubbles: true })); }
+            });
+        }
+        function majEtatMort() {
+            const s = compterCasesMort('s'), f = compterCasesMort('f');
+            const el = document.getElementById('mort-etat');
+            if (el) el.textContent = f >= 3 ? 'Trois échecs.' : (s >= 3 ? 'Stabilisé.' : '');
+            const section = document.querySelector('.death-saves-section');
+            if (section) { section.classList.toggle('is-mort', f >= 3); section.classList.toggle('is-stable', s >= 3 && f < 3); }
+        }
+        function viderCasesMort() { poserCasesMort('s', 0); poserCasesMort('f', 0); majEtatMort(); }
+        function ajouterEchecsMort(n, pourquoi) {
+            const avant = compterCasesMort('f');
+            const apres = Math.min(3, avant + n);
+            poserCasesMort('f', apres);
+            majEtatMort();
+            if (avant < 3 && apres >= 3) troisEchecs(pourquoi);
+            return apres;
+        }
+        // Trois échecs : un événement (le cimetière des héros s'y branchera) et une
+        // fenêtre sobre. Rien n'est fait d'office.
+        function troisEchecs(pourquoi) {
+            const nom = document.getElementById('char-name')?.value || 'Ton personnage';
+            document.dispatchEvent(new CustomEvent('mort:trois-echecs', { detail: { nom, pourquoi: pourquoi || '' } }));
+            if (window.Dialogue) window.Dialogue.informer({
+                titre: 'Trois échecs', icone: '☾', bouton: 'Revenir à la fiche',
+                message: `« Au troisième échec, vous mourez. » ${nom} a rendu son dernier souffle.\n\n`
+                    + 'Si un allié le ramène à la vie, rends-lui simplement des points de vie : les cases se videront d’elles-mêmes.'
+            });
+        }
+        /** Applique un jet contre la mort, juste avant que la carte ne s'affiche. */
+        function appliquerJetContreLaMort(jet) {
+            const cur = parseInt(document.getElementById('hp-current')?.value, 10) || 0;
+            const max = parseInt(document.getElementById('hp-max')?.value, 10) || 0;
+            const nat = jet.d20.garde;
+            jet.notes = jet.notes || [];
+            if (max > 0 && cur > 0) { jet.notes.push('Tu n’es pas à 0 point de vie : aucune case n’est cochée.'); return; }
+            if (compterCasesMort('f') >= 3) { jet.notes.push('Trois échecs sont déjà cochés.'); return; }
+            if (nat === 20) {
+                jet.notes.push('20 naturel : tu récupères 1 point de vie, et les compteurs repartent de zéro.');
+                applyHpDelta(1);
+                viderCasesMort();
+                return;
+            }
+            if (nat === 1) { const f = ajouterEchecsMort(2, '1 naturel'); jet.notes.push(`1 naturel : deux échecs (${f} sur 3).`); return; }
+            if (jet.total >= 10) {
+                const s = Math.min(3, compterCasesMort('s') + 1);
+                poserCasesMort('s', s); majEtatMort();
+                jet.notes.push(s >= 3 ? 'Troisième réussite : tu es stabilisé.' : `Réussite (${s} sur 3).`);
+            } else {
+                const f = ajouterEchecsMort(1, 'échec');
+                jet.notes.push(`Échec (${f} sur 3).`);
+            }
+        }
+
+        // ===== LA BARRE DE PV (LOT 4.5) =====
+        // L'échelle est le maximum de PV — ou PV + PV temporaires s'ils le dépassent :
+        // les PV temporaires forment un bouclier au bout du remplissage. Une perte laisse
+        // une traînée rouge qui fond et un « −12 » qui s'envole ; un soin, un « +8 ».
+        // Seuls les changements VOULUS s'animent (dégâts et soins rapides, repos, jet
+        // contre la mort, saisie validée) : jamais le chargement d'une fiche.
+        // `var` : updateHpVisuals peut être appelée avant que cette ligne soit atteinte.
+        var pvVu = null;                          // le dernier état dessiné : { cur, temp, max }
+        function mouvementReduit() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+        function geometriePv(cur, temp, max) {
+            if (!(max > 0)) return { plein: 0, bouclier: 0, echelle: 1 };
+            const echelle = Math.max(max, cur + temp, 1);
+            return { plein: Math.max(0, Math.min(1, cur / echelle)), bouclier: Math.max(0, Math.min(1, temp / echelle)), echelle };
+        }
+        /** La traînée part de l'état d'avant et rejoint le nouveau, en retard sur le remplissage. */
+        function poserTrainee(el, g, avant, anime) {
+            if (!el) return;
+            const finPv = Math.min(1, g.plein + g.bouclier) * 100;
+            el.style.transition = 'none';
+            if (anime && avant && !mouvementReduit()) {
+                el.style.width = Math.min(100, ((avant.cur + avant.temp) / g.echelle) * 100) + '%';
+                void el.offsetWidth;
+                el.style.transition = '';
+            }
+            el.style.width = finPv + '%';
+        }
+        function envolerPv(hote, delta) {
+            if (!hote || !delta) return;
+            const s = document.createElement('span');
+            s.className = 'hp-float ' + (delta < 0 ? 'is-degats' : 'is-soin');
+            s.setAttribute('aria-hidden', 'true');
+            s.textContent = (delta < 0 ? '−' : '+') + Math.abs(delta);
+            hote.appendChild(s);
+            setTimeout(() => s.remove(), 1700);
+        }
+        function updateHpVisuals(opts) {
+            const o = opts || {};
             const hpCurrentInput = document.getElementById('hp-current'); const hpMaxInput = document.getElementById('hp-max');
             if(!hpCurrentInput || !hpMaxInput) return;
             const current = parseInt(hpCurrentInput.value) || 0;
@@ -4336,13 +4954,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (ratio > 0.25) { block.style.borderColor = '#f1c40f'; block.style.boxShadow = '0 0 10px rgba(241, 196, 15, 0.2)'; }
                 else { block.style.borderColor = '#e74c3c'; block.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.3)'; }
             }
+            const g = geometriePv(current, temp, maxRaw);
+            const avant = o.avant || pvVu;
+            const delta = avant ? (current + temp) - (avant.cur + avant.temp) : 0;
+            const anime = !!(o.anime && avant && delta);
             const fill = document.getElementById('hp-bar-fill');
             if(fill) {
-                fill.style.width = (maxRaw > 0 ? ratio * 100 : 0) + '%';
+                fill.style.width = (g.plein * 100) + '%';
                 fill.classList.remove('hp-mid', 'hp-low');
                 if(maxRaw > 0 && ratio <= 0.25) fill.classList.add('hp-low');
                 else if(maxRaw > 0 && ratio <= 0.5) fill.classList.add('hp-mid');
             }
+            const bouclier = document.getElementById('hp-bar-shield');
+            if(bouclier) {
+                bouclier.hidden = !(temp > 0 && maxRaw > 0);
+                bouclier.style.left = (g.plein * 100) + '%';
+                bouclier.style.width = (g.bouclier * 100) + '%';
+            }
+            poserTrainee(document.getElementById('hp-bar-trail'), g, avant, anime);
             const text = document.getElementById('hp-bar-text');
             if(text) text.innerHTML = `${current} / ${maxRaw}` + (temp > 0 ? ` <span class="hp-bar-temp-badge">+${temp} PVT</span>` : '');
             // À 0 PV : état critique = voile rouge léger + mise en avant des jets contre la mort.
@@ -4350,22 +4979,56 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.toggle('at-zero-hp', atZero);
             const deathSection = document.querySelector('.death-saves-section');
             if(deathSection) deathSection.classList.toggle('is-critical', atZero);
-            updateMobileVitals();
+            // « Ces compteurs sont remis à zéro […] lorsque vous récupérez au moins un point de vie. »
+            if (pvVu && pvVu.cur <= 0 && current > 0 && maxRaw > 0 && (compterCasesMort('s') || compterCasesMort('f'))) viderCasesMort();
+            pvVu = { cur: current, temp, max: maxRaw };
+            if (anime) {
+                envolerPv(document.querySelector('.hp-bar-block .hp-floats'), delta);
+                const annonce = document.getElementById('hp-annonce');
+                if (annonce) annonce.textContent = delta < 0 ? `${-delta} points de vie perdus : il en reste ${current}.` : `${delta} points de vie rendus : ${current}.`;
+            }
+            updateMobileVitals(anime ? { delta, avant } : null);
         }
 
         // Soin / dégâts rapides (les dégâts entament d'abord les PV temporaires, règle 5e)
         function applyHpDelta(delta) {
             const cur = document.getElementById('hp-current'); const tmp = document.getElementById('hp-temp'); const maxEl = document.getElementById('hp-max');
             if(!cur) return; const max = parseInt(maxEl?.value) || 0;
+            const avant = { cur: parseInt(cur.value) || 0, temp: parseInt(tmp?.value) || 0, max };
+            let excedent = 0, degatsReels = 0;
             if(delta < 0) {
-                let dmg = -delta; let temp = parseInt(tmp?.value) || 0;
+                let dmg = -delta; let temp = avant.temp;
                 if(temp > 0 && tmp) { const absorbed = Math.min(temp, dmg); temp -= absorbed; dmg -= absorbed; tmp.value = temp; tmp.dispatchEvent(new Event('input', { bubbles: true })); }
-                if(dmg > 0) { cur.value = Math.max(0, (parseInt(cur.value) || 0) - dmg); cur.dispatchEvent(new Event('input', { bubbles: true })); }   // plancher 0 : à 0 PV on tombe inconscient (jets contre la mort), pas de PV négatifs
+                degatsReels = dmg;
+                if(dmg > 0) { excedent = Math.max(0, dmg - avant.cur); cur.value = Math.max(0, avant.cur - dmg); cur.dispatchEvent(new Event('input', { bubbles: true })); }   // plancher 0 : à 0 PV on tombe inconscient (jets contre la mort), pas de PV négatifs
             } else if(delta > 0) {
-                let nv = (parseInt(cur.value) || 0) + delta; if(max > 0) nv = Math.min(nv, max); cur.value = nv; cur.dispatchEvent(new Event('input', { bubbles: true }));
+                let nv = avant.cur + delta; if(max > 0) nv = Math.min(nv, max); cur.value = nv; cur.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            updateHpVisuals();
+            updateHpVisuals({ anime: true, avant });
+            const apres = { cur: parseInt(cur.value) || 0, temp: parseInt(tmp?.value) || 0, max };
+            // Les formes (formes.js) écoutent : retour à 0 PV, dégâts excédentaires…
+            document.dispatchEvent(new CustomEvent('pv:change', { detail: { avant, apres, delta, excedent } }));
+            // « Si vous subissez des dégâts alors que vous êtes à 0 point de vie, vous subissez
+            //   un échec […]. Si les dégâts sont au moins égaux à votre maximum de points de vie,
+            //   vous mourez sur le coup. » (rules.json 2014 ; même texte en 2024)
+            if(delta < 0 && degatsReels > 0 && avant.cur === 0 && max > 0) {
+                const f = ajouterEchecsMort(1, 'dégâts');
+                if(window.showAppToast) window.showAppToast(degatsReels >= max
+                    ? 'Des dégâts au moins égaux à ton maximum de PV, à 0 PV : mort sur le coup, selon les règles.'
+                    : `Dégâts à 0 PV : un échec contre la mort (${f} sur 3).`, 'erreur');
+            }
         }
+        // Une saisie validée dans les champs de PV s'anime aussi (LOT 4.5).
+        let pvAvantSaisie = null;
+        ['hp-current', 'hp-temp'].forEach(id => {
+            const el = document.getElementById(id); if (!el) return;
+            el.addEventListener('focus', () => { pvAvantSaisie = pvVu ? Object.assign({}, pvVu) : null; });
+            el.addEventListener('change', () => {
+                if (!pvAvantSaisie) return;
+                updateHpVisuals({ anime: true, avant: pvAvantSaisie });
+                pvAvantSaisie = pvVu ? Object.assign({}, pvVu) : null;
+            });
+        });
         // Au clavier, le signe décide : « -8 ⏎ » inflige 8 dégâts (les PV temporaires
         // encaissent d'abord), « 8 ⏎ » et « +8 ⏎ » soignent 8. Les boutons − et +
         // gardent leur sens quoi qu'il arrive : ce sont eux qu'on vise au doigt.
@@ -4502,14 +5165,15 @@ document.addEventListener('DOMContentLoaded', () => {
         })();
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-open-spell-slots-modal') { const list = document.getElementById('spell-slots-config-list'); if(!list) return; list.innerHTML = ''; spellSlotsData.forEach((data, lvl) => { list.innerHTML += `<div class="spell-slot-config-row ${data.total === 0 ? 'is-empty' : ''}" data-lvl="${lvl}"><div class="spell-slot-config-head"><div class="spell-slot-level-badge">Niv. ${lvl + 1}</div><label class="spell-slot-mini-field">Emplacements<input type="number" class="spell-config-total" min="0" max="9" value="${data.total}"></label><label class="spell-slot-mini-field spell-slot-regen-field">Récupération<select class="spell-config-regen-mode"><option value="none" ${data.regenMode === 'none' ? 'selected' : ''}>Aucune</option><option value="long" ${data.regenMode === 'long' ? 'selected' : ''}>Repos long</option><option value="short_long" ${data.regenMode === 'short_long' ? 'selected' : ''}>Repos court + long</option></select></label><label class="spell-slot-mini-field spell-slot-pacte-field" title="Cette réserve vient de la Magie de pacte : elle se recharge et se recalcule à part.">Pacte<input type="checkbox" class="spell-config-pacte" ${data.pacte ? 'checked' : ''}></label></div><div class="spell-slot-config-details"><div class="spell-recovery-pill spell-config-short-block hidden"><span>Court</span><select class="spell-config-short-type"><option value="all" ${data.shortType === 'all' ? 'selected' : ''}>Tout</option><option value="fixed" ${data.shortType === 'fixed' ? 'selected' : ''}>Partiel</option></select><input type="number" class="spell-config-short-amount hidden" min="1" value="${data.shortAmount}" placeholder="Nb"></div><div class="spell-recovery-pill spell-config-long-block"><span>Long</span><select class="spell-config-long-type"><option value="all" ${data.longType === 'all' ? 'selected' : ''}>Tout</option><option value="fixed" ${data.longType === 'fixed' ? 'selected' : ''}>Partiel</option></select><input type="number" class="spell-config-long-amount hidden" min="1" value="${data.longAmount}" placeholder="Nb"></div></div></div>`; }); document.querySelectorAll('.spell-slot-config-row').forEach(row => { const updateVisibility = () => { const total = Math.max(0, parseInt(row.querySelector('.spell-config-total').value) || 0); const mode = row.querySelector('.spell-config-regen-mode').value; row.classList.toggle('is-empty', total === 0); row.querySelector('.spell-slot-config-details').classList.toggle('hidden', total === 0 || mode === 'none'); row.querySelector('.spell-config-short-block').classList.toggle('hidden', total === 0 || mode !== 'short_long'); row.querySelector('.spell-config-long-block').classList.toggle('hidden', total === 0 || mode === 'none'); row.querySelector('.spell-config-short-amount').classList.toggle('hidden', row.querySelector('.spell-config-short-type').value === 'all'); row.querySelector('.spell-config-long-amount').classList.toggle('hidden', row.querySelector('.spell-config-long-type').value === 'all'); }; updateVisibility(); row.querySelectorAll('select, input').forEach(el => { el.addEventListener('input', updateVisibility); }); }); document.getElementById('spell-slots-modal').classList.remove('hidden'); } });
         const btnSaveSpellSlots = document.getElementById('btn-save-spell-slots-config'); if(btnSaveSpellSlots) { btnSaveSpellSlots.addEventListener('click', () => { document.querySelectorAll('.spell-slot-config-row').forEach(row => { const lvl = parseInt(row.dataset.lvl); const total = Math.max(0, Math.min(9, parseInt(row.querySelector('.spell-config-total').value) || 0)); spellSlotsData[lvl] = { total: total, used: (spellSlotsData[lvl].used || []).slice(0, total), regenMode: row.querySelector('.spell-config-regen-mode').value, shortType: row.querySelector('.spell-config-short-type').value, shortAmount: Math.max(1, parseInt(row.querySelector('.spell-config-short-amount').value) || 1), longType: row.querySelector('.spell-config-long-type').value, longAmount: Math.max(1, parseInt(row.querySelector('.spell-config-long-amount').value) || 1), pacte: !!(row.querySelector('.spell-config-pacte') || {}).checked }; while(spellSlotsData[lvl].used.length < total) spellSlotsData[lvl].used.push(false); }); setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); document.getElementById('spell-slots-modal').classList.add('hidden'); }); }
-        function recoverSpellSlotsByRest(restType) { let recovered = 0; spellSlotsData.forEach(data => { if(data.regenMode === 'none' || (restType === 'short' && data.regenMode !== 'short_long')) return; const recoverType = restType === 'short' ? data.shortType : data.longType; const recoverAmount = recoverType === 'all' ? data.total : (restType === 'short' ? data.shortAmount : data.longAmount); let r = 0; for(let i = data.total - 1; i >= 0 && r < recoverAmount; i--) { if(data.used[i]) { data.used[i] = false; r++; recovered++; } } }); setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); return recovered; }
+        /** Rend les emplacements. Rend le détail par niveau : [{ rang, rendus, dispo, total, pacte }]. */
+        function recoverSpellSlotsByRest(restType) { const detail = []; spellSlotsData.forEach((data, lvl) => { if(data.regenMode === 'none' || (restType === 'short' && data.regenMode !== 'short_long')) return; const recoverType = restType === 'short' ? data.shortType : data.longType; const recoverAmount = recoverType === 'all' ? data.total : (restType === 'short' ? data.shortAmount : data.longAmount); let r = 0; for(let i = data.total - 1; i >= 0 && r < recoverAmount; i--) { if(data.used[i]) { data.used[i] = false; r++; } } if(r) detail.push({ rang: lvl + 1, rendus: r, dispo: Math.max(0, data.total - data.used.filter(Boolean).length), total: data.total, pacte: !!data.pacte }); }); setStore('dnd-spell-slots', spellSlotsData); renderSpellSlots(); return detail; }
 
         const restModal = document.getElementById('rest-modal'); const restShortContent = document.getElementById('rest-short-content'); const restLongContent = document.getElementById('rest-long-content'); const restHdAvailable = document.getElementById('rest-hd-available'); const restHdMaxDisplay = document.getElementById('rest-hd-max-display'); const restHdSizeDisplay = document.getElementById('rest-hd-size-display'); const restConModDisplay = document.getElementById('rest-con-mod'); const restHpStatus = document.getElementById('rest-hp-status'); const restRollResult = document.getElementById('rest-roll-result'); const btnRollHitDie = document.getElementById('btn-roll-hit-die'); let shortRestRollLog = [];
         if(document.getElementById('btn-close-rest')) document.getElementById('btn-close-rest').addEventListener('click', () => { restModal.classList.add('hidden'); });
         function getConstitutionModifierForRest() { return Math.floor(((parseInt(document.getElementById('stat-con').value) || 10) - 10) / 2); }
         function updateShortRestPanel() { if(!restHdAvailable) return; const hdMax = parseInt(document.getElementById('hd-max').value) || 0; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; restHdAvailable.textContent = available; restHdMaxDisplay.textContent = hdMax; restHdSizeDisplay.textContent = `d${hdSize}`; restConModDisplay.textContent = conMod >= 0 ? `+${conMod}` : `${conMod}`; restHpStatus.textContent = `${currentHp} / ${maxHp}`; btnRollHitDie.disabled = available <= 0; document.getElementById('rest-hd-to-roll').max = available; }
         function recoverAbilitiesByRest(restType) {
-            let recovered = 0;
+            const detail = [];
             abilities.forEach(ab => {
                 const mode = ab.regenMode || 'long';
                 if(mode === 'none') return;                              // aucune récupération
@@ -4523,16 +5187,154 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(mode === 'long' || mode === 'short_long') { recoverType = ab.longType || 'all'; recoverAmount = recoverType === 'all' ? ab.max : (ab.longAmount || 1); }
                     else { recoverType = ab.shortType || 'all'; recoverAmount = recoverType === 'all' ? ab.max : (ab.shortAmount || 1); }
                 }
+                if(!Array.isArray(ab.used)) ab.used = [];
                 let count = 0;
-                for(let i = ab.max - 1; i >= 0 && count < recoverAmount; i--) { if(ab.used[i]) { ab.used[i] = false; count++; recovered++; } }
+                for(let i = ab.max - 1; i >= 0 && count < recoverAmount; i--) { if(ab.used[i]) { ab.used[i] = false; count++; } }
+                // Le détail, pour le récapitulatif du repos (LOT 4.4).
+                if(count) detail.push({ nom: ab.name, rendus: count, reste: Math.max(0, ab.max - ab.used.filter(Boolean).length), max: ab.max });
             });
-            setStore('dnd-abilities', abilities); renderAbilities(); return recovered;
+            setStore('dnd-abilities', abilities); renderAbilities(); renderTraits(); return detail;
         }
         
         document.body.addEventListener('click', (e) => { if(e.target.id === 'btn-short-rest') { document.getElementById('rest-modal-title').innerText = "Repos Court"; restLongContent.classList.add('hidden'); restShortContent.classList.remove('hidden'); shortRestRollLog = []; restRollResult.innerHTML = ``; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); restModal.classList.remove('hidden'); } if(e.target.id === 'btn-long-rest') { document.getElementById('rest-modal-title').innerText = "Repos Long"; restShortContent.classList.add('hidden'); restLongContent.classList.remove('hidden'); restModal.classList.remove('hidden'); } });
-        if(btnRollHitDie) { btnRollHitDie.addEventListener('click', () => { const hdMax = parseInt(document.getElementById('hd-max').value) || 0; let hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); if(available <= 0) return; let amountToRoll = parseInt(document.getElementById('rest-hd-to-roll').value) || 1; if(amountToRoll > available) amountToRoll = available; if(amountToRoll <= 0) return; const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const conText = conMod >= 0 ? `+${conMod}` : `${conMod}`; let totalHealed = 0; let rollDetails = []; for(let i=0; i < amountToRoll; i++) { const roll = Math.floor(Math.random() * hdSize) + 1; const healed = Math.max(0, roll + conMod); totalHealed += healed; rollDetails.push(`[${roll}${conText}=${healed}]`); } const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0; const newHp = Math.min(maxHp, currentHp + totalHealed); hdSpent += amountToRoll; document.getElementById('hd-spent').value = hdSpent; setStore('dnd-sheet-hd-spent', hdSpent, false); document.getElementById('hp-current').value = newHp; setStore('dnd-sheet-hp-current', newHp, false); shortRestRollLog.push(`<strong>${amountToRoll}d${hdSize}</strong> : ${rollDetails.join(' + ')} ➔ <span style="color:#2ecc71;">+${totalHealed} PV</span>`); restRollResult.innerHTML = `<p class="rest-log-line" style="font-size:1.2rem;"><strong>Lancé (${amountToRoll} dés) :</strong> ➔ <strong>+${totalHealed} PV</strong></p><p class="rest-log-line">PV : ${currentHp} → ${newHp}</p><div class="rest-roll-history" style="margin-top:10px; border-top:1px dashed var(--primary-color); padding-top:10px;"><strong>Historique :</strong><br>${shortRestRollLog.join('<br>')}</div>`; document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel(); updateHpVisuals(); }); }
-        if(document.getElementById('btn-confirm-short-rest')) document.getElementById('btn-confirm-short-rest').addEventListener('click', () => { recoverAbilitiesByRest('short'); recoverSpellSlotsByRest('short'); recoverGearByRest('short'); restModal.classList.add('hidden'); });
-        if(document.getElementById('btn-confirm-long-rest')) document.getElementById('btn-confirm-long-rest').addEventListener('click', () => { if((parseInt(document.getElementById('hp-current').value) || 0) < 1) { window.Dialogue.informer({ titre: 'Repos long impossible', message: "Tu dois avoir au moins 1 PV pour prendre un repos long.", type: 'erreur' }); return; } const maxHp = parseInt(document.getElementById('hp-max').value) || 0; if(maxHp > 0) { document.getElementById('hp-current').value = maxHp; setStore('dnd-sheet-hp-current', maxHp, false); } const hdMax = parseInt(document.getElementById('hd-max').value) || 1; const hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const newSpent = Math.max(0, hdSpent - Math.max(1, Math.floor(hdMax / 2))); document.getElementById('hd-spent').value = newSpent; setStore('dnd-sheet-hd-spent', newSpent, false); recoverSpellSlotsByRest('long'); recoverAbilitiesByRest('long'); recoverGearByRest('long'); updateHpVisuals(); restModal.classList.add('hidden'); window.showAppToast("⛺ Repos long terminé — PV & ressources récupérés", '#2c3e50'); });
+        // Dés de vie du repos court (LOT 4.3) : de vrais dés 3D quand le plateau est
+        // prêt (repli sur un tirage sinon), une carte de résultat, une ligne
+        // d'historique, et les événements des dés (`des:lances`, `repos:des-de-vie`).
+        // Chaque dé rend « dé + modificateur de Constitution » PV, avec un minimum
+        // qui dépend de l'édition, entrée « Repos court » des données :
+        //   · SRD 5.1   (data/srd/2014/fr/rules.json) : « (minimum 0) » ;
+        //   · SRD 5.2.1 (data/srd/2024/fr/rules.json) : « (minimum 1) ».
+        let desDeVieEnCours = false;
+        async function lancerDesDeVie() {
+            if (desDeVieEnCours) return;
+            const hdMax = parseInt(document.getElementById('hd-max').value) || 0; let hdSpent = parseInt(document.getElementById('hd-spent').value) || 0; const available = Math.max(0, hdMax - hdSpent); if(available <= 0) return;
+            let amountToRoll = parseInt(document.getElementById('rest-hd-to-roll').value) || 1; if(amountToRoll > available) amountToRoll = available; if(amountToRoll <= 0) return;
+            const hdSize = parseInt(document.getElementById('hd-size').value) || 8; const conMod = getConstitutionModifierForRest(); const conText = conMod >= 0 ? `+${conMod}` : `${conMod}`;
+            const edition = window.Edition ? window.Edition.active() : '2024';
+            const minimum = edition === '2014' ? 0 : 1;
+            desDeVieEnCours = true; btnRollHitDie.disabled = true;
+            let valeurs = null;
+            try {
+                if (diceBoxReady && diceBox) {
+                    try {
+                        const res = await safeDiceRoll([`${amountToRoll}d${hdSize}`]);
+                        const v = res.map(d => d.value).filter(x => typeof x === 'number');
+                        if (v.length >= amountToRoll) valeurs = v.slice(0, amountToRoll);
+                    } catch (e) { console.warn('Dés de vie : lancer 3D impossible, repli sur un tirage.', e); }
+                }
+            } finally { desDeVieEnCours = false; }
+            if (!valeurs) valeurs = Array.from({ length: amountToRoll }, () => Math.floor(Math.random() * hdSize) + 1);
+            document.dispatchEvent(new CustomEvent('des:lances', { detail: { nombre: amountToRoll } }));
+
+            let totalHealed = 0, releve = false; const rollDetails = [];
+            valeurs.forEach(roll => { const brut = roll + conMod; const healed = Math.max(minimum, brut); if (healed !== brut) releve = true; totalHealed += healed; rollDetails.push(`[${roll}${conText}=${healed}]`); });
+            const currentHp = parseInt(document.getElementById('hp-current').value) || 0; const maxHp = parseInt(document.getElementById('hp-max').value) || 0;
+            const newHp = maxHp > 0 ? Math.min(maxHp, currentHp + totalHealed) : currentHp + totalHealed;
+            hdSpent += amountToRoll; document.getElementById('hd-spent').value = hdSpent; setStore('dnd-sheet-hd-spent', hdSpent, false); document.getElementById('hp-current').value = newHp; setStore('dnd-sheet-hp-current', newHp, false);
+            shortRestRollLog.push(`<strong>${amountToRoll}d${hdSize}</strong> : ${rollDetails.join(' + ')} ➔ <span style="color:#2ecc71;">+${totalHealed} PV</span>`);
+            restRollResult.innerHTML = `<p class="rest-log-line" style="font-size:1.2rem;"><strong>Lancé (${amountToRoll} dés) :</strong> ➔ <strong>+${totalHealed} PV</strong></p><p class="rest-log-line">PV : ${currentHp} → ${newHp}</p><div class="rest-roll-history" style="margin-top:10px; border-top:1px dashed var(--primary-color); padding-top:10px;"><strong>Historique :</strong><br>${shortRestRollLog.join('<br>')}</div>`;
+            if (reposCourtBilan) { reposCourtBilan.des += amountToRoll; reposCourtBilan.soin += totalHealed; }
+            document.getElementById('rest-hd-to-roll').value = 1; updateShortRestPanel();
+            updateHpVisuals({ anime: true, avant: { cur: currentHp, temp: parseInt(document.getElementById('hp-temp').value, 10) || 0, max: maxHp } });
+            document.dispatchEvent(new CustomEvent('repos:des-de-vie', { detail: { faces: hdSize, des: valeurs.slice(), modificateur: conMod, soin: totalHealed, avant: currentHp, apres: newHp } }));
+
+            const notes = [`Constitution ${conText} par dé.`, `PV : ${currentHp} → ${newHp}.`];
+            if (releve) notes.push(`Chaque dé rend au moins ${minimum} PV (règles ${edition}).`);
+            const jet = {
+                type: 'des-de-vie', titre: 'Dés de vie', sousTitre: `Repos court · ${amountToRoll}d${hdSize}`,
+                lancer: { etiquette: 'Soins', nature: 'soins', total: totalHealed,
+                          lignes: [{ groupes: [{ signe: 1, faces: hdSize, des: valeurs.slice() }], fixe: releve ? 0 : conMod * amountToRoll, total: totalHealed }] },
+                total: totalHealed, notes, edition, rejouer: null
+            };
+            pushRollHistory('🎲 Dés de vie', totalHealed, `${amountToRoll}d${hdSize} : ${rollDetails.join(' + ')} → +${totalHealed} PV`, null, jet);
+            montrerJet(jet);
+        }
+        if(btnRollHitDie) btnRollHitDie.addEventListener('click', lancerDesDeVie);
+        document.getElementById('btn-confirm-short-rest')?.addEventListener('click', () => { terminerRepos('short'); });
+        document.getElementById('btn-confirm-long-rest')?.addEventListener('click', () => { terminerRepos('long'); });
+
+        // ===== LE RÉCAPITULATIF DE REPOS (LOT 4.4) =====
+        // Tout ce qui revient, avec les noms. Les règles viennent des données :
+        //   · « Repos long » 2014 (rules.json) : tous les PV ; les DV dépensés « jusqu'à un
+        //     maximum égal à la moitié de son total de DV (minimum un dé) » ;
+        //   · « Repos long » 2024 : « tous les points de vie perdus et tous les dés de vie
+        //     dépensés » ; « Réduction de l'Épuisement […] diminue de 1 » ;
+        //   · Épuisement 2014 (conditions.json) : « réduire de 1, à condition qu'elle se soit
+        //     correctement alimentée et hydratée » — d'où la case du panneau ;
+        //   · « Points de vie temporaires » (les deux) : ils « persistent jusqu'à ce qu'ils
+        //     soient dépensés ou que vous terminiez un repos long » ;
+        //   · les deux éditions : « au moins 1 point de vie » pour un repos long.
+        // Un repos court dure au moins 1 heure, un long au moins 8 : les effets actifs qui
+        // ne tiennent pas jusque-là prennent fin (effets-actifs.js).
+        let reposCourtBilan = null;               // les dés de vie lancés pendant ce repos court
+        document.body.addEventListener('click', (e) => {
+            if (e.target.id === 'btn-short-rest') reposCourtBilan = { des: 0, soin: 0, pvAvant: parseInt(document.getElementById('hp-current').value, 10) || 0 };
+            if (e.target.id === 'btn-long-rest') majPanneauReposLong();
+        });
+        function majPanneauReposLong() {
+            const ed = window.Edition ? window.Edition.active() : '2024';
+            const txt = document.getElementById('rest-long-regles');
+            if (txt) txt.textContent = ed === '2014'
+                ? 'Tu récupères tous tes PV, tes emplacements de sorts et tes capacités, et des dés de vie jusqu’à la moitié de ton total (au moins un).'
+                : 'Tu récupères tous tes PV et tous tes dés de vie, tes emplacements de sorts et tes capacités, et tu perds un niveau d’épuisement.';
+            const ligne = document.getElementById('rest-nourri-ligne');
+            const ep = window.Etats ? window.Etats.niveauEpuisement() : 0;
+            if (ligne) ligne.hidden = !(ed === '2014' && ep > 0);
+        }
+        async function terminerRepos(type) {
+            const ed = window.Edition ? window.Edition.active() : '2024';
+            const num = (id) => parseInt(document.getElementById(id)?.value, 10) || 0;
+            const recap = { type, edition: ed, pv: null, pvTemp: 0, des: null, desDepenses: 0, emplacements: [], capacites: [], objets: [], epuisement: null, epuisementGarde: 0, effets: [] };
+            if (type === 'long') {
+                if (num('hp-current') < 1) { window.Dialogue.informer({ titre: 'Repos long impossible', message: "Tu dois avoir au moins 1 PV pour prendre un repos long.", type: 'erreur' }); return null; }
+                const avant = { cur: num('hp-current'), temp: num('hp-temp'), max: num('hp-max') };
+                if (avant.max > 0 && avant.cur < avant.max) { document.getElementById('hp-current').value = avant.max; setStore('dnd-sheet-hp-current', avant.max, false); recap.pv = { avant: avant.cur, apres: avant.max }; }
+                if (avant.temp > 0) { document.getElementById('hp-temp').value = 0; setStore('dnd-sheet-hp-temp', 0, false); recap.pvTemp = avant.temp; }
+                const hdMax = num('hd-max') || 1, hdSpent = num('hd-spent');
+                const rendus = ed === '2014' ? Math.min(hdSpent, Math.max(1, Math.floor(hdMax / 2))) : hdSpent;
+                if (rendus > 0) { document.getElementById('hd-spent').value = hdSpent - rendus; setStore('dnd-sheet-hd-spent', hdSpent - rendus, false); recap.des = { rendus, dispo: hdMax - (hdSpent - rendus), max: hdMax }; }
+                const ep = window.Etats ? window.Etats.niveauEpuisement() : num('exhaustion-level');
+                const nourri = ed === '2024' || !!document.querySelector('#rest-nourri-ligne input')?.checked;
+                if (ep > 0 && nourri && window.Etats) { window.Etats.definirEpuisement(ep - 1); recap.epuisement = { avant: ep, apres: ep - 1 }; }
+                else if (ep > 0) recap.epuisementGarde = ep;
+                updateHpVisuals({ anime: true, avant });
+            } else if (reposCourtBilan && reposCourtBilan.des) {
+                recap.pv = { avant: reposCourtBilan.pvAvant, apres: num('hp-current') };
+                recap.desDepenses = reposCourtBilan.des;
+            }
+            recap.emplacements = recoverSpellSlotsByRest(type);
+            recap.capacites = recoverAbilitiesByRest(type);
+            recap.objets = recoverGearByRest(type);
+            if ((getStore('dnd-effets-actifs') || []).length && window.charger) {
+                try { await window.charger('effets-actifs'); recap.effets = window.EffetsActifs.finRepos(type); }
+                catch (err) { console.warn('[repos] effets actifs indisponibles', err); }
+            }
+            restModal.classList.add('hidden');
+            reposCourtBilan = null;
+            document.dispatchEvent(new CustomEvent('repos:termine', { detail: recap }));
+            montrerRecapRepos(recap);
+            return recap;
+        }
+        function montrerRecapRepos(r) {
+            const lignes = [];
+            const ligne = (ico, titre, detail) => lignes.push(`<li><span class="rr-ico" aria-hidden="true">${ico}</span><span class="rr-txt"><b>${escAb(titre)}</b>${detail ? `<i>${escAb(detail)}</i>` : ''}</span></li>`);
+            const pl = (n, s) => n > 1 ? s + 's' : s;
+            if (r.pv) ligne('❤', 'Points de vie', `${r.pv.avant} → ${r.pv.apres}` + (r.desDepenses ? ` (${r.desDepenses} ${pl(r.desDepenses, 'dé')} de vie ${pl(r.desDepenses, 'dépensé')})` : ''));
+            if (r.pvTemp) ligne('🛡', 'Points de vie temporaires', `${r.pvTemp} ${pl(r.pvTemp, 'perdu')} à la fin du repos long`);
+            if (r.des) ligne('🎲', 'Dés de vie', `+${r.des.rendus} (${r.des.dispo} / ${r.des.max})` + (r.edition === '2014' ? ' — la moitié du total au plus' : ''));
+            r.emplacements.forEach(e => ligne('◆', `Emplacements de niveau ${e.rang}${e.pacte ? ' (pacte)' : ''}`, `+${e.rendus} (${e.dispo} / ${e.total})`));
+            r.capacites.forEach(c => ligne('✦', c.nom, `+${c.rendus} (${c.reste} / ${c.max})`));
+            r.objets.forEach(o => ligne('⚗', o.nom, `${o.avant} → ${o.apres} charges` + (o.jet ? ` (${o.jet})` : '')));
+            if (r.epuisement) ligne('🕯', 'Épuisement', `${r.epuisement.avant} → ${r.epuisement.apres}`);
+            else if (r.epuisementGarde) ligne('🕯', 'Épuisement', `reste à ${r.epuisementGarde} : ni nourriture ni eau`);
+            if (r.effets.length) ligne('⌛', 'Effets terminés', r.effets.join(', '));
+            window.Dialogue.fenetre({
+                titre: r.type === 'long' ? 'Repos long terminé' : 'Repos court terminé', icone: r.type === 'long' ? '⛺' : '⏳',
+                confirmer: 'Fermer', annuler: '',
+                corps: `<ul class="recap-repos">${lignes.join('') || '<li class="rr-vide">Rien à récupérer : tout était déjà là.</li>'}</ul>`,
+                resultat: () => true
+            });
+        }
 
         // ===== COMPAGNONS / FAMILIERS (plusieurs par personnage) =====
         // Modèle : dnd-companions = [{ id, name, type, ac, hp, hpMax, hpTemp, speed, init,
@@ -4630,15 +5432,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Jets liés au compagnon (réutilisent le lanceur de dés de la fiche) ---
-        function companionRoll(c, label, mod, advMode) {
-            performAbilityRoll((c.name || 'Compagnon') + ' — ' + label, mod, advMode || 'normal');
+        // `rejouer` : de quoi retrouver le compagnon (et son attaque) pour « Relancer ».
+        function companionRoll(c, label, mod, advMode, type, rejouer) {
+            return performAbilityRoll((c.name || 'Compagnon') + ' — ' + label, mod, advMode || 'normal', {
+                type: type || 'carac', sousTitre: 'Compagnon',
+                sources: mod ? [{ libelle: type === 'attaque' ? 'bonus au toucher' : 'modificateur', valeur: mod, origine: type === 'attaque' ? 'manuel' : 'carac' }] : [],
+                rejouer: rejouer || null
+            });
         }
-        function companionDamageRoll(c, atk) {
+        function companionDamageRoll(c, atk, rejouer) {
             const res = rollExpression(atk.dmg);
             if (res.error) { if (window.showAppToast) window.showAppToast('⚠️ ' + res.error, '#c0392b'); return; }
             const label = (c.name || 'Compagnon') + ' — ' + (atk.name || 'attaque') + ' (dégâts)';
-            pushRollHistory(label, res.total, res.detail, null);
-            if (window.showAppToast) window.showAppToast('💥 ' + res.total + ' dégâts');
+            consignerExpression(String(atk.dmg), res, {
+                type: 'degats', titre: (c.name || 'Compagnon') + ' — ' + (atk.name || 'attaque'), sousTitre: 'Compagnon',
+                etiquette: 'Dégâts', nature: 'degats', nom: label, rejouer: rejouer || null
+            });
+        }
+        function rejouerCompagnon(c, ci, k, atk, ai, part, mode) {
+            return { t: 'compagnon', id: c.id || null, ci, nom: c.name || '', k: k || null,
+                     atk: atk ? (atk.id || null) : null, ai, atkNom: atk ? (atk.name || '') : '', part, mode: mode || 'normal' };
+        }
+        /** « Relancer » un jet de compagnon : retrouvé par son identifiant, sinon par sa place et son nom. */
+        function relancerCompagnon(r, mode) {
+            const c = companions.find(x => x && r.id && x.id === r.id)
+                || ((companions[r.ci] && companions[r.ci].name === r.nom) ? companions[r.ci] : null);
+            if (!c) return false;
+            const ci = companions.indexOf(c);
+            if (r.part === 'hit' || r.part === 'dmg') {
+                const atks = c.attacks || [];
+                let atk = atks.find(a => a && r.atk && a.id === r.atk);
+                if (!atk && atks[r.ai] && atks[r.ai].name === r.atkNom) atk = atks[r.ai];
+                if (!atk) return false;
+                const rj = rejouerCompagnon(c, ci, null, atk, atks.indexOf(atk), r.part, mode);
+                if (r.part === 'dmg') companionDamageRoll(c, atk, rj);
+                else companionRoll(c, atk.name || 'Attaque', parseInt(atk.bonus, 10) || 0, mode, 'attaque', rj);
+                return true;
+            }
+            const rj = rejouerCompagnon(c, ci, r.k, null, -1, 'test', mode);
+            if (r.k === 'init') companionRoll(c, 'Initiative', compMod(c.stats.dex), mode, 'initiative', rj);
+            else companionRoll(c, (COMP_STATS.find(s => s[0] === r.k) || [, r.k])[1], compMod(c.stats[r.k]), mode, 'carac', rj);
+            return true;
         }
 
         function renderCompanions() {
@@ -4754,8 +5588,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Jets de caracs / initiative
                 if (btn.dataset.croll) {
                     const k = btn.dataset.croll;
-                    if (k === 'init') companionRoll(c, 'Initiative', compMod(c.stats.dex));
-                    else companionRoll(c, (COMP_STATS.find(s => s[0] === k) || [, k])[1], compMod(c.stats[k]));
+                    if (k === 'init') companionRoll(c, 'Initiative', compMod(c.stats.dex), 'normal', 'initiative', rejouerCompagnon(c, i, k, null, -1, 'test'));
+                    else companionRoll(c, (COMP_STATS.find(s => s[0] === k) || [, k])[1], compMod(c.stats[k]), 'normal', 'carac', rejouerCompagnon(c, i, k, null, -1, 'test'));
                     return;
                 }
                 // Actions sur une attaque
@@ -4763,8 +5597,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (atkRow && btn.dataset.aact) {
                     const ai = parseInt(atkRow.dataset.ai, 10);
                     const atk = c.attacks[ai]; if (!atk) return;
-                    if (btn.dataset.aact === 'hit') companionRoll(c, (atk.name || 'Attaque'), parseInt(atk.bonus, 10) || 0);
-                    else if (btn.dataset.aact === 'dmg') companionDamageRoll(c, atk);
+                    if (btn.dataset.aact === 'hit') companionRoll(c, (atk.name || 'Attaque'), parseInt(atk.bonus, 10) || 0, 'normal', 'attaque', rejouerCompagnon(c, i, null, atk, ai, 'hit'));
+                    else if (btn.dataset.aact === 'dmg') companionDamageRoll(c, atk, rejouerCompagnon(c, i, null, atk, ai, 'dmg'));
                     else if (btn.dataset.aact === 'del') { c.attacks.splice(ai, 1); saveCompanions(); renderCompanions(); }
                     return;
                 }
@@ -4913,7 +5747,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const spellAtkBonus = () => parseMod((document.getElementById('spell-attack-bonus') || {}).value || 0);
         const spellSaveDC = () => (document.getElementById('spell-save-dc') || {}).value || '—';
 
-        /** `part` : 'attack' | 'dmg' | 'cast'. Le résultat s'affiche par-dessus le livre.
+        /** `part` : 'attack' | 'dmg' | 'cast'. Le résultat s'affiche sur la carte de
+         *  résultat (jets.js), qui passe au-dessus du livre.
          *  Un sort de niveau 1 ou plus demande d'abord AVEC QUOI on le lance :
          *  emplacement (le sien ou un plus haut, magie de pacte comprise), rituel,
          *  ou rien du tout quand la réserve est vide. La dépense est annulable. */
@@ -4948,58 +5783,60 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             document.dispatchEvent(new CustomEvent('sort:lance', { detail: { niveau, part, nom: sp.name || '', rang: choix ? choix.rang : niveau, mode: choix ? choix.mode : 'aucun' } }));
 
-            const bits = [];
-            let total = 0, nat = null;
+            const mode = o.advMode || 'normal';
+            const rejouer = { t: 'sort', nom: sp.name || '', index, part, mode };
+            const notes = [];
+            let jet;
             if (part === 'attack') {
-                const d = await rollD20With(o.advMode || 'normal');
-                nat = d.nat;
-                const bonus = spellAtkBonus();
-                total = nat + bonus;
-                let dice = `🎲 ${nat}`;
-                if (d.roll2 != null) {
-                    const dropped = (o.advMode === 'adv') ? Math.min(d.roll1, d.roll2) : Math.max(d.roll1, d.roll2);
-                    dice += ` <s>${dropped}</s>`;
-                }
-                bits.push(`<div class="atkfx-line">${dice} ${bonus >= 0 ? '+' : ''}${bonus} = `
-                    + `<b class="atkfx-total${nat === 1 ? ' is-fumble' : (nat === 20 ? ' is-crit' : '')}">${total}</b>`
-                    + (nat === 20 ? ' <b class="atk-crit">CRITIQUE</b>' : (nat === 1 ? ' <b class="atk-fumble">ÉCHEC CRITIQUE</b>' : ''))
-                    + `</div>`);
+                const d = await rollD20With(mode, 'attaque-sorts');
+                // Le moteur fait foi quand une caractéristique d'incantation est choisie ;
+                // sinon, c'est le bonus saisi dans le champ de la fiche.
+                const r = window.Calcul ? window.Calcul.valeur('attaque-sorts') : null;
+                const bonus = r ? r.total : spellAtkBonus();
+                const sources = r ? r.sources
+                    : (bonus ? [{ libelle: 'bonus d’attaque des sorts', valeur: bonus, origine: 'manuel' }] : []);
+                jet = jetD20({ type: 'sort', titre: sp.name, sousTitre: 'Attaque de sort', mode: d.mode, r1: d.roll1, r2: d.roll2,
+                               bonus: bonus + d.extra.total, sources: sources.concat(d.extra.sources), rejouer });
+                notes.push(...d.notes);
+            } else {
+                jet = { type: 'sort', titre: sp.name, sousTitre: part === 'dmg' ? 'Dégâts du sort' : 'Sort lancé', total: 0, notes: [], rejouer };
             }
             // Les dégâts suivent l'attaque, et doublent leurs dés sur un 20.
             const wantDmg = (part === 'dmg' || (part === 'attack' && hasVal(sp.dmg)));
             if (wantDmg && hasVal(sp.dmg)) {
-                const crit = o.crit || nat === 20;
+                const crit = o.crit || (jet.d20 && jet.d20.garde === 20);
                 const res = rollExpression(crit ? doubleDice(sp.dmg) : sp.dmg);
-                if (res.error) bits.push(`<div class="atkfx-line">${escAb(res.error)}</div>`);
-                else {
-                    if (part === 'dmg') total = res.total;
-                    bits.push(`<div class="atkfx-line">💥 <b class="atkfx-dmg">${res.total}</b> `
-                        + `${sp.dmgType ? escAb(sp.dmgType) + ' ' : ''}<span class="atkfx-detail">(${escAb(res.detail)})</span>`
-                        + (crit ? ' <span class="atkfx-detail">dés doublés</span>' : '') + `</div>`);
-                }
+                jet.lancer = { etiquette: 'Dégâts', nature: 'degats', total: res.error ? 0 : res.total, lignes: [ligneLancer(res, { type: sp.dmgType || '' })] };
+                if (part === 'attack' && window.EffetsActifs) window.EffetsActifs.degatsPour({ genre: 'sort' }).forEach(x => {
+                    const r2 = rollExpression(crit ? doubleDice(x.expr) : x.expr);
+                    if (r2.error) return;
+                    jet.lancer.total += r2.total;
+                    jet.lancer.lignes.push(ligneLancer(r2, { type: x.type || '', libelle: x.libelle }));
+                });
+                if (!jet.d20) jet.total = jet.lancer.total;
+                if (crit && !res.error) notes.push('Dés de dégâts doublés.');
             }
-            if (sp.mode === 'save' && part !== 'attack') {
-                bits.push(`<div class="atkfx-line">🛡️ Sauvegarde <b>DD ${escAb(spellSaveDC())}</b>`
-                    + (sp.saveAbility ? ` de ${escAb(sp.saveAbility)}` : '') + `</div>`);
-            }
-            if (spIsConc(sp)) bits.push(`<div class="atkfx-line atkfx-conc">◈ Concentration en cours sur ce sort.</div>`);
-            // Ce que le lancement a coûté, dit noir sur blanc dans le résultat.
+            if (sp.mode === 'save' && part !== 'attack') notes.push(`Sauvegarde${sp.saveAbility ? ' de ' + sp.saveAbility : ''} : DD ${spellSaveDC()}.`);
+            if (spIsConc(sp)) notes.push('Concentration en cours sur ce sort.');
+            // Ce que le lancement a coûté, dit noir sur blanc dans la carte.
             if (choix && window.LancerSort) {
                 const dit = window.LancerSort.libelle(choix, niveau);
-                if (dit) bits.push(`<div class="atkfx-line atkfx-slot is-${choix.mode}">⬦ ${escAb(dit)}</div>`);
+                if (dit) notes.push(dit);
+            } else if (niveau >= 1 && o.relance) {
+                notes.push('Relance depuis l’historique : aucun emplacement dépensé.');
             }
-            if (!bits.length) bits.push(`<div class="atkfx-line">Ce sort n'a ni jet ni dégâts : à toi de décrire.</div>`);
+            if (!jet.d20 && !jet.lancer && !notes.length) notes.push('Ce sort n’a ni jet ni dégâts : à toi de décrire.');
+            jet.notes = notes;
 
-            showSpellRoll(sp, bits.join(''));
             // Un simple rappel de DD n'est pas un jet : il n'encombre pas l'historique.
-            const aLance = nat != null || (wantDmg && hasVal(sp.dmg));
-            if (aLance) {
-                const label = '✨ ' + sp.name;
+            if (jet.d20 || jet.lancer) {
+                const nat = jet.d20 ? jet.d20.garde : null;
                 const rang = (choix && choix.mode === 'emplacement' && choix.rang !== niveau)
                     ? ` — niv. ${choix.rang}` : '';
-                const detail = (nat != null ? `attaque ${total} (d20 : ${nat})` : `dégâts ${total}`) + rang;
-                pushRollHistory(label, total, detail, nat);
+                const detail = (jet.d20 ? `attaque ${jet.total} (d20 : ${nat})` : `dégâts ${jet.total}`) + rang;
+                pushRollHistory('✨ ' + sp.name, jet.total, detail, nat, jet);
             }
+            montrerJet(jet);
             // Un emplacement dépensé par mégarde se rend : le lancement est annulable
             // tant que le message est à l'écran (6 s, comme toute suppression).
             if (depense && window.showUndoToast) {
@@ -5012,29 +5849,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             renderGrimoire();
         }
-
-        // La surcouche de résultat vit au-dessus du livre (3200) et du scribe
-        // (3400) : elle est à 3600, sinon elle s'ouvrirait derrière la page.
-        const sroOverlay = () => document.getElementById('spell-roll-overlay');
-        function showSpellRoll(sp, html) {
-            const ov = sroOverlay(); if (!ov) return;
-            const body = document.getElementById('spell-roll-body');
-            if (body) body.innerHTML = `<div class="sro-name">✨ ${escAb(sp.name)}</div>${html}`;
-            ov.classList.remove('hidden');
-        }
-        function closeSpellRoll() { const ov = sroOverlay(); if (ov) ov.classList.add('hidden'); }
-        (function initSpellRollOverlay() {
-            const ov = sroOverlay(); if (!ov) return;
-            ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeSpellRoll(); });
-            const x = document.getElementById('btn-close-spell-roll');
-            if (x) x.addEventListener('click', closeSpellRoll);
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && !ov.classList.contains('hidden')) {
-                    e.stopPropagation();   // Échap ferme le résultat avant le livre
-                    closeSpellRoll();
-                }
-            }, true);
-        })();
 
         const grim = { open:false, page:'summary', level:0, spread:0, onlyPrepared:false, sort:'level' };
 
@@ -5824,17 +6638,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = rollExpression(o.crit ? doubleDice(expr) : expr);
                 if (res.error) { lines.push({ text: res.error, bad: true }); return; }
                 total += res.total;
-                lines.push({ value: res.total, type: type || '', detail: res.detail });
+                lines.push({ value: res.total, type: type || '', detail: res.detail, res });
             };
             add(main, atk.dmgType);
             extraDamages(atk).forEach(d => add(d.dice, d.type));
+            // Effets actifs (LOT 4.8) : Rage, Faveur divine, Marque du chasseur… nommés sur la carte.
+            if (window.EffetsActifs) window.EffetsActifs.degatsPour({ arme: atk, genre: 'arme' }).forEach(d => {
+                const res = rollExpression(o.crit ? doubleDice(d.expr) : d.expr);
+                if (res.error) return;
+                total += res.total;
+                lines.push({ value: res.total, type: d.type || '', detail: res.detail, res, libelle: d.libelle });
+            });
             return { total, lines };
         }
 
         /** Un d20 (ou deux, avantage/désavantage), moteur 3D si disponible.
          *  Partagé par les armes et par les sorts du grimoire : un seul endroit
          *  où la logique avantage / désavantage est écrite. */
-        async function rollD20With(advMode) {
+        async function rollD20With(advMode, cle) {
+            // Effets actifs et inspiration (LOT 4.7, 4.8) : le mode réellement joué et les dés en plus.
+            const prep = preparerD20(advMode, cle);
+            advMode = prep.mode;
             const n = advMode === 'normal' ? 1 : 2;
             let roll1 = null, roll2 = null, used3d = false;
             if (diceBoxReady && diceBox) {
@@ -5846,7 +6670,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (advMode === 'adv') nat = Math.max(roll1, roll2);
             else if (advMode === 'dis') nat = Math.min(roll1, roll2);
             if (advMode !== 'normal') document.dispatchEvent(new CustomEvent('jet:paire', { detail: { r1: roll1, r2: roll2, mode: advMode } }));
-            return { roll1, roll2, nat };
+            return { roll1, roll2, nat, mode: advMode, notes: prep.notes, extra: desEffets(prep.des) };
         }
 
         /** Jet complet. `part` : 'full' | 'hit' | 'dmg'. */
@@ -5858,19 +6682,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const critThreshold = Math.min(20, Math.max(2, parseInt(atk.crit, 10) || 20));
             const saveMode = atk.mode === 'save';
 
-            // Munitions : un tir consomme une flèche, et on refuse le carquois vide.
-            if (part !== 'dmg' && hasVal(atk.ammo)) {
-                const left = parseInt(atk.ammo, 10) || 0;
-                if (left <= 0) { if (window.showAppToast) window.showAppToast('🏹 Plus de munitions !', '#c0392b'); return; }
-                atk.ammo = left - 1;
-                setStore('dnd-attacks', attacks);
+            // Munitions (LOT 4.10) : « Chaque fois que vous attaquez avec cette arme, vous
+            // dépensez l'une de ces munitions » (SRD 5.2.1). La réserve est l'objet du sac lié
+            // à l'arme, sinon le compteur de l'arme. Le carquois vide refuse le tir.
+            let munitions = null;
+            if (part !== 'dmg') {
+                const objet = objetMunitions(atk);
+                if (objet || hasVal(atk.ammo)) {
+                    const left = objet ? quantiteObjet(objet) : (parseInt(atk.ammo, 10) || 0);
+                    if (left <= 0) { if (window.showAppToast) window.showAppToast(`🏹 Plus de munitions${objet ? ' : « ' + objet.name + ' » est vide' : ''} !`, 'erreur'); return; }
+                    if (objet) { objet.qty = left - 1; setStore('dnd-inventory', inventory); renderInventory(); }
+                    else atk.ammo = left - 1;
+                    atk.ammoTirees = (parseInt(atk.ammoTirees, 10) || 0) + 1;
+                    setStore('dnd-attacks', attacks);
+                    munitions = { reste: left - 1, nom: objet ? objet.name : 'Munitions' };
+                    if (left - 1 === 0 && window.showAppToast) window.showAppToast(`🏹 Dernière munition tirée${objet ? ' (« ' + objet.name + ' »)' : ''}.`, 'erreur');
+                }
             }
 
-            let nat = null, hitTotal = null, roll1 = null, roll2 = null, crit = !!o.crit;
+            let nat = null, hitTotal = null, roll1 = null, roll2 = null, crit = !!o.crit, modeJoue = advMode, d20 = null;
             if (part !== 'dmg' && !saveMode) {
-                const d = await rollD20With(advMode);
-                roll1 = d.roll1; roll2 = d.roll2; nat = d.nat;
-                hitTotal = nat + parseMod(hitBonusOf(atk));
+                d20 = await rollD20With(advMode, 'attaque');
+                roll1 = d20.roll1; roll2 = d20.roll2; nat = d20.nat; modeJoue = d20.mode;
+                hitTotal = nat + parseMod(hitBonusOf(atk)) + d20.extra.total;
                 if (nat >= critThreshold) crit = true;
             }
 
@@ -5883,48 +6717,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (left > 0) { atk.charges = left - 1; setStore('dnd-attacks', attacks); }
             }
 
-            showAttackResult(atk, { nat, hitTotal, roll1, roll2, advMode, crit, dmg, saveMode, versatile: o.versatile });
+            showAttackResult(atk, { nat, hitTotal, roll1, roll2, advMode: modeJoue, modeChoisi: advMode, crit, dmg, saveMode, versatile: o.versatile, d20, munitions,
+                                    index, part, seuil: critThreshold, critForce: !!o.crit });
             renderAttacks();
         }
 
         function showAttackResult(atk, r) {
-            const bits = [];
-            const critTxt = r.crit ? ' <b class="atk-crit">CRITIQUE</b>' : '';
-            if (r.saveMode) {
-                const ab = atk.saveAbility ? ' de ' + escAb(atk.saveAbility) : '';
-                bits.push(`<div class="atkfx-line">🛡️ Jet de sauvegarde${ab} <b>DD ${escAb(atk.saveDC || atk.bonus || '?')}</b></div>`);
-            } else if (r.nat != null) {
-                let dice = `🎲 ${r.nat}`;
-                if (r.advMode !== 'normal' && r.roll2 != null) {
-                    const dropped = r.advMode === 'adv' ? Math.min(r.roll1, r.roll2) : Math.max(r.roll1, r.roll2);
-                    dice += ` <s>${dropped}</s>`;
-                }
-                const mod = parseMod(hitBonusOf(atk));
-                bits.push(`<div class="atkfx-line">${dice} ${mod >= 0 ? '+' : ''}${mod} = `
-                    + `<b class="atkfx-total${r.nat === 1 ? ' is-fumble' : (r.crit ? ' is-crit' : '')}">${r.hitTotal}</b>`
-                    + (r.nat === 1 ? ' <b class="atk-fumble">ÉCHEC CRITIQUE</b>' : critTxt) + `</div>`);
+            const rejouer = { t: 'attaque', nom: atk.name || '', index: r.index, part: r.part || 'full',
+                              versatile: !!r.versatile, crit: !!r.critForce, mode: r.modeChoisi || r.advMode || 'normal' };
+            const notes = (r.d20 ? r.d20.notes : []).slice();
+            if (r.munitions) notes.push(`${r.munitions.nom} : ${r.munitions.reste} restante${r.munitions.reste > 1 ? 's' : ''}.`);
+            let jet;
+            if (!r.saveMode && r.nat != null) {
+                // Le bonus joué est celui de l'arme ; le moteur en donne le détail
+                // quand il le calcule, sinon c'est la saisie du formulaire.
+                const bonus = parseMod(hitBonusOf(atk));
+                const calc = window.Calcul ? window.Calcul.arme(atk) : null;
+                const t = calc && calc.toucher;
+                const sources = (t && t.total === bonus) ? t.sources
+                    : (bonus ? [{ libelle: 'bonus au toucher', valeur: bonus, origine: 'manuel' }] : []);
+                jet = jetD20({ type: 'attaque', titre: atk.name || 'Attaque', sousTitre: 'Jet d’attaque', mode: r.advMode,
+                               r1: r.roll1, r2: r.advMode === 'normal' ? null : r.roll2, bonus: bonus + (r.d20 ? r.d20.extra.total : 0),
+                               sources: sources.concat(r.d20 ? r.d20.extra.sources : []), seuilCritique: r.seuil, rejouer });
+            } else {
+                jet = { type: 'attaque', titre: atk.name || 'Attaque', sousTitre: r.saveMode ? 'Sauvegarde de la cible' : 'Dégâts', total: 0, notes: [], rejouer };
             }
+            if (r.saveMode) notes.push(`Jet de sauvegarde${atk.saveAbility ? ' de ' + atk.saveAbility : ''} : DD ${atk.saveDC || atk.bonus || '?'}.`);
             if (r.dmg && r.dmg.lines.length) {
-                const detail = r.dmg.lines.map(l => l.bad ? escAb(l.text)
-                    : `${l.value}${l.type ? ' ' + escAb(l.type) : ''} <span class="atkfx-detail">(${escAb(l.detail)})</span>`).join(' + ');
-                bits.push(`<div class="atkfx-line">💥 <b class="atkfx-dmg">${r.dmg.total}</b> ${detail}`
-                    + (r.versatile ? ' <span class="atkfx-detail">à deux mains</span>' : '') + `</div>`);
+                jet.lancer = { etiquette: 'Dégâts', nature: 'degats', total: r.dmg.total,
+                    lignes: r.dmg.lines.map(l => l.bad ? { erreur: l.text } : ligneLancer(l.res || { total: l.value, groupes: [], fixe: 0 }, { type: l.type || '', libelle: l.libelle || '' })) };
+                if (!jet.d20) jet.total = r.dmg.total;
+                if (r.crit) notes.push('Dés de dégâts doublés.');
+                if (r.versatile) notes.push('À deux mains.');
             }
-            if (quickToast) {
-                quickToast.innerHTML = `<div class="atkfx-name">⚔️ ${escAb(atk.name)}</div>${bits.join('')}`;
-                quickToast.classList.remove('hidden');
-                quickToast.style.animation = 'none'; quickToast.offsetHeight;
-                quickToast.style.animation = 'popUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                clearTimeout(quickToast._t);
-                quickToast._t = setTimeout(() => quickToast.classList.add('hidden'), 5200);
-            }
+            jet.notes = notes;
             // Historique, comme un jet de caractéristique
             const label = '⚔️ ' + atk.name;
             const parts = [];
             if (r.hitTotal != null) parts.push(`toucher ${r.hitTotal} (d20 : ${r.nat})`);
             if (r.dmg) parts.push(`dégâts ${r.dmg.total}${r.crit ? ' (critique)' : ''}`);
             const total = r.hitTotal != null ? r.hitTotal : (r.dmg ? r.dmg.total : 0);
-            pushRollHistory(label, total, parts.join(' · '), r.nat);
+            pushRollHistory(label, total, parts.join(' · '), r.nat, jet);
+            montrerJet(jet);
             if (r.dmg) document.dispatchEvent(new CustomEvent('degats:jet', { detail: { total: r.dmg.total } }));
         }
 
@@ -6058,8 +6892,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dmg = hasVal(shownDmg)
                     ? `<button class="gear-chip atk-dmg${weaponAbility(atk) ? ' is-auto' : ''}" title="Ne lancer que les dégâts — Maj+clic pour un critique"><span>Dégâts</span><b>${escAb(shownDmg)}</b>${atk.dmgType ? `<i>${escAb(atk.dmgType)}</i>` : ''}</button>` : '';
 
+                const objetMun = objetMunitions(atk);
+                const tirees = parseInt(atk.ammoTirees, 10) || 0;
                 const res = [
-                    hasVal(atk.ammo) ? gearCounter('Munitions', atk.ammo, atk.ammoMax, '') : '',
+                    objetMun ? gearCounter('Munitions', quantiteObjet(objetMun), null, `« ${objetMun.name} », dans le sac`)
+                             : (hasVal(atk.ammo) ? gearCounter('Munitions', atk.ammo, atk.ammoMax, '') : ''),
+                    tirees > 0 ? `<button type="button" class="gear-chip atk-recup" title="Après le combat : récupérer la moitié des munitions tirées (arrondie à l’inférieur)"><span>Récupérer</span><b>${Math.floor(tirees / 2)}</b><i>sur ${tirees}</i></button>` : '',
                     hasVal(atk.chargesMax) ? gearCounter('Charges', atk.charges, atk.chargesMax, rechargeHint(atk)) : ''
                 ].filter(Boolean).join('');
 
@@ -6196,6 +7034,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const counter = e.target.closest('.gear-counter');
             if(counter) {
                 const isAmmo = /Munitions/.test(counter.textContent);
+                const objet = isAmmo ? objetMunitions(a) : null;
+                if(objet) {
+                    const q = quantiteObjet(objet);
+                    if(e.target.closest('.gear-minus')) { if(q <= 0) { if(window.showAppToast) window.showAppToast('🏹 Plus de munitions !', 'erreur'); return; } objet.qty = q - 1; }
+                    else if(e.target.closest('.gear-plus')) objet.qty = q + 1;
+                    else return;
+                    setStore('dnd-inventory', inventory); renderInventory(); renderAttacks(); return;
+                }
                 const field = isAmmo ? 'ammo' : 'charges', maxField = isAmmo ? 'ammoMax' : 'chargesMax';
                 const n = parseInt(a[field], 10) || 0, max = parseInt(a[maxField], 10) || 0;
                 if(e.target.closest('.gear-minus')) {
@@ -6206,6 +7052,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else return;
                 setStore('dnd-attacks', attacks); renderAttacks(); return;
             }
+            if(e.target.closest('.atk-recup')) { recupererMunitions(index); return; }
             if(e.target.closest('.atk-attune-cb')) { a.isAttuned = !a.isAttuned; setStore('dnd-attacks', attacks); renderAttacks(); return; }
             if(e.target.closest('.gear-pin')) { a.pinned = !a.pinned; setStore('dnd-attacks', attacks); renderAttacks(); return; }
             if(e.target.closest('.gear-equip')) { a.equipped = !a.equipped; setStore('dnd-attacks', attacks); renderAttacks(); return; }
@@ -6279,6 +7126,61 @@ document.addEventListener('DOMContentLoaded', () => {
                             'auto', 'wtype', 'hit-extra', 'dmg-extra'];
         const atkEl = (k) => document.getElementById('new-atk-' + k);
 
+        // ===== MUNITIONS LIÉES AU SAC (LOT 4.10) =====
+        // Une arme à munitions peut puiser dans un objet du sac (`ammoItem` = son id).
+        // Sans lien, son propre compteur (`ammo`, `ammoMax`) marche comme avant : aucune
+        // arme existante ne change. `ammoTirees` compte les tirs depuis la dernière récupération.
+        function quantiteObjet(it) { return it.qty == null || it.qty === '' ? 1 : (parseInt(it.qty, 10) || 0); }
+        function objetMunitions(atk) {
+            if (!atk || !atk.ammoItem) return null;
+            return inventory.find(it => it && it.id === atk.ammoItem) || null;
+        }
+        function remplirSelectMunitions(valeur) {
+            const sel = atkEl('ammo-item'); if (!sel) return;
+            sel.innerHTML = ['<option value="">— le compteur ci-dessus —</option>']
+                .concat(inventory.map((it, i) => (it && it.name)
+                    ? `<option value="${it.id ? escAb(it.id) : 'idx:' + i}">${escAb(it.name)} (×${quantiteObjet(it)})</option>` : ''))
+                .concat(['<option value="nouveau">＋ Créer l’objet dans le sac à partir du compteur</option>']).join('');
+            sel.value = (valeur && inventory.some(it => it && it.id === valeur)) ? valeur : '';
+        }
+        /** La valeur choisie → l'id de l'objet (donné à l'objet s'il n'en avait pas, ou créé). */
+        function resoudreMunitions(v, compteur, nomArme) {
+            const val = String(v || '');
+            if (!val) return '';
+            const nouvelId = () => 'inv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            if (val === 'nouveau') {
+                if (!nomArme) return '';
+                const item = { id: nouvelId(), name: `Munitions (${nomArme})`, qty: Math.max(0, parseInt(compteur, 10) || 0), weight: '-', category: 'Général', pinned: false };
+                inventory.push(item); setStore('dnd-inventory', inventory); renderInventory();
+                return item.id;
+            }
+            if (val.startsWith('idx:')) {
+                const item = inventory[parseInt(val.slice(4), 10)];
+                if (!item) return '';
+                if (!item.id) { item.id = nouvelId(); setStore('dnd-inventory', inventory); }
+                return item.id;
+            }
+            return val;
+        }
+        // « À l'issue d'un affrontement, vous pouvez consacrer 1 minute à récupérer la moitié
+        //   de vos munitions utilisées pendant le combat (arrondir à l'inférieur) » (SRD 5.2.1) ;
+        // « À la fin du combat, vous pouvez récupérer la moitié des munitions dépensées » (SRD 5.1).
+        function recupererMunitions(index) {
+            const a = attacks[index]; if (!a) return;
+            const tirees = parseInt(a.ammoTirees, 10) || 0; if (!tirees) return;
+            const rendues = Math.floor(tirees / 2);
+            const objet = objetMunitions(a);
+            const avant = { tirees, qty: objet ? objet.qty : null, ammo: a.ammo };
+            if (objet) objet.qty = quantiteObjet(objet) + rendues;
+            else if (hasVal(a.ammo)) { const max = parseInt(a.ammoMax, 10) || 0; const n = (parseInt(a.ammo, 10) || 0) + rendues; a.ammo = max > 0 ? Math.min(max, n) : n; }
+            a.ammoTirees = 0;
+            setStore('dnd-attacks', attacks); if (objet) { setStore('dnd-inventory', inventory); renderInventory(); } renderAttacks();
+            window.showUndoToast(`🏹 ${rendues} ${rendues > 1 ? 'munitions récupérées' : 'munition récupérée'} sur ${tirees}`, () => {
+                a.ammoTirees = avant.tirees;
+                if (objet) objet.qty = avant.qty; else a.ammo = avant.ammo;
+                setStore('dnd-attacks', attacks); if (objet) { setStore('dnd-inventory', inventory); renderInventory(); } renderAttacks();
+            });
+        }
         function atkFormReset() {
             ATK_FIELDS.forEach(k => { const el = atkEl(k); if (el) el.value = ''; });
             const mode = atkEl('mode'); if (mode) mode.value = 'attack';
@@ -6288,6 +7190,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ['req-attune', 'pinned', 'equipped', 'no-prof'].forEach(k => { const el = atkEl(k); if (el) el.checked = false; });
             if (typeof AtkRep !== 'undefined') AtkRep.charger(null);
             if (window.__afsBottes) window.__afsBottes(null);
+            remplirSelectMunitions('');
             atkSyncMode();
         }
         // Le bloc « jet de sauvegarde » ne sert qu'en mode sauvegarde, et la
@@ -6949,6 +7852,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 pinned: !!(atkEl('pinned') || {}).checked,
                 equipped: !!(atkEl('equipped') || {}).checked,
                 ammo: numOrNull('ammo'), ammoMax: numOrNull('ammo-max'),
+                ammoItem: resoudreMunitions(v('ammo-item'), numOrNull('ammo'), v('name')),
                 charges: numOrNull('charges'), chargesMax: numOrNull('charges-max'),
                 recharge: v('recharge') || 'none', rechargeDice: v('recharge-dice'),
                 autoAbility: v('auto') || 'manual', wtype: v('wtype'),
@@ -6963,6 +7867,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const old = attacks[editingAttackIndex];
                 atk.isAttuned = !!old.isAttuned;
                 atk.twoHanded = !!old.twoHanded;   // la prise choisie ne se perd pas à l'édition
+                atk.ammoTirees = old.ammoTirees || 0;
                 attacks[editingAttackIndex] = atk;
             }
             else attacks.push(atk);
@@ -6997,7 +7902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             AtkRep.charger(d);   // dégâts et capacités, ancien format converti au passage
             if (window.__afsBottes) window.__afsBottes(d);
             set('notes', d.notes); set('desc', d.desc);
-            set('ammo', d.ammo); set('ammo-max', d.ammoMax);
+            set('ammo', d.ammo); set('ammo-max', d.ammoMax); remplirSelectMunitions(d.ammoItem || '');
             set('charges', d.charges); set('charges-max', d.chargesMax);
             set('recharge', d.recharge || 'none'); set('recharge-dice', d.rechargeDice);
             // Une arme enregistrée avant l'auto-calcul n'a pas de champ : elle
@@ -7330,8 +8235,9 @@ document.addEventListener('DOMContentLoaded', () => {
         /** Recharge des objets et armes au repos. Une quantité (« 1d6+4 ») est
          *  lancée ; sans quantité, tout revient. « À l'aube » suit le repos long,
          *  qui est la nuit de sommeil dans la quasi-totalité des parties. */
+        /** Recharge armes et objets. Rend le détail : [{ nom, avant, apres, max, jet }]. */
         function recoverGearByRest(restType) {
-            let touched = 0;
+            const detail = [];
             const apply = (o) => {
                 const max = parseInt(o.chargesMax, 10) || 0;
                 if(!max) return;
@@ -7341,14 +8247,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(restType === 'long' && mode !== 'short' && mode !== 'long' && mode !== 'dawn') return;
                 const cur = parseInt(o.charges, 10) || 0;
                 if(cur >= max) return;
-                let gain = max - cur;
-                if(hasVal(o.rechargeDice)) { const r = rollExpression(o.rechargeDice); if(!r.error) gain = Math.max(0, r.total); }
+                let gain = max - cur, jet = '';
+                if(hasVal(o.rechargeDice)) { const r = rollExpression(o.rechargeDice); if(!r.error) { gain = Math.max(0, r.total); jet = `${o.rechargeDice} : ${r.total}`; } }
                 o.charges = Math.min(max, cur + gain);
-                touched++;
+                detail.push({ nom: o.name || 'Objet', avant: cur, apres: o.charges, max, jet });
             };
             attacks.forEach(apply); inventory.forEach(apply);
-            if(touched) { setStore('dnd-attacks', attacks); setStore('dnd-inventory', inventory); renderAttacks(); renderInventory(); }
-            return touched;
+            if(detail.length) { setStore('dnd-attacks', attacks); setStore('dnd-inventory', inventory); renderAttacks(); renderInventory(); }
+            return detail;
         }
 
         function renderTraits() { 
@@ -7565,9 +8471,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if(diceBoxReady && diceBox) {
                 try { await safeDiceRoll(ab.de.replace(/\s+/g, '')); } catch(e) { /* la 3D n'est jamais bloquante */ }
             }
-            // `res.detail` porte déjà la notation (« 1d8 [5] ») : pas de doublon.
-            pushRollHistory(`✦ ${ab.name}`, res.total, res.detail, null);
-            if(window.showAppToast) window.showAppToast(`✦ ${ab.name} : ${res.total} (${ab.de})`, 'reussite');
+            // La carte de résultat et une ligne d'historique rejouable, comme tous
+            // les jets (jets.js). « Relancer » relance le dé sans dépenser de charge.
+            consignerExpression(String(ab.de).replace(/\s+/g, ''), res, {
+                titre: ab.name, sousTitre: 'Capacité · ' + ab.de, nom: `✦ ${ab.name}`
+            });
             return res;
         }
 
@@ -7896,7 +8804,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         applyLayout();
-        initSkillProfSave(); initGlobalSave(); restoreCollapsedWidgets(); 
+        initSkillProfSave(); initGlobalSave(); restoreCollapsedWidgets(); majJetonInspiration(); majEtatMort(); majValeursEffectives(); 
         // Bonus de maîtrise : auto-calculé depuis le niveau UNIQUEMENT s'il n'a jamais été saisi
         // (même logique que l'initiative ci-dessous — une valeur éditée à la main survit au rechargement ;
         //  changer le Niveau recalcule toujours, via le listener plus haut).
@@ -7932,6 +8840,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Après le premier affichage : la proposition ne retarde pas l'ouverture.
         setTimeout(() => { proposerLiaisons(); majDesAutos(); }, 1200);
+
+        // ===== EFFETS ACTIFS ET FORMES (LOT 4.8, 4.9) =====
+        // Les modules arrivent à la demande : au clic sur « ✦ Effet », ou tout de suite
+        // si la fiche porte déjà un effet ou une forme — le moteur de calcul doit les
+        // compter dès l'ouverture.
+        function chargerEffets() { return window.charger ? window.charger('effets-actifs') : Promise.reject(new Error('charger.js absent')); }
+        if ((getStore('dnd-effets-actifs') || []).length || getStore('dnd-forme-active')) {
+            chargerEffets().then(() => (getStore('dnd-forme-active') ? window.charger('formes') : null))
+                .catch((err) => console.warn('[effets]', err));
+        }
+        document.getElementById('btn-effet-ajouter')?.addEventListener('click', async (e) => {
+            const b = e.currentTarget; b.disabled = true;
+            try { await chargerEffets(); await window.EffetsActifs.ouvrir(); }
+            catch (err) { console.error('[effets]', err); window.showAppToast('Le module des effets n’a pas pu se charger.', 'erreur'); }
+            finally { b.disabled = false; }
+        });
+        document.getElementById('btn-stats-des')?.addEventListener('click', async () => {
+            try { await window.charger('stats-des'); await window.StatsDes.ouvrir(); }
+            catch (err) { console.error('[stats]', err); window.showAppToast('Les statistiques n’ont pas pu se charger.', 'erreur'); }
+        });
+
+        // ===== CA ET VITESSE EFFECTIVES (LOT 4.8) =====
+        // Les champs gardent la saisie du joueur. Quand un état, un effet ou une forme
+        // change le total, une pastille montre la valeur que compte le moteur, et son détail.
+        function majValeursEffectives() {
+            if (!window.Calcul) return;
+            [['armor-class', 'ca'], ['speed', 'vitesse']].forEach(([id, cle]) => {
+                const champ = document.getElementById(id); if (!champ) return;
+                const hote = champ.closest('.combat-box') || champ.parentNode;
+                let badge = hote.querySelector('.valeur-effective');
+                const r = window.Calcul.valeur(cle);
+                const brut = cle === 'ca' ? parseInt(champ.value, 10) : (r ? r.base : NaN);
+                if (!(r && r.total != null && !isNaN(brut) && r.total !== brut)) { if (badge) badge.remove(); return; }
+                if (!badge) { badge = document.createElement('span'); badge.className = 'valeur-effective no-print'; hote.appendChild(badge); }
+                badge.textContent = '→ ' + (cle === 'vitesse' ? String(r.total).replace('.', ',') + ' ' + (r.unite || 'm') : r.total);
+                badge.title = (cle === 'ca' ? 'CA effective' : 'Vitesse effective') + ' : ' + window.Calcul.detail(r);
+                badge.setAttribute('aria-label', badge.title);
+            });
+        }
+        ['speed', 'armor-class'].forEach(id => document.getElementById(id)?.addEventListener('input', majValeursEffectives));
+        document.addEventListener('effets:change', majValeursEffectives);
+
+        // ===== INSPIRATION ET JETS CONTRE LA MORT : les boutons =====
+        document.getElementById('jeton-inspiration')?.addEventListener('click', () => {
+            const c = caseInspiration(); if (!c) return;
+            if (c.checked && inspirationAvantageEnAttente()) setStore('dnd-inspiration-avantage', '', false);
+            poserInspiration(!c.checked);
+        });
+        document.getElementById('btn-utiliser-inspiration')?.addEventListener('click', () => { utiliserInspiration(); });
+        caseInspiration()?.addEventListener('change', majJetonInspiration);
+        document.getElementById('btn-jet-mort')?.addEventListener('click', () => {
+            const m = document.querySelector('input[name="roll-mode"]:checked');
+            lancerLancable('none', 'Jet contre la mort', 'mort', m ? m.value : 'normal');
+        });
+        ['s', 'f'].forEach(k => casesMort(k).forEach(id => document.getElementById(id)?.addEventListener('change', (e) => {
+            majEtatMort();
+            // Le troisième échec coché à la main propose la même fenêtre.
+            if (e.isTrusted && k === 'f' && e.target.checked && compterCasesMort('f') >= 3) troisEchecs('case');
+        })));
 
         // ===== ÉDITION DES RÈGLES DE CE PERSONNAGE (§ 2.1) =====
         // Le choix appartient au héros, pas au site : il est enregistré avec sa
@@ -7975,7 +8942,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // ===== RACCOURCIS CLAVIER (#22) — personnalisables =====
         // Ignorés dès qu'on saisit du texte (champ, zone de texte, éditeur riche).
         function isTyping(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)); }
-        function quickD20(advMode) { performAbilityRoll('Jet rapide', 0, advMode); }
+        function quickD20(advMode) { performAbilityRoll('Jet rapide', 0, advMode, { type: 'd20' }); }
         // Actions disponibles + touche par défaut. La touche peut être changée par le joueur
         // (stockée dans `dnd-shortcuts-player`, préférence GLOBALE non liée au personnage).
         const PLAYER_SC_ACTIONS = [

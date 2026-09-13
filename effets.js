@@ -68,12 +68,29 @@
     // Appelé par l'historique des jets (script.js, pushRollHistory) pour TOUT jet
     // de d20. Les secrets (secrets.js) passent d'abord : trois 20 ou trois 1
     // d'affilée ont leur propre mise en scène, qui remplace l'effet simple.
+    // ---------- La vibration d'un 20 ou d'un 1 naturel (LOT 4.13) ----------
+    // Là où `navigator.vibrate` existe (Chrome sur Android) ; ailleurs,
+    // l'interrupteur du menu reste caché. Réglage propre à l'appareil.
+    const CLE_VIBRATION = 'dnd-vibration';
+    // Chrome de bureau expose aussi `vibrate` (sans effet) : on exige un écran tactile.
+    const peutVibrer = () => {
+        if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return false;
+        try { return navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches; } catch (e) { return false; }
+    };
+    const vibrationVoulue = () => { try { return localStorage.getItem(CLE_VIBRATION) !== '0'; } catch (e) { return true; } };
+    function vibrer(nat) {
+        if ((nat !== 20 && nat !== 1) || !peutVibrer() || !vibrationVoulue()) return false;
+        // Un 20 : trois impulsions qui montent ; un 1 : un bourdonnement sourd.
+        try { return navigator.vibrate(nat === 20 ? [60, 40, 60, 40, 160] : [280]); } catch (e) { return false; }
+    }
+
     function jet(nat) {
+        vibrer(nat);
         try { if (window.Secrets && window.Secrets.d20(nat)) return; } catch (err) {}
         if (nat === 20) crit(); else if (nat === 1) fumble();
     }
 
-    window.RollFX = { crit, fumble, jet };
+    window.RollFX = { crit, fumble, jet, vibrer, peutVibrer };
 
     // ---------- Voiles d'état plein écran ----------
     //
@@ -434,6 +451,12 @@
 
     document.addEventListener('change', (e) => {
         const t = e.target; if (!t) return;
+        if (t.dataset && t.dataset.vibration !== undefined) {
+            try { localStorage.setItem(CLE_VIBRATION, t.checked ? '1' : '0'); } catch (err) {}
+            if (t.checked) vibrer(20);          // un avant-goût : on sent ce qu'on vient d'activer
+            if (window.showAppToast) window.showAppToast(t.checked ? '📳 Vibration sur un 20 ou un 1 activée' : '📴 Vibration désactivée');
+            return;
+        }
         if (t.id === 'toggle-status-fx' || (t.dataset && t.dataset.fxEtats !== undefined)) {
             try { localStorage.setItem(CLE, t.checked ? '1' : '0'); } catch (err) {}
             syncInterrupteurs(t.checked);
@@ -447,6 +470,13 @@
 
     function init() {
         syncInterrupteurs(actifs());
+        // L'interrupteur de vibration n'apparaît que là où l'appareil sait vibrer.
+        const vib = document.getElementById('menu-vibration');
+        if (vib) {
+            vib.classList.toggle('hidden', !peutVibrer());
+            const cb = vib.querySelector('[data-vibration]');
+            if (cb) cb.checked = vibrationVoulue();
+        }
         // La fiche remplit ses conditions pendant son propre chargement : on
         // laisse passer ce tour avant le premier calcul.
         setTimeout(maj, 0);

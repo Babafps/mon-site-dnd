@@ -18,7 +18,11 @@
     const MODULES = {
         dialogues: 'dialogues.js',
         multiclasse: 'multiclasse.js',
-        'lancer-sort': 'lancer-sort.js'
+        'lancer-sort': 'lancer-sort.js',
+        jets: 'jets.js',
+        'effets-actifs': 'effets-actifs.js',
+        formes: 'formes.js',
+        'stats-des': 'stats-des.js'
     };
     const promesses = new Map();        // fichier -> promesse
 
