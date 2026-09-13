@@ -1181,7 +1181,7 @@
             if (api) {
                 api.addSrdWeapons(g.weapons.map(x => x.srd));
                 api.addItems(g.gear.map(itemOf).concat(g.weapons.filter(x => x.qty > 1).map(itemOf)));
-                api.addCoins(g.coins);
+                api.addCoins(g.coins, 'Équipement de départ');
             }
             if (window.ArmorWidget && (g.armors.length || (wiz.auto && c))) {
                 window.ArmorWidget.add(g.armors.map(x => x.srd), { equip: true, auto: wiz.auto, unarmored });

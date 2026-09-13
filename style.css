@@ -9521,3 +9521,229 @@ body.theme-dark .stats-chiffres > div { background: rgba(255,255,255,.06); }
     .jeton-case { position: static !important; width: auto; height: auto; clip: auto; opacity: 1; }
     .jeton-inspiration { display: none !important; }
 }
+
+/* =====================================================================
+   LOT 5 — BOURSE, ACHAT / VENTE, MACROS
+   Tons de la DA Academia, repris en variables : réussite, danger, info,
+   alerte, encre. Plus clairs en mode nuit, pour rester lisibles.
+   ===================================================================== */
+:root { --ton-reussite: #3F7350; --ton-danger: #A3372D; --ton-info: #33587D; --ton-alerte: #B07C2E; --ton-encre: #4E4437; }
+body.theme-dark { --ton-reussite: #7FB08D; --ton-danger: #E08A80; --ton-info: #8DB2D6; --ton-alerte: #E0B263; --ton-encre: #CFC3AE; }
+
+/* ---------- Bourse : libellé et historique ---------- */
+.currency-libelle-row { margin-top: 6px; }
+.currency-libelle-row input {
+    width: 100%; padding: 6px 10px; border-radius: 6px; font: inherit; font-size: .86rem;
+    border: 1px solid var(--soft-border); background: rgba(255,255,255,.55); color: var(--text-color);
+}
+body.theme-dark .currency-libelle-row input { background: rgba(255,255,255,.06); }
+.bourse-historique { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--soft-border); }
+.bourse-historique-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.bourse-ops { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.bourse-op {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: var(--radius-sm); background: var(--glass-bg);
+    border: 1px solid color-mix(in srgb, var(--accent-color) 16%, var(--soft-border));
+}
+.bourse-op-ico { font-size: 1rem; line-height: 1; }
+.bourse-op-txt { min-width: 0; font-size: .84rem; overflow-wrap: anywhere; }
+/* Couleur explicite : sans elle, le mode nuit héritait d'une encre foncée, illisible. */
+.bourse-historique .bourse-op-txt, .bourse-historique .bourse-op-txt b, .bourse-historique .bourse-op-txt i, .bourse-historique .bourse-op-txt time { color: var(--text-color); }
+.bourse-op-txt i { font-style: normal; opacity: .85; }
+.bourse-op-txt time { display: block; font-size: .72rem; opacity: .65; }
+.bourse-op-montant { font-family: 'Cinzel', serif; font-weight: 700; font-size: .86rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bourse-op-montant.is-moins { color: var(--ton-danger); }
+.bourse-op-montant.is-plus { color: var(--ton-reussite); }
+
+/* ---------- Sac : vendre ---------- */
+.gear-tools .ci-vendre:hover { color: var(--ton-alerte); background: rgba(176,124,46,.12); }
+.vente-prix { margin: 0 0 10px; }
+.vente-total { margin: 12px 0 0; font-family: 'Cinzel', serif; font-weight: 700; color: var(--primary-color); }
+body.theme-dark .vente-total { color: var(--accent-color); }
+
+/* ---------- Macros : poignée, formule, icône, tons ---------- */
+.macro-pill { gap: 0; }
+.macro-poignee {
+    align-self: stretch; display: flex; align-items: center; padding: 0 2px 0 10px;
+    cursor: grab; opacity: .45; touch-action: none; user-select: none; -webkit-user-select: none; font-size: .9rem;
+}
+.macro-pill:hover .macro-poignee { opacity: .8; }
+.macro-btn { display: inline-flex; align-items: baseline; gap: 6px; padding-left: 6px; }
+.macro-ico { font-size: .95rem; }
+.macro-formule { font-family: 'Courier New', monospace; font-size: .72rem; font-weight: 400; opacity: .7; }
+.macro-edit {
+    min-height: 40px; padding: 0 4px; border: 0; background: transparent; cursor: pointer;
+    color: var(--text-color); opacity: .4; transition: opacity .15s ease, color .15s ease;
+}
+.macro-pill:hover .macro-edit, .macro-edit:focus-visible { opacity: .85; }
+.macro-edit:hover { opacity: 1; color: var(--accent-color); }
+.macro-pill.is-dragging { opacity: .6; }
+.ton-sang { --macro-ton: #7E222C; }
+.ton-laiton { --macro-ton: #C9A962; }
+.ton-foret { --macro-ton: #3F7350; }
+.ton-nuit { --macro-ton: #33587D; }
+.ton-ambre { --macro-ton: #B07C2E; }
+.ton-encre { --macro-ton: #4E4437; }
+body.theme-dark .ton-sang { --macro-ton: #C0554A; }
+body.theme-dark .ton-nuit { --macro-ton: #6F98C0; }
+body.theme-dark .ton-encre { --macro-ton: #CFC3AE; }
+.macro-pill[class*="ton-"] {
+    border-color: color-mix(in srgb, var(--macro-ton) 55%, var(--soft-border));
+    border-left: 4px solid var(--macro-ton);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--macro-ton) 16%, transparent), var(--glass-bg) 70%);
+}
+@media (hover: none) { .macro-edit, .macro-del, .macro-poignee { opacity: .75; } }
+
+/* Fenêtre d'édition d'une macro (Dialogue.fenetre) */
+.macro-choix-groupe { border: 0; margin: 0 0 12px; padding: 0; min-width: 0; }
+.macro-choix-groupe legend { margin-bottom: 6px; font-family: 'Cinzel', Georgia, serif; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.macro-choix { display: flex; flex-wrap: wrap; gap: 6px; }
+.macro-choix-opt { position: relative; }
+.macro-choix-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.macro-choix-carte {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 4px 10px;
+    border-radius: 10px; cursor: pointer; font-size: .88rem;
+    border: 1px solid rgba(122,40,40,.28); background: rgba(255,255,255,.45);
+}
+.macro-choix-opt input:checked + .macro-choix-carte { border-color: var(--accent-color); background: rgba(196,155,53,.18); box-shadow: inset 0 0 0 1px rgba(196,155,53,.55); }
+.macro-choix-opt input:focus-visible + .macro-choix-carte { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.macro-ton[class*="ton-"] { border-left: 5px solid var(--macro-ton); }
+body.theme-dark .macro-choix-carte { background: rgba(255,255,255,.05); border-color: rgba(196,155,53,.26); }
+
+@media (prefers-reduced-motion: reduce) { .bourse-op, .macro-pill, .macro-edit { transition: none !important; } }
+@media print { .bourse-historique, .currency-libelle-row, .macro-poignee, .macro-edit { display: none !important; } }
+
+/* =====================================================================
+   LOT 5 — COMPAGNONS DU BESTIAIRE, QUÊTES TERMINÉES
+   ===================================================================== */
+.comp-source { margin: 0 0 8px; font-size: .78rem; font-style: italic; color: var(--ton-encre); opacity: .85; }
+.bst-options { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin: 0 0 10px; }
+.bst-betes { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+.bst-role { display: inline-flex; align-items: center; gap: 8px; font-family: 'Cinzel', Georgia, serif; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; }
+.bst-role select { text-transform: none; letter-spacing: 0; font-family: inherit; min-height: 44px; }
+.bst-liste { max-height: min(46vh, 420px); overflow-y: auto; padding: 2px; }
+.bst-compte { margin: 8px 0 0; font-size: .8rem; opacity: .75; }
+
+.qnote-terminees { margin-top: 10px; border-top: 1px dashed var(--soft-border); padding-top: 6px; }
+.qnote-terminees-bascule {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 4px;
+    border: 0; background: transparent; cursor: pointer; text-align: left; color: var(--accent-color);
+    font-family: 'Cinzel', serif; font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.qnote-terminees-bascule:hover { color: var(--primary-color); }
+body.theme-dark .qnote-terminees-bascule:hover { color: var(--text-color); }
+.qnote-terminees-bascule:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; border-radius: 6px; }
+.qnote-terminees-fleche { display: inline-block; transition: transform .18s ease; }
+.qnote-terminees-bascule[aria-expanded="true"] .qnote-terminees-fleche { transform: rotate(90deg); }
+.qnote-terminees-liste { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+
+@media (prefers-reduced-motion: reduce) { .qnote-terminees-fleche { transition: none; } }
+/* Ces éléments ont leur propre `display` : sans cette règle, l'attribut hidden perdrait. */
+.qnote-terminees-liste[hidden], .qnote-card textarea[hidden], .qnote-apercu[hidden], .bourse-historique[hidden] { display: none !important; }
+@media print {
+    .comp-source { display: none !important; }
+    .qnote-terminees > .qnote-terminees-liste[hidden] { display: flex !important; }
+    .qnote-terminees-fleche { display: none; }
+}
+
+/* =====================================================================
+   LOT 5 — CARNET : PNJ, LIEUX, MENTIONS
+   ===================================================================== */
+.qnote-plier {
+    flex: 0 0 auto; min-width: 32px; min-height: 32px; border: 0; border-radius: 6px;
+    background: transparent; cursor: pointer; color: var(--text-color); opacity: .6;
+}
+.qnote-plier:hover, .qnote-plier:focus-visible { opacity: 1; }
+.qnote-plier:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+.qnote-card.is-plie .qnote-corps { display: none; }
+/* Portrait, nom, pastille et boutons tiennent sur une ligne : c'est le nom qui cède la place. */
+.carnet-pnj .qnote-head, .carnet-lieu .qnote-head { flex-wrap: nowrap; }
+.carnet-pnj .qnote-head input[data-nf="title"], .carnet-lieu .qnote-head input[data-nf="title"] { flex: 1 1 0; min-width: 3.5rem; }
+.carnet-pnj .qnote-head > button, .carnet-lieu .qnote-head > button { flex: 0 0 auto; margin-left: 0; }
+.carnet-pnj .pnj-attitude, .carnet-lieu .lieu-type { max-width: 8rem; overflow: hidden; }
+
+.carnet-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 10px; margin: 2px 0 8px; }
+.carnet-champ { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.carnet-champ > span { font-family: 'Cinzel', serif; font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-color); }
+.carnet-champ input, .carnet-champ select {
+    width: 100%; min-width: 0; min-height: 36px; padding: 4px 8px; border-radius: 6px; font: inherit; font-size: .86rem;
+    border: 1px solid var(--soft-border); background: rgba(255,255,255,.55); color: var(--text-color);
+}
+body.theme-dark .carnet-champ input, body.theme-dark .carnet-champ select { background: rgba(255,255,255,.06); color-scheme: dark; }
+
+.pnj-portrait {
+    flex: 0 0 auto; width: 40px; height: 40px; padding: 0; overflow: hidden; cursor: pointer;
+    display: grid; place-items: center; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--accent-color) 60%, transparent); background: var(--glass-bg);
+    font-family: 'Cinzel', serif; font-weight: 700; color: var(--primary-color);
+}
+body.theme-dark .pnj-portrait { color: var(--accent-color); }
+.pnj-portrait img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pnj-portrait:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+/* L'attitude se lit au texte ET à la forme de la pastille, pas seulement à sa couleur. */
+.pnj-attitude, .lieu-type {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px;
+    border-radius: 999px; border: 1px solid currentColor; font-size: .72rem; font-weight: 700; white-space: nowrap;
+}
+.pnj-attitude::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pnj-attitude.a-allie { color: var(--ton-reussite); }
+.pnj-attitude.a-neutre { color: var(--ton-info); }
+.pnj-attitude.a-hostile { color: var(--ton-danger); }
+.pnj-attitude.a-hostile::before { border-radius: 1px; transform: rotate(45deg); }
+.pnj-attitude.a-inconnu { color: var(--ton-encre); opacity: .8; }
+.pnj-attitude.a-inconnu::before { background: transparent; border: 1.5px solid currentColor; }
+.lieu-type { color: var(--ton-alerte); }
+
+.qnote-apercu {
+    min-height: 2.4em; padding: 6px 8px; border-radius: 6px; border: 1px dashed transparent;
+    cursor: text; line-height: 1.5; overflow-wrap: anywhere;
+}
+.qnote-apercu:hover { border-color: var(--soft-border); }
+.qnote-apercu:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+.mention { padding: 0 3px; border-radius: 4px; font-weight: 700; text-decoration: none; color: var(--primary-color); background: rgba(196,155,53,.16); }
+body.theme-dark .mention { color: var(--accent-color); background: rgba(196,155,53,.14); }
+a.mention:hover, a.mention:focus-visible { text-decoration: underline; }
+.mention.mention-lieu { color: var(--ton-info); background: rgba(51,88,125,.12); }
+.mention.is-orpheline { color: var(--ton-encre); background: transparent; font-weight: 400; text-decoration: line-through; opacity: .7; }
+
+.mention-pop {
+    position: fixed; z-index: 100020; max-height: 260px; overflow-y: auto; padding: 4px; border-radius: 10px;
+    background: var(--surface-1); color: var(--text-color);
+    border: 1px solid color-mix(in srgb, var(--accent-color) 45%, var(--soft-border)); box-shadow: var(--shadow-lg);
+}
+.mention-opt { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.mention-opt.is-active, .mention-opt:hover { background: rgba(196,155,53,.18); }
+.mention-opt-txt { display: flex; flex-direction: column; min-width: 0; }
+.mention-opt-txt b { font-size: .88rem; overflow-wrap: anywhere; }
+.mention-opt-txt small { font-size: .74rem; opacity: .75; }
+.mention-vide { padding: 10px; font-size: .82rem; font-style: italic; opacity: .8; }
+.carnet-astuce { margin: 10px 0 0; font-size: .76rem; font-style: italic; opacity: .75; }
+.carnet-astuce kbd { padding: 0 5px; border-radius: 4px; border: 1px solid var(--soft-border); font-family: 'Courier New', monospace; font-style: normal; }
+
+.carnet-fiche-tete { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.carnet-fiche-portrait { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-color); }
+.carnet-fiche-liste { margin: 0 0 10px; }
+.carnet-fiche-ligne { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dashed rgba(122,40,40,.15); }
+.carnet-fiche-ligne dt { flex: 0 0 9.5em; font-family: 'Cinzel', serif; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; opacity: .8; }
+.carnet-fiche-ligne dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.carnet-fiche-notes { line-height: 1.55; overflow-wrap: anywhere; }
+@media (max-width: 420px) {
+    .carnet-fiche-ligne { flex-direction: column; gap: 0; }
+    .carnet-fiche-ligne dt { flex-basis: auto; }
+}
+@media print {
+    .mention-pop, .qnote-plier, .carnet-astuce { display: none !important; }
+    .qnote-card.is-plie .qnote-corps { display: block !important; }
+}
+
+/* =====================================================================
+   LOT 5 — RECHERCHE : COMMANDES
+   ===================================================================== */
+.search-commande {
+    border-color: color-mix(in srgb, var(--accent-color) 55%, transparent);
+    background: linear-gradient(120deg, rgba(196,155,53,.16), rgba(255,255,255,.8));
+}
+.search-commande.is-premiere { box-shadow: inset 3px 0 0 var(--accent-color); }
+body.theme-dark .search-commande { background: linear-gradient(120deg, rgba(196,155,53,.2), rgba(40,32,26,.92)); }
+.search-result-item:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }

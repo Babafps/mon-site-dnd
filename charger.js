@@ -22,7 +22,11 @@
         jets: 'jets.js',
         'effets-actifs': 'effets-actifs.js',
         formes: 'formes.js',
-        'stats-des': 'stats-des.js'
+        'stats-des': 'stats-des.js',
+        bourse: 'bourse.js',
+        macros: 'macros.js',
+        bestiaire: 'bestiaire.js',
+        carnet: 'carnet.js'
     };
     const promesses = new Map();        // fichier -> promesse
 

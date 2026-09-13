@@ -131,7 +131,7 @@
 
     // Ce qui relève du carnet intime plutôt que de la fiche : on peut choisir
     // de ne pas l'emporter quand on partage.
-    const PRIVATE_KEYS = ['dnd-journal', 'dnd-roll-history', 'dnd-quests', 'dnd-npcs'];
+    const PRIVATE_KEYS = ['dnd-journal', 'dnd-roll-history', 'dnd-quests', 'dnd-npcs', 'dnd-lieux', 'dnd-pnj-portraits'];
 
     function buildHome(dump, meta, opts) {
         const o = opts || {};

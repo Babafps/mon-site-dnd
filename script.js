@@ -1369,10 +1369,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ===== LANCEUR D'EXPRESSION DE DÉS (remplace l'ancienne calculatrice) =====
         // Comprend « 2d6+3 », « 8d6 », « 1d20+5 », « 4d6-1 », « 1d8+2d6+3 »…
+        /** La forme d'une expression, sans rien lancer (macros, recherche). */
+        function formuleValide(raw) {
+            const clean = String(raw || '').toLowerCase().replace(/\s+/g, '');
+            return !!clean && /^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(clean);
+        }
         function rollExpression(raw) {
             const clean = String(raw || '').toLowerCase().replace(/\s+/g, '');
             if (!clean) return { error: 'Entre une expression (ex : 2d6+3).' };
-            if (!/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(clean)) return { error: 'Expression invalide (ex : 2d6+3).' };
+            if (!formuleValide(clean)) return { error: 'Expression invalide (ex : 2d6+3).' };
             const parts = clean.match(/[+-]?(?:\d*d\d+|\d+)/g) || [];
             let total = 0, des = 0, fixe = 0; const bits = [], groupes = [];
             for (const part of parts) {
@@ -2436,11 +2441,99 @@ document.addEventListener('DOMContentLoaded', () => {
         const autoExpandTextareas = document.querySelectorAll('.auto-expand');
         function adjustHeight(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight) + 'px'; } window.adjustHeight = adjustHeight;
         autoExpandTextareas.forEach(textarea => { textarea.addEventListener('input', () => adjustHeight(textarea)); setTimeout(() => adjustHeight(textarea), 100); });
-        // ===== LISTES DE FICHES (notes rapides, quêtes, PNJ) =====
-        // Trois modules partagent la même forme : une liste de { id, title, body } que l'on
-        // ajoute, renomme, remplit et supprime. Une seule fabrique les sert tous les trois.
+        // ===== LISTES DE FICHES (notes rapides, quêtes, PNJ, lieux) =====
+        // Quatre modules partagent la même forme : une liste de { id, title, body } que l'on
+        // ajoute, renomme, remplit, range et supprime. Une seule fabrique les sert tous.
         // Les champs n'ont pas d'id : initGlobalSave() ignore les éléments non identifiés,
         // ce qui évite un double stockage avec les clés dnd-sheet-*.
+        //
+        // LOT 5.5 et 5.6 — ce que la fabrique sait faire en plus :
+        //   · withDone : les éléments cochés se rangent sous « Terminées (N) », repliable ;
+        //   · details  : des champs sous le titre (faction, attitude… d'un PNJ ; région… d'un lieu) ;
+        //   · mentions : le corps accepte « @[Nom](pnj:id) ». Tant qu'on ne l'édite pas, un
+        //     aperçu affiche la mention en lien, avec le nom ACTUEL de la fiche. Un corps
+        //     sans mention reste exactement la zone de texte d'avant.
+
+        // --- Mentions de PNJ et de lieux ---
+        // Enregistrées en texte : « @[Nom](pnj:id) ». Le nom écrit n'est qu'un souvenir,
+        // l'affichage relit le nom actuel par l'identifiant (il survit au renommage).
+        // Dans le journal (Quill), c'est un lien « #bb-pnj:id ».
+        const MENTION_RX = /@\[([^\]\n]{1,80})\]\((pnj|lieu):([\w-]{1,40})\)/g;
+        const MENTION_DECLENCHEUR = /(^|[\s(«"'’])@[^\s@\[\]()]{0,30}$/;
+        const aDesMentions = (t) => { MENTION_RX.lastIndex = 0; return MENTION_RX.test(String(t || '')); };
+        function indexCarnet() {
+            const idx = { pnj: new Map(), lieu: new Map() };
+            (getStore('dnd-npcs') || []).forEach(x => { if (x && x.id) idx.pnj.set(x.id, x); });
+            (getStore('dnd-lieux') || []).forEach(x => { if (x && x.id) idx.lieu.set(x.id, x); });
+            return idx;
+        }
+        /** Texte avec mentions → HTML sûr. `{ liens: false }` : les noms, sans lien. */
+        function rendreMentions(texte, o) {
+            const avecLiens = !(o && o.liens === false);
+            const t = String(texte == null ? '' : texte);
+            const idx = indexCarnet();
+            let html = '', dernier = 0, m;
+            MENTION_RX.lastIndex = 0;
+            while ((m = MENTION_RX.exec(t))) {
+                html += escAb(t.slice(dernier, m.index));
+                const fiche = idx[m[2]].get(m[3]);
+                const nom = fiche ? (String(fiche.title || '').trim() || m[1]) : m[1];
+                if (!fiche) html += `<span class="mention is-orpheline" title="Cette fiche n’est plus dans le carnet">@${escAb(nom)}</span>`;
+                else if (!avecLiens) html += `<span class="mention mention-${m[2]}">@${escAb(nom)}</span>`;
+                else html += `<a href="#" class="mention mention-${m[2]}" data-mention="${m[2]}:${escAb(m[3])}">@${escAb(nom)}</a>`;
+                dernier = m.index + m[0].length;
+            }
+            return (html + escAb(t.slice(dernier))).replace(/\n/g, '<br>');
+        }
+        /** Journal : les liens « #bb-pnj:id » d'un contenu Quill prennent le nom actuel. */
+        function majMentionsHtml(racine) {
+            if (!racine) return;
+            const idx = indexCarnet();
+            racine.querySelectorAll('a[href^="#bb-"]').forEach(a => {
+                const m = /^#bb-(pnj|lieu):([\w-]{1,40})$/.exec(a.getAttribute('href') || '');
+                if (!m) return;
+                const fiche = idx[m[1]].get(m[2]);
+                a.classList.add('mention', 'mention-' + m[1]);
+                a.classList.toggle('is-orpheline', !fiche);
+                a.dataset.mention = m[1] + ':' + m[2];
+                a.removeAttribute('target');
+                if (fiche && String(fiche.title || '').trim()) a.textContent = '@' + String(fiche.title).trim();
+            });
+        }
+        // Une mention cliquée ouvre sa fiche, où qu'elle soit (aperçu d'une note, journal).
+        document.addEventListener('click', (e) => {
+            const a = e.target.closest && e.target.closest('a.mention[data-mention], a[href^="#bb-"]');
+            if (!a) return;
+            e.preventDefault();
+            if (a.closest('.ql-editor[contenteditable="true"]')) return;      // en pleine écriture : on reste dans l'éditeur
+            const m = /^(pnj|lieu):([\w-]{1,40})$/.exec(a.dataset.mention || (a.getAttribute('href') || '').replace(/^#bb-/, ''));
+            if (!m) return;
+            window.charger('carnet').then(() => window.Carnet.ouvrirFiche(m[1], m[2]))
+                .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+        });
+        /** Un « @ » dans une zone qui accepte les mentions : la bulle de carnet.js. */
+        function surSaisieMention(zone) {
+            if (window.Carnet) { window.Carnet.surSaisie(zone); return; }
+            if (MENTION_DECLENCHEUR.test(zone.value.slice(0, zone.selectionStart || 0))) {
+                window.charger('carnet').then(() => window.Carnet.surSaisie(zone)).catch(() => {});
+            }
+        }
+        function ecouterMentionsQuill(q) {
+            if (!q || q.__mentionsEcoute) return;
+            q.__mentionsEcoute = true;
+            q.on('text-change', (delta, ancien, source) => {
+                if (source !== 'user') return;
+                if (window.Carnet) { window.Carnet.surQuill(q); return; }
+                const sel = q.getSelection();
+                if (!sel) return;
+                const depuis = Math.max(0, sel.index - 40);
+                if (MENTION_DECLENCHEUR.test(q.getText(depuis, sel.index - depuis))) {
+                    window.charger('carnet').then(() => window.Carnet.surQuill(q)).catch(() => {});
+                }
+            });
+        }
+        ecouterMentionsQuill(quillNewJournal);
+
         function makeNoteList(opt) {
             let items = getStore(opt.storeKey);
             if (!Array.isArray(items)) {
@@ -2449,35 +2542,108 @@ document.addEventListener('DOMContentLoaded', () => {
                 items = (legacy && legacy.trim())
                     ? [{ id: 'n' + Date.now(), title: opt.legacyTitle || 'Note', body: legacy }]
                     : [];
-                setStore(opt.storeKey, items);
+                // Rien à migrer : on n'écrit rien (pas d'envoi au cloud pour une liste vide).
+                if (items.length) setStore(opt.storeKey, items);
             }
             items.forEach(it => { if (opt.withDone && it.done == null) it.done = false; });
+            // Une mention vise une fiche par son identifiant : une entrée sans id
+            // (fichier modifié à la main) en reçoit un, une seule fois.
+            if (opt.mentionnable && items.some(it => it && !it.id)) {
+                items.forEach((it, k) => { if (it && !it.id) it.id = (opt.prefixeId || 'n') + Date.now() + k; });
+                setStore(opt.storeKey, items);
+            }
 
             let saveTimer = null;
-            const save = () => { clearTimeout(saveTimer); setStore(opt.storeKey, items); };
+            const save = () => { clearTimeout(saveTimer); saveTimer = null; setStore(opt.storeKey, items); };
             // Frappe au clavier : écriture différée, sinon chaque caractère déclenche une synchro cloud.
-            const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => setStore(opt.storeKey, items), 400); };
+            const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); };
             window.addEventListener('beforeunload', () => { if (saveTimer) save(); });
+
+            const cleOuvert = 'dnd-' + opt.listId + '-terminees-ouvertes';     // préférence de l'appareil
+            const libelleCorps = opt.bodyLabel || opt.bodyPlaceholder;
+            const corps = (n) => {
+                const lu = aDesMentions(n.body);
+                return `<textarea data-nf="body" data-mentions="1" class="auto-expand" placeholder="${opt.bodyPlaceholder}" aria-label="${escAb(libelleCorps)}"${lu ? ' hidden' : ''}>${escAb(n.body)}</textarea>`
+                     + `<div class="qnote-apercu" tabindex="0" role="group" aria-label="${escAb(libelleCorps)} — Entrée ou clic pour modifier"${lu ? '' : ' hidden'}>${lu ? rendreMentions(n.body) : ''}</div>`;
+            };
+            const carte = (n, i) => `<div class="qnote-card${n.done ? ' is-done' : ''}${n.plie ? ' is-plie' : ''}${opt.classe ? ' ' + opt.classe : ''}" data-ni="${i}">
+                    <div class="qnote-head">
+                        ${opt.withDone ? `<input type="checkbox" class="qnote-done" data-nf="done"${n.done ? ' checked' : ''} title="Marquer comme terminée" aria-label="Terminée">` : ''}
+                        ${opt.avantTitre ? opt.avantTitre(n, i) : ''}
+                        <input type="text" data-nf="title" value="${escAb(n.title)}" placeholder="${opt.titlePlaceholder}" aria-label="${escAb(opt.titleLabel || opt.titlePlaceholder)}">
+                        ${opt.apresTitre ? opt.apresTitre(n, i) : ''}
+                        ${opt.pliable ? `<button type="button" class="qnote-plier no-print" data-plier aria-expanded="${n.plie ? 'false' : 'true'}" title="${n.plie ? 'Déplier' : 'Replier'}">${n.plie ? '▸' : '▾'}</button>` : ''}
+                        <button type="button" class="qnote-del no-print" title="Supprimer">🗑</button>
+                    </div>
+                    <div class="qnote-corps">
+                        ${opt.details ? `<div class="carnet-champs">${opt.details(n, i)}</div>` : ''}
+                        ${corps(n)}
+                    </div>
+                </div>`;
 
             function render() {
                 const list = document.getElementById(opt.listId); if (!list) return;
-                if (!items.length) { list.innerHTML = `<div class="compact-empty">${opt.emptyText}</div>`; return; }
-                list.innerHTML = items.map((n, i) => `<div class="qnote-card${n.done ? ' is-done' : ''}" data-ni="${i}">
-                    <div class="qnote-head">
-                        ${opt.withDone ? `<input type="checkbox" class="qnote-done" data-nf="done"${n.done ? ' checked' : ''} title="Marquer comme terminée">` : ''}
-                        <input type="text" data-nf="title" value="${escAb(n.title)}" placeholder="${opt.titlePlaceholder}">
-                        <button type="button" class="qnote-del no-print" title="Supprimer">🗑</button>
-                    </div>
-                    <textarea data-nf="body" class="auto-expand" placeholder="${opt.bodyPlaceholder}">${escAb(n.body)}</textarea>
-                </div>`).join('');
-                list.querySelectorAll('.auto-expand').forEach(t => adjustHeight(t));
-                // Ces trois listes n'avaient AUCUN réordonnancement, pas même de
-                // flèches : le glissement est ici la seule façon de les ranger.
-                // La poignée est l'en-tête, pour ne pas gêner la saisie du corps.
+                if (!items.length) {
+                    list.innerHTML = `<div class="compact-empty">${opt.emptyText}</div>`;
+                    if (opt.apresRendu) opt.apresRendu(items);
+                    return;
+                }
+                const rangs = items.map((n, i) => ({ n, i }));
+                const enCours = opt.withDone ? rangs.filter(x => !x.n.done) : rangs;
+                const faites = opt.withDone ? rangs.filter(x => x.n.done) : [];
+                let html = enCours.length ? enCours.map(x => carte(x.n, x.i)).join('')
+                    : `<div class="compact-empty">${opt.toutFaitText || opt.emptyText}</div>`;
+                if (faites.length) {
+                    const ouvert = DB.get(cleOuvert) === '1';
+                    html += `<div class="qnote-terminees">
+                        <button type="button" class="qnote-terminees-bascule" aria-expanded="${ouvert}" aria-controls="${opt.listId}-terminees"><span class="qnote-terminees-fleche" aria-hidden="true">▸</span> Terminées (${faites.length})</button>
+                        <div class="qnote-terminees-liste" id="${opt.listId}-terminees"${ouvert ? '' : ' hidden'}>${faites.map(x => carte(x.n, x.i)).join('')}</div>
+                    </div>`;
+                }
+                list.innerHTML = html;
+                list.querySelectorAll('textarea.auto-expand:not([hidden])').forEach(t => adjustHeight(t));
+                // Le glissement se prend par l'en-tête, pour ne pas gêner la saisie du corps.
+                // Les cartes portent leur rang réel (data-ni) : les quêtes terminées sont
+                // affichées à part, la position visible ne dit donc rien du rang enregistré.
                 if (window.DragSort) window.DragSort.enable(list, {
                     itemSel: '.qnote-card', handleSel: '.qnote-head',
-                    onDrop(de, vers) { window.DragSort.move(items, de, vers); save(); render(); }
+                    onDrop(de, vers) {
+                        const cartes = [...list.querySelectorAll('.qnote-card')];
+                        const iSrc = parseInt(cartes[de].dataset.ni, 10);
+                        const voisin = cartes.filter((_, k) => k !== de)[vers];
+                        const iDest = voisin ? parseInt(voisin.dataset.ni, 10) : null;
+                        if (isNaN(iSrc)) return;
+                        const [x] = items.splice(iSrc, 1);
+                        items.splice(iDest == null ? items.length : (iDest > iSrc ? iDest - 1 : iDest), 0, x);
+                        save(); render();
+                    }
                 });
+                if (opt.apresRendu) opt.apresRendu(items);
+            }
+            /** Redessine les aperçus seuls (une fiche mentionnée a changé de nom) : aucun champ n'est touché. */
+            function majApercus() {
+                const list = document.getElementById(opt.listId); if (!list) return;
+                list.querySelectorAll('.qnote-card').forEach(card => {
+                    const n = items[parseInt(card.dataset.ni, 10)];
+                    const ap = card.querySelector('.qnote-apercu');
+                    if (!n || !ap || ap.hidden) return;
+                    // Seulement si le rendu change : remplacer un lien identique sous le
+                    // pointeur ferait perdre le clic en cours.
+                    const html = rendreMentions(n.body);
+                    if (ap.__rendu === html || (ap.__rendu === undefined && ap.innerHTML === html)) { ap.__rendu = html; return; }
+                    ap.innerHTML = html;
+                    ap.__rendu = html;
+                });
+            }
+            function modifierCorps(card) {
+                const zone = card && card.querySelector('textarea[data-nf="body"]');
+                if (!zone) return;
+                const ap = card.querySelector('.qnote-apercu');
+                if (ap) ap.hidden = true;
+                zone.hidden = false;
+                adjustHeight(zone);
+                zone.focus();
+                try { const p = zone.value.length; zone.setSelectionRange(p, p); } catch (e) {}
             }
 
             const list = document.getElementById(opt.listId);
@@ -2485,55 +2651,241 @@ document.addEventListener('DOMContentLoaded', () => {
                 list.addEventListener('input', (e) => {
                     const card = e.target.closest('.qnote-card'); if (!card) return;
                     const field = e.target.dataset.nf; if (!field || field === 'done') return;
-                    items[parseInt(card.dataset.ni, 10)][field] = e.target.value;
+                    const n = items[parseInt(card.dataset.ni, 10)]; if (!n) return;
+                    n[field] = e.target.value;
                     saveSoon();
                     if (e.target.classList.contains('auto-expand')) adjustHeight(e.target);
+                    if (e.target.dataset.mentions) surSaisieMention(e.target);
+                    if (opt.majCarte) opt.majCarte(card, n, field);
                 });
                 // Sortie de champ (et cases à cocher) : on écrit tout de suite.
                 list.addEventListener('change', (e) => {
                     const card = e.target.closest('.qnote-card');
                     if (card && e.target.dataset.nf === 'done') {
-                        items[parseInt(card.dataset.ni, 10)].done = e.target.checked;
-                        card.classList.toggle('is-done', e.target.checked);
+                        const i = parseInt(card.dataset.ni, 10);
+                        items[i].done = e.target.checked;
+                        save(); render();
+                        // Le focus suit l'élément dans sa section, ou se pose sur la section repliée.
+                        const cb = list.querySelector(`.qnote-card[data-ni="${i}"] .qnote-done`);
+                        if (cb && cb.getClientRects().length) cb.focus({ preventScroll: true });
+                        else list.querySelector('.qnote-terminees-bascule')?.focus({ preventScroll: true });
+                        return;
                     }
                     save();
                 });
+                // Quitter un corps qui contient une mention : l'aperçu reprend sa place.
+                list.addEventListener('focusout', (e) => {
+                    const zone = e.target;
+                    if (!zone.matches || !zone.matches('textarea[data-mentions]')) return;
+                    setTimeout(() => {
+                        if (document.activeElement === zone || !zone.isConnected || !aDesMentions(zone.value)) return;
+                        const ap = zone.closest('.qnote-card')?.querySelector('.qnote-apercu');
+                        if (!ap) return;
+                        ap.innerHTML = rendreMentions(zone.value);
+                        ap.__rendu = ap.innerHTML;
+                        ap.hidden = false;
+                        zone.hidden = true;
+                    }, 0);
+                });
                 list.addEventListener('click', (e) => {
-                    if (!e.target.closest('.qnote-del')) return;
-                    const i = parseInt(e.target.closest('.qnote-card').dataset.ni, 10);
-                    window.deleteWithUndo(items, i, items[i].title || opt.deleteFallback, save, render);
+                    const bascule = e.target.closest('.qnote-terminees-bascule');
+                    if (bascule) {
+                        const ouvert = bascule.getAttribute('aria-expanded') !== 'true';
+                        bascule.setAttribute('aria-expanded', String(ouvert));
+                        const zone = document.getElementById(bascule.getAttribute('aria-controls'));
+                        if (zone) {
+                            zone.hidden = !ouvert;
+                            if (ouvert) zone.querySelectorAll('textarea.auto-expand:not([hidden])').forEach(t => adjustHeight(t));
+                        }
+                        DB.set(cleOuvert, ouvert ? '1' : '0');
+                        return;
+                    }
+                    const card = e.target.closest('.qnote-card'); if (!card) return;
+                    const i = parseInt(card.dataset.ni, 10);
+                    const n = items[i]; if (!n) return;
+                    if (e.target.closest('.qnote-del')) {
+                        window.deleteWithUndo(items, i, n.title || opt.deleteFallback, save, render);
+                        return;
+                    }
+                    if (e.target.closest('[data-plier]')) {
+                        if (n.plie) delete n.plie; else n.plie = true;
+                        save(); render();
+                        list.querySelector(`.qnote-card[data-ni="${i}"] [data-plier]`)?.focus({ preventScroll: true });
+                        if (!n.plie) list.querySelectorAll(`.qnote-card[data-ni="${i}"] textarea.auto-expand:not([hidden])`).forEach(t => adjustHeight(t));
+                        return;
+                    }
+                    if (opt.surClic && opt.surClic(e, card, n, i)) return;
+                    if (e.target.closest('.qnote-apercu') && !e.target.closest('a')) modifierCorps(card);
+                });
+                list.addEventListener('keydown', (e) => {
+                    if (!e.target.classList || !e.target.classList.contains('qnote-apercu')) return;
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); modifierCorps(e.target.closest('.qnote-card')); }
                 });
             }
             const addBtn = document.getElementById(opt.addBtnId);
             if (addBtn) addBtn.addEventListener('click', () => {
-                const entry = { id: 'n' + Date.now(), title: '', body: '' };
+                const entry = { id: (opt.prefixeId || 'n') + Date.now(), title: '', body: '' };
                 if (opt.withDone) entry.done = false;
                 items.push(entry); save(); render();
-                const last = document.querySelector('#' + opt.listId + ' .qnote-card:last-child input[data-nf="title"]');
-                if (last) last.focus();
+                const titre = document.querySelector(`#${opt.listId} .qnote-card[data-ni="${items.length - 1}"] input[data-nf="title"]`);
+                if (titre) titre.focus();
             });
             render();
-            return { render, all: () => items };
+            return { render, majApercus, all: () => items };
         }
 
-        makeNoteList({
+        const listeNotes = makeNoteList({
             listId: 'quick-notes-list', addBtnId: 'btn-add-quick-note',
             storeKey: 'dnd-quick-notes', legacyKey: 'dnd-sheet-quick-note', legacyTitle: 'Note',
-            titlePlaceholder: 'Titre de la note…', bodyPlaceholder: 'Saisis tes notes ici…',
+            titlePlaceholder: 'Titre de la note…', bodyPlaceholder: 'Saisis tes notes ici…', bodyLabel: 'Texte de la note',
             emptyText: 'Aucune note — clique sur ➕ Ajouter.', deleteFallback: 'cette note'
         });
-        makeNoteList({
+        const listeQuetes = makeNoteList({
             listId: 'quests-list', addBtnId: 'btn-add-quest', withDone: true,
             storeKey: 'dnd-quests', legacyKey: 'dnd-sheet-quest-log', legacyTitle: 'Quêtes en cours',
-            titlePlaceholder: 'Nom de la quête…', bodyPlaceholder: 'Objectifs, commanditaire, récompense…',
-            emptyText: 'Aucune quête — clique sur ➕ Ajouter.', deleteFallback: 'cette quête'
+            titlePlaceholder: 'Nom de la quête…', bodyPlaceholder: 'Objectifs, commanditaire, récompense…', bodyLabel: 'Détails de la quête',
+            emptyText: 'Aucune quête — clique sur ➕ Ajouter.', deleteFallback: 'cette quête',
+            toutFaitText: 'Toutes tes quêtes sont terminées. ➕ Ajouter pour la suite.'
         });
-        makeNoteList({
-            listId: 'npcs-list', addBtnId: 'btn-add-npc',
+
+        // --- Le carnet : PNJ et lieux (LOT 5.5) ---
+        // Un PNJ garde { id, title, body } et reçoit, facultatifs : faction, attitude,
+        // rencontreDate (AAAA-MM-JJ), rencontreLieu, plie. Son portrait, compressé, vit
+        // à part dans `dnd-pnj-portraits` ({ id: data:image/jpeg… }) : taper une note ne
+        // renvoie pas l'image au cloud à chaque frappe. Un lieu : { id, title, body,
+        // region, type, visite, plie }, dans `dnd-lieux`.
+        const ATTITUDES = [['allie', 'Allié'], ['neutre', 'Neutre'], ['hostile', 'Hostile'], ['inconnu', 'Inconnu']];
+        const attitudeDe = (cle) => { const a = ATTITUDES.find(x => x[0] === cle) || ATTITUDES[3]; return { cle: a[0], nom: a[1] }; };
+        const PORTRAIT_RX = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+        const portraitsPnj = () => { const p = getStore('dnd-pnj-portraits'); return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {}; };
+        const initialeDe = (t) => (String(t || '').trim().charAt(0) || '?').toUpperCase();
+
+        const listePnj = makeNoteList({
+            listId: 'npcs-list', addBtnId: 'btn-add-npc', classe: 'carnet-pnj', pliable: true, mentionnable: true,
             storeKey: 'dnd-npcs', legacyKey: 'dnd-sheet-npc-log', legacyTitle: 'Registre des PNJ',
-            titlePlaceholder: 'Nom du PNJ…', bodyPlaceholder: 'Lieu, attitude, ce qu\'il sait…',
-            emptyText: 'Aucun PNJ — clique sur ➕ Ajouter.', deleteFallback: 'ce PNJ'
+            titlePlaceholder: 'Nom du PNJ…', titleLabel: 'Nom du PNJ',
+            bodyPlaceholder: 'Ce qu\'il sait, ce qu\'il veut, ce qu\'il cache…', bodyLabel: 'Notes sur ce PNJ',
+            emptyText: 'Aucun PNJ — clique sur ➕ Ajouter.', deleteFallback: 'ce PNJ',
+            avantTitre(n) {
+                const src = portraitsPnj()[n.id];
+                const ok = typeof src === 'string' && PORTRAIT_RX.test(src);
+                const quoi = ok ? 'Changer le portrait' : 'Ajouter un portrait';
+                return `<button type="button" class="pnj-portrait" data-portrait title="${quoi}" aria-label="${quoi} de ${escAb(n.title || 'ce PNJ')}">`
+                     + (ok ? `<img src="${src}" alt="">` : `<span aria-hidden="true">${escAb(initialeDe(n.title))}</span>`) + '</button>';
+            },
+            apresTitre(n) { const a = attitudeDe(n.attitude); return `<span class="pnj-attitude a-${a.cle}">${a.nom}</span>`; },
+            details(n) {
+                return `<label class="carnet-champ"><span>Faction</span><input type="text" data-nf="faction" value="${escAb(n.faction)}" placeholder="Guilde, ordre, famille…" autocomplete="off"></label>
+                    <label class="carnet-champ"><span>Attitude</span><select data-nf="attitude">${ATTITUDES.map(([v, l]) => `<option value="${v}"${attitudeDe(n.attitude).cle === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+                    <label class="carnet-champ"><span>Dernière rencontre</span><input type="date" data-nf="rencontreDate" value="${escAb(n.rencontreDate)}"></label>
+                    <label class="carnet-champ"><span>Lieu de la rencontre</span><input type="text" data-nf="rencontreLieu" value="${escAb(n.rencontreLieu)}" list="carnet-lieux-noms" placeholder="Taverne du Poney…" autocomplete="off"></label>`;
+            },
+            majCarte(card, n, champ) {
+                if (champ === 'attitude') {
+                    const a = attitudeDe(n.attitude), p = card.querySelector('.pnj-attitude');
+                    if (p) { p.className = 'pnj-attitude a-' + a.cle; p.textContent = a.nom; }
+                } else if (champ === 'title') {
+                    const s = card.querySelector('.pnj-portrait > span');
+                    if (s) s.textContent = initialeDe(n.title);
+                }
+            },
+            surClic(e, card, n) {
+                if (!e.target.closest('[data-portrait]')) return false;
+                window.charger('carnet').then(() => window.Carnet.portrait(n.id))
+                    .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+                return true;
+            }
         });
+
+        function remplirNomsLieux() {
+            const dl = document.getElementById('carnet-lieux-noms'); if (!dl) return;
+            const noms = [...new Set((getStore('dnd-lieux') || []).map(l => String((l && l.title) || '').trim()).filter(Boolean))];
+            dl.innerHTML = noms.map(t => `<option value="${escAb(t)}"></option>`).join('');
+        }
+        const listeLieux = makeNoteList({
+            listId: 'lieux-list', addBtnId: 'btn-add-lieu', classe: 'carnet-lieu', pliable: true, mentionnable: true, prefixeId: 'l',
+            storeKey: 'dnd-lieux',
+            titlePlaceholder: 'Nom du lieu…', titleLabel: 'Nom du lieu',
+            bodyPlaceholder: 'Ce qu\'on y trouve, qui y vit, ce qui s\'y est passé…', bodyLabel: 'Notes sur ce lieu',
+            emptyText: 'Aucun lieu — clique sur ➕ Ajouter.', deleteFallback: 'ce lieu',
+            apresTitre(n) { return n.type ? `<span class="lieu-type">${escAb(n.type)}</span>` : ''; },
+            details(n) {
+                return `<label class="carnet-champ"><span>Région</span><input type="text" data-nf="region" value="${escAb(n.region)}" placeholder="Côte des Épées…" autocomplete="off"></label>
+                    <label class="carnet-champ"><span>Type</span><input type="text" data-nf="type" value="${escAb(n.type)}" list="carnet-lieux-types" placeholder="Ville, donjon…" autocomplete="off"></label>
+                    <label class="carnet-champ"><span>Visité le</span><input type="date" data-nf="visite" value="${escAb(n.visite)}"></label>`;
+            },
+            majCarte(card, n, champ) {
+                if (champ !== 'type') return;
+                let p = card.querySelector('.lieu-type');
+                if (!n.type) { if (p) p.remove(); return; }
+                if (!p) { p = document.createElement('span'); p.className = 'lieu-type'; card.querySelector('input[data-nf="title"]').after(p); }
+                p.textContent = n.type;
+            },
+            apresRendu: remplirNomsLieux
+        });
+
+        // Une fiche du carnet change : les aperçus de toutes les listes, et le journal
+        // ouvert, relisent les noms. Rien d'autre n'est redessiné (aucun champ perdu).
+        // Un clic sur une mention fait quitter le champ « Nom » d'une fiche, qui
+        // s'enregistre aussitôt : la mise à jour attend alors que le bouton soit
+        // relâché, pour ne pas remplacer le lien entre l'appui et le clic.
+        let appuiEnCours = false, carnetEnAttente = false;
+        function majCarnetPartout() {
+            [listeNotes, listeQuetes, listePnj, listeLieux].forEach(l => l.majApercus());
+            remplirNomsLieux();
+            majMentionsHtml(document.getElementById('view-journal-content'));
+        }
+        document.addEventListener('pointerdown', () => { appuiEnCours = true; }, true);
+        const relacherAppui = () => {
+            appuiEnCours = false;
+            if (carnetEnAttente) { carnetEnAttente = false; setTimeout(majCarnetPartout, 0); }
+        };
+        document.addEventListener('pointerup', relacherAppui, true);
+        document.addEventListener('pointercancel', relacherAppui, true);
+        document.addEventListener('fiche:ecrite', (e) => {
+            const cle = e.detail && e.detail.key;
+            if (cle !== 'dnd-npcs' && cle !== 'dnd-lieux') return;
+            if (appuiEnCours) { carnetEnAttente = true; return; }
+            majCarnetPartout();
+        });
+
+        window.SheetCarnet = {
+            pnj: () => listePnj.all(),
+            lieux: () => listeLieux.all(),
+            portraits: portraitsPnj,
+            attitude: attitudeDe,
+            rendre: rendreMentions,
+            /** Pose (ou retire, avec null) le portrait d'un PNJ. */
+            poserPortrait(id, src) {
+                const p = portraitsPnj();
+                if (typeof src === 'string' && PORTRAIT_RX.test(src)) p[id] = src; else delete p[id];
+                setStore('dnd-pnj-portraits', p);
+                listePnj.render();
+            },
+            /** Amène la fiche à l'écran, dépliée et mise en évidence. */
+            allerA(type, id) {
+                const liste = type === 'pnj' ? listePnj : listeLieux;
+                const items = liste.all();
+                const i = items.findIndex(x => x && x.id === id);
+                if (i < 0) return;
+                document.getElementById('journal-modal')?.classList.add('hidden');
+                if (isMobileView()) switchMobileTab('notes');
+                const w = document.getElementById('widget-quests');
+                if (w) {
+                    setWidgetCollapsed(w, false);
+                    const replies = new Set(getStore(COLLAPSE_KEY) || []);
+                    if (replies.delete('widget-quests')) setStore(COLLAPSE_KEY, [...replies]);
+                }
+                if (items[i].plie) { delete items[i].plie; setStore(type === 'pnj' ? 'dnd-npcs' : 'dnd-lieux', items); liste.render(); }
+                const carte = document.querySelector(`#${type === 'pnj' ? 'npcs-list' : 'lieux-list'} .qnote-card[data-ni="${i}"]`);
+                if (!carte) return;
+                const calme = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                carte.scrollIntoView({ behavior: calme ? 'auto' : 'smooth', block: 'center' });
+                carte.classList.add('search-highlight-active');
+                setTimeout(() => carte.classList.remove('search-highlight-active'), 2400);
+                carte.querySelector('input[data-nf="title"]')?.focus({ preventScroll: true });
+            }
+        };
 
 
         // ===== MONTÉE DE NIVEAU =====
@@ -4569,17 +4921,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (added) { setStore('dnd-inventory', inventory); renderInventory(); }
                 return added;
             },
-            /** { po: 15, pa: 3 } -> ajouté à la bourse. */
-            addCoins(map) {
-                let touched = 0;
+            /** { po: 15, pa: 3 } -> ajouté à la bourse, et consigné dans son
+             *  historique (LOT 5.1) sous `libelle` (facultatif). */
+            addCoins(map, libelle) {
+                let touched = 0, cuivre = 0;
+                const avant = lireBourse();
                 Object.entries(map || {}).forEach(([k, n]) => {
                     const el = document.getElementById('coin-' + k);
                     const v = parseInt(n, 10) || 0;
-                    if (!el || !v) return;
+                    if (!el || !v || !COIN_VALUE[k]) return;
                     el.value = (parseInt(el.value, 10) || 0) + v;
                     el.dispatchEvent(new Event('input', { bubbles: true }));
+                    cuivre += v * COIN_VALUE[k];
                     touched++;
                 });
+                if (touched) consignerBourse({ type: 'ajout', cuivre, libelle: String(libelle || '').slice(0, 80) }, avant);
                 return touched;
             },
             /** Sorts du SRD -> grimoire, préparés. Un sort déjà inscrit ne l'est pas deux fois. */
@@ -5515,11 +5871,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="comp-head-actions no-print">
                             <button type="button" class="comp-act" data-cact="up" title="Monter"${i === 0 ? ' disabled' : ''}>▲</button>
                             <button type="button" class="comp-act" data-cact="down" title="Descendre"${i === companions.length - 1 ? ' disabled' : ''}>▼</button>
+                            <button type="button" class="comp-act" data-cact="bestiaire" title="Remplir depuis le bestiaire" aria-label="Remplir ${escAb(c.name || 'ce compagnon')} depuis le bestiaire">📖</button>
                             <button type="button" class="comp-act" data-cact="dup" title="Dupliquer ce compagnon">⧉</button>
                             <button type="button" class="comp-act companion-del" data-cact="del" title="Supprimer ce compagnon">🗑</button>
                         </div>
                     </div>
                     <div class="companion-body">
+                        ${c.bestiaire && c.bestiaire.nom ? `<div class="comp-source">📖 D’après « ${escAb(c.bestiaire.nom)} »${c.bestiaire.edition ? ' — règles ' + escAb(c.bestiaire.edition) : ''}${c.bestiaire.perso ? ' · contenu perso' : ''}</div>` : ''}
                         <div class="comp-vitals">
                             <div class="comp-stat"><label>CA</label><input type="number" data-cf="ac" value="${escAb(c.ac)}"></div>
                             <div class="comp-stat"><label>PV</label><input type="number" data-cf="hp" value="${escAb(c.hp)}"></div>
@@ -5620,6 +5978,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'del':
                         window.deleteWithUndo(companions, i, c.name || 'ce compagnon', saveCompanions, renderCompanions);
                         break;
+                    case 'bestiaire':
+                        ouvrirBestiaire(i);
+                        break;
                     case 'addatk':
                         c.attacks.push({ id: 'a' + Date.now(), name: '', bonus: '', dmg: '' });
                         saveCompanions(); renderCompanions();
@@ -5646,6 +6007,21 @@ document.addEventListener('DOMContentLoaded', () => {
             saveCompanions(); renderCompanions();
             const last = document.querySelector('#companions-list .companion-card:last-child input[data-cf="name"]'); if (last) last.focus();
         });
+        // ----- Compagnon tiré du bestiaire (LOT 5.4) : bestiaire.js, chargé à la demande -----
+        window.SheetCompagnons = {
+            liste: () => companions,
+            ajouter(c) { companions.push(normalizeCompanion(c)); saveCompanions(); renderCompanions(); },
+            remplacer(i, c) { if (!companions[i]) return; companions[i] = normalizeCompanion(c); saveCompanions(); renderCompanions(); },
+            retirer(id) {
+                const i = companions.findIndex(x => x && x.id === id);
+                if (i >= 0) { companions.splice(i, 1); saveCompanions(); renderCompanions(); }
+            }
+        };
+        function ouvrirBestiaire(index) {
+            window.charger('bestiaire').then(() => window.Bestiaire.choisir(index == null ? {} : { index }))
+                .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+        }
+        document.getElementById('btn-bestiaire-companion')?.addEventListener('click', () => ouvrirBestiaire());
 
         // ==========================================
         // MODULE MAGIE — un seul module, trois blocs :
@@ -6460,6 +6836,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" id="btn-cancel-edit-journal" class="btn-small jr-cancel">Annuler</button>
                     </div>
                 </div>`;
+            majMentionsHtml(document.getElementById('view-journal-content'));
         };
 
         window.editJournalForm = (index) => {
@@ -6471,7 +6848,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Quill se réinstancie à chaque ouverture : le conteneur est recréé
             // par openJournalEntry, l'ancienne instance pointait dans le vide.
             quillEditJournal = new Quill('#edit-journal-content', { theme: 'snow' });
-            quillEditJournal.root.innerHTML = entry.content || '';
+            const contenu = document.createElement('div');
+            contenu.innerHTML = entry.content || '';
+            majMentionsHtml(contenu);
+            quillEditJournal.root.innerHTML = contenu.innerHTML;
+            ecouterMentionsQuill(quillEditJournal);
 
             document.getElementById('btn-confirm-edit-journal').onclick = () => {
                 journal[index].title = document.getElementById('edit-journal-title').value.trim() || 'Sans titre';
@@ -8058,7 +8439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="gear-tools">
                                 <button class="gear-equip${item.equipped ? ' is-on' : ''}" title="${item.equipped ? 'Ranger dans le sac' : 'Marquer comme équipé'}">⚔️</button>
                                 ${invSortMode === 'manual' ? '<button class="ci-up" title="Monter">▲</button><button class="ci-down" title="Descendre">▼</button>' : ''}
-                                <button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button>
+                                <button class="ci-vendre" title="Vendre" aria-label="Vendre ${escAb(item.name)}">💰</button><button class="ci-edit" title="Modifier">✎</button><button class="ci-del" title="Supprimer">🗑</button>
                             </div>
                         </div>
                         ${extra ? `<div class="gear-detail">${extra}</div>` : ''}
@@ -8117,7 +8498,18 @@ document.addEventListener('DOMContentLoaded', () => {
             setStore('dnd-inventory', inventory);
             nameEl.value = ''; document.getElementById('inv-qty').value = ''; document.getElementById('inv-weight').value = '';
             renderInventory(); nameEl.focus();
+            // Un objet des règles arrive avec son prix : on propose de le payer (LOT 5.2).
+            // Sans prix lisible (objet magique, « variable »), bourse.js ne demande rien.
+            if (extra.value) {
+                const index = inventory.length - 1;
+                window.charger('bourse').then(() => window.Bourse.proposerAchat(index)).catch(() => {});
+            }
         }
+        // Le sac vu par bourse.js : achat, vente et leur annulation.
+        window.SheetSac = {
+            liste: () => inventory,
+            enregistrer() { setStore('dnd-inventory', inventory); renderInventory(); }
+        };
 
         if(document.getElementById('btn-add-inventory')) document.getElementById('btn-add-inventory').addEventListener('click', addInventoryFromInputs);
         ['inv-name', 'inv-qty', 'inv-weight'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') { e.preventDefault(); addInventoryFromInputs(); } }); });
@@ -8144,6 +8536,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     it.charges = max > 0 ? Math.min(n + 1, max) : n + 1; save(); return;
                 }
                 if(e.target.closest('.ci-toatk')) { itemToAttack(index); return; }
+                if(e.target.closest('.ci-vendre')) { window.charger('bourse').then(() => window.Bourse.vendre(index)).catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur')); return; }
                 if(e.target.closest('.ci-edit')) { openItemModal(index); return; }
                 if(e.target.closest('.ci-del')) { window.deleteWithUndo(inventory, index, it.name || 'cet objet', () => setStore('dnd-inventory', inventory), renderInventory); return; }
                 if(e.target.closest('.gear-more, .gear-name, .gear-spacer, .gear-line')) toggleGearDetail(rowEl);
@@ -8633,10 +9026,58 @@ document.addEventListener('DOMContentLoaded', () => {
         window.deleteAbility = (index) => window.deleteWithUndo(abilities, index, (abilities[index] || {}).name || 'cette capacité',
             () => setStore('dnd-abilities', abilities), renderAbilities);
 
-        let macros = getStore('dnd-macros') || [];
-        function renderMacros() { const list = document.getElementById('macro-list'); if(!list) return; list.innerHTML = ''; macros.forEach((m, i) => { list.innerHTML += `<div class="macro-pill"><button class="macro-btn rollable" data-formula="${m.formula}" data-name="${m.name}">${m.name}</button><span class="macro-del" onclick="deleteMacro(${i})">✖</span></div>`; }); }
-        if(document.getElementById('btn-add-macro')) { document.getElementById('btn-add-macro').addEventListener('click', () => { const name = document.getElementById('macro-name').value.trim(); const formula = document.getElementById('macro-formula').value.trim(); if(name && formula) { macros.push({ name, formula }); setStore('dnd-macros', macros); renderMacros(); document.getElementById('macro-name').value = ''; document.getElementById('macro-formula').value = ''; } }); }
-        window.deleteMacro = (index) => { macros.splice(index, 1); setStore('dnd-macros', macros); renderMacros(); };
+        // ===== MACROS (LOT 5.3) =====
+        // Une macro reste { name, formula } : c'est ce que lisent l'export, les
+        // exploits et les fiches d'avant. S'y ajoutent, facultatifs, `id`,
+        // `icone` et `couleur` (un ton du site). La fenêtre d'édition vit dans
+        // macros.js, chargé au premier clic sur ✎.
+        let macros = getStore('dnd-macros');
+        if (!Array.isArray(macros)) macros = [];
+        const MACRO_TONS = ['sang', 'laiton', 'foret', 'nuit', 'ambre', 'encre'];
+        function saveMacros() { setStore('dnd-macros', macros); }
+        function renderMacros() {
+            const list = document.getElementById('macro-list'); if(!list) return;
+            if (!macros.length) { list.innerHTML = '<div class="compact-empty">Aucune macro : donne-lui un nom et une formule ci-dessus.</div>'; return; }
+            list.innerHTML = macros.map((m, i) => {
+                const ton = MACRO_TONS.includes(m.couleur) ? m.couleur : '';
+                return `<div class="macro-pill${ton ? ' ton-' + ton : ''}" data-mi="${i}">
+                    <span class="macro-poignee no-print" aria-hidden="true" title="Glisse pour ranger">⠿</span>
+                    <button type="button" class="macro-btn rollable" data-formula="${escAb(m.formula)}" data-name="${escAb(m.name)}" title="Lancer ${escAb(m.formula)}">${m.icone ? `<span class="macro-ico" aria-hidden="true">${escAb(m.icone)}</span>` : ''}<span class="macro-nom">${escAb(m.name)}</span><small class="macro-formule">${escAb(m.formula)}</small></button>
+                    <button type="button" class="macro-edit no-print" data-macro-edit="${i}" title="Modifier" aria-label="Modifier la macro ${escAb(m.name)}">✎</button>
+                    <button type="button" class="macro-del no-print" data-macro-del="${i}" title="Supprimer" aria-label="Supprimer la macro ${escAb(m.name)}">✖</button>
+                </div>`;
+            }).join('');
+            // La pastille est presque tout entière un bouton : on la saisit par sa poignée.
+            if (window.DragSort) window.DragSort.enable(list, {
+                itemSel: '.macro-pill', handleSel: '.macro-poignee',
+                onDrop(de, vers) { window.DragSort.move(macros, de, vers); saveMacros(); renderMacros(); }
+            });
+        }
+        window.SheetMacros = {
+            liste: () => macros,
+            valide: formuleValide,
+            enregistrer() { saveMacros(); renderMacros(); }
+        };
+        function ajouterMacro() {
+            const nameEl = document.getElementById('macro-name'), formulaEl = document.getElementById('macro-formula');
+            if (!nameEl || !formulaEl) return;
+            const name = nameEl.value.trim(), formula = formulaEl.value.trim();
+            if (!name) { nameEl.focus(); return; }
+            if (!formuleValide(formula)) { window.showAppToast('⚠️ Formule invalide (ex : 1d8+3d6+4).', 'erreur'); formulaEl.focus(); return; }
+            macros.push({ id: 'm' + Date.now().toString(36), name, formula });
+            saveMacros(); renderMacros();
+            nameEl.value = ''; formulaEl.value = ''; nameEl.focus();
+        }
+        document.getElementById('btn-add-macro')?.addEventListener('click', ajouterMacro);
+        ['macro-name', 'macro-formula'].forEach(id => document.getElementById(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouterMacro(); } }));
+        document.getElementById('macro-list')?.addEventListener('click', (e) => {
+            const edit = e.target.closest('[data-macro-edit]');
+            if (edit) { const i = parseInt(edit.dataset.macroEdit, 10); window.charger('macros').then(() => window.Macros.modifier(i)).catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur')); return; }
+            const del = e.target.closest('[data-macro-del]');
+            if (del) { const i = parseInt(del.dataset.macroDel, 10); window.deleteWithUndo(macros, i, (macros[i] || {}).name || 'cette macro', saveMacros, renderMacros); }
+        });
+        // Compatibilité : l'ancien rendu appelait deleteMacro(i) depuis un attribut onclick.
+        window.deleteMacro = (index) => window.deleteWithUndo(macros, index, (macros[index] || {}).name || 'cette macro', saveMacros, renderMacros);
 
         // ===== BOURSE : valeurs en cuivre, conversion optimale, payer / ajouter =====
         // 1 pa = 10 pc | 1 pe = 50 pc | 1 po = 100 pc | 1 pp = 1000 pc
@@ -8670,17 +9111,85 @@ document.addEventListener('DOMContentLoaded', () => {
             return out;
         }
         const COIN_LABEL = { pp: 'platine', po: 'or', pe: 'électrum', pa: 'argent', pc: 'cuivre' };
+
+        // ----- Historique de la Bourse (LOT 5.1) -----
+        // Les 50 dernières opérations, la plus récente d'abord :
+        //   { id, ts, type, cuivre, libelle, avant, apres, objet? }
+        // `type` : paiement, ajout, conversion, achat, vente. `cuivre` : ce que
+        // la bourse gagne (positif) ou perd (négatif). `avant` et `apres` : les
+        // pièces de part et d'autre — c'est ce qui permet de défaire
+        // l'opération (bourse.js). Une saisie à la main dans les cases n'est pas
+        // une opération : elle ne s'inscrit pas.
+        const BOURSE_HISTO_KEY = 'dnd-bourse-historique';
+        const BOURSE_HISTO_MAX = 50;
+        function lireBourse() { const o = {}; COIN_ORDER.forEach(t => { o[t] = getCoin(t); }); return o; }
+        function formatCuivre(c) {
+            const n = Math.max(0, Math.round(c || 0));
+            const parts = [];
+            if (Math.floor(n / 100)) parts.push(Math.floor(n / 100) + ' po');
+            if (Math.floor(n % 100 / 10)) parts.push(Math.floor(n % 100 / 10) + ' pa');
+            if (n % 10) parts.push(n % 10 + ' pc');
+            return parts.length ? parts.join(' ') : '0 pc';
+        }
+        function historiqueBourse() { const h = getStore(BOURSE_HISTO_KEY); return Array.isArray(h) ? h : []; }
+        function consignerBourse(op, avant) {
+            const apres = lireBourse();
+            if (op.type === 'conversion' && COIN_ORDER.every(t => avant[t] === apres[t])) return null;
+            const entree = Object.assign({ id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: Date.now(), libelle: '' },
+                op, { avant, apres });
+            setStore(BOURSE_HISTO_KEY, [entree].concat(historiqueBourse()).slice(0, BOURSE_HISTO_MAX));
+            document.dispatchEvent(new CustomEvent('bourse:operation', { detail: entree }));
+            return entree;
+        }
+        /** Paiement intelligent : on paie sur le total, la monnaie est rendue au plus juste. */
+        function payerCuivre(copper, op) {
+            const total = purseTotalCopper();
+            if (copper > total) return null;
+            const avant = lireBourse();
+            applyDistribution(distributeCopper(total - copper));
+            return consignerBourse(Object.assign({ type: 'paiement', libelle: '' }, op, { cuivre: -copper }), avant);
+        }
+        /** Gain : les pièces s'ajoutent à celles déjà là, sans refondre toute la
+         *  bourse. Un marchand paie en or, argent et cuivre — jamais en platine
+         *  ni en électrum : 15 po restent 15 po, pas 1 pp et 5 po. */
+        function ajouterCuivre(copper, op) {
+            const avant = lireBourse();
+            const n = Math.max(0, Math.round(copper));
+            const d = { po: Math.floor(n / 100), pa: Math.floor(n % 100 / 10), pc: n % 10 };
+            ['po', 'pa', 'pc'].forEach(t => { if (d[t]) setCoin(t, getCoin(t) + d[t]); });
+            renderCurrencyTotal();
+            return consignerBourse(Object.assign({ type: 'ajout', libelle: '' }, op, { cuivre: Math.max(0, Math.round(copper)) }), avant);
+        }
+        window.SheetBourse = {
+            lire: lireBourse, total: purseTotalCopper, format: formatCuivre, repartir: distributeCopper,
+            /** Pose les pièces telles quelles (annulation) : rien n'est consigné. */
+            poser(o) { COIN_ORDER.forEach(t => setCoin(t, Math.max(0, parseInt(o && o[t], 10) || 0))); renderCurrencyTotal(); },
+            payer: payerCuivre, ajouter: ajouterCuivre,
+            historique: historiqueBourse,
+            retirerOperation(id) {
+                setStore(BOURSE_HISTO_KEY, historiqueBourse().filter(x => x.id !== id));
+                document.dispatchEvent(new CustomEvent('bourse:operation'));
+            }
+        };
+        document.getElementById('btn-bourse-historique')?.addEventListener('click', () => {
+            window.charger('bourse').then(() => window.Bourse.basculer())
+                .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+        });
+
         const btnOptimize = document.getElementById('btn-optimize-currency');
         if (btnOptimize) btnOptimize.addEventListener('click', () => {
             const total = purseTotalCopper();
             if (total <= 0) { if (window.showAppToast) window.showAppToast('Ta bourse est vide.', '#c0392b'); return; }
             const target = (document.getElementById('convert-target') || {}).value || 'auto';
+            const avant = lireBourse();
             if (target === 'auto') {
                 applyDistribution(distributeCopper(total));
+                consignerBourse({ type: 'conversion', cuivre: 0, libelle: 'au minimum de pièces' }, avant);
                 if (window.showAppToast) window.showAppToast('⚖️ Bourse convertie au minimum de pièces.', '#27ae60');
             } else {
                 const d = distributeToTarget(total, target);
                 applyDistribution(d);
+                consignerBourse({ type: 'conversion', cuivre: 0, libelle: 'tout en ' + COIN_LABEL[target] }, avant);
                 const reste = COIN_ORDER.slice(COIN_ORDER.indexOf(target) + 1).some(t => d[t] > 0);
                 if (window.showAppToast) window.showAppToast(
                     `⚖️ ${d[target]} pièce(s) de ${COIN_LABEL[target]}` + (reste ? ' + le reliquat en petite monnaie.' : '.'), '#27ae60');
@@ -8692,21 +9201,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const amount = parseFloat(amountEl.value) || 0;
             const type = document.getElementById('pay-amount-type').value;
             const mode = (document.getElementById('pay-mode') || {}).value || 'pay';
+            const libelleEl = document.getElementById('pay-libelle');
+            const libelle = String((libelleEl && libelleEl.value) || '').trim().slice(0, 80);
             if (amount <= 0) return;
             const copper = Math.round(amount * COIN_VALUE[type]);
             if (mode === 'add') {
                 // Ajout : on ajoute les pièces du type choisi (pas de conversion forcée).
+                const avant = lireBourse();
                 setCoin(type, getCoin(type) + Math.round(amount));
                 renderCurrencyTotal();
+                consignerBourse({ type: 'ajout', cuivre: Math.round(amount) * COIN_VALUE[type], libelle }, avant);
                 if (window.showAppToast) window.showAppToast(`➕ ${Math.round(amount)} ${type.toUpperCase()} ajoutée(s).`, '#27ae60');
             } else {
                 // Paiement INTELLIGENT : on paie sur le total et on rend la monnaie de façon optimale.
-                const total = purseTotalCopper();
-                if (copper > total) { if (window.showAppToast) window.showAppToast('💸 Pas assez d\'argent dans ta bourse.', '#c0392b'); return; }
-                applyDistribution(distributeCopper(total - copper));
+                if (!payerCuivre(copper, { libelle })) { if (window.showAppToast) window.showAppToast('💸 Pas assez d\'argent dans ta bourse.', '#c0392b'); return; }
                 if (window.showAppToast) window.showAppToast(`➖ ${amount} ${type.toUpperCase()} payée(s) — monnaie rendue.`, '#2c3e50');
             }
             amountEl.value = '';
+            if (libelleEl) libelleEl.value = '';
         });
         // Le total se met à jour dès qu'on édite une pièce à la main
         COIN_ORDER.forEach(t => { const el = document.getElementById('coin-' + t); if (el) el.addEventListener('input', renderCurrencyTotal); });
@@ -9082,19 +9594,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // --- Recherche dans les données saisies de la fiche ---
+            // Insensible aux accents. Chaque résultat sait où mener : un module de la
+            // fiche (widgetId), ou une action (`ouvrir`) — un chapitre du journal, la
+            // fiche d'un PNJ ou d'un lieu (LOT 5.7).
+            const plie = (s) => (window.SRD && window.SRD.fold ? window.SRD.fold(s) : String(s == null ? '' : s).toLowerCase());
+            const texteLisible = (t) => String(t == null ? '' : t)
+                .replace(/@\[([^\]\n]{1,80})\]\((?:pnj|lieu):[\w-]{1,40}\)/g, '@$1')
+                .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            function ouvrirFicheCarnet(type, id) {
+                window.charger('carnet').then(() => window.Carnet.ouvrirFiche(type, id))
+                    .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+            }
+            function ouvrirChapitre(i) {
+                document.getElementById('btn-open-journal')?.click();
+                if (typeof window.openJournalEntry === 'function') window.openJournalEntry(i);
+            }
             function searchSheetData(q) {
                 const out = [];
+                const f = plie(q);
                 // La recherche porte aussi sur les descriptions : c'est ce qui permet
                 // de retrouver « celui qui donne la résistance au feu » sans se
                 // rappeler du nom de l'objet. Le sous-titre indique alors le passage trouvé.
-                const add = (arr, icon, subtitle, widgetId) => { (arr || []).forEach(it => {
+                const add = (arr, icon, subtitle, widgetId, o) => { (Array.isArray(arr) ? arr : []).forEach((it, i) => {
                     const nm = String((it && (it.name || it.title)) || '').trim(); if (!nm) return;
-                    if (nm.toLowerCase().includes(q)) { out.push({ icon, title: nm, subtitle, widgetId }); return; }
-                    const body = String((it && (it.desc || it.notes || it.text)) || '').replace(/<[^>]*>/g, ' ');
-                    const at = body.toLowerCase().indexOf(q);
+                    const sous = typeof subtitle === 'function' ? subtitle(it) : subtitle;
+                    const ouvrir = o && o.ouvrir ? () => o.ouvrir(it, i) : null;
+                    if (plie(nm).includes(f)) { out.push({ icon, title: nm, subtitle: sous, widgetId, ouvrir }); return; }
+                    const body = texteLisible((o && o.champs ? o.champs(it) : [it && (it.desc || it.notes || it.text)]).filter(Boolean).join(' · '));
+                    const at = plie(body).indexOf(f);
                     if (at === -1) return;
                     const snippet = body.slice(Math.max(0, at - 30), at + 60).trim();
-                    out.push({ icon, title: nm, subtitle: subtitle + ' — …' + snippet + '…', widgetId });
+                    out.push({ icon, title: nm, subtitle: sous + ' — …' + snippet + '…', widgetId, ouvrir });
                 }); };
                 add(getStore('dnd-abilities'), '🔋', 'Capacité limitée', 'widget-abilities');
                 add(getStore('dnd-spells'),    '✨', 'Sort',             'widget-magic');
@@ -9102,6 +9632,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 add(getStore('dnd-inventory'), '🎒', 'Objet (sac à dos)','widget-inventory');
                 add(getStore('dnd-traits'),    '📜', 'Capacité / don',   'widget-traits');
                 add(getStore('dnd-macros'),    '🎲', 'Macro',            'widget-macros');
+                add(getStore('dnd-npcs'),  '👤', 'PNJ', 'widget-quests', { champs: n => [n.faction, n.rencontreLieu, n.body], ouvrir: n => ouvrirFicheCarnet('pnj', n.id) });
+                add(getStore('dnd-lieux'), '🏰', 'Lieu', 'widget-quests', { champs: n => [n.region, n.type, n.body], ouvrir: n => ouvrirFicheCarnet('lieu', n.id) });
+                add(getStore('dnd-quests'), '🗺️', q => q.done ? 'Quête terminée' : 'Quête', 'widget-quests', { champs: n => [n.body] });
+                add(getStore('dnd-quick-notes'), '📋', 'Note rapide', 'widget-notes', { champs: n => [n.body] });
+                add(getStore('dnd-journal'), '📕', 'Chapitre du journal', 'widget-notes', { champs: n => [n.content], ouvrir: (n, i) => ouvrirChapitre(i) });
                 // Raccourcis vers les modules (ex. « bourse »)
                 const modules = [
                     { kw: ['bourse', 'argent', 'piece', 'pièce', 'or', 'monnaie', 'po'], title: 'Bourse', widgetId: 'widget-currency', icon: '💰' },
@@ -9113,12 +9648,60 @@ document.addEventListener('DOMContentLoaded', () => {
                     { kw: ['competence', 'compétence', 'sauvegarde', 'caracteristique', 'caractéristique', 'stat', 'force', 'dexterite', 'dextérité'], title: 'Caractéristiques & compétences', widgetId: 'widget-stats', icon: '🎯' },
                     { kw: ['repos'], title: 'Repos', widgetId: 'widget-rests', icon: '⛺' },
                     { kw: ['compagnon', 'familier'], title: 'Compagnon / Familier', widgetId: 'widget-companion', icon: '🐾' },
-                    { kw: ['quete', 'quête', 'pnj'], title: 'Quêtes & PNJ', widgetId: 'widget-quests', icon: '🗺️' }
+                    { kw: ['quete', 'quête', 'pnj', 'lieu', 'lieux', 'carnet'], title: 'Quêtes, PNJ & lieux', widgetId: 'widget-quests', icon: '🗺️' }
                 ];
                 modules.forEach(m => { if (m.kw.some(k => k.includes(q) || q.includes(k))) out.push({ icon: m.icon, title: m.title, subtitle: 'Module de la fiche', widgetId: m.widgetId }); });
                 // Dédoublonnage par titre + module
                 const seen = new Set();
-                return out.filter(o => { const key = o.title + '|' + o.widgetId; if (seen.has(key)) return false; seen.add(key); return true; });
+                return out.filter(o => { const key = o.title + '|' + o.widgetId + '|' + o.subtitle; if (seen.has(key)) return false; seen.add(key); return true; });
+            }
+
+            // --- Commandes : ce que la recherche sait FAIRE (LOT 5.7) ---
+            // Elles passent en tête des résultats, et Entrée exécute la première.
+            // Une commande n'apparaît que sur une saisie COMPLÈTE (« repos long »,
+            // « états ») : chercher la règle « Inspiration bardique » puis appuyer
+            // sur Entrée ne doit jamais dépenser l'inspiration du héros.
+            function commandes(brut) {
+                const saisie = String(brut == null ? '' : brut).trim();
+                const f = plie(saisie).replace(/\s+/g, ' ');
+                const out = [];
+                if (!f) return out;
+                let m;
+                // Une expression de dés : « 2d6+3 », « d20 », « 1d8 + 2d6 ».
+                const expr = saisie.replace(/\s+/g, '');
+                if (/d\d/i.test(expr) && formuleValide(expr)) {
+                    out.push({ icon: '🎲', title: 'Lancer ' + expr, subtitle: 'Expression de dés, consignée dans l’historique', run: () => {
+                        const res = rollExpression(expr);
+                        if (res.error) { window.showAppToast('⚠️ ' + res.error, 'erreur'); return; }
+                        consignerExpression(expr, res, { titre: expr });
+                    } });
+                }
+                // Soin et dégâts : « soin 8 », « soigner 8 », « dégâts 8 ».
+                if ((m = /^(?:soin|soins|soigner) \+?(\d{1,4})$/.exec(f)) && +m[1] > 0) {
+                    const n = +m[1];
+                    out.push({ icon: '💚', title: `Soigner ${n} PV`, subtitle: 'Sans dépasser le maximum de points de vie', run: () => applyHpDelta(n) });
+                }
+                if ((m = /^(?:degats?|degat) -?(\d{1,4})$/.exec(f)) && +m[1] > 0) {
+                    const n = +m[1];
+                    out.push({ icon: '💥', title: `Subir ${n} dégâts`, subtitle: 'Les PV temporaires encaissent d’abord', run: () => applyHpDelta(-n) });
+                }
+                // Repos.
+                if (f === 'repos' || f === 'repos court') out.push({ icon: '☕', title: 'Repos court', subtitle: 'Ouvre la fenêtre du repos court', run: () => document.getElementById('btn-short-rest')?.click() });
+                if (f === 'repos' || f === 'repos long') out.push({ icon: '🌙', title: 'Repos long', subtitle: 'Ouvre la fenêtre du repos long', run: () => document.getElementById('btn-long-rest')?.click() });
+                // Inspiration : l'utiliser si le héros l'a, la lui donner sinon.
+                if (f === 'inspiration') {
+                    const a = !!(caseInspiration() && caseInspiration().checked);
+                    out.push({
+                        icon: '✦', title: a ? 'Utiliser l’inspiration' : 'Gagner l’inspiration',
+                        subtitle: a ? (edition2024() ? 'Règles 2024 : rejouer un dé du dernier jet' : 'Règles 2014 : avantage au prochain jet') : 'Allume le jeton d’inspiration',
+                        run: () => { if (a) utiliserInspiration(); else { poserInspiration(true); window.showAppToast('✦ Inspiration gagnée', 'reussite'); } }
+                    });
+                }
+                // Les états.
+                if (f === 'etats' || f === 'etat' || f === 'tous les etats') {
+                    out.push({ icon: '📖', title: 'Tous les états', subtitle: 'La liste des états et de leurs effets', run: () => window.Etats && window.Etats.ouvrirTous() });
+                }
+                return out;
             }
 
             // --- Recherche des libellés/champs affichés sur la fiche ---
@@ -9162,8 +9745,12 @@ document.addEventListener('DOMContentLoaded', () => {
             function makeResultRow(icon, title, subtitle, onClick) {
                 const row = document.createElement('div');
                 row.className = 'search-result-item';
+                // Au clavier aussi : Tab pour atteindre un résultat, Entrée ou Espace pour l'ouvrir.
+                row.tabIndex = 0;
+                row.setAttribute('role', 'button');
                 row.innerHTML = `<div class="result-title">${icon} ${escSearch(title)}</div><div class="result-path">${escSearch(subtitle)}</div>`;
                 row.addEventListener('click', onClick);
+                row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onClick(e); } });
                 return row;
             }
             function groupHeader(label) { const h = document.createElement('div'); h.className = 'search-group-head'; h.textContent = label; return h; }
@@ -9181,12 +9768,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!query) { searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#777; font-style:italic;">Entrez un mot-clé pour lancer la recherche...</div>'; return; }
                 let any = false;
 
+                // 0) Les commandes, en tête : Entrée exécute la première.
+                const cmds = commandes(searchInput.value);
+                if (cmds.length) {
+                    any = true;
+                    searchResults.appendChild(groupHeader('⚡ Commandes'));
+                    cmds.forEach((c, k) => {
+                        const row = makeResultRow(c.icon, c.title, c.subtitle + (k === 0 ? ' · Entrée' : ''), () => { closeSearch(); c.run(); });
+                        row.classList.add('search-commande');
+                        if (k === 0) row.classList.add('is-premiere');
+                        searchResults.appendChild(row);
+                    });
+                }
+
                 // 1) Données de ta fiche
                 const data = searchSheetData(query);
                 if (data.length) {
                     any = true;
                     searchResults.appendChild(groupHeader('📋 Ta fiche'));
-                    data.slice(0, 12).forEach(d => searchResults.appendChild(makeResultRow(d.icon || '•', d.title, d.subtitle, () => { closeSearch(); revealAndScroll(document.getElementById(d.widgetId)); })));
+                    data.slice(0, 12).forEach(d => searchResults.appendChild(makeResultRow(d.icon || '•', d.title, d.subtitle, () => {
+                        closeSearch();
+                        if (d.ouvrir) d.ouvrir(); else revealAndScroll(document.getElementById(d.widgetId));
+                    })));
                 }
 
                 // 2) Base de règles SRD — chargée à la demande, donc asynchrone.
@@ -9221,6 +9824,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 // (asynchrone) peut retirer sans écraser les résultats déjà affichés.
                 var emptyMsg = null;
                 if (!any) { emptyMsg = document.createElement("div"); emptyMsg.style.cssText = "text-align:center; padding:20px; color:#777; font-style:italic;"; emptyMsg.textContent = "Aucun résultat. Essaie un autre mot-clé (règle, capacité, objet, sort…)."; searchResults.appendChild(emptyMsg); }
+            });
+            // Entrée : la première commande s'il y en a une, sinon le premier résultat.
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' || e.isComposing) return;
+                e.preventDefault();
+                const cmd = commandes(searchInput.value)[0];
+                if (cmd) { closeSearch(); cmd.run(); return; }
+                const premier = searchResults.querySelector('.search-result-item');
+                if (premier) premier.click();
             });
 
             window.openGlobalSearch = openSearch;
