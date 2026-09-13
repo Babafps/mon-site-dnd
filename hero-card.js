@@ -3,11 +3,20 @@
 //
 // Un bouton, une image : le portrait dans son cadre, le nom, la classe, le
 // niveau, les caractéristiques, l'arme fétiche. Tout est dessiné dans un
-// <canvas>, sur l'appareil — aucun serveur, aucune requête. L'image sort en
-// 2160 × 2700 : le format portrait 4:5 qui passe partout (Discord, Instagram,
-// WhatsApp), en double définition pour rester nette sur un écran de téléphone
-// comme à l'impression. En JPEG (moins d'1 Mo) : en PNG, les dégradés et le
+// <canvas>, sur l'appareil — aucun serveur, aucune requête. Trois formats
+// (LOT 7.3), chacun avec sa propre mise en page :
+//   · 4:5, 2160 × 2700 — le portrait qui passe partout (Discord, Instagram,
+//     WhatsApp) ;
+//   · 9:16, 2160 × 3840 — story et fond d'écran : le haut et le bas restent
+//     libres pour l'interface des stories ;
+//   · 1:1, 2160 × 2160 — l'avatar Discord : l'essentiel tient dans le cercle
+//     que Discord découpe.
+// En double définition pour rester nette sur un écran de téléphone comme à
+// l'impression. En JPEG (moins d'1 Mo en 4:5) : en PNG, les dégradés et le
 // grain pesaient plus de 9 Mo, au ras de la limite d'envoi de Discord.
+// Le reflet holographique de l'atelier s'enregistre aussi en vidéo de 5 s
+// (captureStream + MediaRecorder) : MP4 quand le navigateur sait en faire,
+// WebM sinon.
 //
 // La carte se nourrit de la fiche OUVERTE : identité et combat se lisent dans
 // le DOM, et les armes arrivent déjà calculées par window.HeroCardArmes(),
@@ -25,10 +34,54 @@
 (function () {
     'use strict';
 
-    // La mise en page se pense en 1080 × 1350 ; le canvas compte deux fois plus
-    // de pixels dans chaque sens (setTransform au début du dessin). Seul le flou
-    // des ombres échappe à la transformation du contexte : il passe par flou().
-    const W = 1080, H = 1350, M = 80;
+    // La mise en page se pense en 1080 de large ; la hauteur dépend du format.
+    // Le canvas compte deux fois plus de pixels dans chaque sens (setTransform au
+    // début du dessin). Seul le flou des ombres échappe à la transformation du
+    // contexte : il passe par flou().
+    const FORMATS = {
+        '4:5':  { id: '4:5',  nom: 'Portrait', usage: 'Discord, Instagram, WhatsApp', w: 1080, h: 1350, suffixe: '',
+                  conseil: 'Ton cadre de portrait s’applique aux styles offerts.' },
+        '9:16': { id: '9:16', nom: 'Story', usage: 'Story, fond d’écran', w: 1080, h: 1920, suffixe: '-story',
+                  conseil: 'Le haut et le bas restent libres pour l’interface des stories.' },
+        '1:1':  { id: '1:1',  nom: 'Avatar', usage: 'Avatar Discord', w: 1080, h: 1080, suffixe: '-avatar',
+                  conseil: 'Le cercle en pointillés montre ce que Discord garde.' }
+    };
+    const ORDRE_FORMATS = ['4:5', '9:16', '1:1'];
+    const PORTRAIT = FORMATS['4:5'];      // la collection, les annonces et la vignette de l'accueil
+    // Les repères de chaque mise en page ; le 4:5 reprend la carte d'origine au pixel près.
+    //   entete, filet : ligne de l'en-tête et longueur de ses filets (enteteMax : il se resserre au-delà)
+    //   PY, PR        : centre et rayon du portrait
+    //   nom, ligne1, ligne2, devise… : l'identité, et la largeur que chaque ligne peut prendre
+    //   blocs         : caractéristiques, combat et arme, centrés au-dessus de basBlocs
+    //   sceau, pied   : l'exploit gravé et la signature du site (hote : l'adresse du site)
+    const MISES_EN_PAGE = {
+        '4:5': {
+            entete: 104, enteteMax: 0, filet: 104, PY: 300, PR: 160,
+            nom: 560, nomMax: 84, nomLargeur: 880, ligne1: 608, ligne2: 646, ligneLargeur: 920,
+            deviseLargeur: 860, deviseLignes: 2,
+            blocs: true, ecart: 20, ecartArme: 22, basBlocs: 1190, sceau: 1210, pied: 1262, hote: true
+        },
+        // La story garde ~300 px libres en haut (profil, barre de progression) et
+        // ~200 px en bas (champ de réponse) : rien d'essentiel n'y est posé.
+        '9:16': {
+            entete: 330, enteteMax: 0, filet: 104, PY: 640, PR: 220,
+            nom: 990, nomMax: 92, nomLargeur: 880, ligne1: 1042, ligne2: 1082, ligneLargeur: 920,
+            deviseLargeur: 860, deviseLignes: 3,
+            blocs: true, ecart: 34, ecartArme: 36, basBlocs: 1620, sceau: 1650, pied: 1716, hote: true
+        },
+        // Discord découpe l'avatar en cercle de 1080 de diamètre : chaque ligne
+        // tient dans la corde du cercle à sa hauteur. Pas de blocs : un avatar se
+        // lit en tout petit.
+        '1:1': {
+            entete: 150, enteteMax: 540, filet: 60, PY: 470, PR: 240,
+            nom: 812, nomMax: 80, nomLargeur: 760, ligne1: 858, ligne2: 894, ligneLargeur: 700,
+            deviseLargeur: 600, deviseLignes: 1,
+            blocs: false, ecart: 0, ecartArme: 0, basBlocs: 0, sceau: 0, pied: 1008, hote: false
+        }
+    };
+    // W et H suivent le format du dessin en cours : les outils de dessin les lisent ici.
+    let W = PORTRAIT.w, H = PORTRAIT.h;
+    const M = 80;
     const ECHELLE = 2;
     // Les vignettes de l'atelier se dessinent en petit : l'échelle suit le dessin en cours.
     let echelleDessin = ECHELLE;
@@ -339,7 +392,7 @@
 
     /** Une gloire : des rayons d'or qui partent du portrait et s'éteignent en chemin. */
     function rayons(ctx, x, y, p) {
-        const R = 900;
+        const R = 900 * H / 1350;
         const g = ctx.createRadialGradient(x, y, 30, x, y, R);
         g.addColorStop(0, css(p.or, 1)); g.addColorStop(0.55, css(p.or, 0.25)); g.addColorStop(1, css(p.or, 0));
         ctx.save();
@@ -553,6 +606,9 @@
     // =====================================================
     function dessiner(cv, d, reg, res) {
         const ctx = cv.getContext('2d');
+        const fmt = FORMATS[reg.format] || PORTRAIT;
+        const L = MISES_EN_PAGE[fmt.id];
+        W = fmt.w; H = fmt.h;
         echelleDessin = reg.echelle || ECHELLE;
         ctx.setTransform(echelleDessin, 0, 0, echelleDessin, 0, 0);
         ctx.imageSmoothingEnabled = true;
@@ -562,9 +618,10 @@
         const sceauInfo = st.sceau ? exploitDe(st) : null;
         const nuit = p.nuit;
         const alea = graine(d.nom + '|' + d.classe);
-        const PX = W / 2, PY = 300, PR = 160;
-        // La boîte à outils prêtée aux styles de hero-card-styles.js
-        const T = { p, alea, W, H, M, PX, PY, PR, css, melange, rrect, halo, etoile, losange, feuille, flou, dorure, texteEspace, largeurEspacee, CINZEL, LORA };
+        const PX = W / 2, PY = L.PY, PR = L.PR;
+        // La boîte à outils prêtée aux styles de hero-card-styles.js. HY et NY sont
+        // les lignes de l'en-tête et du nom : un décor s'y accroche, dans tout format.
+        const T = { p, alea, W, H, M, PX, PY, PR, HY: L.entete, NY: L.nom, FORMAT: fmt.id, css, melange, rrect, halo, etoile, losange, feuille, flou, dorure, texteEspace, largeurEspacee, CINZEL, LORA };
         ctx.clearRect(0, 0, W, H);
         ctx.textBaseline = 'alphabetic';
 
@@ -572,7 +629,7 @@
         const fond = ctx.createLinearGradient(0, 0, 0, H);
         fond.addColorStop(0, css(p.fondA)); fond.addColorStop(1, css(p.fondB));
         ctx.fillStyle = fond; ctx.fillRect(0, 0, W, H);
-        halo(ctx, W / 2, 300, 520, css(p.or, nuit ? 0.2 : 0.16));
+        halo(ctx, W / 2, PY, 520, css(p.or, nuit ? 0.2 : 0.16));
         halo(ctx, W / 2, H + 80, 760, css(p.primaire, nuit ? 0.3 : 0.1));
         if (p.legende) { rayons(ctx, PX, PY, p); halo(ctx, PX, PY, 420, css(p.or, 0.22)); }
         if (p.maudit) halo(ctx, W / 2, H - 40, 720, css(p.or, 0.13));
@@ -606,16 +663,19 @@
 
         // --- En-tête ---
         const entete = st.entete || 'BONES & BLADES';
+        const yf = L.entete - 8;
         ctx.fillStyle = css(p.or); ctx.font = `600 24px ${CINZEL}`; ctx.textAlign = 'center';
-        texteEspace(ctx, entete, W / 2, 104, 8, true);
+        // Dans le cercle de l'avatar, un long en-tête se resserre au lieu d'être rogné.
+        for (let t = 23; L.enteteMax && t >= 16 && largeurEspacee(ctx, entete, 8) > L.enteteMax; t--) ctx.font = `600 ${t}px ${CINZEL}`;
+        texteEspace(ctx, entete, W / 2, L.entete, 8, true);
         const lt = largeurEspacee(ctx, entete, 8);
         ctx.save(); ctx.strokeStyle = css(p.or, 0.55); ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(W / 2 - lt / 2 - 26, 96); ctx.lineTo(W / 2 - lt / 2 - 130, 96);
-        ctx.moveTo(W / 2 + lt / 2 + 26, 96); ctx.lineTo(W / 2 + lt / 2 + 130, 96);
+        ctx.moveTo(W / 2 - lt / 2 - 26, yf); ctx.lineTo(W / 2 - lt / 2 - 26 - L.filet, yf);
+        ctx.moveTo(W / 2 + lt / 2 + 26, yf); ctx.lineTo(W / 2 + lt / 2 + 26 + L.filet, yf);
         ctx.stroke(); ctx.restore();
-        losange(ctx, W / 2 - lt / 2 - 15, 96, 4, css(p.or));
-        losange(ctx, W / 2 + lt / 2 + 15, 96, 4, css(p.or));
+        losange(ctx, W / 2 - lt / 2 - 15, yf, 4, css(p.or));
+        losange(ctx, W / 2 + lt / 2 + 15, yf, 4, css(p.or));
 
         // --- Portrait ---
         ctx.save();
@@ -630,8 +690,8 @@
             gp.addColorStop(0, css(melange(p.primaire, [255, 255, 255], 0.15)));
             gp.addColorStop(1, css(melange(p.primaire, [0, 0, 0], 0.5)));
             ctx.fillStyle = gp; ctx.fillRect(PX - PR, PY - PR, PR * 2, PR * 2);
-            ctx.fillStyle = css(p.or); ctx.font = `700 160px ${CINZEL}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText((d.nom.trim()[0] || '?').toUpperCase(), PX, PY + 8);
+            ctx.fillStyle = css(p.or); ctx.font = `700 ${PR}px ${CINZEL}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText((d.nom.trim()[0] || '?').toUpperCase(), PX, PY + PR / 20);
             ctx.textBaseline = 'alphabetic';
         }
         if (p.maudit) teinteMaudite(ctx, PX, PY, PR);
@@ -645,7 +705,7 @@
 
         // --- Nom et identité ---
         ctx.textAlign = 'center';
-        const tn = ajuster(ctx, d.nom, '700', CINZEL, 84, 44, W - 2 * M - 40);
+        const tn = ajuster(ctx, d.nom, '700', CINZEL, L.nomMax, 44, L.nomLargeur);
         ctx.save();
         ctx.font = `700 ${tn}px ${CINZEL}`;
         if (p.legende) {
@@ -656,24 +716,24 @@
         else if (typeof st.nomDuHeros === 'function') { st.nomDuHeros(ctx, T, ctx.measureText(d.nom).width); }
         else if (nuit) { ctx.shadowColor = css(p.or, 0.55); ctx.shadowBlur = flou(26); ctx.fillStyle = css(p.encre); }
         else ctx.fillStyle = css(p.primaire);
-        ctx.fillText(d.nom, W / 2, 560);
+        ctx.fillText(d.nom, W / 2, L.nom);
         ctx.restore();
 
         const l1 = ['Niveau ' + d.niveau, [d.classe, d.sousClasse ? '(' + d.sousClasse + ')' : ''].filter(Boolean).join(' ')].filter(Boolean).join('  ·  ');
         const l2 = [d.race, d.historique].filter(Boolean).join('  ·  ');
         ctx.fillStyle = css(p.encre, 0.72);
-        ctx.font = `italic 400 ${ajuster(ctx, l1, 'italic 400', LORA, 34, 22, W - 2 * M)}px ${LORA}`;
-        ctx.fillText(l1, W / 2, 608);
+        ctx.font = `italic 400 ${ajuster(ctx, l1, 'italic 400', LORA, 34, 22, L.ligneLargeur)}px ${LORA}`;
+        ctx.fillText(l1, W / 2, L.ligne1);
         if (l2) {
-            ctx.font = `italic 400 ${ajuster(ctx, l2, 'italic 400', LORA, 30, 20, W - 2 * M)}px ${LORA}`;
-            ctx.fillText(l2, W / 2, 646);
+            ctx.font = `italic 400 ${ajuster(ctx, l2, 'italic 400', LORA, 30, 20, L.ligneLargeur)}px ${LORA}`;
+            ctx.fillText(l2, W / 2, L.ligne2);
         }
 
-        let y = l2 ? 668 : 630;
+        let y = (l2 ? L.ligne2 : L.ligne1) + 22;
         const devise = String(reg.devise || '').trim();
         if (devise) {
             ctx.font = `italic 400 36px ${LORA}`;
-            const lignes = couper(ctx, '« ' + devise + ' »', W - 2 * M - 60, 2);
+            const lignes = couper(ctx, '« ' + devise + ' »', L.deviseLargeur, L.deviseLignes);
             ctx.save();
             ctx.fillStyle = css(p.or);
             if (nuit) { ctx.shadowColor = css(p.or, 0.35); ctx.shadowBlur = flou(12); }
@@ -684,22 +744,24 @@
         y += 30;
 
         // Choix de l'arme
+        // L'avatar (1:1) n'a ni caractéristiques, ni combat, ni arme.
         let arme = null;
-        if (reg.arme === 'auto') arme = d.armes[0] || null;
+        if (!L.blocs) arme = null;
+        else if (reg.arme === 'auto') arme = d.armes[0] || null;
         else if (typeof reg.arme === 'number' && !isNaN(reg.arme)) arme = d.armes.find(a => a.i === reg.arme) || null;
 
-        const infos = [['CA', d.ca], ['PV', d.pv], ['INIT', bonus(d.init)], ['VITESSE', metres(d.vitesse)], ['MAÎTRISE', bonus(d.maitrise)]].filter(([, v]) => v);
+        const infos = !L.blocs ? [] : [['CA', d.ca], ['PV', d.pv], ['INIT', bonus(d.init)], ['VITESSE', metres(d.vitesse)], ['MAÎTRISE', bonus(d.maitrise)]].filter(([, v]) => v);
         // Le bloc du bas se centre dans la place qui reste au-dessus du pied.
-        const bloc = 150 + (infos.length ? 20 + 84 : 0) + (arme ? 22 + 118 : 0);
+        const bloc = 150 + (infos.length ? L.ecart + 84 : 0) + (arme ? L.ecartArme + 118 : 0);
         // Un style gagné grave son exploit juste au-dessus du pied.
-        const reste = (sceauInfo ? 1166 : 1190) - (y + bloc);
-        if (reste > 0) y += reste / 2;
+        const reste = (sceauInfo ? L.basBlocs - 24 : L.basBlocs) - (y + bloc);
+        if (L.blocs && reste > 0) y += reste / 2;
 
         // --- Caractéristiques ---
         const gap = 16, cw = (W - 2 * M - gap * 5) / 6, ch = 150;
         const meilleure = Math.max(...d.stats.map(s => s.score));
         let marquee = false;
-        d.stats.forEach((s, i) => {
+        (L.blocs ? d.stats : []).forEach((s, i) => {
             const x = M + i * (cw + gap);
             const top = s.score === meilleure && !marquee;
             if (top) marquee = true;
@@ -717,11 +779,11 @@
             ctx.fillStyle = css(p.encre, 0.6); ctx.font = `400 25px ${LORA}`;
             ctx.fillText(String(s.score), x + cw / 2, y + 134);
         });
-        y += ch;
+        if (L.blocs) y += ch;
 
         // --- Combat ---
         if (infos.length) {
-            y += 20;
+            y += L.ecart;
             const pg = 14, pw = (W - 2 * M - pg * (infos.length - 1)) / infos.length, ph = 84;
             infos.forEach(([lab, v], i) => {
                 const x = M + i * (pw + pg);
@@ -741,7 +803,7 @@
 
         // --- Arme fétiche ---
         if (arme) {
-            y += 22;
+            y += L.ecartArme;
             const ah = 118;
             ctx.save();
             rrect(ctx, M, y, W - 2 * M, ah, 24);
@@ -793,7 +855,7 @@
         if (st.devant) { ctx.save(); st.devant(ctx, T); ctx.restore(); }
 
         // --- Le sceau de l'exploit (styles gagnés) ---
-        if (sceauInfo) {
+        if (sceauInfo && L.sceau) {
             let quand = '';
             try { quand = new Date(sceauInfo.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {}
             const sceau = [st.sceau, quand, sceauInfo.fois > 1 ? '×' + sceauInfo.fois : ''].filter(Boolean).join('  ·  ');
@@ -802,17 +864,17 @@
             ctx.font = `italic 400 ${ajuster(ctx, sceau, 'italic 400', LORA, 23, 15, W - 2 * M - 90)}px ${LORA}`;
             ctx.fillStyle = css(p.or, 0.92);
             ctx.shadowColor = css(p.or, 0.35); ctx.shadowBlur = flou(10);
-            ctx.fillText(sceau, W / 2, 1210);
+            ctx.fillText(sceau, W / 2, L.sceau);
             const ls = ctx.measureText(sceau).width;
             ctx.restore();
-            etoile(ctx, W / 2 - ls / 2 - 22, 1202, 7, css(p.or));
-            etoile(ctx, W / 2 + ls / 2 + 22, 1202, 7, css(p.or));
+            etoile(ctx, W / 2 - ls / 2 - 22, L.sceau - 8, 7, css(p.or));
+            etoile(ctx, W / 2 + ls / 2 + 22, L.sceau - 8, 7, css(p.or));
         }
 
         // --- Pied : logo, nom du site, adresse réelle quand il est en ligne ---
         const local = location.protocol === 'file:' || /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname);
-        const hote = local ? '' : location.host;
-        const titre = 'BONES & BLADES', fy = 1262;
+        const hote = local || !L.hote ? '' : location.host;
+        const titre = 'BONES & BLADES', fy = L.pied;
         ctx.textAlign = 'left';
         ctx.font = `600 22px ${CINZEL}`; const tw = largeurEspacee(ctx, titre, 5);
         ctx.font = `400 20px ${LORA}`; const hw = hote ? ctx.measureText('  ·  ' + hote).width : 0;
@@ -848,6 +910,7 @@
     // réglages et l'export. Tout l'atelier prend les couleurs du style choisi.
     // =====================================================
     const RARETES = { offert: 'Offert', rare: 'Rare', epique: 'Épique', legendaire: 'Légendaire' };
+    const LIBELLE_VIDEO = '🎬 Vidéo holographique';
     let modal = null, cv = null, d = null, reglages = null, minuteur = null, jetonVignettes = 0, filtre = 'tous';
     const rgb = (c) => c.map(Math.round).join(',');
     const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
@@ -871,7 +934,7 @@
         modal.id = 'hero-card-modal';
         modal.className = 'hc2 hidden no-print';
         modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', 'hc-titre');
-        const tuiles = STYLES.map(x => `<button type="button" class="hc2-tuile r-${x.rarete || 'rare'}" data-hc-style="${x.id}"><canvas width="${Math.round(W * 0.2)}" height="${Math.round(H * 0.2)}"></canvas><span class="hc2-tuile-nom"></span><span class="hc2-verrou" aria-hidden="true">🔒</span></button>`).join('');
+        const tuiles = STYLES.map(x => `<button type="button" class="hc2-tuile r-${x.rarete || 'rare'}" data-hc-style="${x.id}"><canvas width="${Math.round(PORTRAIT.w * 0.2)}" height="${Math.round(PORTRAIT.h * 0.2)}"></canvas><span class="hc2-tuile-nom"></span><span class="hc2-verrou" aria-hidden="true">🔒</span></button>`).join('');
         modal.innerHTML = `<div class="hc2-fond" aria-hidden="true">${'<i></i>'.repeat(18)}</div>
             <button type="button" class="hc2-fermer" data-hc="fermer" aria-label="Fermer">✕</button>
             <div class="hc2-grille">
@@ -885,8 +948,9 @@
                         <div class="hc2-carte" id="hc-carte">
                             <div class="hc2-pivot" id="hc-pivot">
                                 <div class="hc2-face">
-                                    <canvas id="hc-canvas" width="${W * ECHELLE}" height="${H * ECHELLE}" role="img" aria-label="Carte de héros"></canvas>
+                                    <canvas id="hc-canvas" width="${PORTRAIT.w * ECHELLE}" height="${PORTRAIT.h * ECHELLE}" role="img" aria-label="Carte de héros"></canvas>
                                     <div class="hc2-holo" aria-hidden="true"></div>
+                                    <div class="hc2-cercle" aria-hidden="true"></div>
                                     <div class="hc2-forge" aria-hidden="true"><span>Forge de la carte…</span></div>
                                 </div>
                                 <div class="hc2-dos" aria-hidden="true"><img src="IMG/logo-256.png" alt=""><span>Bones &amp; Blades</span></div>
@@ -914,6 +978,9 @@
                     </div>
                     <div class="hc2-bloc">
                         <div class="hc2-bloc-tete"><h3>Personnaliser</h3></div>
+                        <div class="hc2-champ"><span id="hc-format-titre">Format</span>
+                            <div class="hc2-formats" role="radiogroup" aria-labelledby="hc-format-titre">${ORDRE_FORMATS.map(id => `<button type="button" role="radio" aria-checked="false" data-hc-format="${id}" title="${esc(FORMATS[id].usage)}"><i class="hc2-forme" style="aspect-ratio:${id.replace(':', ' / ')}" aria-hidden="true"></i><b>${esc(FORMATS[id].nom)}</b><small>${id}</small></button>`).join('')}</div>
+                        </div>
                         <label class="hc2-champ"><span>Devise</span><input type="text" id="hc-devise" maxlength="90" placeholder="Je ne recule jamais." autocomplete="off"></label>
                         <label class="hc2-champ"><span>Arme fétiche</span><select id="hc-arme"></select></label>
                     </div>
@@ -921,8 +988,9 @@
                         <button type="button" class="hc2-btn hc2-principal" data-hc="telecharger">⬇ Télécharger la carte</button>
                         <button type="button" class="hc2-btn" data-hc="partager" hidden>↗ Partager</button>
                         <button type="button" class="hc2-btn" data-hc="copier" hidden>📋 Copier</button>
+                        <button type="button" class="hc2-btn hc2-video" data-hc="video">${LIBELLE_VIDEO}</button>
                     </div>
-                    <p class="hc2-note">Image 2160 × 2700 px, fabriquée sur ton appareil. Ton cadre de portrait s’applique aux styles offerts.</p>
+                    <p class="hc2-note" id="hc-note">Image 2160 × 2700 px, fabriquée sur ton appareil. Ton cadre de portrait s’applique aux styles offerts.</p>
                 </aside>
             </div>`;
         document.body.appendChild(modal);
@@ -942,11 +1010,14 @@
             if (nav) { voisin(parseInt(nav.dataset.hcNav, 10)); return; }
             const f = e.target.closest('[data-hc-filtre]');
             if (f) { filtre = f.dataset.hcFiltre; majGalerie(); return; }
+            const fm = e.target.closest('[data-hc-format]');
+            if (fm) { changerFormat(fm.dataset.hcFormat); return; }
             const act = e.target.closest('[data-hc]');
             if (!act) return;
             if (act.dataset.hc === 'telecharger') telecharger();
             else if (act.dataset.hc === 'partager') partager();
             else if (act.dataset.hc === 'copier') copier();
+            else if (act.dataset.hc === 'video') video();
         });
         modal.querySelector('#hc-devise').addEventListener('input', (e) => {
             reglages.devise = e.target.value;
@@ -963,6 +1034,16 @@
             if (!modal || modal.classList.contains('hidden')) return;
             if (e.key === 'Escape') { fermer(); return; }
             if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName || '')) return;
+            // Dans le choix du format, les flèches changent de format, pas de style.
+            if (e.target && e.target.closest && e.target.closest('.hc2-formats') && /^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
+                e.preventDefault();
+                const pas = /Right|Down/.test(e.key) ? 1 : -1;
+                const id = ORDRE_FORMATS[(ORDRE_FORMATS.indexOf(reglages.format) + pas + ORDRE_FORMATS.length) % ORDRE_FORMATS.length];
+                changerFormat(id);
+                const b = modal.querySelector(`[data-hc-format="${id}"]`);
+                if (b) b.focus();
+                return;
+            }
             if (e.key === 'ArrowRight') { e.preventDefault(); voisin(1); }
             else if (e.key === 'ArrowLeft') { e.preventDefault(); voisin(-1); }
         });
@@ -1045,6 +1126,22 @@
         choisir(ids[(i + sens + ids.length) % ids.length]);
     }
 
+    /** Le format choisi se voit partout : taille du canvas, forme de la scène, boutons, note. */
+    function appliquerFormat() {
+        const fmt = FORMATS[reglages.format] || PORTRAIT;
+        if (cv.width !== fmt.w * ECHELLE || cv.height !== fmt.h * ECHELLE) { cv.width = fmt.w * ECHELLE; cv.height = fmt.h * ECHELLE; }
+        modal.dataset.format = fmt.id;
+        modal.querySelectorAll('[data-hc-format]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.hcFormat === fmt.id)));
+        modal.querySelector('#hc-note').textContent = `Image ${fmt.w * ECHELLE} × ${fmt.h * ECHELLE} px, fabriquée sur ton appareil. ${fmt.conseil}`;
+    }
+    async function changerFormat(id) {
+        if (!FORMATS[id] || id === reglages.format || enregistrement) return;
+        reglages.format = id;
+        noter('dnd-hero-format', id);
+        appliquerFormat();
+        await rendre();
+    }
+
     /** Le changement de style : la carte pivote sur la tranche, se redessine, revient. */
     async function retourner() {
         const pivot = modal.querySelector('#hc-pivot');
@@ -1083,7 +1180,9 @@
         let style = (opts && opts.style) || lire('dnd-hero-style');
         if (!STYLES.some(x => x.id === style && disponible(x))) style = 'nuit';
         if (opts && opts.style) noter('dnd-hero-style', style);
-        reglages = { style, devise: lire('dnd-hero-devise') || '', arme: lire('dnd-hero-arme') || 'auto' };
+        const formatLu = lire('dnd-hero-format');
+        reglages = { style, devise: lire('dnd-hero-devise') || '', arme: lire('dnd-hero-arme') || 'auto', format: FORMATS[formatLu] ? formatLu : PORTRAIT.id };
+        appliquerFormat();
         filtre = 'tous';
         modal.querySelector('#hc-indice').hidden = true;
         modal.querySelector('#hc-devise').value = reglages.devise;
@@ -1115,6 +1214,7 @@
 
     function fermer() {
         if (!modal) return;
+        if (enregistrement) enregistrement.annule = true;
         modal.classList.add('hidden');
         document.body.classList.remove('hc2-ouvert');
         jetonVignettes++;
@@ -1127,8 +1227,9 @@
         modal.classList.add('is-busy');
         majEntete();
         const res = await preparer(d);
-        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme: armeReglee() }, res);
-        cv.setAttribute('aria-label', `Carte de héros de ${d.nom}, ${d.classe || 'aventurier'} de niveau ${d.niveau}`);
+        const fmt = FORMATS[reglages.format] || PORTRAIT;
+        dessiner(cv, d, { style: reglages.style, devise: reglages.devise, arme: armeReglee(), format: fmt.id }, res);
+        cv.setAttribute('aria-label', `Carte de héros de ${d.nom}, ${d.classe || 'aventurier'} de niveau ${d.niveau} — format ${fmt.nom.toLowerCase()} ${fmt.id}`);
         modal.classList.remove('is-busy');
     }
 
@@ -1156,7 +1257,7 @@
         el.setAttribute('role', 'status');
         el.style.setProperty('--a-or', rgb(t.or)); el.style.setProperty('--a-f1', rgb(t.f1)); el.style.setProperty('--a-f2', rgb(t.f2));
         el.innerHTML = `<div class="hc-annonce-carte" aria-hidden="true"><div class="hc-annonce-pivot">
-                <canvas width="${Math.round(W * 0.2)}" height="${Math.round(H * 0.2)}"></canvas>
+                <canvas width="${Math.round(PORTRAIT.w * 0.2)}" height="${Math.round(PORTRAIT.h * 0.2)}"></canvas>
                 <div class="hc-annonce-dos"><img src="IMG/logo-256.png" alt=""></div>
             </div></div>
             <div class="hc-annonce-eclats" aria-hidden="true">${'<i></i>'.repeat(16)}</div>
@@ -1197,17 +1298,18 @@
     // SORTIE DE L'IMAGE
     // =====================================================
     const nomFichier = () => 'heros-' + (d.nom || 'sans-nom').normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.jpg';
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + (FORMATS[reglages && reglages.format] || PORTRAIT).suffixe + '.jpg';
     const enBlob = () => new Promise(ok => cv.toBlob(b => ok(b), 'image/jpeg', 0.95));
-    // Le presse-papiers n'accepte que le PNG : on y copie la carte en 1080 × 1350,
-    // largement assez pour une conversation, et bien plus léger qu'en pleine définition.
+    // Le presse-papiers n'accepte que le PNG : on y copie la carte en simple
+    // définition (1080 de large), largement assez pour une conversation, et bien
+    // plus léger qu'en pleine définition.
     function enPngReduit() {
         const petit = document.createElement('canvas');
-        petit.width = W; petit.height = H;
+        petit.width = cv.width / ECHELLE; petit.height = cv.height / ECHELLE;
         const c = petit.getContext('2d');
         c.imageSmoothingEnabled = true;
         if ('imageSmoothingQuality' in c) c.imageSmoothingQuality = 'high';
-        c.drawImage(cv, 0, 0, W, H);
+        c.drawImage(cv, 0, 0, petit.width, petit.height);
         return new Promise(ok => petit.toBlob(b => ok(b), 'image/png'));
     }
 
@@ -1233,6 +1335,149 @@
         catch (e) { toast('Copie impossible ici — télécharge l’image à la place.'); }
     }
 
+    // =====================================================
+    // LA VIDÉO DU REFLET HOLOGRAPHIQUE (LOT 7.3)
+    // La carte déjà dessinée et, par-dessus, le reflet de l'atelier (le même que
+    // .hc2-holo) : un point de lumière qui décrit une boucle et une bande irisée
+    // qui glisse en travers. La boucle se referme : la vidéo peut tourner en rond
+    // sans à-coup. 1080 de large, la définition d'une story.
+    // =====================================================
+    const DUREE_VIDEO = 5000, IPS = 30;
+    let enregistrement = null;            // { annule } pendant qu'on enregistre
+
+    /** Ce que ce navigateur sait enregistrer : MP4 (H.264) d'abord, WebM sinon. null : rien. */
+    function formatVideo() {
+        if (typeof window.MediaRecorder !== 'function' || typeof MediaRecorder.isTypeSupported !== 'function') return null;
+        if (typeof HTMLCanvasElement === 'undefined' || typeof HTMLCanvasElement.prototype.captureStream !== 'function') return null;
+        const essais = [['video/mp4;codecs=avc1.42E01E', 'mp4'], ['video/mp4;codecs=avc1', 'mp4'],
+                        ['video/webm;codecs=vp9', 'webm'], ['video/webm;codecs=vp8', 'webm'], ['video/webm', 'webm'], ['video/mp4', 'mp4']];
+        for (const [type, ext] of essais) { try { if (MediaRecorder.isTypeSupported(type)) return { type, ext }; } catch (e) {} }
+        return null;
+    }
+
+    /** Une image de la vidéo : la carte, puis le reflet à l'instant t (0 → 1). */
+    function peindreReflet(ctx, base, w, h, t, force) {
+        const a = t * Math.PI * 2;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.drawImage(base, 0, 0, w, h);
+        if (!force) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'color-dodge';
+        ctx.globalAlpha = force;
+        const mx = w * (0.5 + 0.38 * Math.sin(a)), my = h * (0.42 + 0.26 * Math.sin(2 * a + 0.7));
+        const g = ctx.createRadialGradient(mx, my, 0, mx, my, Math.max(w, h) * 0.42);
+        g.addColorStop(0, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        // La bande irisée, inclinée à 115° comme dans l'atelier.
+        const ang = 115 * Math.PI / 180, ux = Math.sin(ang), uy = -Math.cos(ang);
+        const long = Math.hypot(w, h), dec = Math.sin(a) * long * 0.45;
+        const cx = w / 2 + ux * dec, cy = h / 2 + uy * dec;
+        const lg = ctx.createLinearGradient(cx - ux * long / 2, cy - uy * long / 2, cx + ux * long / 2, cy + uy * long / 2);
+        lg.addColorStop(0.18, 'rgba(255,80,190,0)'); lg.addColorStop(0.34, 'rgba(255,80,190,.24)');
+        lg.addColorStop(0.5, 'rgba(80,240,255,.24)'); lg.addColorStop(0.66, 'rgba(255,230,90,.24)'); lg.addColorStop(0.82, 'rgba(255,230,90,0)');
+        ctx.fillStyle = lg; ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+    }
+
+    const informer = (titre, message) => (window.Dialogue
+        ? window.Dialogue.informer({ titre, message, icone: '🎬' })
+        : Promise.resolve(toast(message)));
+
+    async function video() {
+        if (enregistrement || !cv || !d) return;
+        const fv = formatVideo();
+        if (!fv) {
+            await informer('Vidéo impossible ici', 'Ce navigateur ne sait pas enregistrer de vidéo depuis une page. Télécharge l’image à la place, ou ouvre l’atelier dans un navigateur récent (Chrome, Edge, Firefox ou Safari).');
+            return;
+        }
+        const w = cv.width / ECHELLE, h = cv.height / ECHELLE;
+        const base = document.createElement('canvas');
+        base.width = w; base.height = h;
+        const bx = base.getContext('2d');
+        bx.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in bx) bx.imageSmoothingQuality = 'high';
+        bx.drawImage(cv, 0, 0, w, h);
+        const scene = document.createElement('canvas');
+        scene.width = w; scene.height = h;
+        const sx = scene.getContext('2d');
+        peindreReflet(sx, base, w, h, 0, 0);
+        let flux = null, rec = null;
+        try {
+            flux = scene.captureStream(IPS);
+            rec = new MediaRecorder(flux, { mimeType: fv.type, videoBitsPerSecond: 8000000 });
+        } catch (e) {
+            if (flux) flux.getTracks().forEach(p => p.stop());
+            await informer('Vidéo impossible ici', 'L’enregistrement n’a pas pu démarrer sur cet appareil. Télécharge l’image à la place.');
+            return;
+        }
+        const morceaux = [];
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) morceaux.push(e.data); };
+        const arret = new Promise(ok => { rec.onstop = ok; });
+        const etat = enregistrement = { annule: false };
+        const bouton = modal.querySelector('[data-hc="video"]');
+        const rarete = styleParId(reglages.style).rarete;
+        const force = rarete === 'legendaire' ? 0.55 : rarete === 'offert' ? 0.2 : 0.34;
+        modal.classList.add('is-video');
+        modal.querySelectorAll('[data-hc-format], [data-hc="video"]').forEach(b => { b.disabled = true; });
+        rec.start(250);
+        const debut = performance.now();
+        await new Promise(fin => {
+            const image = () => {
+                const t = Math.min(1, (performance.now() - debut) / DUREE_VIDEO);
+                peindreReflet(sx, base, w, h, t, force);
+                bouton.textContent = `🎬 Enregistrement… ${Math.max(1, Math.ceil((1 - t) * DUREE_VIDEO / 1000))} s`;
+                if (t >= 1 || etat.annule || document.hidden) fin(); else requestAnimationFrame(image);
+            };
+            requestAnimationFrame(image);
+        });
+        const interrompu = etat.annule || document.hidden;
+        try { rec.stop(); } catch (e) { /* déjà arrêté */ }
+        await arret;
+        flux.getTracks().forEach(p => p.stop());
+        enregistrement = null;
+        modal.classList.remove('is-video');
+        modal.querySelectorAll('[data-hc-format], [data-hc="video"]').forEach(b => { b.disabled = false; });
+        bouton.textContent = LIBELLE_VIDEO;
+        if (interrompu) {
+            if (!etat.annule) toast('Enregistrement interrompu : garde l’atelier au premier plan pendant les 5 secondes.');
+            return;
+        }
+        const blob = new Blob(morceaux, { type: fv.type.split(';')[0] });
+        if (!blob.size) { await informer('La vidéo est vide', 'Cet appareil n’a rien enregistré. Télécharge l’image à la place.'); return; }
+        await proposerVideo(blob, fv.ext);
+    }
+
+    /** La vidéo est prête : la télécharger, ou la partager quand l'appareil sait le faire. */
+    async function proposerVideo(blob, ext) {
+        const nom = nomFichier().replace(/\.jpg$/, '-holo.' + ext);
+        let fichier = null, partage = false;
+        try { fichier = new File([blob], nom, { type: blob.type }); partage = !!(navigator.canShare && navigator.canShare({ files: [fichier] })); } catch (e) {}
+        const taille = blob.size >= 1048576 ? (blob.size / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(blob.size / 1024)) + ' Ko';
+        const choix = await window.Dialogue.choisir({
+            titre: 'Ta vidéo est prête', icone: '🎬', confirmer: 'Valider', annuler: 'Fermer',
+            message: `${ext.toUpperCase()} · ${DUREE_VIDEO / 1000} s · ${taille}`
+                + (ext === 'webm' ? '\nCe navigateur n’enregistre pas le MP4 : le WebM se lit sur ordinateur et sur Android, pas toujours sur iPhone.' : ''),
+            valeur: partage ? 'partager' : 'telecharger',
+            options: [
+                { valeur: 'telecharger', ico: '⬇', titre: 'Télécharger', detail: nom },
+                { valeur: 'partager', ico: '↗', titre: 'Partager', desactive: !partage,
+                  detail: partage ? 'Discord, messagerie, réseaux…' : 'Cet appareil ne sait pas partager une vidéo depuis le navigateur : télécharge-la.' }
+            ]
+        });
+        if (choix === 'telecharger') {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = nom;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            toast(`🎬 Vidéo enregistrée — ${nom}`);
+            document.dispatchEvent(new CustomEvent('carte:exportee'));
+        } else if (choix === 'partager') {
+            try { await navigator.share({ files: [fichier], title: d.nom, text: d.nom + ' — Bones & Blades' }); document.dispatchEvent(new CustomEvent('carte:exportee')); }
+            catch (e) { if (e && e.name !== 'AbortError') toast('Le partage a échoué — télécharge la vidéo à la place.'); }
+        }
+    }
+
     document.addEventListener('click', (e) => {
         if (e.target.closest('#btn-hero-card, #btn-menu-hero-card')) { e.preventDefault(); ouvrir(); }
     });
@@ -1249,7 +1494,7 @@
         const dc = donnees();
         const echelle = 0.25;
         const c = document.createElement('canvas');
-        c.width = Math.round(W * echelle); c.height = Math.round(H * echelle);
+        c.width = Math.round(PORTRAIT.w * echelle); c.height = Math.round(PORTRAIT.h * echelle);
         const brute = lire('dnd-hero-arme') || 'auto';
         const arme = brute === 'auto' || brute === 'aucune' ? brute : parseInt(brute, 10);
         dessiner(c, dc, { style, devise: lire('dnd-hero-devise') || '', arme, echelle }, await preparer(dc));
@@ -1265,6 +1510,22 @@
         vignette,
         ajouterStyles,
         annoncer,
+        /** Les formats de la carte, dans l'ordre de l'atelier. */
+        formats: () => ORDRE_FORMATS.map(id => Object.assign({}, FORMATS[id])),
+        /** Les identifiants de tous les styles, gagnés ou non. */
+        styles: () => STYLES.map(x => x.id),
+        /** La carte du personnage ouvert dans un style et un format, sans ouvrir l'atelier. */
+        async dessinerPour(o) {
+            const opt = o || {};
+            const fmt = FORMATS[opt.format] || PORTRAIT;
+            const echelle = opt.echelle || 0.25;
+            const dc = donnees();
+            const c = document.createElement('canvas');
+            c.width = Math.round(fmt.w * echelle); c.height = Math.round(fmt.h * echelle);
+            dessiner(c, dc, { style: opt.style || 'nuit', devise: opt.devise || '', arme: opt.arme || 'auto', format: fmt.id, echelle }, await preparer(dc));
+            return c;
+        },
+        formatVideo,
         /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */
         styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; }
     };

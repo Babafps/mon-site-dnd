@@ -4959,6 +4959,8 @@ body.theme-dark .grim-meta, body.theme-dark .grim-empty { color: #b6a484; }
 #grimoire-overlay .set-toggle.is-on{background:linear-gradient(160deg,var(--red-hi),var(--red));color:var(--gold-hi);
   border-color:var(--red);font-weight:600}
 #grimoire-overlay .set-toggle input{accent-color:var(--red);width:14px;height:14px;cursor:pointer;margin:0}
+#grimoire-overlay .set-cartes{font-family:'Lora',serif;font-size:.78rem;line-height:1.2}
+#grimoire-overlay .set-cartes:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 #grimoire-overlay .set-sort{display:inline-flex;border:1px solid rgba(122,40,40,.3);border-radius:20px;overflow:hidden}
 #grimoire-overlay .set-sort button{border:none;cursor:pointer;padding:5px 11px;font-family:'Lora',serif;font-size:.78rem;
   background:rgba(255,255,255,.28);color:var(--ink)}
@@ -8133,6 +8135,27 @@ body.hc2-ouvert { overflow: hidden; }
 .hc2-note { margin: 0; text-align: center; font-family: 'Lora', Georgia, serif; font-style: italic; font-size: .78rem; opacity: .55; }
 .hc2 button:focus-visible { outline: 2px solid rgb(var(--hc-or)); outline-offset: 2px; }
 
+/* ---------- Les formats de la carte (LOT 7.3) ---------- */
+.hc2-formats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.hc2-formats button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 72px; padding: 8px 4px; border-radius: 12px; cursor: pointer;
+    font-family: 'Lora', Georgia, serif; color: #f4ead6; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.14);
+    transition: border-color .2s, background .2s, box-shadow .2s;
+}
+.hc2-formats button:hover { border-color: rgba(var(--hc-or), .7); }
+.hc2-formats button b { font-size: .8rem; font-weight: 600; }
+.hc2-formats button small { font-family: 'Courier New', monospace; font-size: .66rem; opacity: .7; }
+.hc2-forme { display: block; height: 22px; border: 1.5px solid currentColor; border-radius: 3px; opacity: .75; }
+.hc2-formats button[aria-checked="true"] { border-color: rgb(var(--hc-or)); background: rgba(var(--hc-or), .16); box-shadow: 0 0 0 2px rgba(var(--hc-or), .45); }
+.hc2-formats button[aria-checked="true"] .hc2-forme { color: rgb(var(--hc-or)); opacity: 1; }
+.hc2-formats button:disabled, .hc2 .hc2-btn:disabled { opacity: .55; cursor: progress; transform: none; }
+#hero-card-modal[data-format="9:16"] .hc2-carte { aspect-ratio: 9 / 16; width: min(300px, 62vw, calc((100vh - 280px) * .5625)); }
+#hero-card-modal[data-format="1:1"] .hc2-carte { aspect-ratio: 1 / 1; width: min(400px, 78vw, calc(100vh - 280px)); }
+/* L'avatar : ce que Discord garde, en aperçu seulement (l'image exportée n'a pas ce cercle). */
+.hc2-cercle { display: none; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; border: 1.5px dashed rgba(255,255,255,.6); box-shadow: 0 0 0 100vmax rgba(0,0,0,.3); }
+#hero-card-modal[data-format="1:1"] .hc2-cercle { display: block; }
+#hero-card-modal.is-video .hc2-video { box-shadow: 0 0 0 2px rgba(var(--hc-or), .65), 0 0 22px rgba(var(--hc-or), .45); }
+
 /* ---------- L'annonce d'un nouveau style (hero-card.js) ---------- */
 .hc-annonce {
     --a-or: 196, 155, 53; --a-f1: 40, 18, 26; --a-f2: 8, 5, 6;
@@ -8190,6 +8213,8 @@ body.hc2-ouvert { overflow: hidden; }
 @media (max-width: 900px) {
     .hc2-grille { grid-template-columns: 1fr; align-items: start; padding-top: 70px; }
     .hc2-carte { width: min(340px, 80vw); }
+    #hero-card-modal[data-format="9:16"] .hc2-carte { width: min(250px, 62vw); }
+    #hero-card-modal[data-format="1:1"] .hc2-carte { width: min(340px, 80vw); }
     .hc2-galerie { max-height: none; }
 }
 @media (prefers-reduced-motion: reduce) {

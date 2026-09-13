@@ -6670,6 +6670,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" data-gsort="level" class="${grim.sort==='level'?'is-on':''}">Par niveau</button>
                     <button type="button" data-gsort="alpha" class="${grim.sort==='alpha'?'is-on':''}">A → Z</button>
                   </div>
+                  <button type="button" class="set-toggle set-cartes" data-gcartes title="Imprimer des cartes de sorts à découper">🃏 Cartes à imprimer</button>
                 </div>
                 <h4 class="page-head">Sommaire</h4>
                 <ul class="levels">${SP_LEVELS.map(l => {
@@ -6839,6 +6840,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (lvl) { grim.level = +lvl.dataset.glevel; grim.page = 'folio'; grim.spread = 0; renderGrimoire(); return; }
                 if (e.target.closest('[data-gback]')) { grim.page = 'summary'; renderGrimoire(); return; }
                 if (e.target.closest('[data-dropconc]')) { setConcentration(-1); renderGrimoire(); return; }
+                if (e.target.closest('[data-gcartes]')) {
+                    window.charger('cartes-sorts').then(() => window.CartesSorts.ouvrir())
+                        .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
+                    return;
+                }
                 const goto = e.target.closest('[data-goto]');
                 if (goto) { goToSpell(+goto.dataset.goto); return; }
                 const step = e.target.closest('[data-gstep]');
@@ -9965,12 +9971,22 @@ document.addEventListener('DOMContentLoaded', () => {
         initiativePrete = true;
         updateInitiative();
         if(document.getElementById('btn-export-pdf')) document.getElementById('btn-export-pdf').addEventListener('click', async () => {
-            // Fiche officielle remplie (print-sheet.js) ; repli = impression classique du site (hors-ligne / erreur)
+            // Fiche officielle remplie (print-sheet.js). La fenêtre demande d'abord
+            // l'écriture (manuscrit ou imprimé) : y renoncer n'imprime rien.
+            // Repli = impression classique du site (hors-ligne / erreur).
             if (window.PrintSheet) {
-                try { const ok = await window.PrintSheet.print(); if (ok) return; } catch (e) { console.warn('Impression fiche officielle KO, repli :', e); }
+                try {
+                    const ok = window.PrintSheet.demander ? await window.PrintSheet.demander() : await window.PrintSheet.print();
+                    if (ok !== false) return;
+                } catch (e) { console.warn('Impression fiche officielle KO, repli :', e); }
             }
             applyLayout(null, { forceDesktop: true }); window.print();
             if (isMobileView()) applyLayout();
+        });
+        // Cartes de sorts à imprimer (LOT 7.2) : le module se charge au premier clic.
+        document.getElementById('btn-cartes-sorts')?.addEventListener('click', () => {
+            window.charger('cartes-sorts').then(() => window.CartesSorts.ouvrir())
+                .catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur'));
         });
 
         // ==========================================

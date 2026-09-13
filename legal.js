@@ -76,7 +76,8 @@
                    + 'Attribution 4.0 (CC BY 4.0). Cette licence autorise l’usage, la modification et la '
                    + 'redistribution, y compris commerciale, à condition de citer la source. La déclaration '
                    + 'ci-dessous est celle que le document officiel exige, mot pour mot ; le site l’affiche '
-                   + 'aussi sous chaque fiche de règle, au pied de la page Règles et sur l’impression.' },
+                   + 'aussi sous chaque fiche de règle, au pied de la page Règles, sur l’impression et sur '
+                   + 'les cartes de sorts.' },
                 // Texte recopié du document, jamais réécrit : il vit dans edition.js.
                 { note: (window.Edition && window.Edition.attribution('2024'))
                      || 'Cette œuvre inclut du matériel issu du System Reference Document 5.2.1.' },
@@ -89,6 +90,10 @@
                    + 'Abbie Gonzalez, avec le nom de police réservé « OpenDyslexic » ; Copyright (c) '
                    + '12/2012 - 2019. Le texte complet de la licence accompagne les fichiers de la police '
                    + '(fonts/OFL.txt).' },
+                { p: 'La police Caveat, qui prête son écriture manuscrite à la fiche imprimée, est '
+                   + 'distribuée sous licence SIL Open Font License 1.1 — Copyright 2014 The Caveat Project '
+                   + 'Authors (https://github.com/googlefonts/caveat). Le texte complet de la licence '
+                   + 'accompagne les fichiers de la police (fonts/Caveat-OFL.txt).' },
 
                 { h: 'Contenu signalé' },
                 { p: 'Pour signaler un contenu illicite ou une atteinte à vos droits, écrivez à '

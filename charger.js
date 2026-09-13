@@ -30,7 +30,9 @@
         confort: 'confort.js',
         coffre: 'coffre.js',
         seance: 'seance.js',
-        admin: 'admin.js'
+        admin: 'admin.js',
+        'impression-suite': 'impression-suite.js',
+        'cartes-sorts': 'cartes-sorts.js'
     };
     const promesses = new Map();        // fichier -> promesse
 

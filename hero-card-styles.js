@@ -6,7 +6,11 @@
 // Il déclare sa palette et des crochets de dessin, que hero-card.js appelle
 // avec (ctx, T) — T étant la boîte à outils de la carte : mesures, couleurs,
 // formes, et la graine aléatoire du héros (le même héros garde le même décor).
-// Mise en page de référence : 1080 × 1350 (le canvas est en double définition).
+// La carte existe en trois formats (4:5, 9:16, 1:1) : aucune position n'est écrite
+// pour 1080 × 1350. Tout se place d'après T.W et T.H, ou d'après les repères de
+// la mise en page — T.PX, T.PY, T.PR (le portrait), T.HY (la ligne d'en-tête),
+// T.NY (la ligne du nom). Une valeur « H * 900 / 1350 » garde, en 4:5, la
+// position d'origine au pixel près, et suit la hauteur ailleurs.
 // =====================================================
 (function () {
     'use strict';
@@ -243,8 +247,8 @@
         id: 'astral', nom: '🌌 Astral', exploit: 'astral', entete: 'VENU DU PLAN ASTRAL', sceau: 'Un sac dans un sac', indice: 'Certains sacs n’aiment pas être rangés ensemble.',
         palette: { fondA: [30, 18, 66], fondB: [4, 3, 14], or: [190, 176, 255], encre: [242, 238, 255], primaire: [90, 70, 190] },
         fond(ctx, T) {
-            const { PX, PY, PR, halo, etoile } = T;
-            halo(ctx, 260, 380, 460, 'rgba(160,80,255,.22)'); halo(ctx, 860, 900, 520, 'rgba(60,120,255,.18)'); halo(ctx, 760, 260, 300, 'rgba(255,110,210,.12)');
+            const { PX, PY, PR, H, halo, etoile } = T;
+            halo(ctx, 260, PY + 80, 460, 'rgba(160,80,255,.22)'); halo(ctx, 860, H * 900 / 1350, 520, 'rgba(60,120,255,.18)'); halo(ctx, 760, PY - 40, 300, 'rgba(255,110,210,.12)');
             semis(T, 140, (x, y, k) => disque(ctx, x, y, 0.5 + k * 1.6, `rgba(255,255,255,${0.2 + k * 0.6})`));
             semis(T, 10, (x, y, k) => etoile(ctx, x, y, 3 + k * 6, 'rgba(220,210,255,.8)'));
             // Une orbite derrière le portrait, et sa petite planète
@@ -285,7 +289,7 @@
         id: 'revenant', nom: '💀 Revenant', exploit: 'revenant', entete: 'REVENU D’ENTRE LES MORTS', sceau: 'Trois jets contre la mort réussis', indice: 'Frôler la mort… et refuser.',
         palette: { fondA: [22, 32, 44], fondB: [4, 6, 10], or: [170, 215, 240], encre: [236, 232, 220], primaire: [60, 90, 120] },
         fond(ctx, T) {
-            T.halo(ctx, 200, 1100, 500, 'rgba(120,190,230,.16)'); T.halo(ctx, 900, 500, 420, 'rgba(120,190,230,.12)');
+            T.halo(ctx, 200, T.H - 250, 500, 'rgba(120,190,230,.16)'); T.halo(ctx, 900, T.PY + 200, 420, 'rgba(120,190,230,.12)');
             ctx.strokeStyle = 'rgba(170,215,240,.12)'; ctx.lineWidth = 3;
             semis(T, 7, (x, y, k) => { ctx.beginPath(); ctx.moveTo(x - 200, y); ctx.bezierCurveTo(x - 80, y - 60 * k, x + 80, y + 70, x + 220, y - 20); ctx.stroke(); });
         },
@@ -301,11 +305,11 @@
         id: 'noctambule', nom: '🦉 Noctambule', exploit: 'nuit-blanche', entete: 'VEILLEUR DE MINUIT', sceau: 'Une fiche ouverte à 3 h du matin', indice: 'Les bardes dorment. Toi, non.',
         palette: { fondA: [18, 28, 60], fondB: [3, 5, 14], or: [236, 226, 170], encre: [232, 236, 250], primaire: [60, 80, 150] },
         fond(ctx, T) {
-            T.halo(ctx, 880, 190, 260, 'rgba(236,226,170,.18)');
-            ctx.save(); lueur(ctx, T, 'rgba(236,226,170,.8)', 30); croissant(ctx, 880, 190, 62, 'rgba(240,232,190,.95)'); ctx.restore();
+            T.halo(ctx, 880, T.HY + 86, 260, 'rgba(236,226,170,.18)');
+            ctx.save(); lueur(ctx, T, 'rgba(236,226,170,.8)', 30); croissant(ctx, 880, T.HY + 86, 62, 'rgba(240,232,190,.95)'); ctx.restore();
             semis(T, 90, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.4, `rgba(255,255,240,${0.2 + k * 0.6})`));
             semis(T, 6, (x, y, k) => T.etoile(ctx, x, y, 4 + k * 5, 'rgba(255,250,220,.8)'));
-            chouette(ctx, 170, 230, 70, 'rgba(8,12,28,.96)', 'rgba(236,210,120,.95)');
+            chouette(ctx, 170, T.HY + 126, 70, 'rgba(8,12,28,.96)', 'rgba(236,210,120,.95)');
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.css(T.p.or, 0.7), 2.5, T.css(T.p.or, 0.3)); },
         anneau(ctx, T) {
@@ -326,7 +330,7 @@
                 for (let x = r % 2 ? 0 : 30; x < W + 60; x += 60) { ctx.beginPath(); ctx.arc(x, y, 30, 0, Math.PI); ctx.stroke(); }
             }
             const tas = (x, y, k) => piece(ctx, x, y, 12 + k * 14, '#ffe9a0', '#b07a18');
-            semis(T, 12, tas, [80, 1170, 300, 1300]); semis(T, 12, tas, [780, 1170, 1000, 1300]);
+            semis(T, 12, tas, [80, H - 180, 300, H - 50]); semis(T, 12, tas, [780, H - 180, 1000, H - 50]);
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 8, T.css(T.p.or, 0.45)); coins(ctx, T, c => piece(c, 0, 0, 16, '#ffe9a0', '#b07a18')); },
         anneau(ctx, T) {
@@ -372,10 +376,10 @@
         id: 'gelatineux', nom: '🧊 Gélatineux', exploit: 'cube', entete: 'À TRAVERS LE CUBE', sceau: 'A contemplé le Cube gélatineux', indice: 'Un monstre qu’on voit à travers.',
         palette: { fondA: [22, 60, 44], fondB: [4, 16, 11], or: [150, 232, 170], encre: [226, 250, 236], primaire: [60, 140, 100] },
         fond(ctx, T) {
-            const { PX, PY, rrect } = T;
+            const { PX, PY, PR, rrect } = T, k = PR / 160;
             ctx.save(); ctx.strokeStyle = 'rgba(150,232,170,.16)'; ctx.lineWidth = 3;
-            rrect(ctx, PX - 330, PY - 250, 520, 520, 30); ctx.stroke(); rrect(ctx, PX - 190, PY - 350, 520, 520, 30); ctx.stroke();
-            [[-330, -250, -190, -350], [190, -250, 330, -350], [-330, 270, -190, 170], [190, 270, 330, 170]].forEach(([a, b, c, d]) => { ctx.beginPath(); ctx.moveTo(PX + a, PY + b); ctx.lineTo(PX + c, PY + d); ctx.stroke(); });
+            rrect(ctx, PX - 330 * k, PY - 250 * k, 520 * k, 520 * k, 30); ctx.stroke(); rrect(ctx, PX - 190 * k, PY - 350 * k, 520 * k, 520 * k, 30); ctx.stroke();
+            [[-330, -250, -190, -350], [190, -250, 330, -350], [-330, 270, -190, 170], [190, 270, 330, 170]].forEach(([a, b, c, d]) => { ctx.beginPath(); ctx.moveTo(PX + a * k, PY + b * k); ctx.lineTo(PX + c * k, PY + d * k); ctx.stroke(); });
             ctx.restore();
             semis(T, 34, (x, y, k) => bulle(ctx, x, y, 4 + k * 18, `rgba(190,255,210,${0.25 + k * 0.35})`));
         },
@@ -450,10 +454,10 @@
         id: 'chatnoir', nom: '🐈‍⬛ Chat noir', exploit: 'nat1x50', entete: 'PORTE-MALHEUR', sceau: '50 un naturels', indice: 'La malchance, à force de patience.',
         palette: { fondA: [34, 18, 46], fondB: [4, 2, 8], or: [196, 140, 245], encre: [242, 232, 252], primaire: [90, 50, 130] },
         fond(ctx, T) {
-            T.halo(ctx, 260, 1000, 520, 'rgba(160,90,230,.18)'); T.halo(ctx, 860, 320, 380, 'rgba(160,90,230,.14)');
+            T.halo(ctx, 260, T.H - 350, 520, 'rgba(160,90,230,.18)'); T.halo(ctx, 860, T.PY + 20, 380, 'rgba(160,90,230,.14)');
             // Des traces de pattes qui remontent le long du bord
-            for (let i = 0; i < 9; i++) patte(ctx, 108 + (i % 2) * 34, 1210 - i * 112, 12, -0.2 + (i % 2) * 0.4, 'rgba(196,140,245,.18)');
-            chat(ctx, T, 930, 250, 64, 'rgba(6,3,10,.96)', '#e8d44a');
+            for (let i = 0; i < 9; i++) patte(ctx, 108 + (i % 2) * 34, T.H - 140 - i * (T.H - 230) / 10, 12, -0.2 + (i % 2) * 0.4, 'rgba(196,140,245,.18)');
+            chat(ctx, T, 930, T.HY + 146, 64, 'rgba(6,3,10,.96)', '#e8d44a');
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.css(T.p.or, 0.75), 3, T.css(T.p.or, 0.3), [1, 7]); coins(ctx, T, c => T.losange(c, 0, 0, 8, T.css(T.p.or, 0.9))); },
         anneau(ctx, T) { anneauBrillant(ctx, T, T.css(T.p.or, 0.9), 4, T.css(T.p.or, 0.35)); }
@@ -567,7 +571,7 @@
             for (let y = 0; y < H; y += 9) { ctx.strokeStyle = `rgba(80,56,30,${y % 18 ? 0.09 : 0.13})`; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y + 3); ctx.stroke(); }
             for (let x = 0; x < W; x += 9) { ctx.strokeStyle = `rgba(255,240,210,${x % 18 ? 0.04 : 0.07})`; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 3, H); ctx.stroke(); }
             // Deux pièces rapiécées
-            [[160, 1040, 170, 120, -0.1], [880, 190, 130, 110, 0.12]].forEach(([x, y, w, h, a]) => {
+            [[160, H - 310, 170, 120, -0.1], [880, T.HY + 86, 130, 110, 0.12]].forEach(([x, y, w, h, a]) => {
                 ctx.save(); ctx.translate(x, y); ctx.rotate(a);
                 ctx.fillStyle = 'rgba(150,110,70,.55)'; rrect(ctx, -w / 2, -h / 2, w, h, 6); ctx.fill();
                 ctx.strokeStyle = 'rgba(60,40,20,.7)'; ctx.lineWidth = 2; ctx.setLineDash([7, 6]); rrect(ctx, -w / 2 + 8, -h / 2 + 8, w - 16, h - 16, 4); ctx.stroke();
@@ -586,7 +590,7 @@
         id: 'archimage', nom: '🔮 Archimage', exploit: 'sort9', entete: 'ARCHIMAGE', sceau: 'Un sort de niveau 9 lancé', indice: 'La magie la plus haute.',
         palette: { fondA: [14, 28, 72], fondB: [2, 5, 18], or: [130, 205, 255], encre: [232, 244, 255], primaire: [50, 90, 190] },
         fond(ctx, T) {
-            const { PX, PY, halo } = T, R = 250;
+            const { PX, PY, halo } = T, R = T.PR + 90;
             halo(ctx, PX, PY, 520, 'rgba(90,170,255,.2)');
             ctx.save(); lueur(ctx, T, 'rgba(130,205,255,.6)', 12); cercleRunique(ctx, PX, PY, R, 'rgba(130,205,255,.55)', 28); ctx.restore();
             // L'étoile à six branches du cercle de conjuration
@@ -614,10 +618,10 @@
             const { W, H, PX, PY, halo } = T;
             halo(ctx, W / 2, H + 60, 700, 'rgba(255,120,40,.28)');
             ctx.save(); ctx.globalAlpha = 0.55;
-            epee(ctx, PX, PY, 560, -Math.PI / 4, 'rgba(200,206,212,.9)', 'rgba(150,100,50,.95)');
-            epee(ctx, PX, PY, 560, Math.PI / 4, 'rgba(200,206,212,.9)', 'rgba(150,100,50,.95)');
+            epee(ctx, PX, PY, 3.5 * T.PR, -Math.PI / 4, 'rgba(200,206,212,.9)', 'rgba(150,100,50,.95)');
+            epee(ctx, PX, PY, 3.5 * T.PR, Math.PI / 4, 'rgba(200,206,212,.9)', 'rgba(150,100,50,.95)');
             ctx.restore();
-            semis(T, 60, (x, y, k) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.9)', 8); disque(ctx, x, y, 1 + k * 2.6, `rgba(255,${120 + Math.round(k * 90)},40,${0.35 + k * 0.5})`); ctx.restore(); }, [60, 500, W - 60, H - 60]);
+            semis(T, 60, (x, y, k) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.9)', 8); disque(ctx, x, y, 1 + k * 2.6, `rgba(255,${120 + Math.round(k * 90)},40,${0.35 + k * 0.5})`); ctx.restore(); }, [60, PY + 200, W - 60, H - 60]);
         },
         cadre(ctx, T) {
             const { W, H, rrect } = T;
@@ -669,7 +673,7 @@
         fond(ctx, T) {
             const { rrect } = T;
             // Les autres héros, accrochés au mur de la galerie
-            [[150, 250, 110, 140], [930, 250, 110, 140], [150, 470, 90, 110], [930, 470, 90, 110]].forEach(([x, y, w, h]) => {
+            [[150, T.PY - 50, 110, 140], [930, T.PY - 50, 110, 140], [150, T.PY + 170, 90, 110], [930, T.PY + 170, 90, 110]].forEach(([x, y, w, h]) => {
                 ctx.save();
                 ctx.fillStyle = 'rgba(0,0,0,.35)'; rrect(ctx, x - w / 2 + 6, y - h / 2 + 8, w, h, 4); ctx.fill();
                 ctx.strokeStyle = 'rgba(222,184,96,.75)'; ctx.lineWidth = 7; rrect(ctx, x - w / 2, y - h / 2, w, h, 4); ctx.stroke();
@@ -698,7 +702,7 @@
         palette: { fondA: [28, 48, 28], fondB: [6, 12, 6], or: [176, 206, 116], encre: [240, 246, 228], primaire: [70, 110, 50] },
         fond(ctx, T) {
             T.halo(ctx, T.PX, T.PY, 460, 'rgba(176,206,116,.14)');
-            for (let i = 0; i < 10; i++) patte(ctx, 150 + i * 88, 1225 - (i % 2) * 30 - i * 8, 13, 1.2, 'rgba(176,206,116,.16)');
+            for (let i = 0; i < 10; i++) patte(ctx, 150 + i * 88, T.H - 125 - (i % 2) * 30 - i * 8, 13, 1.2, 'rgba(176,206,116,.16)');
             semis(T, 18, (x, y, k) => T.feuille(ctx, x, y, 10 + k * 14, k * TAU, `rgba(120,170,80,${0.12 + k * 0.2})`));
         },
         cadre(ctx, T) {
@@ -726,8 +730,8 @@
             const { W, H } = T;
             T.halo(ctx, W / 2, H + 40, 640, 'rgba(255,120,20,.22)');
             coins(ctx, T, c => toile(c, 170, 'rgba(236,226,210,.35)'), 34);
-            [[150, 1232, 52], [930, 1236, 44]].forEach(([x, y, s]) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.6)', 14); citrouille(ctx, x, y, s); ctx.restore(); });
-            [[230, 200, 26], [860, 150, 20], [950, 300, 16]].forEach(([x, y, s]) => chauveSouris(ctx, x, y, s, 'rgba(10,5,2,.9)'));
+            [[150, H - 118, 52], [930, H - 114, 44]].forEach(([x, y, s]) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.6)', 14); citrouille(ctx, x, y, s); ctx.restore(); });
+            [[230, T.HY + 96, 26], [860, T.HY + 46, 20], [950, T.HY + 196, 16]].forEach(([x, y, s]) => chauveSouris(ctx, x, y, s, 'rgba(10,5,2,.9)'));
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.css(T.p.or, 0.8), 3, T.css(T.p.or, 0.3), [16, 8]); },
         anneau(ctx, T) { anneauBrillant(ctx, T, T.css(T.p.or), 5, 'rgba(255,146,44,.35)'); }
@@ -800,7 +804,7 @@
         fond(ctx, T) {
             const { W, H, PX, PY, alea } = T;
             ctx.save(); ctx.globalAlpha = 0.08; ctx.fillStyle = '#ccae70';
-            for (let i = 0; i < 60; i++) { const a = TAU * i / 60; ctx.beginPath(); ctx.moveTo(PX, PY); ctx.arc(PX, PY, 1100, a - 0.012, a + 0.012); ctx.closePath(); ctx.fill(); }
+            for (let i = 0; i < 60; i++) { const a = TAU * i / 60; ctx.beginPath(); ctx.moveTo(PX, PY); ctx.arc(PX, PY, 1100 * H / 1350, a - 0.012, a + 0.012); ctx.closePath(); ctx.fill(); }
             ctx.restore();
             // L'usure : de fines rayures, comme sur un vieux médaillon
             ctx.strokeStyle = 'rgba(255,240,210,.05)'; ctx.lineWidth = 1;
@@ -835,7 +839,7 @@
         fond(ctx, T) {
             const { W, H, PX, PY, halo } = T;
             halo(ctx, PX, PY, 500, 'rgba(60,255,140,.16)'); halo(ctx, W / 2, H + 80, 700, 'rgba(60,255,140,.14)');
-            ctx.save(); lueur(ctx, T, 'rgba(120,255,160,.7)', 10); cercleRunique(ctx, PX, PY, 250, 'rgba(120,255,160,.3)', 20); ctx.restore();
+            ctx.save(); lueur(ctx, T, 'rgba(120,255,160,.7)', 10); cercleRunique(ctx, PX, PY, T.PR + 90, 'rgba(120,255,160,.3)', 20); ctx.restore();
             ctx.strokeStyle = 'rgba(120,255,160,.1)'; ctx.lineWidth = 4;
             semis(T, 8, (x, y, k) => { ctx.beginPath(); ctx.moveTo(x, y + 120); ctx.bezierCurveTo(x - 60, y + 40, x + 60 * k, y - 20, x - 20, y - 140); ctx.stroke(); });
         },
@@ -951,7 +955,7 @@
             const { W, H, alea } = T;
             T.halo(ctx, W / 2, H + 60, 760, 'rgba(255,110,20,.35)');
             for (let i = 0; i < 30; i++) flamme(ctx, 20 + i * 36 + alea() * 16, H + 10, 70 + alea() * 170, 44 + alea() * 36, 'rgba(255,190,70,.32)', 'rgba(255,70,10,0)');
-            semis(T, 50, (x, y, k) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.9)', 8); disque(ctx, x, y, 1 + k * 2.4, `rgba(255,${150 + Math.round(k * 80)},60,${0.3 + k * 0.5})`); ctx.restore(); }, [60, 420, W - 60, H - 60]);
+            semis(T, 50, (x, y, k) => { ctx.save(); lueur(ctx, T, 'rgba(255,140,40,.9)', 8); disque(ctx, x, y, 1 + k * 2.4, `rgba(255,${150 + Math.round(k * 80)},60,${0.3 + k * 0.5})`); ctx.restore(); }, [60, T.PY + 120, W - 60, H - 60]);
         },
         cadre(ctx, T) { const g = ctx.createLinearGradient(0, T.H, 0, 0); g.addColorStop(0, '#ffcf6a'); g.addColorStop(0.5, '#ff6a1a'); g.addColorStop(1, '#8a1a04'); doubleCadre(ctx, T, g, 6, 'rgba(255,170,60,.4)'); },
         anneau(ctx, T) {
@@ -959,7 +963,7 @@
             for (let i = 0; i < 14; i++) { const a = Math.PI + Math.PI * i / 13; flamme(ctx, PX + Math.cos(a) * (PR + 6), PY + Math.sin(a) * (PR + 6) + 6, 26 + (i % 3) * 8, 16, 'rgba(255,200,80,.85)', 'rgba(255,80,20,0)'); }
             anneauBrillant(ctx, T, 'rgba(255,150,50,.95)', 5, 'rgba(255,170,60,.35)');
         },
-        nomDuHeros(ctx, T, l) { const g = ctx.createLinearGradient(0, 500, 0, 570); g.addColorStop(0, '#ffe08a'); g.addColorStop(1, '#ff6a1a'); ctx.shadowColor = 'rgba(255,120,30,.8)'; ctx.shadowBlur = T.flou(26); ctx.fillStyle = g; }
+        nomDuHeros(ctx, T, l) { const g = ctx.createLinearGradient(0, T.NY - 60, 0, T.NY + 10); g.addColorStop(0, '#ffe08a'); g.addColorStop(1, '#ff6a1a'); ctx.shadowColor = 'rgba(255,120,30,.8)'; ctx.shadowBlur = T.flou(26); ctx.fillStyle = g; }
     });
 
     STYLES.push({
@@ -968,7 +972,7 @@
         fond(ctx, T) {
             const { W, PX, PY } = T;
             ctx.save(); ctx.globalAlpha = 0.12; ctx.fillStyle = '#e8c46a';
-            for (let i = 0; i < 28; i++) { const a = Math.PI * 0.1 + Math.PI * 0.8 * i / 27; ctx.beginPath(); ctx.moveTo(W / 2, -60); ctx.arc(W / 2, -60, 1500, a - 0.015, a + 0.015); ctx.closePath(); ctx.fill(); }
+            for (let i = 0; i < 28; i++) { const a = Math.PI * 0.1 + Math.PI * 0.8 * i / 27; ctx.beginPath(); ctx.moveTo(W / 2, -60); ctx.arc(W / 2, -60, 1500 * T.H / 1350, a - 0.015, a + 0.015); ctx.closePath(); ctx.fill(); }
             ctx.restore();
             T.halo(ctx, PX, PY, 420, 'rgba(255,255,240,.7)');
             semis(T, 18, (x, y, k) => croix(ctx, x, y, 10 + k * 16, `rgba(176,132,40,${0.1 + k * 0.15})`));
@@ -982,7 +986,7 @@
         palette: { fondA: [60, 10, 14], fondB: [10, 1, 2], or: [220, 90, 80], encre: [250, 230, 226], primaire: [140, 20, 30] },
         fond(ctx, T) {
             T.halo(ctx, T.PX, T.PY, 460, 'rgba(160,20,30,.3)');
-            [[180, 360, 150, -0.4], [900, 700, 180, 0.5], [230, 1050, 130, 0.2], [880, 200, 110, -0.2]].forEach(([x, y, s, a]) => griffes(ctx, x, y, s, a, 'rgba(10,0,0,.45)'));
+            [[180, T.PY + 60, 150, -0.4], [900, T.NY + 140, 180, 0.5], [230, T.H - 300, 130, 0.2], [880, T.HY + 96, 110, -0.2]].forEach(([x, y, s, a]) => griffes(ctx, x, y, s, a, 'rgba(10,0,0,.45)'));
             fissuresSimples(ctx, T, 3);
         },
         cadre(ctx, T) {
@@ -991,7 +995,7 @@
             ctx.strokeStyle = 'rgba(220,90,80,.6)'; ctx.lineWidth = 2; rrect(ctx, 50, 50, W - 100, H - 100, 10); ctx.stroke();
             // Des entailles dans le cadre
             ctx.strokeStyle = 'rgba(220,90,80,.8)'; ctx.lineWidth = 3;
-            [[200, 34], [640, 34], [W - 34, 400], [W - 34, 980], [380, H - 34], [34, 760]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 10, y - 10); ctx.lineTo(x + 10, y + 10); ctx.stroke(); });
+            [[200, 34], [640, 34], [W - 34, H * 400 / 1350], [W - 34, H * 980 / 1350], [380, H - 34], [34, H * 760 / 1350]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 10, y - 10); ctx.lineTo(x + 10, y + 10); ctx.stroke(); });
         },
         anneau(ctx, T) {
             const { PX, PY, PR } = T;
@@ -1008,9 +1012,9 @@
         fond(ctx, T) {
             const { W, H, CINZEL } = T;
             semis(T, 70, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.4, `rgba(255,255,255,${0.2 + k * 0.5})`));
-            ctx.save(); lueur(ctx, T, 'rgba(236,230,190,.7)', 20); croissant(ctx, 150, 200, 42, 'rgba(240,232,200,.9)'); ctx.restore();
+            ctx.save(); lueur(ctx, T, 'rgba(236,230,190,.7)', 20); croissant(ctx, 150, T.HY + 96, 42, 'rgba(240,232,200,.9)'); ctx.restore();
             ctx.fillStyle = 'rgba(200,190,255,.55)'; ctx.textAlign = 'center';
-            [[850, 230, 64], [920, 170, 44], [970, 125, 30]].forEach(([x, y, t]) => { ctx.font = `700 ${t}px ${CINZEL}`; ctx.fillText('Z', x, y); });
+            [[850, T.HY + 126, 64], [920, T.HY + 66, 44], [970, T.HY + 21, 30]].forEach(([x, y, t]) => { ctx.font = `700 ${t}px ${CINZEL}`; ctx.fillText('Z', x, y); });
             ctx.fillStyle = 'rgba(170,160,230,.13)';
             for (let x = -40; x < W + 80; x += 110) { ctx.beginPath(); ctx.arc(x, H - 30 - (x % 220 ? 10 : 40), 90, 0, TAU); ctx.fill(); }
         },
@@ -1023,10 +1027,10 @@
         palette: { fondA: [22, 34, 26], fondB: [4, 6, 4], or: [255, 180, 90], encre: [246, 236, 220], primaire: [120, 80, 40] },
         fond(ctx, T) {
             const { W, H, alea } = T;
-            semis(T, 60, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.3, `rgba(255,250,230,${0.15 + k * 0.45})`), [40, 40, W - 40, 520]);
+            semis(T, 60, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.3, `rgba(255,250,230,${0.15 + k * 0.45})`), [40, 40, W - 40, T.PY + 220]);
             T.halo(ctx, W / 2, H + 40, 620, 'rgba(255,140,50,.3)');
             for (let i = 0; i < 6; i++) { sapin(ctx, 60 + i * 42 + alea() * 12, H - 40, 180 + alea() * 120, 'rgba(4,10,6,.92)'); sapin(ctx, W - 60 - i * 42 - alea() * 12, H - 40, 180 + alea() * 120, 'rgba(4,10,6,.92)'); }
-            semis(T, 24, (x, y, k) => disque(ctx, x, y, 1 + k * 2, `rgba(255,170,70,${0.3 + k * 0.5})`), [360, 1000, 720, 1300]);
+            semis(T, 24, (x, y, k) => disque(ctx, x, y, 1 + k * 2, `rgba(255,170,70,${0.3 + k * 0.5})`), [360, H - 350, 720, H - 50]);
         },
         cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(255,180,90,.7)', 3, 'rgba(255,180,90,.3)'); },
         anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(255,180,90,.95)', 4, 'rgba(255,180,90,.3)'); }
@@ -1038,10 +1042,10 @@
         fond(ctx, T) {
             const { PX, PY, W, H } = T;
             ctx.save(); ctx.strokeStyle = 'rgba(255,80,60,.14)'; ctx.lineWidth = 3;
-            for (let i = 0; i < 40; i++) { const a = TAU * i / 40, r1 = 260 + T.alea() * 60; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * r1, PY + Math.sin(a) * r1); ctx.lineTo(PX + Math.cos(a) * 1200, PY + Math.sin(a) * 1200); ctx.stroke(); }
+            for (let i = 0; i < 40; i++) { const a = TAU * i / 40, r1 = 260 + T.alea() * 60; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * r1, PY + Math.sin(a) * r1); ctx.lineTo(PX + Math.cos(a) * 1200 * H / 1350, PY + Math.sin(a) * 1200 * H / 1350); ctx.stroke(); }
             ctx.restore();
-            ctx.save(); lueur(ctx, T, 'rgba(255,60,40,.8)', 30); eclat(ctx, T, PX, PY, 300, 14, 'rgba(160,10,10,.55)'); ctx.restore();
-            semis(T, 16, (x, y, k) => { ctx.save(); ctx.translate(x, y); ctx.rotate(k * TAU); ctx.fillStyle = `rgba(255,120,100,${0.15 + k * 0.3})`; ctx.beginPath(); ctx.moveTo(0, -14 - k * 20); ctx.lineTo(6 + k * 8, 10); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill(); ctx.restore(); }, [60, 560, W - 60, H - 80]);
+            ctx.save(); lueur(ctx, T, 'rgba(255,60,40,.8)', 30); eclat(ctx, T, PX, PY, T.PR + 140, 14, 'rgba(160,10,10,.55)'); ctx.restore();
+            semis(T, 16, (x, y, k) => { ctx.save(); ctx.translate(x, y); ctx.rotate(k * TAU); ctx.fillStyle = `rgba(255,120,100,${0.15 + k * 0.3})`; ctx.beginPath(); ctx.moveTo(0, -14 - k * 20); ctx.lineTo(6 + k * 8, 10); ctx.lineTo(-6, 6); ctx.closePath(); ctx.fill(); ctx.restore(); }, [60, T.NY, W - 60, H - 80]);
         },
         cadre(ctx, T) {
             const { W, H } = T, c = 46;
@@ -1075,7 +1079,7 @@
         palette: { fondA: [44, 30, 20], fondB: [10, 6, 4], or: [214, 176, 110], encre: [246, 234, 214], primaire: [110, 60, 30] },
         fond(ctx, T) {
             T.halo(ctx, T.PX, T.PY, 440, 'rgba(255,210,140,.14)');
-            [250, 400, 540].forEach(b => { livres(ctx, T, 70, 250, b); livres(ctx, T, 830, 1010, b); });
+            [T.PY - 50, T.PY + 100, T.PY + 240].forEach(b => { livres(ctx, T, 70, 250, b); livres(ctx, T, 830, 1010, b); });
         },
         cadre(ctx, T) { const { W, H, rrect } = T; ctx.strokeStyle = 'rgba(90,60,30,.95)'; ctx.lineWidth = 12; rrect(ctx, 34, 34, W - 68, H - 68, 10); ctx.stroke(); ctx.strokeStyle = 'rgba(214,176,110,.6)'; ctx.lineWidth = 2; rrect(ctx, 48, 48, W - 96, H - 96, 8); ctx.stroke(); },
         anneau(ctx, T) { const { PX, PY, PR } = T; ctx.save(); ctx.lineWidth = 7; ctx.strokeStyle = T.dorure(ctx, PX - PR, PY - PR, PX + PR, PY + PR); ctx.beginPath(); ctx.arc(PX, PY, PR + 5, 0, TAU); ctx.stroke(); ctx.restore(); }
@@ -1086,9 +1090,9 @@
         palette: { fondA: [30, 40, 24], fondB: [6, 8, 4], or: [196, 210, 120], encre: [238, 242, 222], primaire: [90, 110, 50] },
         fond(ctx, T) {
             const { W, H } = T;
-            [[200, 700, 170, 0.3], [880, 380, 150, -0.3], [860, 1080, 120, 0.1]].forEach(([x, y, s, a]) => griffes(ctx, x, y, s, a, 'rgba(0,0,0,.35)'));
+            [[200, T.NY + 140, 170, 0.3], [880, T.PY + 80, 150, -0.3], [860, H - 270, 120, 0.1]].forEach(([x, y, s, a]) => griffes(ctx, x, y, s, a, 'rgba(0,0,0,.35)'));
             // Des yeux qui brillent dans l'ombre des bords
-            [[110, 260], [W - 120, 560], [140, 940], [W - 150, 1180]].forEach(([x, y]) => { ctx.save(); lueur(ctx, T, 'rgba(230,220,80,.9)', 10); [-12, 12].forEach(dx => { ctx.fillStyle = 'rgba(240,230,110,.85)'; ctx.beginPath(); ctx.ellipse(x + dx, y, 6, 3.5, 0, 0, TAU); ctx.fill(); }); ctx.restore(); });
+            [[110, T.PY - 40], [W - 120, T.NY], [140, H - 410], [W - 150, H - 170]].forEach(([x, y]) => { ctx.save(); lueur(ctx, T, 'rgba(230,220,80,.9)', 10); [-12, 12].forEach(dx => { ctx.fillStyle = 'rgba(240,230,110,.85)'; ctx.beginPath(); ctx.ellipse(x + dx, y, 6, 3.5, 0, 0, TAU); ctx.fill(); }); ctx.restore(); });
         },
         cadre(ctx, T) { const { W, H } = T; doubleCadre(ctx, T, 'rgba(196,210,120,.7)', 3, 'rgba(196,210,120,.3)'); dents(ctx, 80, W - 80, 32, 28, 1, 'rgba(236,232,210,.85)'); dents(ctx, 80, W - 80, H - 32, 28, -1, 'rgba(236,232,210,.85)'); },
         anneau(ctx, T) {
@@ -1108,7 +1112,7 @@
             for (let y = 0; y < H; y += 90) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
             ctx.strokeStyle = 'rgba(255,220,160,.05)'; ctx.lineWidth = 1.5;
             for (let i = 0; i < 40; i++) { const y = alea() * H, x = alea() * W; ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 60, y + 6, x + 120, y - 6, x + 200, y); ctx.stroke(); }
-            [470, 880].forEach(y => { ctx.fillStyle = 'rgba(30,24,20,.55)'; ctx.fillRect(0, y, W, 26); for (let x = 60; x < W; x += 140) rivet(ctx, x, y + 13, 5, '#9a8a70'); });
+            [H * 470 / 1350, H * 880 / 1350].forEach(y => { ctx.fillStyle = 'rgba(30,24,20,.55)'; ctx.fillRect(0, y, W, 26); for (let x = 60; x < W; x += 140) rivet(ctx, x, y + 13, 5, '#9a8a70'); });
         },
         cadre(ctx, T) {
             const { W, H } = T;
@@ -1140,8 +1144,8 @@
         palette: { fondA: [40, 34, 26], fondB: [8, 6, 4], or: [214, 176, 96], encre: [244, 236, 220], primaire: [120, 90, 40] },
         fond(ctx, T) {
             const { W, H, PX, PY } = T;
-            engrenage(ctx, PX, PY, 250, 16, 'rgba(214,176,96,.16)', 10);
-            engrenage(ctx, 110, 260, 120, 10, 'rgba(214,176,96,.2)', 7); engrenage(ctx, W - 130, 1000, 150, 12, 'rgba(214,176,96,.16)', 8); engrenage(ctx, 180, 1180, 80, 8, 'rgba(214,176,96,.18)', 6);
+            engrenage(ctx, PX, PY, T.PR + 90, 16, 'rgba(214,176,96,.16)', 10);
+            engrenage(ctx, 110, PY - 40, 120, 10, 'rgba(214,176,96,.2)', 7); engrenage(ctx, W - 130, H - 350, 150, 12, 'rgba(214,176,96,.16)', 8); engrenage(ctx, 180, H - 170, 80, 8, 'rgba(214,176,96,.18)', 6);
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 6, 'rgba(214,176,96,.4)'); coins(ctx, T, c => engrenage(c, 0, 0, 16, 8, 'rgba(214,176,96,.9)', 2.5)); },
         anneau(ctx, T) {
@@ -1156,11 +1160,11 @@
         id: 'lycan', nom: '🌕 Lycan', exploit: 'pleine-lune', entete: 'NUIT DE PLEINE LUNE', sceau: 'Présent un soir de pleine lune', indice: 'Quand la lune est ronde…',
         palette: { fondA: [20, 26, 44], fondB: [3, 4, 8], or: [220, 226, 240], encre: [236, 240, 250], primaire: [80, 90, 120] },
         fond(ctx, T) {
-            const { W, H, alea } = T;
-            T.halo(ctx, 820, 270, 360, 'rgba(220,226,240,.25)');
-            ctx.save(); lueur(ctx, T, 'rgba(220,226,240,.8)', 40); disque(ctx, 820, 270, 170, 'rgba(232,236,244,.9)'); ctx.restore();
-            semis(T, 9, (x, y, k) => disque(ctx, 820 + (x / W - 0.5) * 240, 270 + (y / H - 0.5) * 240, 8 + k * 18, 'rgba(180,186,200,.35)'));
-            semis(T, 60, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.2, `rgba(255,255,255,${0.2 + k * 0.4})`), [40, 40, W - 40, 600]);
+            const { W, H, alea } = T, LY = T.PY - 30;
+            T.halo(ctx, 820, LY, 360, 'rgba(220,226,240,.25)');
+            ctx.save(); lueur(ctx, T, 'rgba(220,226,240,.8)', 40); disque(ctx, 820, LY, 170, 'rgba(232,236,244,.9)'); ctx.restore();
+            semis(T, 9, (x, y, k) => disque(ctx, 820 + (x / W - 0.5) * 240, LY + (y / H - 0.5) * 240, 8 + k * 18, 'rgba(180,186,200,.35)'));
+            semis(T, 60, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.2, `rgba(255,255,255,${0.2 + k * 0.4})`), [40, 40, W - 40, T.PY + 300]);
             for (let i = 0; i < 16; i++) sapin(ctx, i * 72 + alea() * 30, H - 30, 160 + alea() * 160, 'rgba(2,4,8,.9)');
         },
         cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(220,226,240,.7)', 2.5, 'rgba(220,226,240,.3)'); },
@@ -1174,7 +1178,7 @@
             const { W, H, alea, CINZEL } = T;
             ctx.save(); ctx.fillStyle = 'rgba(200,205,215,.06)'; ctx.font = `700 520px ${CINZEL}`; ctx.textAlign = 'center'; ctx.fillText('13', W / 2, H - 120); ctx.restore();
             // Un miroir brisé : un point d'impact, des rayons, des cercles cassés
-            const x0 = 260, y0 = 860;
+            const x0 = 260, y0 = H - 490;
             ctx.strokeStyle = 'rgba(230,234,244,.28)'; ctx.lineWidth = 1.6;
             for (let i = 0; i < 18; i++) { const a = TAU * i / 18 + alea() * 0.2, l = 180 + alea() * 420; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + Math.cos(a) * l, y0 + Math.sin(a) * l); ctx.stroke(); }
             [40, 95, 170].forEach(r => { ctx.beginPath(); for (let i = 0; i <= 18; i++) { const a = TAU * i / 18, rr = r + (alea() - 0.5) * 14; if (i) ctx.lineTo(x0 + Math.cos(a) * rr, y0 + Math.sin(a) * rr); else ctx.moveTo(x0 + Math.cos(a) * rr, y0 + Math.sin(a) * rr); } ctx.stroke(); });
@@ -1193,9 +1197,9 @@
         palette: { fondA: [70, 54, 34], fondB: [16, 12, 6], or: [226, 190, 120], encre: [250, 240, 222], primaire: [120, 90, 50] },
         fond(ctx, T) {
             const { W, H } = T;
-            [[70, 1130, 110], [180, 1160, 80], [110, 1030, 90], [W - 180, 1130, 110], [W - 270, 1170, 80], [W - 150, 1030, 80]].forEach(([x, y, s]) => caisse(ctx, x, y, s));
+            [[70, H - 220, 110], [180, H - 190, 80], [110, H - 320, 90], [W - 180, H - 220, 110], [W - 270, H - 180, 80], [W - 150, H - 320, 80]].forEach(([x, y, s]) => caisse(ctx, x, y, s));
             ctx.strokeStyle = 'rgba(210,180,120,.25)'; ctx.lineWidth = 5;
-            [140, 180].forEach((y, i) => { ctx.beginPath(); ctx.moveTo(40, y); for (let x = 40; x < W - 40; x += 120) ctx.quadraticCurveTo(x + 60, y + (i ? -26 : 26), x + 120, y); ctx.stroke(); });
+            [T.HY + 36, T.HY + 76].forEach((y, i) => { ctx.beginPath(); ctx.moveTo(40, y); for (let x = 40; x < W - 40; x += 120) ctx.quadraticCurveTo(x + 60, y + (i ? -26 : 26), x + 120, y); ctx.stroke(); });
         },
         cadre(ctx, T) {
             const { W, H, rrect } = T;
@@ -1278,7 +1282,7 @@
         palette: { fondA: [30, 44, 56], fondB: [4, 8, 12], or: [170, 230, 230], encre: [230, 250, 250], primaire: [60, 110, 120] },
         fond(ctx, T) {
             const { W, H, alea } = T;
-            for (let i = 0; i < 7; i++) { ctx.fillStyle = `rgba(170,230,230,${0.04 + alea() * 0.05})`; ctx.beginPath(); ctx.ellipse(alea() * W, 300 + alea() * (H - 300), 260 + alea() * 200, 40 + alea() * 50, 0, 0, TAU); ctx.fill(); }
+            for (let i = 0; i < 7; i++) { ctx.fillStyle = `rgba(170,230,230,${0.04 + alea() * 0.05})`; ctx.beginPath(); ctx.ellipse(alea() * W, T.PY + alea() * (H - T.PY), 260 + alea() * 200, 40 + alea() * 50, 0, 0, TAU); ctx.fill(); }
             [[110, 90, 130], [230, 70, 100], [W - 120, 90, 140], [W - 250, 64, 96]].forEach(([x, w, h]) => tombe(ctx, x, H - 36, w, h, 'rgba(4,10,14,.85)'));
             ctx.strokeStyle = 'rgba(170,230,230,.12)'; ctx.lineWidth = 3;
             semis(T, 6, (x, y, k) => { ctx.beginPath(); ctx.moveTo(x, y + 90); ctx.bezierCurveTo(x - 50, y + 30, x + 50 * k, y - 20, x - 10, y - 110); ctx.stroke(); });
@@ -1300,7 +1304,7 @@
             const { PX, PY } = T;
             T.halo(ctx, PX, PY, 520, 'rgba(255,214,110,.28)');
             ctx.strokeStyle = 'rgba(255,214,110,.14)'; ctx.lineWidth = 2;
-            for (let i = 0; i < 72; i++) { const a = TAU * i / 72, r1 = 200 + (i % 3) * 30; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * r1, PY + Math.sin(a) * r1); ctx.lineTo(PX + Math.cos(a) * 1100, PY + Math.sin(a) * 1100); ctx.stroke(); }
+            for (let i = 0; i < 72; i++) { const a = TAU * i / 72, r1 = 200 + (i % 3) * 30; ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * r1, PY + Math.sin(a) * r1); ctx.lineTo(PX + Math.cos(a) * 1100 * T.H / 1350, PY + Math.sin(a) * 1100 * T.H / 1350); ctx.stroke(); }
             semis(T, 24, (x, y, k) => T.etoile(ctx, x, y, 3 + k * 7, `rgba(255,236,170,${0.35 + k * 0.5})`));
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 5, 'rgba(255,214,110,.4)'); coins(ctx, T, c => T.etoile(c, 0, 0, 14, 'rgba(255,240,190,.95)')); },
@@ -1321,7 +1325,7 @@
             for (let x = -H; x < W; x += 140) { ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x + 50, H); ctx.lineTo(x + 50 + H, 0); ctx.lineTo(x + H, 0); ctx.closePath(); ctx.fill(); }
             ctx.restore();
             const tas = (x, y, k) => piece(ctx, x, y, 12 + k * 16, '#ffffff', '#7d8594');
-            semis(T, 10, tas, [80, 1170, 300, 1300]); semis(T, 10, tas, [780, 1170, 1000, 1300]);
+            semis(T, 10, tas, [80, H - 180, 300, H - 50]); semis(T, 10, tas, [780, H - 180, 1000, H - 50]);
         },
         cadre(ctx, T) { doubleCadre(ctx, T, argenture(ctx, 0, 0, T.W, T.H), 8, 'rgba(226,232,244,.45)'); coins(ctx, T, c => piece(c, 0, 0, 15, '#ffffff', '#7d8594')); },
         anneau(ctx, T) { const { PX, PY, PR } = T; ctx.lineWidth = 9; ctx.strokeStyle = argenture(ctx, PX - PR, PY - PR, PX + PR, PY + PR); ctx.beginPath(); ctx.arc(PX, PY, PR + 5, 0, TAU); ctx.stroke(); cercle(ctx, PX, PY, PR + 18, 'rgba(226,232,244,.4)', 1.6); },
@@ -1339,7 +1343,7 @@
         fond(ctx, T) {
             const { W, LORA } = T;
             T.halo(ctx, T.PX, T.PY, 480, 'rgba(200,140,255,.2)');
-            [[170, 300, 70, -0.2], [W - 170, 320, 64, 0.25], [150, 1030, 58, 0.1], [W - 160, 1060, 62, -0.15]].forEach(([x, y, s, a]) => { ctx.save(); ctx.translate(x, y); ctx.rotate(a); lueur(ctx, T, 'rgba(236,190,255,.6)', 16); livreOuvert(ctx, 0, 0, s, 'rgba(250,240,255,.8)', 'rgba(120,50,150,.5)'); ctx.restore(); });
+            [[170, T.PY, 70, -0.2], [W - 170, T.PY + 20, 64, 0.25], [150, T.H - 320, 58, 0.1], [W - 160, T.H - 290, 62, -0.15]].forEach(([x, y, s, a]) => { ctx.save(); ctx.translate(x, y); ctx.rotate(a); lueur(ctx, T, 'rgba(236,190,255,.6)', 16); livreOuvert(ctx, 0, 0, s, 'rgba(250,240,255,.8)', 'rgba(120,50,150,.5)'); ctx.restore(); });
             ctx.fillStyle = 'rgba(236,190,255,.3)'; ctx.textAlign = 'center';
             semis(T, 22, (x, y, k, i) => { ctx.font = `${Math.round(16 + k * 22)}px ${LORA}`; ctx.fillText(['✶', '☽', '✧', '⚝', '♄', '☿'][i % 6], x, y); });
         },
@@ -1379,9 +1383,9 @@
             ctx.lineWidth = 1;
             for (let x = 0; x < W; x += 30) { ctx.strokeStyle = `rgba(120,224,214,${x % 150 ? 0.06 : 0.14})`; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
             for (let y = 0; y < H; y += 30) { ctx.strokeStyle = `rgba(120,224,214,${y % 150 ? 0.06 : 0.14})`; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-            engrenage(ctx, 150, 280, 90, 10, 'rgba(120,224,214,.35)', 3); engrenage(ctx, 245, 370, 50, 7, 'rgba(120,224,214,.3)', 3);
-            engrenage(ctx, W - 160, 1060, 110, 12, 'rgba(120,224,214,.3)', 3);
-            ctx.strokeStyle = 'rgba(120,224,214,.3)'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(PX, PY, 230, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+            engrenage(ctx, 150, PY - 20, 90, 10, 'rgba(120,224,214,.35)', 3); engrenage(ctx, 245, PY + 70, 50, 7, 'rgba(120,224,214,.3)', 3);
+            engrenage(ctx, W - 160, H - 290, 110, 12, 'rgba(120,224,214,.3)', 3);
+            ctx.strokeStyle = 'rgba(120,224,214,.3)'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(PX, PY, T.PR + 70, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
         },
         cadre(ctx, T) {
             const { W, H } = T;
@@ -1410,7 +1414,7 @@
         fond(ctx, T) {
             const { W } = T;
             ctx.strokeStyle = 'rgba(236,220,170,.14)'; ctx.lineWidth = 3;
-            for (let i = 0; i < 7; i++) { const y = 180 + i * 150; ctx.beginPath(); ctx.moveTo(40, y); ctx.bezierCurveTo(W * 0.3, y - 40, W * 0.6, y + 40, W - 40, y - 10); ctx.stroke(); }
+            for (let i = 0; i < 7; i++) { const y = 180 + i * (T.H - 300) / 7; ctx.beginPath(); ctx.moveTo(40, y); ctx.bezierCurveTo(W * 0.3, y - 40, W * 0.6, y + 40, W - 40, y - 10); ctx.stroke(); }
             semis(T, 9, (x, y, k) => enveloppe(ctx, x, y, 40 + k * 40, (k - 0.5) * 0.9, 'rgba(246,238,214,.5)', 'rgba(120,90,50,.6)'));
         },
         cadre(ctx, T) { doubleCadre(ctx, T, 'rgba(236,220,170,.75)', 3, 'rgba(236,220,170,.3)'); coins(ctx, T, c => { disque(c, 0, 0, 16, '#9a1f28'); cercle(c, 0, 0, 10, 'rgba(255,200,190,.5)', 2); }); },
@@ -1441,9 +1445,9 @@
             const { PX, PY, W, alea, CINZEL } = T;
             // L'ensō : un cercle tracé d'un seul coup de pinceau
             ctx.lineCap = 'round';
-            for (let k = 0; k < 14; k++) { ctx.strokeStyle = `rgba(30,24,20,${0.05 + alea() * 0.05})`; ctx.lineWidth = 26 + alea() * 20; const r = 240 + (alea() - 0.5) * 16; ctx.beginPath(); ctx.arc(PX + (alea() - 0.5) * 6, PY + (alea() - 0.5) * 6, r, -0.95 + alea() * 0.08, 4.08 - alea() * 0.12); ctx.stroke(); }
-            ctx.fillStyle = 'rgba(160,40,30,.85)'; ctx.fillRect(W - 160, 1226, 56, 56);
-            ctx.fillStyle = 'rgba(244,238,226,.95)'; ctx.font = `700 30px ${CINZEL}`; ctx.textAlign = 'center'; ctx.fillText('B', W - 132, 1265);
+            for (let k = 0; k < 14; k++) { ctx.strokeStyle = `rgba(30,24,20,${0.05 + alea() * 0.05})`; ctx.lineWidth = 26 + alea() * 20; const r = T.PR + 80 + (alea() - 0.5) * 16; ctx.beginPath(); ctx.arc(PX + (alea() - 0.5) * 6, PY + (alea() - 0.5) * 6, r, -0.95 + alea() * 0.08, 4.08 - alea() * 0.12); ctx.stroke(); }
+            ctx.fillStyle = 'rgba(160,40,30,.85)'; ctx.fillRect(W - 160, T.H - 124, 56, 56);
+            ctx.fillStyle = 'rgba(244,238,226,.95)'; ctx.font = `700 30px ${CINZEL}`; ctx.textAlign = 'center'; ctx.fillText('B', W - 132, T.H - 85);
         },
         cadre(ctx, T) { const { W, H } = T; ctx.strokeStyle = 'rgba(40,34,28,.6)'; ctx.lineWidth = 1.5; ctx.strokeRect(46, 46, W - 92, H - 92); },
         anneau(ctx, T) { const { PX, PY, PR } = T; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(30,24,20,.8)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(PX, PY, PR + 6, -1.6, 4.3); ctx.stroke(); }
@@ -1455,7 +1459,7 @@
         fond(ctx, T) {
             const { W } = T;
             semis(T, 70, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.2, `rgba(255,255,255,${0.2 + k * 0.4})`));
-            [[190, 230, 130, 'rgba(255,120,160,.8)'], [W - 200, 190, 150, 'rgba(120,220,255,.8)'], [180, 1040, 110, 'rgba(255,214,120,.8)'], [W - 170, 1000, 120, 'rgba(170,255,140,.8)']].forEach(([x, y, r, c]) => feuDArtifice(ctx, T, x, y, r, c));
+            [[190, T.HY + 126, 130, 'rgba(255,120,160,.8)'], [W - 200, T.HY + 86, 150, 'rgba(120,220,255,.8)'], [180, T.H - 310, 110, 'rgba(255,214,120,.8)'], [W - 170, T.H - 350, 120, 'rgba(170,255,140,.8)']].forEach(([x, y, r, c]) => feuDArtifice(ctx, T, x, y, r, c));
         },
         cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 4, 'rgba(255,214,120,.35)'); coins(ctx, T, c => T.etoile(c, 0, 0, 13, 'rgba(255,240,200,.95)')); },
         anneau(ctx, T) { anneauBrillant(ctx, T, 'rgba(255,220,130,1)', 4, 'rgba(255,214,120,.35)'); }
@@ -1478,7 +1482,7 @@
         fond(ctx, T) {
             const { W, H, LORA } = T;
             // Une portée qui ondule d'un bord à l'autre
-            for (let k = 0; k < 5; k++) { ctx.strokeStyle = 'rgba(255,198,96,.14)'; ctx.lineWidth = 2; ctx.beginPath(); for (let x = 0; x <= W; x += 20) { const y = 980 + k * 18 + Math.sin(x / 120) * 40; if (x) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.stroke(); }
+            for (let k = 0; k < 5; k++) { ctx.strokeStyle = 'rgba(255,198,96,.14)'; ctx.lineWidth = 2; ctx.beginPath(); for (let x = 0; x <= W; x += 20) { const y = H - 370 + k * 18 + Math.sin(x / 120) * 40; if (x) ctx.lineTo(x, y); else ctx.moveTo(x, y); } ctx.stroke(); }
             ctx.textAlign = 'center';
             semis(T, 26, (x, y, k, i) => { ctx.fillStyle = `rgba(255,214,140,${0.2 + k * 0.45})`; ctx.font = `${Math.round(24 + k * 40)}px ${LORA}`; ctx.fillText(['♪', '♫', '♬', '♩'][i % 4], x, y); }, [60, 120, W - 60, H - 100]);
         },
