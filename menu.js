@@ -36,6 +36,10 @@
                 menu.scrollTop = 0;
                 // Mode nuit et confort de lecture : leurs commandes se chargent à la demande.
                 if (window.charger) window.charger('confort').catch(() => {});
+                // L'outil d'administration : chargé pour un joueur connecté, montré aux seuls administrateurs.
+                if (window.charger && window.SupaAuth && window.SupaAuth.currentUser) {
+                    window.charger('admin').then(() => window.Admin && window.Admin.verifier()).catch(() => {});
+                }
                 setTimeout(() => menu.querySelector('.menu-close')?.focus({ preventScroll: true }), 40);
             }
             wasOpen = open;

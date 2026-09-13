@@ -44,6 +44,12 @@ La migration `docs/corbeille.sql` installe la **corbeille des personnages**
 (30 jours, avec l'abonnement), imposée par la base : sans elle, supprimer un
 personnage reste définitif, après avoir retapé son nom.
 
+La migration `docs/admin.sql` installe l'**outil d'administration des droits**
+(menu ☰ → Compte & abonnement) : une adresse e-mail, et les options payantes
+de ce compte s'accordent ou se retirent sans passer par Stripe. Seuls les
+comptes inscrits dans la table `admins` le voient, et la base refuse tous les
+autres.
+
 ## Régénérer la base de règles
 
 La page Règles propose deux éditions, chacune tirée du PDF officiel français de

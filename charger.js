@@ -29,7 +29,8 @@
         carnet: 'carnet.js',
         confort: 'confort.js',
         coffre: 'coffre.js',
-        seance: 'seance.js'
+        seance: 'seance.js',
+        admin: 'admin.js'
     };
     const promesses = new Map();        // fichier -> promesse
 
