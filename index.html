@@ -379,6 +379,24 @@
             </div>
         </details>
 
+        <details class="menu-cat" data-cat="communaute">
+            <summary><span class="menu-ico" aria-hidden="true">🏆</span><span class="menu-cat-txt"><b>Trophées &amp; communauté</b><small>Secrets, défi du mois, parrainage, cimetière</small></span></summary>
+            <div class="menu-cat-body menu-help">
+                <button type="button" id="btn-menu-trophees" class="menu-tile" data-communaute="trophees">
+                    <span class="menu-tile-ico" aria-hidden="true">🏆</span>
+                    <span class="menu-tile-txt"><b>Salle des trophées</b><small>Secrets trouvés, défi du mois, compteurs</small></span>
+                </button>
+                <button type="button" id="btn-menu-cimetiere" class="menu-tile" data-communaute="cimetiere">
+                    <span class="menu-tile-ico" aria-hidden="true">🪦</span>
+                    <span class="menu-tile-txt"><b>Cimetière des héros</b><small>Le panthéon des héros tombés</small></span>
+                </button>
+                <button type="button" id="btn-menu-parrainage" class="menu-tile" data-communaute="parrainage">
+                    <span class="menu-tile-ico" aria-hidden="true">🤝</span>
+                    <span class="menu-tile-txt"><b>Parrainer un ami</b><small>Ton lien d’invitation</small></span>
+                </button>
+            </div>
+        </details>
+
         <details class="menu-cat" data-cat="compte">
             <summary><span class="menu-ico" aria-hidden="true">👤</span><span class="menu-cat-txt"><b>Compte &amp; abonnement</b><small>Connexion, tarifs</small></span></summary>
             <div class="menu-cat-body">
@@ -409,6 +427,7 @@
             <div id="character-list" class="char-list"></div>
             <button id="btn-create-char" class="btn home-create">＋ Créer un personnage</button>
             <button id="btn-open-rules" class="btn home-rules" type="button">📖 Règles du jeu</button>
+            <button id="btn-open-trophees" class="btn home-rules no-print" type="button" data-communaute="trophees">🏆 Salle des trophées</button>
             <label id="char-show-archived-wrap" class="home-archived-toggle hidden"><input type="checkbox" id="char-show-archived"> Afficher les archivés<span id="char-archived-count"></span></label>
             <details id="home-corbeille" class="home-corbeille no-print" hidden>
                 <summary><span aria-hidden="true">🗑</span> Corbeille <span class="corb-nb"></span></summary>

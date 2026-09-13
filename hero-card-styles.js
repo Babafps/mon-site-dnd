@@ -1584,11 +1584,199 @@
     });
 
     // =====================================================
+    // LE LOT 8 — les quatre saisons (défi du mois), les compagnons de route
+    // (parrainage) et l'in memoriam (cimetière des héros)
+    // =====================================================
+    function fleur(ctx, x, y, r, petale, pistil) {
+        ctx.save(); ctx.translate(x, y); ctx.fillStyle = petale;
+        for (let i = 0; i < 5; i++) { ctx.rotate(TAU / 5); ctx.beginPath(); ctx.ellipse(0, -r * 0.55, r * 0.34, r * 0.55, 0, 0, TAU); ctx.fill(); }
+        disque(ctx, 0, 0, r * 0.26, pistil);
+        ctx.restore();
+    }
+    function soleil(ctx, x, y, r, c) {
+        ctx.save(); ctx.translate(x, y); ctx.strokeStyle = c; ctx.lineWidth = Math.max(1.5, r * 0.18); ctx.lineCap = 'round';
+        for (let i = 0; i < 12; i++) { const a = TAU * i / 12; ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 1.4, Math.sin(a) * r * 1.4); ctx.lineTo(Math.cos(a) * r * 1.95, Math.sin(a) * r * 1.95); ctx.stroke(); }
+        disque(ctx, 0, 0, r, c);
+        ctx.restore();
+    }
+    /** Des décors posés sur les côtés seulement : le pied de la carte (logo, nom du site) reste lisible. */
+    const surLesCotes = (x, W) => x < W * 0.3 || x > W * 0.7;
+    const TEINTES_AUTOMNE = ['rgba(214,96,40,.85)', 'rgba(232,160,60,.85)', 'rgba(170,60,30,.85)', 'rgba(222,190,90,.8)'];
+
+    STYLES.push({
+        id: 'hiver', nom: '❄️ Hiver', exploit: 'saison-hiver', entete: 'CŒUR D’HIVER', sceau: 'Un défi du mois réussi en hiver', indice: 'Relever un défi quand il neige.',
+        palette: { fondA: [30, 48, 80], fondB: [5, 9, 20], or: [196, 224, 255], encre: [240, 246, 255], primaire: [70, 110, 160] },
+        fond(ctx, T) {
+            const { W, H, PX, PY, halo, alea } = T;
+            halo(ctx, PX, PY, 520, 'rgba(170,210,255,.18)'); halo(ctx, 180, H * 1050 / 1350, 420, 'rgba(120,170,230,.14)');
+            semis(T, 120, (x, y, k) => disque(ctx, x, y, 0.8 + k * 2.2, `rgba(255,255,255,${0.25 + k * 0.55})`));
+            semis(T, 16, (x, y, k) => flocon(ctx, x, y, 8 + k * 16, `rgba(225,240,255,${0.35 + k * 0.45})`));
+            // Des congères au pied de la carte
+            ctx.fillStyle = 'rgba(232,242,255,.13)';
+            ctx.beginPath(); ctx.moveTo(0, H);
+            for (let x = 0; x <= W; x += 60) ctx.lineTo(x, H - 150 - Math.sin(x / 140) * 26 - alea() * 10);
+            ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, T.css(T.p.or, 0.85), 3, T.css(T.p.or, 0.35), [3, 7]); coins(ctx, T, c => flocon(c, 0, 0, 22, 'rgba(235,245,255,.95)')); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, T.css(T.p.or), 5, T.css(T.p.or, 0.4));
+            [0.5, 1.6, 2.7, 3.8, 4.9, 6.0].forEach(a => flocon(ctx, PX + Math.cos(a) * (PR + 26), PY + Math.sin(a) * (PR + 26), 10, 'rgba(235,245,255,.9)'));
+        }
+    });
+
+    STYLES.push({
+        id: 'printemps', nom: '🌸 Printemps', exploit: 'saison-printemps', entete: 'RENOUVEAU', sceau: 'Un défi du mois réussi au printemps', indice: 'Relever un défi quand tout refleurit.',
+        palette: { nuit: false, fondA: [248, 240, 242], fondB: [216, 230, 204], or: [178, 88, 120], encre: [52, 40, 46], primaire: [110, 146, 84] },
+        fond(ctx, T) {
+            const { W, H, PX, PY, halo, alea } = T;
+            halo(ctx, PX, PY, 480, 'rgba(255,190,210,.3)'); halo(ctx, 880, H * 1080 / 1350, 380, 'rgba(170,210,140,.25)');
+            // Des pétales qui volent
+            semis(T, 46, (x, y, k) => {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(k * TAU);
+                ctx.fillStyle = `rgba(236,${140 + Math.round(k * 60)},${170 + Math.round(k * 40)},${0.35 + k * 0.4})`;
+                ctx.beginPath(); ctx.ellipse(0, 0, 5 + k * 7, 3 + k * 3, 0, 0, TAU); ctx.fill(); ctx.restore();
+            });
+            // Des pousses au pied, sur les côtés
+            for (let x = 60; x < W; x += 60 + alea() * 40) if (surLesCotes(x, W)) pousse(ctx, x, H - 70, 36 + alea() * 34, 'rgba(110,146,84,.5)');
+        },
+        cadre(ctx, T) {
+            doubleCadre(ctx, T, T.css(T.p.or, 0.7), 3, T.css(T.p.primaire, 0.45));
+            coins(ctx, T, c => { fleur(c, 0, 0, 20, 'rgba(236,150,180,.95)', 'rgba(240,200,90,.95)'); fleur(c, 34, 12, 10, 'rgba(250,200,215,.9)', 'rgba(240,200,90,.9)'); });
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, T.css(T.p.or, 0.9), 5, T.css(T.p.primaire, 0.5));
+            [0.3, 1.35, 2.4, 3.45, 4.5, 5.55].forEach((a, i) => fleur(ctx, PX + Math.cos(a) * (PR + 16), PY + Math.sin(a) * (PR + 16), i % 2 ? 11 : 15, 'rgba(240,160,190,.95)', 'rgba(240,200,90,.95)'));
+        }
+    });
+
+    STYLES.push({
+        id: 'ete', nom: '☀️ Été', exploit: 'saison-ete', entete: 'PLEIN SOLEIL', sceau: 'Un défi du mois réussi en été', indice: 'Relever un défi sous le grand soleil.',
+        palette: { nuit: false, fondA: [255, 238, 200], fondB: [242, 184, 112], or: [178, 86, 20], encre: [62, 34, 14], primaire: [214, 120, 36] },
+        fond(ctx, T) {
+            const { W, H, PX, PY, halo } = T;
+            // Les rayons partent de derrière le portrait
+            ctx.save(); ctx.translate(PX, PY);
+            for (let i = 0; i < 24; i++) {
+                ctx.rotate(TAU / 24);
+                ctx.fillStyle = i % 2 ? 'rgba(255,220,120,.16)' : 'rgba(255,250,220,.1)';
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-70, -H); ctx.lineTo(70, -H); ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+            halo(ctx, PX, PY, 560, 'rgba(255,200,90,.35)');
+            // La mer, en vagues, au pied de la carte
+            ctx.save(); ctx.strokeStyle = 'rgba(40,120,160,.16)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+            for (let r = 0; r < 3; r++) {
+                const y = H - 170 + r * 34;
+                ctx.beginPath(); ctx.moveTo(0, y);
+                for (let x = 0; x < W; x += 40) ctx.quadraticCurveTo(x + 20, y - 12, x + 40, y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        },
+        cadre(ctx, T) { doubleCadre(ctx, T, T.dorure(ctx, 0, 0, T.W, T.H), 5, T.css(T.p.or, 0.4)); coins(ctx, T, c => soleil(c, 0, 0, 12, 'rgba(214,120,36,.95)')); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            ctx.save(); ctx.strokeStyle = 'rgba(214,120,36,.85)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+            for (let i = 0; i < 36; i++) {
+                const a = TAU * i / 36, l = i % 2 ? 14 : 26;
+                ctx.beginPath(); ctx.moveTo(PX + Math.cos(a) * (PR + 12), PY + Math.sin(a) * (PR + 12)); ctx.lineTo(PX + Math.cos(a) * (PR + 12 + l), PY + Math.sin(a) * (PR + 12 + l)); ctx.stroke();
+            }
+            ctx.restore();
+            anneauBrillant(ctx, T, T.css(T.p.or), 6);
+        }
+    });
+
+    STYLES.push({
+        id: 'automne', nom: '🍂 Automne', exploit: 'saison-automne', entete: 'FEUILLES D’OR', sceau: 'Un défi du mois réussi en automne', indice: 'Relever un défi quand les feuilles tombent.',
+        palette: { fondA: [74, 38, 18], fondB: [16, 8, 4], or: [238, 164, 72], encre: [252, 238, 216], primaire: [168, 72, 30] },
+        fond(ctx, T) {
+            const { PX, PY, H, halo } = T;
+            halo(ctx, PX, PY, 520, 'rgba(238,150,60,.2)'); halo(ctx, 860, H * 1100 / 1350, 420, 'rgba(190,70,30,.18)');
+            semis(T, 34, (x, y, k, i) => T.feuille(ctx, x, y, 14 + k * 22, k * TAU, TEINTES_AUTOMNE[i % TEINTES_AUTOMNE.length]));
+            semis(T, 50, (x, y, k) => disque(ctx, x, y, 0.8 + k * 1.8, `rgba(255,210,140,${0.12 + k * 0.3})`));
+        },
+        cadre(ctx, T) {
+            doubleCadre(ctx, T, T.css(T.p.or, 0.8), 4, T.css(T.p.or, 0.3));
+            coins(ctx, T, c => { T.feuille(c, 18, 8, 20, 0.4, 'rgba(232,140,50,.95)'); T.feuille(c, 8, 22, 16, 1.2, 'rgba(200,80,36,.95)'); });
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, T.css(T.p.or), 5, T.css(T.p.primaire, 0.5));
+            [0.2, 1.1, 2.0, 2.9, 3.8, 4.7, 5.6].forEach((a, i) => T.feuille(ctx, PX + Math.cos(a) * (PR + 18), PY + Math.sin(a) * (PR + 18), 16, a + 1.2, TEINTES_AUTOMNE[i % 4]));
+        }
+    });
+
+    STYLES.push({
+        id: 'compagnons', nom: '🤝 Compagnons de route', exploit: 'parrain', entete: 'COMPAGNON DE ROUTE', sceau: 'Un ami guidé jusqu’à son premier héros', indice: 'On voyage mieux à plusieurs.',
+        palette: { fondA: [36, 54, 42], fondB: [8, 14, 10], or: [220, 194, 124], encre: [242, 238, 222], primaire: [74, 112, 84] },
+        fond(ctx, T) {
+            const { W, H, PX, PY, halo } = T;
+            halo(ctx, PX, PY, 500, 'rgba(220,194,124,.16)');
+            // Le chemin qui serpente, et deux feux de camp à ses bords
+            ctx.save(); ctx.strokeStyle = 'rgba(220,194,124,.32)'; ctx.lineWidth = 5; ctx.setLineDash([2, 16]); ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(-20, H * 0.94);
+            ctx.bezierCurveTo(W * 0.3, H * 0.7, W * 0.05, H * 0.45, W * 0.45, H * 0.34);
+            ctx.bezierCurveTo(W * 0.8, H * 0.24, W * 0.62, H * 0.08, W + 20, H * 0.04);
+            ctx.stroke(); ctx.restore();
+            [[150, H * 0.78], [930, H * 0.3]].forEach(([x, y]) => {
+                halo(ctx, x, y - 16, 90, 'rgba(255,170,70,.25)');
+                flamme(ctx, x, y, 38, 24, 'rgba(230,90,30,.9)', 'rgba(255,214,110,.9)');
+            });
+            semis(T, 70, (x, y, k) => disque(ctx, x, y, 0.6 + k * 1.6, `rgba(242,238,222,${0.12 + k * 0.4})`));
+        },
+        cadre(ctx, T) {
+            doubleCadre(ctx, T, T.css(T.p.or, 0.75), 3, T.css(T.p.or, 0.3), [12, 8]);
+            coins(ctx, T, c => { cercle(c, -6, 0, 13, 'rgba(220,194,124,.95)', 3.5); cercle(c, 10, 0, 13, 'rgba(242,238,222,.9)', 3.5); });
+        },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, T.css(T.p.or), 5);
+            cercle(ctx, PX - 12, PY, PR + 20, 'rgba(220,194,124,.55)', 2.2);
+            cercle(ctx, PX + 12, PY, PR + 20, 'rgba(242,238,222,.45)', 2.2);
+        }
+    });
+
+    STYLES.push({
+        id: 'memoriam', nom: '🕯️ In memoriam', exploit: 'pantheon', entete: 'IN MEMORIAM', indice: 'Certains héros ne reviennent pas.',
+        palette: { fondA: [60, 60, 64], fondB: [12, 12, 14], or: [214, 208, 196], encre: [238, 236, 230], primaire: [96, 96, 102] },
+        fond(ctx, T) {
+            const { W, H, PX, PY, halo, alea } = T;
+            halo(ctx, PX, PY, 480, 'rgba(230,220,200,.12)');
+            // La brume, puis les stèles du cimetière, sur les côtés du pied de carte
+            for (let i = 0; i < 5; i++) halo(ctx, alea() * W, H * (0.72 + alea() * 0.2), 260 + alea() * 160, 'rgba(200,200,210,.07)');
+            for (let x = 70; x < W; x += 110 + alea() * 50) if (surLesCotes(x, W)) tombe(ctx, x, H - 60, 40 + alea() * 20, 60 + alea() * 30, 'rgba(0,0,0,.35)');
+            // Deux cierges de part et d'autre du portrait
+            [150, 930].forEach(x => {
+                const y = PY + 40;
+                halo(ctx, x, y - 50, 120, 'rgba(255,210,140,.18)');
+                ctx.fillStyle = 'rgba(236,230,214,.85)'; ctx.fillRect(x - 9, y - 30, 18, 90);
+                flamme(ctx, x, y - 32, 34, 16, 'rgba(240,150,60,.9)', 'rgba(255,236,170,.95)');
+            });
+        },
+        cadre(ctx, T) {
+            doubleCadre(ctx, T, 'rgba(214,208,196,.7)', 2.5, 'rgba(214,208,196,.28)');
+            coins(ctx, T, c => { T.feuille(c, 18, 8, 16, 0.45, 'rgba(160,168,140,.85)'); T.feuille(c, 8, 18, 16, 1.12, 'rgba(160,168,140,.85)'); T.losange(c, 0, 0, 5, 'rgba(214,208,196,.9)'); });
+        },
+        portrait(ctx, T) { const { PX, PY, PR } = T; ctx.globalCompositeOperation = 'saturation'; ctx.fillStyle = 'rgb(128,128,128)'; ctx.fillRect(PX - PR, PY - PR, PR * 2, PR * 2); },
+        anneau(ctx, T) {
+            const { PX, PY, PR } = T;
+            anneauBrillant(ctx, T, 'rgba(214,208,196,.9)', 4);
+            // Une couronne de laurier, ouverte en bas
+            for (let i = 0; i < 22; i++) {
+                const a = Math.PI * 0.62 + (i / 21) * Math.PI * 1.76;
+                T.feuille(ctx, PX + Math.cos(a) * (PR + 24), PY + Math.sin(a) * (PR + 24), 15, a + Math.PI / 2 + (i % 2 ? 0.5 : -0.5), 'rgba(150,160,130,.9)');
+            }
+        }
+    });
+
+    // =====================================================
     // LA RARETÉ — affichée dans la vitrine de la carte
     // =====================================================
     const RARETES = {
         legendaire: ['epique', 'chanceux', 'chatnoir', 'jumeaux', 'veteran', 'archimage', 'coupfatal', 'surcharge', 'pyromane', 'horloger', 'grimoire'],
-        epique: ['astral', 'revenant', 'tresor', 'liche', 'forteresse', 'sommet', 'mendiant', 'armurier', 'chroniqueur', 'fidele', 'soigneur', 'increvable', 'dormeur', 'feudecamp', 'erudit', 'bestiaire', 'demenageur', 'lycan', 'inspire', 'bagnard', 'platine', 'artificier']
+        epique: ['astral', 'revenant', 'tresor', 'liche', 'forteresse', 'sommet', 'mendiant', 'armurier', 'chroniqueur', 'fidele', 'soigneur', 'increvable', 'dormeur', 'feudecamp', 'erudit', 'bestiaire', 'demenageur', 'lycan', 'inspire', 'bagnard', 'platine', 'artificier', 'hiver', 'printemps', 'ete', 'automne', 'compagnons']
     };
     STYLES.forEach(s => { s.rarete = Object.keys(RARETES).find(r => RARETES[r].includes(s.id)) || 'rare'; });
 

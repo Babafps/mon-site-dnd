@@ -5576,16 +5576,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (avant < 3 && apres >= 3) troisEchecs(pourquoi);
             return apres;
         }
-        // Trois échecs : un événement (le cimetière des héros s'y branchera) et une
-        // fenêtre sobre. Rien n'est fait d'office.
+        // Trois échecs : un événement, et une fenêtre qui PROPOSE le cimetière des
+        // héros (cimetiere.js, LOT 8.5). Rien n'est fait d'office : même accepter
+        // n'ouvre qu'un formulaire, que le joueur remplit ou abandonne.
         function troisEchecs(pourquoi) {
             const nom = document.getElementById('char-name')?.value || 'Ton personnage';
             document.dispatchEvent(new CustomEvent('mort:trois-echecs', { detail: { nom, pourquoi: pourquoi || '' } }));
-            if (window.Dialogue) window.Dialogue.informer({
-                titre: 'Trois échecs', icone: '☾', bouton: 'Revenir à la fiche',
+            if (!window.Dialogue) return;
+            window.Dialogue.confirmer({
+                titre: 'Trois échecs', icone: '☾', confirmer: '🪦 Rejoindre le panthéon', annuler: 'Revenir à la fiche',
                 message: `« Au troisième échec, vous mourez. » ${nom} a rendu son dernier souffle.\n\n`
+                    + 'Tu peux lui graver une tombe au cimetière des héros : son portrait, une épitaphe, et c’est toi qui décides qui la voit.\n\n'
                     + 'Si un allié le ramène à la vie, rends-lui simplement des points de vie : les cases se videront d’elles-mêmes.'
-            });
+            }).then((oui) => {
+                if (oui && window.Cimetiere) window.Cimetiere.inhumer({ pourquoi: pourquoi || '' });
+            }).catch(() => {});
         }
         /** Applique un jet contre la mort, juste avant que la carte ne s'affiche. */
         function appliquerJetContreLaMort(jet) {

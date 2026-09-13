@@ -22,7 +22,7 @@ inertes.
 
 | Dossier | Contenu |
 |---|---|
-| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `calcul.js` (moteur de calcul : chaque total en sources nommées), `toasts.js` (messages sur parchemin), `charger.js` (modules chargés à la demande) + `dialogues.js` (confirmer, demander, informer), `confort.js` (mode nuit et confort de lecture), `coffre.js` (cache IndexedDB propre à l'appareil), `seance.js` (prochaine séance d'un personnage), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles, en image ou en vidéo), `print-sheet.js` + `impression-suite.js` (fiche officielle imprimée et ses pages de suite), `cartes-sorts.js` (cartes de sorts à imprimer), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` + `secrets-plus.js` + `secrets-absurdes.js` (trophées du compte et petits secrets)… |
+| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `calcul.js` (moteur de calcul : chaque total en sources nommées), `toasts.js` (messages sur parchemin), `charger.js` (modules chargés à la demande) + `dialogues.js` (confirmer, demander, informer), `confort.js` (mode nuit et confort de lecture), `coffre.js` (cache IndexedDB propre à l'appareil), `seance.js` (prochaine séance d'un personnage), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles, en image ou en vidéo), `print-sheet.js` + `impression-suite.js` (fiche officielle imprimée et ses pages de suite), `cartes-sorts.js` (cartes de sorts à imprimer), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` + `secrets-plus.js` + `secrets-absurdes.js` (trophées du compte, défi du mois et petits secrets), `trophees.js` (salle des trophées), `parrainage.js` (inviter un ami), `cimetiere.js` (cimetière des héros)… |
 | `data/srd/` | La base de règles générée — sorts, monstres, objets, équipement, classes, races, états. Voir son `README.md`. |
 | `tools/srd/` | Les scripts Python qui régénèrent `data/srd/` depuis le PDF officiel. |
 | `docs/` | Migration Supabase et cahier des charges en cours. |
@@ -49,6 +49,18 @@ La migration `docs/admin.sql` installe l'**outil d'administration des droits**
 de ce compte s'accordent ou se retirent sans passer par Stripe. Seuls les
 comptes inscrits dans la table `admins` le voient, et la base refuse tous les
 autres.
+
+La migration `docs/parrainage.sql` installe le **parrainage** (menu ☰ →
+Trophées & communauté) : un code par compte, un parrain par filleul, validé
+quand le filleul a confirmé son adresse et créé son premier personnage. Pour que
+le lien de parrainage survive au mail de confirmation, ajoute l'adresse du site
+aux **Redirect URLs** de Supabase (Authentication → URL Configuration).
+
+La migration `docs/cimetiere.sql` installe le **cimetière des héros** : les
+tombes, leur lien secret, les signalements et la modération, et le seau de
+stockage `tombes` pour les portraits (privé, 200 Ko par portrait). À exécuter
+après `docs/admin.sql`. Sans ces deux migrations, les écrans correspondants
+affichent simplement « pas encore ouvert ».
 
 ## Régénérer la base de règles
 

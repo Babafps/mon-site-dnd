@@ -20,6 +20,8 @@
         if (u && u.murmure) u.murmure(Object.assign({ icone: mm ? mm[1] : '✦', texte: mm ? mm[2] : String(m) }, o || {}));
         else if (window.showAppToast) window.showAppToast(m);
     };
+    // Chaque découverte laisse une trace dans le registre des secrets (exploits.js, LOT 8.1).
+    const trouver = (id) => { try { if (window.Exploits && window.Exploits.trouver) window.Exploits.trouver(id); } catch (e) {} };
     const idPerso = () => { try { return localStorage.getItem('dnd-active-char') || ''; } catch (e) { return ''; } };
     const calme = () => !!(UI() && UI().calme());
     const normal = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -71,7 +73,10 @@
             minuteurTitre = setTimeout(() => { document.title = '💀 Ton héros s’impatiente…'; }, 60000);
         } else {
             clearTimeout(minuteurTitre);
-            if (document.title.indexOf('💀') === 0 && titreAvant) document.title = titreAvant;
+            if (document.title.indexOf('💀') === 0) {
+                trouver('onglet');
+                if (titreAvant) document.title = titreAvant;
+            }
         }
     });
 
@@ -102,6 +107,7 @@
         const t = new Date(), m = t.getMonth() + 1, j = t.getDate(), h = t.getHours();
         if (m === 10 && j === 31 && !document.querySelector('.sx-toile')) {
             styles();
+            trouver('toiles');
             [['0', '0', ''], ['auto', '0', 'scaleX(-1)'], ['0', 'auto', 'scaleY(-1)'], ['auto', 'auto', 'scale(-1,-1)']].forEach(([l, tp, tr], i) => {
                 const el = document.createElement('i');
                 el.className = 'sx-toile no-print'; el.setAttribute('aria-hidden', 'true');
@@ -131,6 +137,7 @@
         el.addEventListener('click', () => {
             el.classList.add('decolle');
             toast('🐟 Poisson d’avril !');
+            trouver('poisson');
             try { sessionStorage.setItem('dnd-poisson', '1'); } catch (e) {}
             setTimeout(() => el.remove(), 600);
         });
@@ -141,9 +148,9 @@
 
     // ---------- Des noms qui font réagir ----------
     const NOMS = [
-        [/^bob\b/, 'Encore un Bob ? Le cimetière du village en compte déjà trois.'],
-        [/^personne$/, 'Personne ? Le cyclope du coin s’en souviendra.'],
-        [/^merlin\b/, 'Merlin ? Ton grimoire date un peu, non ?']
+        [/^bob\b/, 'Encore un Bob ? Le cimetière du village en compte déjà trois.', 'bob'],
+        [/^personne$/, 'Personne ? Le cyclope du coin s’en souviendra.', 'personne'],
+        [/^merlin\b/, 'Merlin ? Ton grimoire date un peu, non ?', 'merlin']
     ];
     let minuteurNom = null;
     document.addEventListener('input', (e) => {
@@ -156,6 +163,7 @@
             if (!trouve) return;
             try { const cle = 'dnd-nom-vu-' + idPerso() + '-' + n; if (sessionStorage.getItem(cle)) return; sessionStorage.setItem(cle, '1'); } catch (x) {}
             toast('😏 ' + trouve[1]);
+            trouver('nom:' + trouve[2]);
         }, 1200);
     });
 
@@ -165,7 +173,7 @@
     document.addEventListener('input', (e) => {
         if (!e.target || e.target.id !== 'hp-current') return;
         const pv = parseInt(e.target.value, 10);
-        if (pv === 1 && pvAvant !== 1) toast('🪦 Un PV. Le barde compose déjà ton épitaphe.');
+        if (pv === 1 && pvAvant !== 1) { toast('🪦 Un PV. Le barde compose déjà ton épitaphe.'); trouver('un-pv'); }
         pvAvant = pv;
     });
 
@@ -179,11 +187,12 @@
         const noms = objets().map(o => normal(o && o.name));
         const nouveaux = sacConnu ? noms.filter(n => !sacConnu.has(n)) : [];
         sacConnu = new Set(noms);
-        if (nouveaux.some(n => /\bcorde\b/.test(n))) toast('🪢 Une corde. Ton MJ est secrètement fier de toi.');
+        if (nouveaux.some(n => /\bcorde\b/.test(n))) { toast('🪢 Une corde. Ton MJ est secrètement fier de toi.'); trouver('corde'); }
         if (nouveaux.some(n => /\b(poulet|poule|coq)\b/.test(n))) poulet();
     });
     function poulet() {
         toast('🐔 Cot cot ! Il s’est échappé du sac.');
+        trouver('poulet');
         if (calme()) return;
         styles();
         const el = document.createElement('div');
@@ -198,7 +207,7 @@
         if (!e.target || e.target.id !== 'coin-po') return;
         clearTimeout(minuteur42);
         const champ = e.target;
-        if (String(champ.value).trim() === '42') minuteur42 = setTimeout(() => { if (String(champ.value).trim() === '42') toast('🌌 42 pièces d’or. La réponse, apparemment.'); }, 900);
+        if (String(champ.value).trim() === '42') minuteur42 = setTimeout(() => { if (String(champ.value).trim() === '42') { toast('🌌 42 pièces d’or. La réponse, apparemment.'); trouver('quarante-deux'); } }, 900);
     });
 
     // ---------- Le plateau de dés (script.js prévient à chaque lancer) ----------
@@ -214,10 +223,11 @@
     document.addEventListener('des:lances', (e) => averse(parseInt(e.detail && e.detail.nombre, 10) || 0));
     document.addEventListener('plateau:lance', (e) => {
         const d = e.detail || {}, des = d.des || [], scores = d.scores || [];
-        if (des.length === 1 && des[0] === 100 && scores[0] === 100) toast('💯 Un 100 sur le d100. Centenaire !');
+        if (des.length === 1 && des[0] === 100 && scores[0] === 100) { toast('💯 Un 100 sur le d100. Centenaire !'); trouver('centenaire'); }
     });
     function pluie(nombre) {
         toast(`🎲 ${nombre || 20} dés d’un coup ? Il pleut des dés !`, { titre: 'Averse de dés' });
+        trouver('averse');
         if (calme()) return;
         styles();
         const zone = document.createElement('div');
@@ -239,7 +249,7 @@
     document.addEventListener('keydown', (e) => {
         if (!horsSaisie(e.target) || !e.key || e.key.length !== 1) return;
         frappe = (frappe + e.key.toLowerCase()).slice(-5);
-        if (frappe === 'iddqd') { frappe = ''; toast('🛡️ Mode dieu refusé. Ceci est un jeu de rôle, pas un jeu de tir.'); }
+        if (frappe === 'iddqd') { frappe = ''; toast('🛡️ Mode dieu refusé. Ceci est un jeu de rôle, pas un jeu de tir.'); trouver('iddqd'); }
     });
 
     // ---------- La Mimique, cachée dans la recherche des Règles ----------

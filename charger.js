@@ -32,7 +32,10 @@
         seance: 'seance.js',
         admin: 'admin.js',
         'impression-suite': 'impression-suite.js',
-        'cartes-sorts': 'cartes-sorts.js'
+        'cartes-sorts': 'cartes-sorts.js',
+        trophees: 'trophees.js',
+        parrainage: 'parrainage.js',
+        cimetiere: 'cimetiere.js'
     };
     const promesses = new Map();        // fichier -> promesse
 
@@ -90,4 +93,8 @@
 
     window.charger = charger;
     facade('Dialogue', 'dialogues', ['confirmer', 'demander', 'informer', 'choisir', 'fenetre']);
+    // Trophées et communauté (LOT 8)
+    facade('Trophees', 'trophees', ['ouvrir', 'accueil', 'etat']);
+    facade('Parrainage', 'parrainage', ['ouvrir', 'appliquer', 'verifier', 'etat']);
+    facade('Cimetiere', 'cimetiere', ['ouvrir', 'inhumer', 'ouvrirLien']);
 })();

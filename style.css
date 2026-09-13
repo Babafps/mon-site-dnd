@@ -8166,6 +8166,8 @@ body.hc2-ouvert { overflow: hidden; }
     opacity: 0; transform: translateY(34px) scale(.95); transition: opacity .45s ease, transform .65s cubic-bezier(.2,.9,.3,1.25);
 }
 .hc-annonce.entre { opacity: 1; transform: none; }
+/* Une fenêtre ouverte (dialogues.js) passe devant l'annonce : ses boutons restent à portée, même sur téléphone. */
+body:has(.dlg-voile) .hc-annonce { z-index: 100005; }
 .hc-annonce.entre.r-legendaire, .hc-annonce.entre.r-epique { animation: hcAnnonceLueur 2.6s ease-in-out .9s infinite; }
 @keyframes hcAnnonceLueur { 50% { box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 80px rgba(var(--a-or), .65); } }
 .hc-annonce.sort { opacity: 0; transform: translateY(22px) scale(.97); transition: opacity .35s ease, transform .4s ease; }

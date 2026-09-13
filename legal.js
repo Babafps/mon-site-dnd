@@ -17,7 +17,7 @@
 (function () {
     'use strict';
 
-    const MAJ = '4 septembre 2026';        // dernière relecture du texte
+    const MAJ = '14 septembre 2026';        // dernière relecture du texte
     const esc = (s) => String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     // Les trous à combler sautent aux yeux, dans le texte comme à l'impression.
@@ -129,6 +129,14 @@
                     'votre contenu personnel (classes, sorts, monstres que vous créez) si vous choisissez '
                     + 'de le synchroniser ;',
                     'les dates de création et de dernière modification de chaque personnage ;',
+                    'vos trophées : les exploits gagnés, les secrets découverts et la progression du défi '
+                    + 'du mois, enregistrés avec votre compte ;',
+                    'si vous parrainez un ami ou êtes parrainé : votre code de parrainage, le lien entre le '
+                    + 'compte du parrain et celui du filleul, et la date de validation. Le parrain ne voit que '
+                    + 'le nombre de ses filleuls inscrits et validés, jamais leur adresse ;',
+                    'si vous gravez une tombe au cimetière des héros : le nom, la classe, le niveau, l’espèce, '
+                    + 'l’épitaphe, la date et la cause que vous choisissez d’y inscrire, le portrait si vous le '
+                    + 'joignez, et les signalements que vous faites ou que la tombe reçoit ;',
                     'des données techniques enregistrées par l’hébergeur pour la sécurité du service '
                     + '(adresse IP, horodatage des connexions), conservées par Supabase selon ses propres '
                     + 'durées.'
@@ -154,6 +162,10 @@
                 { h: 'Qui y a accès' },
                 { ul: [
                     'vous ;',
+                    'pour une tombe du cimetière des héros : tous les joueurs connectés si vous la rendez '
+                    + 'publique ; les seuls joueurs connectés qui ont ouvert son lien secret si elle est privée, '
+                    + 'tant que vous ne le révoquez pas ;',
+                    'les administrateurs du site, pour examiner les tombes signalées ;',
                     'Supabase, en qualité de sous-traitant, pour héberger la base et gérer les comptes ;',
                     '[À COMPLÉTER : l’hébergeur du site, si différent] ;',
                     '[À COMPLÉTER : le prestataire de paiement, quand les options payantes existeront] ;',
@@ -173,6 +185,10 @@
                 { dl: [
                     ['Compte et fiches', 'tant que le compte existe. La suppression du compte efface les '
                      + 'personnages associés.'],
+                    ['Tombes du cimetière des héros', 'jusqu’à ce que vous les retiriez (ramener un héros à la '
+                     + 'vie retire aussi sa tombe), ou jusqu’à la suppression du compte. Les signalements '
+                     + 'disparaissent avec la tombe, ou quand un administrateur la rétablit.'],
+                    ['Parrainage', 'tant que le compte du parrain et celui du filleul existent.'],
                     ['Compte resté inactif', '[À COMPLÉTER : durée retenue, par ex. 3 ans sans connexion], '
                      + 'après un message d’avertissement envoyé à votre adresse.'],
                     ['Sauvegardes techniques', 'jusqu’à [À COMPLÉTER : durée de rétention des sauvegardes '
@@ -272,7 +288,8 @@
                    + 'Cette autorisation s’éteint quand vous supprimez le contenu.' },
                 { p: 'Vous êtes responsable de ce que vous saisissez, et notamment de ne pas y recopier des '
                    + 'textes protégés dont vous n’avez pas les droits. Le contenu personnel saisi dans le '
-                   + 'site n’est visible que de vous.' },
+                   + 'site n’est visible que de vous, sauf ce que vous choisissez de publier au cimetière des '
+                   + 'héros.' },
 
                 { h: 'Usages interdits' },
                 { ul: [
@@ -282,6 +299,34 @@
                     'perturber le service, le sonder, le contourner ou le surcharger automatiquement ;',
                     'utiliser le site pour redistribuer massivement du contenu sous droit d’auteur.'
                 ] },
+
+                { h: 'Le cimetière des héros : ce que vous publiez' },
+                { p: 'Le cimetière des héros permet de graver la tombe d’un personnage : son nom, sa classe, '
+                   + 'son niveau, son espèce, une épitaphe de 280 caractères au plus, une date, une cause et, si '
+                   + 'vous le souhaitez, son portrait. Une tombe privée n’est visible que de vous et des joueurs '
+                   + 'connectés à qui vous confiez son lien secret ; une tombe publique est visible de tous les '
+                   + 'joueurs connectés.' },
+                { p: 'Vous restez propriétaire de ce que vous publiez, et autorisez le site à l’afficher aux '
+                   + 'personnes que vous avez choisies, le temps que la tombe existe. Vous garantissez avoir les '
+                   + 'droits sur le texte et le portrait, et vous vous engagez à n’y mettre ni contenu illicite, '
+                   + 'choquant, haineux ou harcelant, ni données personnelles d’autrui, ni publicité.' },
+                { ul: [
+                    'chaque joueur connecté peut signaler une tombe qu’il voit ; au troisième signalement '
+                    + 'distinct, la tombe est masquée automatiquement, en attendant l’examen d’un administrateur ;',
+                    'un administrateur peut masquer une tombe ou la rétablir ; son auteur la voit toujours, '
+                    + 'avec la mention de son masquage ;',
+                    'vous pouvez retirer une tombe à tout moment, ou ramener son héros à la vie, ce qui la retire '
+                    + 'aussi ;',
+                    'le nombre de tombes et la taille des portraits sont limités ;',
+                    'un manquement grave ou répété peut entraîner la suspension du compte, selon l’article '
+                    + '« Suspension et fermeture ».'
+                ] },
+
+                { h: 'Parrainage' },
+                { p: 'Chaque compte peut partager un lien de parrainage. Un parrainage est validé quand le compte '
+                   + 'invité a confirmé son adresse e-mail et créé son premier personnage. Se parrainer soi-même, '
+                   + 'ou créer des comptes dans ce seul but, est interdit. La récompense d’un parrainage est '
+                   + 'purement cosmétique et n’a aucune valeur marchande.' },
 
                 { h: 'Disponibilité' },
                 { p: 'Le site est fourni tel quel, sans garantie de disponibilité continue. Des '

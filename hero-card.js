@@ -601,6 +601,18 @@
         };
     }
 
+    /** Un héros décrit hors de la fiche (une tombe du cimetière, LOT 8.5) : ce qui manque prend une valeur neutre. */
+    function heros(x) {
+        return {
+            nom: String(x.nom || '').trim() || 'Héros sans nom',
+            classe: String(x.classe || ''), sousClasse: '', niveau: String(x.niveau || '1'),
+            race: String(x.race || ''), historique: String(x.historique || ''),
+            stats: ['FOR', 'DEX', 'CON', 'INT', 'SAG', 'CHA'].map(l => ({ l, score: 10, mod: 0 })),
+            ca: '', pv: '', init: '', vitesse: '', maitrise: '',
+            avatar: x.avatar || null, cadre: '', armes: []
+        };
+    }
+
     // =====================================================
     // LE DESSIN
     // =====================================================
@@ -729,11 +741,13 @@
             ctx.fillText(l2, W / 2, L.ligne2);
         }
 
+        // Sans blocs (une tombe, LOT 8.5), la devise — l'épitaphe — prend leur place.
+        const blocs = L.blocs && !reg.sansBlocs;
         let y = (l2 ? L.ligne2 : L.ligne1) + 22;
         const devise = String(reg.devise || '').trim();
         if (devise) {
             ctx.font = `italic 400 36px ${LORA}`;
-            const lignes = couper(ctx, '« ' + devise + ' »', L.deviseLargeur, L.deviseLignes);
+            const lignes = couper(ctx, '« ' + devise + ' »', L.deviseLargeur, reg.sansBlocs && L.blocs ? L.deviseLignes + 5 : L.deviseLignes);
             ctx.save();
             ctx.fillStyle = css(p.or);
             if (nuit) { ctx.shadowColor = css(p.or, 0.35); ctx.shadowBlur = flou(12); }
@@ -744,24 +758,24 @@
         y += 30;
 
         // Choix de l'arme
-        // L'avatar (1:1) n'a ni caractéristiques, ni combat, ni arme.
+        // L'avatar (1:1) n'a ni caractéristiques, ni combat, ni arme. La carte d'une tombe non plus.
         let arme = null;
-        if (!L.blocs) arme = null;
+        if (!blocs) arme = null;
         else if (reg.arme === 'auto') arme = d.armes[0] || null;
         else if (typeof reg.arme === 'number' && !isNaN(reg.arme)) arme = d.armes.find(a => a.i === reg.arme) || null;
 
-        const infos = !L.blocs ? [] : [['CA', d.ca], ['PV', d.pv], ['INIT', bonus(d.init)], ['VITESSE', metres(d.vitesse)], ['MAÎTRISE', bonus(d.maitrise)]].filter(([, v]) => v);
+        const infos = !blocs ? [] : [['CA', d.ca], ['PV', d.pv], ['INIT', bonus(d.init)], ['VITESSE', metres(d.vitesse)], ['MAÎTRISE', bonus(d.maitrise)]].filter(([, v]) => v);
         // Le bloc du bas se centre dans la place qui reste au-dessus du pied.
         const bloc = 150 + (infos.length ? L.ecart + 84 : 0) + (arme ? L.ecartArme + 118 : 0);
         // Un style gagné grave son exploit juste au-dessus du pied.
         const reste = (sceauInfo ? L.basBlocs - 24 : L.basBlocs) - (y + bloc);
-        if (L.blocs && reste > 0) y += reste / 2;
+        if (blocs && reste > 0) y += reste / 2;
 
         // --- Caractéristiques ---
         const gap = 16, cw = (W - 2 * M - gap * 5) / 6, ch = 150;
         const meilleure = Math.max(...d.stats.map(s => s.score));
         let marquee = false;
-        (L.blocs ? d.stats : []).forEach((s, i) => {
+        (blocs ? d.stats : []).forEach((s, i) => {
             const x = M + i * (cw + gap);
             const top = s.score === meilleure && !marquee;
             if (top) marquee = true;
@@ -779,7 +793,7 @@
             ctx.fillStyle = css(p.encre, 0.6); ctx.font = `400 25px ${LORA}`;
             ctx.fillText(String(s.score), x + cw / 2, y + 134);
         });
-        if (L.blocs) y += ch;
+        if (blocs) y += ch;
 
         // --- Combat ---
         if (infos.length) {
@@ -1514,17 +1528,23 @@
         formats: () => ORDRE_FORMATS.map(id => Object.assign({}, FORMATS[id])),
         /** Les identifiants de tous les styles, gagnés ou non. */
         styles: () => STYLES.map(x => x.id),
-        /** La carte du personnage ouvert dans un style et un format, sans ouvrir l'atelier. */
+        /**
+         * La carte du personnage ouvert dans un style et un format, sans ouvrir l'atelier.
+         * `donnees` dessine un autre héros ({ nom, classe, niveau, race, historique, avatar }),
+         * `sansBlocs` laisse de côté caractéristiques, combat et arme (les tombes du cimetière).
+         */
         async dessinerPour(o) {
             const opt = o || {};
             const fmt = FORMATS[opt.format] || PORTRAIT;
             const echelle = opt.echelle || 0.25;
-            const dc = donnees();
+            const dc = opt.donnees ? heros(opt.donnees) : donnees();
             const c = document.createElement('canvas');
             c.width = Math.round(fmt.w * echelle); c.height = Math.round(fmt.h * echelle);
-            dessiner(c, dc, { style: opt.style || 'nuit', devise: opt.devise || '', arme: opt.arme || 'auto', format: fmt.id, echelle }, await preparer(dc));
+            dessiner(c, dc, { style: opt.style || 'nuit', devise: opt.devise || '', arme: opt.arme || 'auto', format: fmt.id, echelle, sansBlocs: !!opt.sansBlocs }, await preparer(dc));
             return c;
         },
+        /** Chaque style, gagné ou non (la salle des trophées compte la collection). */
+        collection: () => STYLES.map(x => ({ id: x.id, nom: x.nom, rarete: x.rarete || 'rare', gagne: disponible(x) })),
         formatVideo,
         /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */
         styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; }

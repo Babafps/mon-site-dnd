@@ -22,6 +22,8 @@
     const normal = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
     const horsSaisie = (t) => !(t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || '')));
     const dire = (icone, texte, o) => { const u = UI(); if (u && u.murmure) u.murmure(Object.assign({ icone, texte, titre: 'Hmm.' }, o || {})); };
+    // Chaque découverte laisse une trace dans le registre des secrets (exploits.js, LOT 8.1).
+    const trouver = (id) => { try { if (window.Exploits && window.Exploits.trouver) window.Exploits.trouver(id); } catch (e) {} };
     const unParSession = (cle) => {
         try { const k = 'dnd-absurde-' + idPerso() + '-' + cle; if (sessionStorage.getItem(k)) return false; sessionStorage.setItem(k, '1'); } catch (e) {}
         return true;
@@ -71,6 +73,7 @@
     // =====================================================
     function tarte() {
         dire('🥧', 'Une tarte à la crème dans un sac ? Elle n’a pas tenu. Splotch.', { titre: 'Splotch' });
+        trouver('tarte');
         if (calme()) return;
         styles();
         const vol = document.createElement('div');
@@ -110,14 +113,15 @@
         connus = new Set(noms);
         const ajout = (re) => nouveaux.some(n => re.test(n));
         if (ajout(/\btartes?\b/)) tarte();
-        else if (ajout(/\bchaussettes?\b/)) dire('🧦', 'Chaussette ajoutée. Sa jumelle a été vue pour la dernière fois dans le plan Astral.', { titre: 'Inventaire' });
-        else if (ajout(/\bketchup\b/)) dire('🍅', 'Le ketchup est formellement interdit à la table des aventuriers. Le MJ a été prévenu.', { titre: 'Règlement de la taverne', humeur: 'sang' });
-        else if (ajout(/\bmayo(nnaise)?\b/)) dire('🫙', 'Potion de mayonnaise ajoutée. Effet : aucun. Goût : discutable.', { titre: 'Inventaire' });
-        else if (nouveaux.some(n => /\bbaguettes?\b/.test(n) && !/magique/.test(n))) dire('🥖', 'Une baguette. Pas magique. Mais croustillante.', { titre: 'Inventaire' });
+        else if (ajout(/\bchaussettes?\b/)) { dire('🧦', 'Chaussette ajoutée. Sa jumelle a été vue pour la dernière fois dans le plan Astral.', { titre: 'Inventaire' }); trouver('sac:chaussette'); }
+        else if (ajout(/\bketchup\b/)) { dire('🍅', 'Le ketchup est formellement interdit à la table des aventuriers. Le MJ a été prévenu.', { titre: 'Règlement de la taverne', humeur: 'sang' }); trouver('sac:ketchup'); }
+        else if (ajout(/\bmayo(nnaise)?\b/)) { dire('🫙', 'Potion de mayonnaise ajoutée. Effet : aucun. Goût : discutable.', { titre: 'Inventaire' }); trouver('sac:mayonnaise'); }
+        else if (nouveaux.some(n => /\bbaguettes?\b/.test(n) && !/magique/.test(n))) { dire('🥖', 'Une baguette. Pas magique. Mais croustillante.', { titre: 'Inventaire' }); trouver('sac:baguette'); }
 
         // Un objet au poids négatif : le sac s'allège… un peu trop
         if (liste.some(o => o && parseFloat(String(o.weight || '').replace(',', '.')) < 0) && unParSession('sac-flotte')) {
             dire('🎈', 'Un objet de poids négatif. Ton sac flotte. Attache-le avant qu’il s’envole.', { titre: 'Physique', humeur: 'arcane' });
+            trouver('sac-flotte');
             const w = document.getElementById('widget-inventory');
             if (w && !calme()) { styles(); w.classList.remove('ab-flotte'); void w.offsetWidth; w.classList.add('ab-flotte'); setTimeout(() => w.classList.remove('ab-flotte'), 4400); }
         }
@@ -135,27 +139,28 @@
         'stat-cha': ['🦨', 'Charisme 1. Même les gobelins changent de trottoir.']
     };
     const NOMS = [
-        [/^kevin\b/, '🧙', 'Kevin le Nécromancien refuse qu’on l’appelle Kev.'],
-        [/^jean[- ]?michel\b/, '🪓', 'Jean-Michel le Barbare. Les contrées lointaines tremblent un peu.'],
-        [/^gerard\b/, '🌋', 'Gérard, Destructeur de Mondes, préfère qu’on le vouvoie.'],
-        [/^brigitte\b/, '🗂️', 'Brigitte l’Implacable a déjà rangé ton inventaire. Par ordre alphabétique.'],
-        [/^jean[- ]?claude\b/, '😴', 'Jean-Claude, paladin du dimanche, n’attaque qu’après la sieste.']
+        [/^kevin\b/, '🧙', 'Kevin le Nécromancien refuse qu’on l’appelle Kev.', 'kevin'],
+        [/^jean[- ]?michel\b/, '🪓', 'Jean-Michel le Barbare. Les contrées lointaines tremblent un peu.', 'jean-michel'],
+        [/^gerard\b/, '🌋', 'Gérard, Destructeur de Mondes, préfère qu’on le vouvoie.', 'gerard'],
+        [/^brigitte\b/, '🗂️', 'Brigitte l’Implacable a déjà rangé ton inventaire. Par ordre alphabétique.', 'brigitte'],
+        [/^jean[- ]?claude\b/, '😴', 'Jean-Claude, paladin du dimanche, n’attaque qu’après la sieste.', 'jean-claude']
     ];
     const minuteurs = {};
     // En capture : on voit passer la frappe de tous les champs, journal compris.
     document.addEventListener('input', (e) => {
         const t = e.target; if (!t) return;
         const plusTard = (fn) => { clearTimeout(minuteurs[t.id]); minuteurs[t.id] = setTimeout(fn, 900); };
-        if (DIAGNOSTICS[t.id]) plusTard(() => { if (String(t.value).trim() === '1' && unParSession(t.id)) dire(DIAGNOSTICS[t.id][0], DIAGNOSTICS[t.id][1], { titre: 'Diagnostic' }); });
-        else if (t.id === 'speed') plusTard(() => { if (/^0([.,]0+)?\s*(m|ft)?$/i.test(String(t.value).trim()) && unParSession('vitesse0')) dire('🪴', 'Vitesse 0 m. Ton héros est officiellement une plante verte. Pense à l’arroser.', { titre: 'Diagnostic' }); });
+        if (DIAGNOSTICS[t.id]) plusTard(() => { if (String(t.value).trim() === '1' && unParSession(t.id)) { dire(DIAGNOSTICS[t.id][0], DIAGNOSTICS[t.id][1], { titre: 'Diagnostic' }); trouver('diagnostic:' + t.id.slice(5)); } });
+        else if (t.id === 'speed') plusTard(() => { if (/^0([.,]0+)?\s*(m|ft)?$/i.test(String(t.value).trim()) && unParSession('vitesse0')) { dire('🪴', 'Vitesse 0 m. Ton héros est officiellement une plante verte. Pense à l’arroser.', { titre: 'Diagnostic' }); trouver('diagnostic:vitesse'); } });
         else if (t.id === 'char-level') plusTard(() => {
             const n = parseInt(String(t.value).trim(), 10);
             if (isNaN(n) || n > 0 || !unParSession(n < 0 ? 'niveau-negatif' : 'niveau-0')) return;
             dire('🍼', n < 0 ? 'Niveau négatif. Ton héros a réussi à régresser. C’est presque un exploit.' : 'Niveau 0. Ton héros est encore en train de lire le manuel.', { titre: 'Diagnostic' });
+            trouver(n < 0 ? 'diagnostic:niveau-negatif' : 'diagnostic:niveau0');
         });
         else if (t.id === 'char-name') plusTard(() => {
             const n = normal(t.value), x = NOMS.find(([re]) => re.test(n));
-            if (x && unParSession('nom-' + n)) dire(x[1], x[2], { titre: 'Registre des héros' });
+            if (x && unParSession('nom-' + n)) { dire(x[1], x[2], { titre: 'Registre des héros' }); trouver('nom:' + x[3]); }
         });
         // Un cri de guerre en majuscules, dans n'importe quel champ
         const texte = t.isContentEditable ? t.textContent : t.value;
@@ -164,6 +169,7 @@
 
     function criDeGuerre() {
         dire('📣', 'Ton héros charge en hurlant. Personne ne sait vers quoi.', { titre: 'Cri de guerre', humeur: 'sang' });
+        trouver('cri');
         if (calme()) return;
         styles();
         document.body.classList.remove('ab-secousse'); void document.body.offsetWidth; document.body.classList.add('ab-secousse');
@@ -180,7 +186,7 @@
         if ((e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 's') {
             if (e.defaultPrevented) return;
             e.preventDefault();
-            if (pasAvant('ctrl-s', 8000)) dire('💾', 'Jet de sauvegarde réussi ! (Ta fiche s’enregistre toute seule, tu sais.)', { titre: 'Sauvegarde contre la mort', humeur: 'or' });
+            if (pasAvant('ctrl-s', 8000)) { dire('💾', 'Jet de sauvegarde réussi ! (Ta fiche s’enregistre toute seule, tu sais.)', { titre: 'Sauvegarde contre la mort', humeur: 'or' }); trouver('ctrl-s'); }
             return;
         }
         if (e.ctrlKey || e.metaKey || e.altKey || !e.key || e.key.length !== 1) return;
@@ -204,6 +210,7 @@
 
     function chat() {
         dire('🐈', 'Un chat vient de marcher sur ton clavier. Il gagne +2 en Discrétion et refuse de s’excuser.', { titre: 'Intrusion féline' });
+        trouver('chat');
         if (calme()) return;
         styles();
         const trace = document.createElement('div');
@@ -222,6 +229,7 @@
 
     function moutons() {
         dire('🐑', 'Tu comptais les moutons ? Il y en a sept. Le huitième est coincé quelque part dans ta fiche.', { titre: 'Insomnie', humeur: 'nuit' });
+        trouver('moutons');
         if (calme()) return;
         styles();
         for (let i = 0; i < 7; i++) {
@@ -240,8 +248,8 @@
     // =====================================================
     function desImpossibles(expr) {
         const v = normal(expr).replace(/\s+/g, '');
-        if (/(^|[+-])\d*d0+(?!\d)/.test(v)) dire('🕳️', 'Un dé à zéro face. Il a disparu. Le MJ te le facture 5 po.', { titre: 'Physique', humeur: 'arcane' });
-        else if (/(^|[+-])\d*d1(?!\d)/.test(v)) dire('🎲', 'Un dé à une face. Suspense insoutenable… c’est un 1.', { titre: 'Suspense' });
+        if (/(^|[+-])\d*d0+(?!\d)/.test(v)) { dire('🕳️', 'Un dé à zéro face. Il a disparu. Le MJ te le facture 5 po.', { titre: 'Physique', humeur: 'arcane' }); trouver('de:0'); }
+        else if (/(^|[+-])\d*d1(?!\d)/.test(v)) { dire('🎲', 'Un dé à une face. Suspense insoutenable… c’est un 1.', { titre: 'Suspense' }); trouver('de:1'); }
     }
     document.addEventListener('click', (e) => {
         if (e.target && e.target.closest && e.target.closest('#btn-expr-roll')) desImpossibles((document.getElementById('expr-input') || {}).value);
@@ -260,6 +268,7 @@
         if (lancers.length >= 8 && pasAvant('greve', 90000)) {
             lancers = [];
             dire('🪧', 'Ton d20 fait grève. Revendications : moins de jets, plus de 20.', { titre: 'Syndicat des dés' });
+            trouver('greve');
         }
     });
 
@@ -271,7 +280,7 @@
         derniereActivite = Date.now();
         if (!ronfle) return;
         ronfle.remove(); ronfle = null;
-        if (Date.now() - debutRonflement > 4000) dire('😪', 'Hein ? Quoi ? J’étais pas endormi. Je surveillais la fiche.', { titre: 'Réveil en sursaut', humeur: 'nuit' });
+        if (Date.now() - debutRonflement > 4000) { dire('😪', 'Hein ? Quoi ? J’étais pas endormi. Je surveillais la fiche.', { titre: 'Réveil en sursaut', humeur: 'nuit' }); trouver('ronfle'); }
     }
     ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, reveil, { passive: true, capture: true }));
     document.addEventListener('pointermove', () => { if (ronfle || Date.now() - derniereActivite > 1000) reveil(); }, { passive: true });

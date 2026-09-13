@@ -11,6 +11,25 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const AUTH_RECOVERY   = location.hash.includes('type=recovery');
 const AUTH_LINK_ERROR = /error_code=otp_expired|error=access_denied/.test(location.hash);
 
+// Un lien de parrainage (`?parrain=CODE`, LOT 8.4) ou de tombe partagée
+// (`?tombe=JETON`, LOT 8.5) : gardé dès l'arrivée, il traverse la connexion,
+// l'inscription et la confirmation de l'adresse. L'adresse est nettoyée aussitôt
+// (le hash, que supabase-js lit, reste intact).
+(function garderLiensCommunaute() {
+    try {
+        const u = new URL(location.href);
+        const code = (u.searchParams.get('parrain') || '').trim().toUpperCase();
+        if (/^[A-HJ-NP-Z2-9]{8}$/.test(code)) localStorage.setItem('dnd-parrain', JSON.stringify({ code, date: Date.now() }));
+        const jeton = (u.searchParams.get('tombe') || '').trim().toLowerCase();
+        if (/^[0-9a-f]{64}$/.test(jeton)) localStorage.setItem('dnd-tombe-lien', JSON.stringify({ jeton, date: Date.now() }));
+        if (u.searchParams.has('parrain') || u.searchParams.has('tombe')) {
+            u.searchParams.delete('parrain');
+            u.searchParams.delete('tombe');
+            history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+        }
+    } catch (e) { /* stockage indisponible : le lien sera simplement ignoré */ }
+})();
+
 // =====================================================
 // NAVIGATION GLOBALE ENTRE ÉCRANS (routeur léger)
 // Tous les écrans plein page sont des .screen-view ; on bascule
@@ -52,7 +71,13 @@ window.SupaAuth = {
     },
 
     async signUpEmail(email, password) {
-        const { data, error } = await _supabase.auth.signUp({ email, password });
+        // Le code d'un lien de parrainage voyage avec l'inscription (LOT 8.4) : dans les
+        // métadonnées du compte, et dans l'adresse de retour du mail de confirmation.
+        let parrain = null;
+        try { const o = JSON.parse(localStorage.getItem('dnd-parrain') || 'null'); if (o && /^[A-HJ-NP-Z2-9]{8}$/.test(o.code)) parrain = o.code; } catch (e) {}
+        const { data, error } = await _supabase.auth.signUp(parrain
+            ? { email, password, options: { data: { parrain }, emailRedirectTo: location.origin + location.pathname + '?parrain=' + parrain } }
+            : { email, password });
         if (error) throw error;
         this.currentUser = data.user;
         return data;
@@ -500,6 +525,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.navTo(id);
     }
 
+    // Trophées et communauté (LOT 8) : une fois connecté, et une seule fois par page,
+    // le lien de parrainage suivi est enregistré, les filleuls d'un parrain sont
+    // vérifiés, la tombe d'un lien partagé s'ouvre. Chaque module arrive à la demande.
+    let communauteVue = false;
+    function apresConnexion(u) {
+        if (communauteVue || !u || !window.charger) return;
+        communauteVue = true;
+        setTimeout(() => {
+            let parrain = !!(u.user_metadata && u.user_metadata.parrain), tombe = false;
+            try { parrain = parrain || !!localStorage.getItem('dnd-parrain'); tombe = !!localStorage.getItem('dnd-tombe-lien'); } catch (e) {}
+            if (parrain) {
+                window.charger('parrainage').then(() => window.Parrainage.appliquer(u)).catch(() => {});
+            } else if (u.user_metadata && u.user_metadata.bnb_parrain && !(window.Exploits && window.Exploits.a('parrain'))) {
+                window.charger('parrainage').then(() => window.Parrainage.verifier()).catch(() => {});
+            }
+            if (tombe) window.charger('cimetiere').then(() => window.Cimetiere.ouvrirLien()).catch(() => {});
+        }, 1500);
+    }
+
     // --- Flux « mot de passe oublié » ---
     // Autonome (accès DOM directs) : appelé pendant le boot, avant l'initialisation
     // des const du bas de ce callback (showMsg/msgEl seraient encore en TDZ).
@@ -530,6 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showScreen('home-screen');
         loadUserDataIntoLocalStorage(user.id);
         window.Ent?.attach(user);
+        apresConnexion(user);
     } else {
         showScreen('login-screen');
         if (AUTH_LINK_ERROR) authBootMsg('Lien invalide ou expiré. Clique sur « Mot de passe oublié ? » pour en recevoir un nouveau.', 'error');
@@ -552,6 +597,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const loginVisible = !document.getElementById('login-screen').classList.contains('hidden');
             const loadingVisible = !document.getElementById('loading-screen').classList.contains('hidden');
             window.Ent?.attach(session.user);
+            apresConnexion(session.user);
             if (loginVisible || loadingVisible) {
                 showScreen('home-screen');
                 loadUserDataIntoLocalStorage(session.user.id);
@@ -711,6 +757,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             message: 'Te déconnecter de ce compte sur cet appareil ?',
             confirmer: 'Se déconnecter'
         })) return;
+        // Un secret ou un défi pas encore envoyé au compte part avant la déconnexion (exploits.js).
+        if (window.Exploits && window.Exploits.enAttente && window.Exploits.enAttente()) {
+            try { await window.Exploits.pousser(); } catch (e) {}
+        }
         await SyncQueue.quitter();
         // La déconnexion vide le stockage de cet appareil : si quelque chose
         // n'est pas encore parti, on le dit AVANT, pas après.

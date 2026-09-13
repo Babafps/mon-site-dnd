@@ -65,4 +65,28 @@
             btn.focus({ preventScroll: true });
         });
     });
+
+    // ---------- Trophées et communauté (LOT 8) ----------
+    // La salle des trophées, le parrainage et le cimetière naissent chargés à la
+    // demande (charger.js leur pose une façade) : un bouton `data-communaute`
+    // les ouvre, du menu comme de l'accueil.
+    const COMMUNAUTE = {
+        trophees: () => window.Trophees.ouvrir(),
+        parrainage: () => window.Parrainage.ouvrir(),
+        cimetiere: () => window.Cimetiere.ouvrir()
+    };
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('[data-communaute]');
+        if (!b || !COMMUNAUTE[b.dataset.communaute]) return;
+        const menu = document.getElementById('settings-dropdown');
+        if (menu) menu.classList.add('hidden');
+        Promise.resolve().then(COMMUNAUTE[b.dataset.communaute]).catch(() => {
+            if (window.showAppToast) window.showAppToast('Ce module n’a pas pu se charger. Vérifie ta connexion, puis réessaie.', 'erreur');
+        });
+    });
+    // L'accueil montre la carte du défi du mois : son module arrive après l'affichage.
+    document.addEventListener('screen:change', (e) => {
+        if (!e.detail || e.detail.id !== 'home-screen' || !window.charger) return;
+        setTimeout(() => window.charger('trophees').then(() => window.Trophees.accueil()).catch(() => {}), 300);
+    });
 })();
