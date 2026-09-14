@@ -79,6 +79,9 @@
             blocs: false, ecart: 0, ecartArme: 0, basBlocs: 0, sceau: 0, pied: 1008, hote: false
         }
     };
+    // Le décor seul, pour l'accueil : ni en-tête, ni nom, ni blocs — le style et le portrait.
+    // Le portrait descend au centre et grandit ; les ornements le suivent (T.PY, T.PR, T.HY, T.NY).
+    const DECOR = { PY: 640, PR: 250, entete: 300, nom: 1040 };
     // W et H suivent le format du dessin en cours : les outils de dessin les lisent ici.
     let W = PORTRAIT.w, H = PORTRAIT.h;
     const M = 80;
@@ -619,7 +622,7 @@
     function dessiner(cv, d, reg, res) {
         const ctx = cv.getContext('2d');
         const fmt = FORMATS[reg.format] || PORTRAIT;
-        const L = MISES_EN_PAGE[fmt.id];
+        const L = reg.decor ? Object.assign({}, MISES_EN_PAGE[fmt.id], DECOR) : MISES_EN_PAGE[fmt.id];
         W = fmt.w; H = fmt.h;
         echelleDessin = reg.echelle || ECHELLE;
         ctx.setTransform(echelleDessin, 0, 0, echelleDessin, 0, 0);
@@ -673,21 +676,23 @@
         else if (st.cadre) { ctx.save(); st.cadre(ctx, T); ctx.restore(); }
         else cadre(ctx, p, d.cadre);
 
-        // --- En-tête ---
-        const entete = st.entete || 'BONES & BLADES';
-        const yf = L.entete - 8;
-        ctx.fillStyle = css(p.or); ctx.font = `600 24px ${CINZEL}`; ctx.textAlign = 'center';
-        // Dans le cercle de l'avatar, un long en-tête se resserre au lieu d'être rogné.
-        for (let t = 23; L.enteteMax && t >= 16 && largeurEspacee(ctx, entete, 8) > L.enteteMax; t--) ctx.font = `600 ${t}px ${CINZEL}`;
-        texteEspace(ctx, entete, W / 2, L.entete, 8, true);
-        const lt = largeurEspacee(ctx, entete, 8);
-        ctx.save(); ctx.strokeStyle = css(p.or, 0.55); ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(W / 2 - lt / 2 - 26, yf); ctx.lineTo(W / 2 - lt / 2 - 26 - L.filet, yf);
-        ctx.moveTo(W / 2 + lt / 2 + 26, yf); ctx.lineTo(W / 2 + lt / 2 + 26 + L.filet, yf);
-        ctx.stroke(); ctx.restore();
-        losange(ctx, W / 2 - lt / 2 - 15, yf, 4, css(p.or));
-        losange(ctx, W / 2 + lt / 2 + 15, yf, 4, css(p.or));
+        // --- En-tête (le décor seul n'en a pas) ---
+        if (!reg.decor) {
+            const entete = st.entete || 'BONES & BLADES';
+            const yf = L.entete - 8;
+            ctx.fillStyle = css(p.or); ctx.font = `600 24px ${CINZEL}`; ctx.textAlign = 'center';
+            // Dans le cercle de l'avatar, un long en-tête se resserre au lieu d'être rogné.
+            for (let t = 23; L.enteteMax && t >= 16 && largeurEspacee(ctx, entete, 8) > L.enteteMax; t--) ctx.font = `600 ${t}px ${CINZEL}`;
+            texteEspace(ctx, entete, W / 2, L.entete, 8, true);
+            const lt = largeurEspacee(ctx, entete, 8);
+            ctx.save(); ctx.strokeStyle = css(p.or, 0.55); ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(W / 2 - lt / 2 - 26, yf); ctx.lineTo(W / 2 - lt / 2 - 26 - L.filet, yf);
+            ctx.moveTo(W / 2 + lt / 2 + 26, yf); ctx.lineTo(W / 2 + lt / 2 + 26 + L.filet, yf);
+            ctx.stroke(); ctx.restore();
+            losange(ctx, W / 2 - lt / 2 - 15, yf, 4, css(p.or));
+            losange(ctx, W / 2 + lt / 2 + 15, yf, 4, css(p.or));
+        }
 
         // --- Portrait ---
         ctx.save();
@@ -713,6 +718,8 @@
         else if (p.maudit) anneauMaudit(ctx, PX, PY, PR, p, alea);
         else if (st.anneau) { ctx.save(); st.anneau(ctx, T); ctx.restore(); }
         else anneau(ctx, PX, PY, PR, p, d.cadre);
+        // Le décor seul s'arrête là : le style et le portrait, sans un mot.
+        if (reg.decor) { if (st.devant) { ctx.save(); st.devant(ctx, T); ctx.restore(); } return; }
         if ((parseInt(d.niveau, 10) || 0) >= 20) ruban(ctx, PX, PY + PR + 4, 'HÉROS ÉPIQUE', p);
 
         // --- Nom et identité ---
@@ -1505,7 +1512,10 @@
     // style : l'accueil habille la carte du personnage sans charger l'atelier.
     // Rien tant que le joueur n'a pas choisi de style.
     // =====================================================
-    async function vignette() {
+    /** L'aperçu de la carte, à l'échelle 1/4. `{ decor: true }` : le style seul (fond, cadre,
+     *  ornements, portrait), sans en-tête, nom ni blocs — c'est ce que montre l'accueil. */
+    async function vignette(o) {
+        const decor = !!(o && o.decor);
         const style = lire('dnd-hero-style');
         if (!style || !STYLES.some(x => x.id === style && disponible(x))) return null;
         const dc = donnees();
@@ -1514,12 +1524,12 @@
         c.width = Math.round(PORTRAIT.w * echelle); c.height = Math.round(PORTRAIT.h * echelle);
         const brute = lire('dnd-hero-arme') || 'auto';
         const arme = brute === 'auto' || brute === 'aucune' ? brute : parseInt(brute, 10);
-        dessiner(c, dc, { style, devise: lire('dnd-hero-devise') || '', arme, echelle }, await preparer(dc));
+        dessiner(c, dc, { style, devise: lire('dnd-hero-devise') || '', arme, echelle, decor }, await preparer(dc));
         const t = teintes(palette(style));
         let image = '';
         // Un portrait venu d'une autre origine « salit » le canvas : pas de vignette, pas d'erreur.
         try { image = c.toDataURL('image/jpeg', 0.8); } catch (e) { return null; }
-        return { style, image, or: rgb(t.or), f1: rgb(t.f1), f2: rgb(t.f2), date: Date.now() };
+        return { style, image, or: rgb(t.or), f1: rgb(t.f1), f2: rgb(t.f2), date: Date.now(), decor };
     }
 
     window.HeroCard = {
@@ -1543,7 +1553,7 @@
             const dc = opt.donnees ? heros(opt.donnees) : donnees();
             const c = document.createElement('canvas');
             c.width = Math.round(fmt.w * echelle); c.height = Math.round(fmt.h * echelle);
-            dessiner(c, dc, { style: opt.style || 'nuit', devise: opt.devise || '', arme: opt.arme || 'auto', format: fmt.id, echelle, sansBlocs: !!opt.sansBlocs }, await preparer(dc));
+            dessiner(c, dc, { style: opt.style || 'nuit', devise: opt.devise || '', arme: opt.arme || 'auto', format: fmt.id, echelle, sansBlocs: !!opt.sansBlocs, decor: !!opt.decor }, await preparer(dc));
             return c;
         },
         /** Chaque style, gagné ou non (la salle des trophées compte la collection). */

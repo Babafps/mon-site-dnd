@@ -9900,6 +9900,168 @@ body.theme-dark .char-card.a-style.seance-proche .char-info .char-meta span.char
 .char-card.a-style.seance-proche .char-info .char-seance { background: rgb(var(--carte-or)); color: rgb(var(--carte-f2)) !important; }
 .char-card.a-style .char-act, body.theme-dark .char-card.a-style .char-act { color: rgba(var(--carte-or), .85); }
 
+/* ============================================================
+   ✦ ACCUEIL — LA GALERIE DES HÉROS
+   Chaque personnage est une carte de héros au format portrait : la vignette
+   du style choisi (coffre.js) en occupe toute la face ; sans style, son
+   portrait dans un cadre doré. La tuile « Créer » ferme la galerie, et les
+   raccourcis (Règles, Tarifs, Trophées) deviennent des pastilles discrètes.
+   Préfixe #home-screen : ces règles passent devant les anciennes couches.
+   ============================================================ */
+#home-screen .home-container { max-width: 980px; margin: 56px auto 40px; padding: 26px 30px 22px; text-align: left; }
+#home-screen .home-entete { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 0 0 24px; }
+#home-screen .brand-logo { flex: 0 0 auto; width: 88px; height: 88px; margin: 0; }
+#home-screen .home-entete-txt { min-width: 0; }
+#home-screen .home-title { margin: 0; padding: 0 0 12px; font-size: clamp(1.9rem, 4.4vw, 2.6rem); letter-spacing: .04em; }
+#home-screen .home-title::after { left: 0; right: 0; }
+#home-screen .home-devise { margin: 6px 0 0; font-family: 'Lora', Georgia, serif; font-style: italic; font-size: .92rem; opacity: .78; }
+
+#home-screen .home-head { align-items: center; margin: 0 0 14px; padding: 0 0 10px; border-bottom: 1px solid rgba(122,40,40,.16); }
+#home-screen .home-head h2 { margin: 0; font-size: .98rem; opacity: .9; }
+
+#home-screen .char-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; margin: 0 0 18px; }
+#home-screen .char-list > .char-list-vide { grid-column: 1 / -1; margin: 4px 0 0; text-align: center; font-style: italic; opacity: .8; }
+
+#home-screen .char-card,
+body.theme-dark #home-screen .char-card {
+    position: relative; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0;
+    padding: 7px; border-radius: 16px; overflow: visible; cursor: pointer; text-align: left;
+    font-family: 'Lora', Georgia, serif; font-weight: normal; font-size: 1rem; color: var(--text-color);
+    background: linear-gradient(170deg, rgba(255,252,242,.96), rgba(238,226,198,.92));
+    border: 1px solid rgba(122,40,40,.22);
+    box-shadow: 0 2px 8px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.6);
+    transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease, border-color .22s ease;
+    animation: accueilCarte .38s cubic-bezier(.2,.8,.2,1) backwards;
+}
+body.theme-dark #home-screen .char-card { background: linear-gradient(170deg, #2b221b, #1d1712); border-color: rgba(196,155,53,.24); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+#home-screen .char-card:hover,
+body.theme-dark #home-screen .char-card:hover { transform: translateY(-4px); border-color: var(--accent-color); box-shadow: 0 16px 30px rgba(0,0,0,.2), 0 0 0 1px rgba(196,155,53,.35); }
+#home-screen .char-card:hover { background: linear-gradient(170deg, rgba(255,252,242,.98), rgba(242,231,204,.95)); color: var(--text-color); }
+body.theme-dark #home-screen .char-card:hover { background: linear-gradient(170deg, #31271f, #211a14); }
+#home-screen .char-card:active { transform: translateY(-1px); }
+#home-screen .char-card:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 3px; }
+@keyframes accueilCarte { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* La face : un cadre de carte, puis la vignette ou le portrait */
+#home-screen .char-card-face {
+    position: relative; aspect-ratio: 4 / 5; border-radius: 11px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 38%, rgba(232,193,106,.3), transparent 62%), linear-gradient(165deg, #4a2433 0%, #1a0e13 100%);
+    box-shadow: inset 0 0 0 1px rgba(196,155,53,.4), 0 4px 12px rgba(0,0,0,.22);
+}
+#home-screen .char-card-face::after { content: ''; position: absolute; inset: 7px; border: 1px solid rgba(232,193,106,.42); border-radius: 8px; pointer-events: none; }
+#home-screen .char-card.a-decor .char-card-face::after { display: none; }
+/* Le style choisi, avant que la fiche n'ait peint son décor : ses couleurs, et un cadre à sa teinte */
+#home-screen .char-card.a-style:not(.a-decor) .char-card-face {
+    background: radial-gradient(ellipse at 50% 38%, rgba(var(--carte-or), .28), transparent 62%), linear-gradient(165deg, rgb(var(--carte-f1)), rgb(var(--carte-f2)));
+    box-shadow: inset 0 0 0 1px rgba(var(--carte-or), .45), 0 4px 12px rgba(0,0,0,.25);
+}
+#home-screen .char-card.a-style:not(.a-decor) .char-card-face::after { border-color: rgba(var(--carte-or), .5); }
+#home-screen .char-card.a-style .char-card-avatar { border-color: rgb(var(--carte-or)); color: rgb(var(--carte-or)); box-shadow: 0 0 26px rgba(var(--carte-or), .25), inset 0 0 0 3px rgba(0,0,0,.25); }
+#home-screen .char-card-vignette { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: 0; border-radius: 0; box-shadow: none; }
+#home-screen .char-card-avatar,
+body.theme-dark #home-screen .char-card-avatar {
+    width: 62%; height: auto; aspect-ratio: 1; margin: 0; border-radius: 50%;
+    background-color: rgba(255,255,255,.06); background-size: cover; background-position: center;
+    border: 2px solid rgba(232,193,106,.8); box-shadow: 0 0 26px rgba(232,193,106,.22), inset 0 0 0 3px rgba(0,0,0,.25);
+    color: #e8c16a; font-family: 'Cinzel', Georgia, serif; font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 700;
+}
+#home-screen .char-card:hover .char-card-avatar { border-color: #f3d27a; }
+
+/* Sous la face : le nom, le niveau, la dernière ouverture, la séance */
+#home-screen .char-info { padding: 9px 5px 3px; gap: 3px; }
+#home-screen .char-name { font-size: .95rem; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; /* galerie */ line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+#home-screen .char-sub { font-size: .76rem; }
+#home-screen .char-meta { font-size: .7rem; gap: 3px 6px; min-height: 1.25em; }
+body.theme-dark #home-screen .char-card:not(.a-style) .char-info .char-name { color: var(--text-color) !important; }
+
+/* Le style de héros choisi habille toute la carte, pas seulement sa face */
+#home-screen .char-card.a-style,
+body.theme-dark #home-screen .char-card.a-style { background: linear-gradient(170deg, rgb(var(--carte-f1)), rgb(var(--carte-f2))); border-color: rgba(var(--carte-or), .45); }
+#home-screen .char-card.a-style:hover,
+body.theme-dark #home-screen .char-card.a-style:hover { background: linear-gradient(170deg, rgb(var(--carte-f1)), rgb(var(--carte-f2))); border-color: rgb(var(--carte-or)); box-shadow: 0 16px 30px rgba(0,0,0,.35), 0 0 20px rgba(var(--carte-or), .28); }
+
+/* Les actions : des pastilles posées dans le coin de la face */
+#home-screen .char-actions { position: absolute; top: 13px; right: 13px; z-index: 3; gap: 4px; padding: 0; }
+#home-screen .char-act,
+#home-screen .char-card.a-style .char-act,
+body.theme-dark #home-screen .char-act {
+    display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+    font-size: .95rem; line-height: 1; color: #f6ead0; opacity: .85;
+    background: rgba(12,8,6,.58); border: 1px solid rgba(232,193,106,.4);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+#home-screen .char-card:hover .char-act, #home-screen .char-card:focus-within .char-act, #home-screen .char-card.is-menu-open .char-act { opacity: 1; }
+#home-screen .char-act:hover:not(:disabled),
+body.theme-dark #home-screen .char-act:hover:not(:disabled) { background: rgba(12,8,6,.85); color: #fff; }
+#home-screen .char-act:disabled { opacity: .3; }
+#home-screen .char-act:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+#home-screen .char-act-move { opacity: .85; }
+#home-screen .char-menu-btn { letter-spacing: 0; }
+#home-screen .char-menu-pop { background: #fffaf0; z-index: 70; }
+body.theme-dark #home-screen .char-menu-pop { background: #2a2118; }
+
+/* La tuile « Créer un personnage » */
+#home-screen .char-list > .home-create {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    width: auto; min-height: 240px; margin: 0; padding: 16px; border-radius: 16px;
+    font-family: 'Cinzel', Georgia, serif; font-size: .88rem; font-weight: 600; letter-spacing: .03em; text-transform: none; color: var(--primary-color);
+    background: rgba(255,252,242,.4); border: 2px dashed rgba(122,40,40,.32); box-shadow: none;
+    transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+#home-screen .char-list > .home-create::after { display: none; }
+#home-screen .home-create-plus {
+    display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
+    font-size: 1.9rem; line-height: 1; background: rgba(122,40,40,.08); border: 1px solid rgba(122,40,40,.28);
+    transition: transform .25s cubic-bezier(.2,.8,.2,1);
+}
+#home-screen .char-list > .home-create:hover { border-color: var(--primary-color); background: rgba(255,252,242,.7); transform: translateY(-3px); box-shadow: none; }
+#home-screen .char-list > .home-create:hover .home-create-plus { transform: rotate(90deg) scale(1.06); }
+#home-screen .char-list > .home-create:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 3px; }
+body.theme-dark #home-screen .char-list > .home-create { color: var(--accent-color); background: rgba(255,255,255,.03); border-color: rgba(196,155,53,.32); }
+body.theme-dark #home-screen .char-list > .home-create:hover { background: rgba(196,155,53,.08); border-color: var(--accent-color); }
+body.theme-dark #home-screen .home-create-plus { background: rgba(196,155,53,.1); border-color: rgba(196,155,53,.35); }
+
+/* Glisser une carte : le repère ne prend aucune case (sinon la grille se décalerait sous
+   le pointeur) ; un trait doré marque la place, contre la carte voisine. */
+#home-screen .char-list > .ds-drop { display: none; }
+#home-screen .char-list > .char-card:has(+ .ds-drop) { box-shadow: 7px 0 0 0 var(--accent-color), 0 10px 22px rgba(0,0,0,.18) !important; }
+#home-screen .char-list > .ds-drop + .char-card { box-shadow: -7px 0 0 0 var(--accent-color), 0 10px 22px rgba(0,0,0,.18) !important; }
+
+/* Les raccourcis : des pastilles, plus des boutons pleine largeur */
+#home-screen .home-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 2px 0 12px; }
+#home-screen .home-actions .btn {
+    width: auto; margin: 0; padding: 7px 16px; border-radius: 999px;
+    font-size: .8rem; font-weight: 600; letter-spacing: .03em; text-transform: none;
+    color: var(--primary-color); background: rgba(255,252,242,.6); border: 1px solid rgba(122,40,40,.26); box-shadow: none;
+}
+#home-screen .home-actions .btn::after { display: none; }
+#home-screen .home-actions .btn:hover { color: #f6ead0; background: var(--primary-color); border-color: var(--primary-color); box-shadow: none; }
+body.theme-dark #home-screen .home-actions .btn { color: var(--accent-color); background: rgba(255,255,255,.05); border-color: rgba(196,155,53,.32); }
+body.theme-dark #home-screen .home-actions .btn:hover { color: #f6ead0; background: rgba(196,155,53,.18); border-color: var(--accent-color); }
+#home-screen .home-defi { margin-top: 0; }
+
+@media (max-width: 600px) {
+    #home-screen .home-container { margin: 64px 12px 24px; padding: 18px 14px 16px; }
+    #home-screen .home-entete { flex-direction: column; gap: 6px; margin-bottom: 18px; text-align: center; }
+    #home-screen .brand-logo { width: 72px; height: 72px; }
+    #home-screen .home-title::after { left: 12%; right: 12%; }
+    #home-screen .home-devise { font-size: .84rem; }
+    #home-screen .char-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    #home-screen .char-card { padding: 5px; border-radius: 13px; }
+    #home-screen .char-actions { top: 10px; right: 10px; }
+    #home-screen .char-act { width: 34px; height: 34px; }
+    /* Sur téléphone, la tuile « Créer » devient une barre : pas de grande case vide au bout de la galerie. */
+    #home-screen .char-list > .home-create { grid-column: 1 / -1; flex-direction: row; gap: 12px; min-height: 0; padding: 12px 14px; }
+    #home-screen .home-create-plus { width: 40px; height: 40px; font-size: 1.4rem; }
+}
+@media (hover: none) { #home-screen .char-act { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    #home-screen .char-card, #home-screen .char-list > .home-create, #home-screen .home-create-plus { animation: none; transition: none; }
+    #home-screen .char-card:hover, #home-screen .char-list > .home-create:hover { transform: none; }
+    #home-screen .char-list > .home-create:hover .home-create-plus { transform: none; }
+}
+
 /* --- Prochaine séance : la fenêtre (LOT 6.4) --- */
 .seance-form { display: flex; flex-direction: column; gap: 10px; }
 .seance-ligne { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

@@ -668,7 +668,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (cible && (cible === ligne || !siennes(cible))) cible = null;
                 if (cible) {
                     const r = cible.getBoundingClientRect();
-                    poserRepere(cible, y < r.top + r.height / 2);
+                    // Une liste se lit de haut en bas ; une grille de cartes, de gauche à droite.
+                    poserRepere(cible, opt.axe === 'x' ? x < r.left + r.width / 2 : y < r.top + r.height / 2);
                     return;
                 }
                 // Hors d'une ligne (en-tête de groupe, fond de la liste) : avant
@@ -1062,14 +1063,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (jeton !== jetonCartes) return;
                 res.forEach(({ c, v }) => {
                     const el = carte(c.id);
-                    if (!el || !v || !v.image) return;
+                    if (!el || !v || !v.or) return;
                     el.classList.add('a-style');
                     el.style.setProperty('--carte-or', v.or);
                     el.style.setProperty('--carte-f1', v.f1);
                     el.style.setProperty('--carte-f2', v.f2);
+                    // Seul le décor du style habille la face. Une vignette d'avant (la carte
+                    // complète, sans `decor`) ne prête que ses couleurs, jusqu'à ce que la
+                    // fiche, rouverte, repeigne son décor au repos.
+                    if (!v.decor || !v.image) return;
+                    el.classList.add('a-decor');
                     const img = document.createElement('img');
                     img.className = 'char-card-vignette';
-                    img.src = v.image; img.alt = ''; img.width = 46; img.height = 58;
+                    img.src = v.image; img.alt = ''; img.width = 270; img.height = 337;
                     const avatar = el.querySelector('.char-card-avatar');
                     if (avatar) avatar.replaceWith(img);
                 });
@@ -1099,9 +1105,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }).catch(() => {});
         }
 
+        // La tuile « Créer un personnage » vit dans la galerie, après la dernière carte.
+        // On garde l'élément lui-même : son écouteur de clic le suit d'un rendu à l'autre.
+        let tuileCreer = null;
         function renderCharacterList() {
             const listDiv = document.getElementById('character-list');
             if (!listDiv) return;
+            tuileCreer = tuileCreer || document.getElementById('btn-create-char');
             const mode = DB.get(CHAR_SORT_KEY) || 'created';
             const sel = document.getElementById('char-sort-select'); if (sel) sel.value = mode;
 
@@ -1118,8 +1128,9 @@ document.addEventListener('DOMContentLoaded', () => {
             listDiv.innerHTML = '';
             if (!visible.length) {
                 listDiv.innerHTML = charactersList.length
-                    ? "<p style='text-align:center; font-style:italic;'>Tous tes personnages sont archivés.</p>"
-                    : "<p style='text-align:center; font-style:italic;'>Aucun personnage. Créez-en un !</p>";
+                    ? "<p class='char-list-vide'>Tous tes personnages sont archivés.</p>"
+                    : "<p class='char-list-vide'>Aucun héros pour l’instant. Crée le premier !</p>";
+                if (tuileCreer) listDiv.appendChild(tuileCreer);
                 return;
             }
             // Glisser une fiche la range : on fige l'ordre affiché puis on
@@ -1127,6 +1138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // « personnalisé », sinon le tri d'origine reprendrait la main.
             if (window.DragSort) window.DragSort.enable(listDiv, {
                 itemSel: '.char-card',
+                axe: 'x',                  // la galerie des héros est une grille : avant ou après se lit à l'horizontale
                 onDrop(de, vers) {
                     const ordre = sortedCharacters(DB.get(CHAR_SORT_KEY) || 'created')
                         .filter(c => showArchivedChars() || !metaOf(c.id).archived);
@@ -1146,6 +1158,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('div');
                 card.className = 'char-card' + (archived ? ' is-archived' : '');
                 card.dataset.id = c.id;
+                // Au clavier aussi : Tab pour atteindre la carte, Entrée pour ouvrir le héros.
+                card.tabIndex = 0;
+                card.setAttribute('role', 'group');
+                card.setAttribute('aria-label', (c.name || 'Personnage') + ' — Entrée pour ouvrir');
                 // Vignette du perso : l'avatar est stocké sous `{charId}_dnd-avatar`
                 // (chargé en localStorage pour local ET Supabase → dispo dès l'accueil).
                 const avatarSrc = DB.get(c.id + '_dnd-avatar');
@@ -1173,6 +1189,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 // La carte entière ouvre le personnage : ouvrir = 1 clic.
                 card.onclick = openChar;
+                card.addEventListener('keydown', (e) => {
+                    if (e.target !== card || (e.key !== 'Enter' && e.key !== ' ')) return;
+                    e.preventDefault();
+                    openChar();
+                });
 
                 const actions = document.createElement('div'); actions.className = 'char-actions';
 
@@ -1186,8 +1207,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         b.onclick = (e) => { e.stopPropagation(); moveCharacter(c.id, dir); };
                         return b;
                     };
-                    actions.appendChild(arrow('▲', 'Monter', -1, idx === 0));
-                    actions.appendChild(arrow('▼', 'Descendre', 1, idx === visible.length - 1));
+                    actions.appendChild(arrow('◀', 'Avancer dans la liste', -1, idx === 0));
+                    actions.appendChild(arrow('▶', 'Reculer dans la liste', 1, idx === visible.length - 1));
                 }
 
                 // Tout le reste tient derrière un seul bouton « ⋯ » : la carte reste lisible,
@@ -1221,9 +1242,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 menuWrap.appendChild(menuBtn); menuWrap.appendChild(menu);
                 actions.appendChild(menuWrap);
 
-                card.appendChild(thumb); card.appendChild(info); card.appendChild(actions);
+                // La face de la carte : la vignette du style de héros choisi, sinon le portrait dans un cadre.
+                const face = document.createElement('div'); face.className = 'char-card-face';
+                face.appendChild(thumb);
+                card.appendChild(face); card.appendChild(info); card.appendChild(actions);
                 listDiv.appendChild(card);
             });
+            if (tuileCreer) listDiv.appendChild(tuileCreer);
             habillerCartes(visible);
         }
 
@@ -9952,7 +9977,8 @@ document.addEventListener('DOMContentLoaded', () => {
         function rafraichirVignette() {
             if (!window.HeroCard || !window.HeroCard.vignette || !window.charger) return;
             const id = ACTIVE_CHAR_ID;
-            window.HeroCard.vignette()
+            // L'accueil montre le STYLE de la carte (décor et portrait), jamais la carte elle-même.
+            window.HeroCard.vignette({ decor: true })
                 .then(v => (v ? window.charger('coffre').then(() => window.Coffre.ecrire('vignettes', id, v)) : null))
                 .catch(() => {});
         }

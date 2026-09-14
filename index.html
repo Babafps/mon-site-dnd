@@ -411,8 +411,13 @@
 
 <div id="home-screen" class="screen-view">
     <div class="home-container">
-        <img class="brand-logo" src="IMG/logo-256.png" alt="Bones &amp; Blades" width="256" height="256">
-        <h1 class="home-title">Bones &amp; Blades</h1>
+        <header class="home-entete">
+            <img class="brand-logo" src="IMG/logo-256.png" alt="Bones &amp; Blades" width="256" height="256">
+            <div class="home-entete-txt">
+                <h1 class="home-title">Bones &amp; Blades</h1>
+                <p class="home-devise">Fiches de personnage, forgées dé après dé.</p>
+            </div>
+        </header>
         <div id="home-panel-player" class="home-panel">
             <div class="home-head">
                 <h2>Mes personnages</h2>
@@ -425,9 +430,11 @@
                 </select>
             </div>
             <div id="character-list" class="char-list"></div>
-            <button id="btn-create-char" class="btn home-create">＋ Créer un personnage</button>
-            <button id="btn-open-rules" class="btn home-rules" type="button">📖 Règles du jeu</button>
-            <button id="btn-open-trophees" class="btn home-rules no-print" type="button" data-communaute="trophees">🏆 Salle des trophées</button>
+            <button id="btn-create-char" class="btn home-create" type="button"><span class="home-create-plus" aria-hidden="true">＋</span><span class="home-create-txt">Créer un personnage</span></button>
+            <nav id="home-actions" class="home-actions" aria-label="Raccourcis">
+                <button id="btn-open-rules" class="btn home-rules" type="button">📖 Règles du jeu</button>
+                <button id="btn-open-trophees" class="btn home-rules no-print" type="button" data-communaute="trophees">🏆 Salle des trophées</button>
+            </nav>
             <label id="char-show-archived-wrap" class="home-archived-toggle hidden"><input type="checkbox" id="char-show-archived"> Afficher les archivés<span id="char-archived-count"></span></label>
             <details id="home-corbeille" class="home-corbeille no-print" hidden>
                 <summary><span aria-hidden="true">🗑</span> Corbeille <span class="corb-nb"></span></summary>

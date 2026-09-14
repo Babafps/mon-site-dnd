@@ -319,7 +319,7 @@
             carte.id = 'home-defi';
             carte.className = 'home-defi no-print';
             carte.addEventListener('click', () => ouvrir());
-            const repere = $('btn-open-trophees') || $('btn-open-rules');
+            const repere = $('home-actions') || $('btn-open-trophees') || $('btn-open-rules');
             if (repere && repere.parentNode === panneau) repere.insertAdjacentElement('afterend', carte);
             else panneau.appendChild(carte);
         }
