@@ -1301,7 +1301,10 @@
             setTimeout(() => { el.remove(); annonceSuivante(); }, 450);
         };
         const armerA = () => { clearTimeout(minuteurA); minuteurA = setTimeout(fermerA, 9000); };
-        el.addEventListener('pointerenter', () => clearTimeout(minuteurA));
+        // Le survol met l'annonce en pause, à condition que le pointeur BOUGE dessus. Une annonce
+        // qui apparaît, ou qui se découvre quand une fenêtre se ferme, sous un pointeur immobile
+        // n'est pas survolée : sans cela, elle resterait indéfiniment sur la barre du téléphone.
+        el.addEventListener('pointermove', () => clearTimeout(minuteurA));
         el.addEventListener('pointerleave', armerA);
         el.querySelector('.hc-annonce-fermer').addEventListener('click', fermerA);
         el.querySelector('.hc-annonce-voir').addEventListener('click', () => { fermerA(); ouvrir({ style: id }); });
