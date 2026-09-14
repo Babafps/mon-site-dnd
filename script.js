@@ -357,11 +357,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const musicKey = () => musicMobileView() ? 'dnd-show-music-player-mobile' : 'dnd-show-music-player';
         const shown = (DB.get(musicKey()) || 'false') === 'true';   // masqué par défaut
         toggleMusicPlayer.checked = shown;
-        if (window.MusicPlayer) window.MusicPlayer.setVisible(shown, false);
+        // Le lecteur se charge à la demande (LOT 10) : quand il est affiché, ou quand
+        // une piste jouait avant le rechargement (il propose alors « Reprendre ▶ »).
+        // Il lit lui-même la préférence d'affichage en démarrant.
+        let etatMusique = null;
+        try { etatMusique = JSON.parse(localStorage.getItem('dnd-musique') || 'null'); } catch (e) {}
+        const reprise = !!(etatMusique && Array.isArray(etatMusique.file) && etatMusique.file.length && etatMusique.lecture);
+        if ((shown || reprise) && window.charger) window.charger.apresAffichage(() => window.charger('musique').catch(() => {}));
         toggleMusicPlayer.addEventListener('change', (e) => {
             DB.set(musicKey(), e.target.checked ? 'true' : 'false');
-            if (window.MusicPlayer) window.MusicPlayer.setVisible(e.target.checked, false);
+            musiqueVisible(e.target.checked);
         });
+    }
+    /** Montre ou cache le lecteur ; le charge s'il faut le montrer et qu'il n'est pas là. */
+    function musiqueVisible(on) {
+        if (window.MusicPlayer) { window.MusicPlayer.setVisible(on, false); return; }
+        if (on && window.charger) window.charger('musique').catch(() => {});
     }
 
     // ===== SAUVEGARDE COMPLÈTE (toutes les fiches en un fichier) =====
@@ -1270,8 +1281,41 @@ document.addEventListener('DOMContentLoaded', () => {
             majCorbeille();
         };
     } else { 
-        let quillNewJournal = new Quill('#new-journal-content', { theme: 'snow' });
+        // Quill, l'éditeur du journal, se charge à la première ouverture du livre
+        // (LOT 10) : il ne pèse plus rien au premier affichage de la fiche.
+        let quillNewJournal = null;
         let quillEditJournal = null;
+        function preparerQuill() {
+            return window.charger('quill').then(() => {
+                if (quillNewJournal || !document.getElementById('new-journal-content')) return;
+                quillNewJournal = new Quill('#new-journal-content', { theme: 'snow' });
+                ecouterMentionsQuill(quillNewJournal);
+            });
+        }
+        // L'éditeur « nouveau chapitre » vit sur la fiche, dans le module Notes :
+        // Quill vient quand ce module approche de l'écran (après le premier
+        // affichage), ou au premier geste sur la zone d'écriture.
+        (function guetterQuill() {
+            const zone = document.getElementById('new-journal-content');
+            if (!zone) return;
+            let io = null;
+            const lancer = (geste) => {
+                if (io) { io.disconnect(); io = null; }
+                preparerQuill()
+                    .then(() => { if (geste === true && quillNewJournal) quillNewJournal.focus(); })
+                    .catch(() => {});
+            };
+            const bloc = zone.parentElement || zone;
+            bloc.addEventListener('pointerdown', (e) => { if (!quillNewJournal && zone.contains(e.target)) lancer(true); });
+            bloc.addEventListener('focusin', () => { if (!quillNewJournal) lancer(false); });
+            const guetter = () => {
+                if (quillNewJournal) return;
+                if (!('IntersectionObserver' in window)) { lancer(false); return; }
+                io = new IntersectionObserver((entrees) => { if (entrees.some(x => x.isIntersecting)) lancer(false); }, { rootMargin: '600px 0px' });
+                io.observe(zone);
+            };
+            if (window.charger && window.charger.apresAffichage) window.charger.apresAffichage(guetter); else guetter();
+        })();
 
 
         // ===== UN SORT DU SRD, TRADUIT DANS LA FORME DE LA FICHE =====
@@ -1707,7 +1751,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyLayout();
             // Resynchronise le lecteur de musique avec la préférence de l'écran courant (mobile = caché par défaut)
             const musicPref = isMobileView() ? (DB.get('dnd-show-music-player-mobile') || 'false') : (DB.get('dnd-show-music-player') || 'false');
-            if (window.MusicPlayer) window.MusicPlayer.setVisible(musicPref === 'true', false);
+            musiqueVisible(musicPref === 'true');
             const musicToggle = document.getElementById('toggle-music-player'); if (musicToggle) musicToggle.checked = musicPref === 'true';
         };
         if (mobileMedia.addEventListener) mobileMedia.addEventListener('change', onMobileMediaChange);
@@ -2900,8 +2944,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        ecouterMentionsQuill(quillNewJournal);
-
         function makeNoteList(opt) {
             let items = getStore(opt.storeKey);
             if (!Array.isArray(items)) {
@@ -7218,8 +7260,12 @@ document.addEventListener('DOMContentLoaded', () => {
             majMentionsHtml(document.getElementById('view-journal-content'));
         };
 
-        window.editJournalForm = (index) => {
+        window.editJournalForm = async (index) => {
             const entry = journal[index]; if (!entry) return;
+            try { await preparerQuill(); }
+            catch (e) { if (window.showAppToast) window.showAppToast('⚠️ ' + e.message, 'erreur'); return; }
+            // La page a pu tourner pendant le chargement de l'éditeur.
+            if (!document.getElementById('journal-edit-container') || !document.getElementById('edit-journal-content')) return;
             document.getElementById('view-journal-content').classList.add('hidden');
             document.getElementById('journal-edit-container').classList.remove('hidden');
             document.getElementById('edit-journal-title').value = entry.title;
@@ -7242,7 +7288,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             document.getElementById('btn-cancel-edit-journal').onclick = () => openJournalEntry(index);
         };
-        if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal.root.innerHTML; if(title && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; window.showAppToast("📕 Chapitre enregistré dans le journal", '#27ae60'); } }); }
+        if(document.getElementById('btn-save-journal')) { document.getElementById('btn-save-journal').addEventListener('click', () => { const title = document.getElementById('new-journal-title').value.trim(); const content = quillNewJournal ? quillNewJournal.root.innerHTML : ''; if(title && content && content !== '<p><br></p>') { journal.push({title, content}); setStore('dnd-journal', journal); document.getElementById('new-journal-title').value = ''; quillNewJournal.root.innerHTML = ''; window.showAppToast("📕 Chapitre enregistré dans le journal", '#27ae60'); } }); }
         function clearBookFlames() { const bc = document.getElementById('book-container'); const f = bc && bc.querySelector('.book-flames'); if(f) f.remove(); }
 
         function igniteBook() {
@@ -7255,7 +7301,7 @@ document.addEventListener('DOMContentLoaded', () => {
             bc.appendChild(flames);
         }
         document.body.addEventListener('click', (e) => {
-            if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); clearBookFlames(); modal.classList.remove('hidden', 'book-burning', 'book-closing'); modal.classList.add('book-opening'); renderJournalTOC(); }
+            if(e.target.id === 'btn-open-journal') { const modal = document.getElementById('journal-modal'); clearBookFlames(); modal.classList.remove('hidden', 'book-burning', 'book-closing'); modal.classList.add('book-opening'); renderJournalTOC(); preparerQuill().catch(err => window.showAppToast('⚠️ ' + err.message, 'erreur')); }
             // Fermeture en DEUX temps : la couverture se rabat (0,62 s), PUIS le livre refermé s'embrase.
             if(e.target.id === 'btn-lighter-close') {
                 const modal = document.getElementById('journal-modal');
@@ -9965,18 +10011,39 @@ document.addEventListener('DOMContentLoaded', () => {
         // ===== VIGNETTE DE LA CARTE DE HÉROS, POUR L'ACCUEIL (LOT 6.3) =====
         // L'accueil ne charge pas l'atelier : il montre un petit aperçu, peint
         // ici quand la fiche est au repos, et rangé dans le coffre de l'appareil.
-        function rafraichirVignette() {
-            if (!window.HeroCard || !window.HeroCard.vignette || !window.charger) return;
+        // L'atelier se charge à la demande (LOT 10) : on ne le fait venir que si la
+        // vignette rangée ne correspond plus à la fiche (style, nom, niveau, portrait…).
+        function signatureVignette() {
+            const avatar = String(getStore('dnd-avatar', false) || '');
+            let h = 2166136261;
+            for (let i = 0; i < avatar.length; i += 61) { h ^= avatar.charCodeAt(i); h = Math.imul(h, 16777619); }
+            let cadre = '';
+            try { cadre = localStorage.getItem('dnd-frame-portrait') || ''; } catch (e) {}
+            const champ = (id) => (document.getElementById(id) || {}).value || '';
+            return [getStore('dnd-hero-style', false) || '', getStore('dnd-hero-devise', false) || '', getStore('dnd-hero-arme', false) || '',
+                champ('char-name'), champ('char-class'), champ('char-level'), cadre, avatar.length, h >>> 0].join('|');
+        }
+        function rafraichirVignette(force) {
+            if (!window.charger) return;
             const id = ACTIVE_CHAR_ID;
-            // L'accueil montre le STYLE de la carte (décor et portrait), jamais la carte elle-même.
-            window.HeroCard.vignette({ decor: true })
-                .then(v => (v ? window.charger('coffre').then(() => window.Coffre.ecrire('vignettes', id, v)) : null))
+            // Sans style choisi, l'accueil montre le portrait : aucune vignette à peindre.
+            if (!getStore('dnd-hero-style', false)) return;
+            const sig = signatureVignette();
+            window.charger('coffre')
+                .then(() => (force === true ? null : window.Coffre.lire('vignettes', id).catch(() => null)))
+                .then(rangee => {
+                    if (rangee && rangee.decor && rangee.sig === sig) return null;
+                    // L'accueil montre le STYLE de la carte (décor et portrait), jamais la carte elle-même.
+                    return window.charger('carte-heros')
+                        .then(() => window.HeroCard.vignette({ decor: true }))
+                        .then(v => (v ? window.Coffre.ecrire('vignettes', id, Object.assign(v, { sig })) : null));
+                })
                 .catch(() => {});
         }
         const auRepos = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 200));
         setTimeout(() => auRepos(rafraichirVignette), 3000);
-        document.addEventListener('carte:exportee', rafraichirVignette);
-        document.addEventListener('carte:fermee', rafraichirVignette);
+        document.addEventListener('carte:exportee', () => rafraichirVignette(true));
+        document.addEventListener('carte:fermee', () => rafraichirVignette(true));
         document.getElementById('btn-close-shortcuts')?.addEventListener('click', () => { scCaptureId = null; document.getElementById('shortcuts-modal')?.classList.add('hidden'); });
         document.getElementById('btn-reset-shortcuts')?.addEventListener('click', () => { DB.remove('dnd-shortcuts-player'); renderShortcutsEditor(); majInfobullesRaccourcis(); if (window.showAppToast) window.showAppToast('⌨️ Raccourcis réinitialisés.', '#2c3e50'); });
         
@@ -10056,12 +10123,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             ? `<p class="rw-attrib">${window.Edition.attributionHtml(window.SRD.getEdition())}</p>`
                             : `<p class="rw-src">${escAb(window.SRD.attribution)}</p>`);
                     document.dispatchEvent(new CustomEvent('regles:fiche', { detail: { cat: res.category, id: res.id, box: bodyEl } }));
-                    // L'étoile et la liste des fiches consultées : les mêmes que la page Règles (LOT 6.5).
-                    if (window.ReglesFavoris) {
-                        const fiche = { cat: res.category, id: res.id, nom: e.name || res.name, sub: res.subtitle || res.categoryLabel || '', ed: window.SRD.getEdition() };
-                        titleEl.innerHTML = escAb(fiche.nom) + ' ' + window.ReglesFavoris.etoile(fiche);
+                    // L'étoile et la liste des fiches consultées : les mêmes que la page Règles (LOT 6.5),
+                    // dont le module se charge à la demande (LOT 10).
+                    const fiche = { cat: res.category, id: res.id, nom: e.name || res.name, sub: res.subtitle || res.categoryLabel || '', ed: window.SRD.getEdition() };
+                    const cle = fiche.cat + '|' + fiche.id;
+                    modal.dataset.fiche = cle;
+                    const poserEtoile = () => {
+                        if (!window.ReglesFavoris) return;
                         window.ReglesFavoris.consulter(fiche);
-                    }
+                        // Une autre fiche a pu s'ouvrir pendant le chargement : l'étoile ne va qu'à la sienne.
+                        if (modal.dataset.fiche === cle) titleEl.innerHTML = escAb(fiche.nom) + ' ' + window.ReglesFavoris.etoile(fiche);
+                    };
+                    if (window.ReglesFavoris) poserEtoile();
+                    else if (window.charger) window.charger('regles').then(poserEtoile).catch(() => {});
                 } catch (err) {
                     if (bodyEl) bodyEl.innerHTML = `<p style="color:#c0392b;">Impossible de charger cette fiche.<br><small>${escAb(err.message)}</small></p>`;
                 }

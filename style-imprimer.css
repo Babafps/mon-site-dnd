@@ -1,0 +1,254 @@
+/* =====================================================
+   style-imprimer.css — chargée avec le module « imprimer » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- PRINT STYLES ---------- */
+@media print {
+    .no-print, .settings-container, #btn-toggle-dice, #dice-drawer, #concentration-glow, #status-fx, #sfx-invisible, #btn-go-home, .item-controls, .dynamic-box .add-form, .dynamic-box form, .dynamic-box .spell-form, .tabs-nav, .cat-tab-add, .cat-tab-edit, .category-tabs, .btn-pin, .attune-check, .currency-pay-form,  *, .collapse-icon, .modal-overlay, #widget-calculator, #widget-initiative, #widget-macros, .btn-rest-roll, .btn-rest-finish, .btn-close-modal, #btn-open-grimoire, #btn-open-spell-add, #btn-open-spell-slots-modal, #btn-open-prepare-spells, #btn-open-trait-modal, #btn-open-ability-modal, #btn-open-inventory, #btn-open-attack-modal, #btn-open-journal, #btn-clear-note, #btn-edit-custom, #custom-layout-manager, .custom-tabs-nav, #btn-global-search-trigger { display: none !important; }
+    .screen-view { min-height: 0 !important; }
+    #home-screen, #login-screen, #loading-screen { display: none !important; }
+    #app-screen { display: block !important; }
+    h1::before, h1::after { display: none !important; }
+    .sheet-header { margin-bottom: 10px !important; padding-bottom: 10px !important; border-bottom: 1pt solid rgba(122,40,40,0.4) !important; }
+    .sheet-header::after { display: none !important; }
+    .input-group input { font-size: 0.85rem !important; height: auto !important; }
+    .input-group label { font-size: 0.6rem !important; }
+    #layout-classic-container, #layout-tabs-container, #layout-custom-container, #layout-mobile-container { display: block !important; }
+    .info-grid { display: flex !important; }
+    #layout-tabs-container .tab-content { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+    #layout-tabs-container .tab-content.hidden { display: grid !important; }
+    .classic-grid { display: grid !important; grid-template-columns: 0.95fr 1.3fr 0.95fr !important; gap: 8px !important; align-items: start !important; }
+    .full-width-zone { gap: 8px !important; }
+    .col-flex-row { flex-direction: column !important; flex-wrap: nowrap !important; gap: 8px !important; }
+    .draggable-widget { break-inside: avoid; page-break-inside: avoid; width: 100% !important; margin: 0 0 6px 0 !important; }
+    .widget-third { width: 100% !important; }
+    .dynamic-box::before, .dynamic-box::after, .sheet-container::before { display: none !important; }
+    .collapsible-content, .collapsible-content.collapsed { display: block !important; overflow: visible !important; animation: none !important; }
+    input, textarea, select { border: none !important; border-bottom: 0.5pt solid rgba(122,40,40,0.5) !important; background: transparent !important; color: #1a0800 !important; font-size: 8.5pt !important; padding: 1px 0 !important; }
+    input[type="checkbox"] { width: 10px !important; height: 10px !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    textarea.auto-expand { height: auto !important; overflow: visible !important; resize: none !important; min-height: 0 !important; }
+    .section-title { font-size: 8.5pt !important; padding-bottom: 2px !important; margin-bottom: 5px !important; color: #7A2828 !important; border-bottom: 0.5pt solid rgba(122,40,40,0.3) !important; }
+    .section-title-row { margin-bottom: 5px !important; }
+    .item-card-header h4 { font-size: 8pt !important; }
+    .item-details { font-size: 7pt !important; gap: 8px !important; }
+    .attribute-block h3 { font-size: 8pt !important; margin-bottom: 4px !important; }
+    .stat-score-circle { width: 42px !important; height: 42px !important; }
+    .stat-score-input { font-size: 1.3rem !important; width: 35px !important; }
+    .stat-mod-box { font-size: 0.95rem !important; padding: 3px 10px !important; width: 60px !important; }
+    .skill-row { font-size: 7pt !important; gap: 4px !important; }
+    .skill-mod { width: 20px !important; font-size: 7pt !important; }
+    .nested-skills-list { gap: 3px !important; padding-top: 4px !important; }
+    .health-col input { font-size: 1.1rem !important; }
+    .health-col label { font-size: 0.7rem !important; }
+    .combat-stats { gap: 5px !important; break-inside: avoid; }
+    .combat-box input { font-size: 1rem !important; height: auto !important; }
+    .combat-box label { font-size: 0.55rem !important; }
+    .death-saves-section { padding-left: 8px !important; }
+    .conditions-track { gap: 4px !important; padding: 5px !important; }
+    .conditions-track label { font-size: 7pt !important; padding: 2px 5px !important; background: transparent !important; border: 0.5pt solid #ccc !important; color: #1a0800 !important; transform: none !important; }
+    .slot-lvl-label { font-size: 7.5pt !important; }
+    .slot-info { font-size: 7pt !important; }
+    .slot-gems { gap: 3px !important; }
+    .slot-gem::before { background: #fff !important; border: 0.5pt solid #6b3f10 !important; box-shadow: none !important; clip-path: none !important; border-radius: 50% !important; }
+    .slot-gem.is-spent::before { background: #6b3f10 !important; opacity: 1 !important; }
+    .slot-gem .slot-gem-eclat { display: none !important; }
+    .slot-pacte { font-size: 6pt !important; color: #1a0800 !important; }
+    .ca-row, .ci-row { break-inside: avoid; page-break-inside: avoid; }
+    .ci-qty { background: none !important; padding: 0 !important; }
+    .ci-row, .ca-row { border: 0.5pt solid rgba(122,40,40,0.25) !important; padding: 3px 6px !important; }
+    .spell-stats-container { padding-bottom: 8px !important; gap: 6px !important; }
+    .spell-stat-col input, .spell-stat-col select { font-size: 0.95rem !important; }
+    .spell-stat-col label { font-size: 7pt !important; }
+    .trait-desc { display: block !important; }
+    .trait-desc.expanded { display: block !important; }
+    .trait-meta { font-size: 6.5pt !important; }
+    .training-module { font-size: 7.5pt !important; }
+    .mini-stat-box { padding: 5px !important; }
+    .mini-stat-box .section-title { font-size: 7pt !important; }
+    .prof-bonus-box { width: 32px !important; height: 32px !important; }
+    .prof-bonus-box input { font-size: 1rem !important; }
+    #widget-rests .dynamic-box button { display: none !important; }
+    .hit-dice-box { width: 100% !important; }
+    .hit-dice-box label { font-size: 7.5pt !important; }
+    #quick-note, #quest-log, #npc-log { min-height: 40px !important; }
+    .avatar-upload-container { width: 80px !important; height: 80px !important; margin: 5px auto !important; }
+    .sheet-col, .full-width-zone { break-inside: auto; }
+    #layout-tabs-container .tab-content { background: white !important; }
+    #comp-notes { min-height: 30px !important; }
+    body, body.theme-dark, #app-screen, .sheet-container, .sheet-header,
+    #layout-classic-container, #layout-tabs-container, #layout-custom-container,
+    .classic-grid, .tab-content, .full-width-zone, .col-flex-row, .sheet-col { background: #fff !important; }
+    /* Aucune ombre / halo (économie d'encre) */
+    * { box-shadow: none !important; text-shadow: none !important; filter: none !important; }
+    h1, h2, h3, h4, .section-title, .attribute-block h3, .item-card-header h4,
+    .slot-lvl-label, .ca-name, .ci-name, .trait-name {
+        color: #000 !important; border-color: #000 !important; background: #fff !important; background-image: none !important;
+    }
+    /* Champs : transparents, simple trait noir dessous */
+    input, textarea, select {
+        color: #000 !important; background: transparent !important;
+        border: none !important; border-bottom: 1px solid #000 !important;
+    }
+    input[type="checkbox"]:checked { background: #000 !important; }
+    .sheet-container { border: 1px solid #000 !important; }
+    h1 { border-bottom: 1.5px solid #000 !important; }
+    /* Sauts de page propres : ne jamais couper un bloc majeur */
+    .draggable-widget, .dynamic-box, .attribute-block, .item-card, .health-block,
+    .combat-stats, .spell-slot-row, .ca-row, .ci-row, .trait-row, .spell-stats-container,
+    .training-text-box, .ability-card { page-break-inside: avoid !important; break-inside: avoid !important; }
+    h2, h3, h4, .section-title { page-break-after: avoid !important; }
+    /* EXCEPTION — on conserve la couleur du portrait / avatar du personnage */
+    #header-avatar, #header-avatar img, #main-avatar-preview, .avatar-mini, .avatar-mini img,
+    .avatar-upload-container, .avatar-upload-container img {
+        -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+        border: 1px solid #000 !important;
+    }
+}
+
+/* ---------- ✦ FLUIDITÉ TACTILE — allègements de rendu (téléphones/tablettes) ---------- */
+@media print {
+    .qnote-del { display: none !important; }
+}
+@media print {
+    .comp-fold, .comp-head-actions, .comp-hp-controls, .comp-hpbar,
+    .comp-atk-roll, .comp-atk-del, .comp-add-atk { display: none !important; }
+    .companion-card.is-collapsed .companion-body { display: block !important; }
+}
+
+/* ---------- ✦ ANTI-CHEVAUCHEMENT — un mot trop long ne doit jamais ---------- */
+@media print {
+    .ci-equip { display: none !important; }
+    .ci-row.is-equipped::after { content: ' (équipé)'; font-size: 0.7rem; }
+}
+
+/* ---------- Classe : la roue qui ouvre le multiclassage ---------- */
+@media print {
+    #levelup-fx { display: none !important; }
+}
+
+/* ---------- ✦ PAGE RÈGLES — consultation du SRD ---------- */
+@media print {
+    #rules-screen { display: none !important; }
+}
+@media print {
+    #app-toast-undo { display: none !important; }
+}
+@media print {
+    .srd-auto { display: none !important; }
+}
+
+/* ---------- Armes & sac à dos — objets magiques, charges, jets d'attaque ---------- */
+@media print {
+    .gear-detail { display: block !important; padding-left: 12px; }
+    .gear-desc { border-left-color: #000; background: none; }
+    .gear-more, .gear-pin, .gear-equip, .gear-tools, .gear-dactions,
+    .gear-minus, .gear-plus, .gear-qty .ci-step { display: none !important; }
+    .gear-go { background: none !important; color: #000 !important; }
+}
+
+/* ---------- Grimoire — onglets par niveau, recherche, sorts dépliants ---------- */
+@media print {
+    .grim-tools { display: none !important; }
+    .grim-row .gear-detail { display: block !important; }
+}
+
+/* ---------- MODULE MAGIE — couverture fermée, surcouche du livre, et les deux thèmes. ---------- */
+@media print {
+    #grimoire-overlay{display:none !important}
+}
+
+/* ---------- Exporter / importer une fiche (sheet-io.js) ---------- */
+@media print {
+    #sheet-io { display: none !important; }
+}
+
+/* ---------- Pages légales (legal.js) ---------- */
+@media print {
+    .legal-todo {
+        background: none; color: #000; border: 1px solid #000;
+        font-weight: bold;
+    }
+}
+
+/* ---------- Page tarifs (pricing.js) ---------- */
+@media print {
+    #pricing-screen, #pr-modal { display: none !important; }
+}
+
+/* ---------- Le panneau d'apparence ---------- */
+@media print {
+    #cosmetics { display: none !important; }
+}
+
+/* ---------- LES MODULES QUI MANQUAIENT DE SOIN ---------- */
+@media print {
+    body::before { display: none !important; }
+}
+
+/* ---------- BOUTONS RAFFINÉS · GLISSER-DÉPOSER · COCHES ANIMÉES ---------- */
+@media print {
+    .ds-drop, .chk-burst { display: none !important; }
+}
+
+/* ---------- ARMURE & CLASSE D'ARMURE (armor.js) ---------- */
+@media print {
+    .ac-open-cta, .ac-auto-badge { display: none !important; }
+    .ac-open { border: none !important; background: none !important; box-shadow: none !important; padding: 0 !important; }
+}
+
+/* ---------- TOASTS SUR PARCHEMIN (toasts.js) ---------- */
+@media print {
+    .tst-pile { display: none !important; }
+}
+
+/* ---------- ÉTAT DE LA SAUVEGARDE (LOT 1.2) ---------- */
+@media print {
+    .sync-etat { display: none !important; }
+}
+
+/* ---------- BANDEAU « NOUVELLE VERSION — RECHARGER » (LOT 1.3) ---------- */
+@media print {
+    .maj-bandeau { display: none !important; }
+}
+
+/* ---------- ÉTATS DU PERSONNAGE (§ 2.3, 2.4) — etats.js ---------- */
+@media print {
+    .etat-bulle, .etat-menu, .etats-panneau { display: none !important; }
+}
+
+/* ---------- LOT 4B · 4C · 4D — repos, PV, mort, inspiration, effets, formes, plateau, statistiques ---------- */
+@media print {
+    .hp-floats, .hp-float, .effets-bloc, .forme-banniere, .forme-attaques, .valeur-effective, .def-effets, .mort-etat { display: none !important; }
+    .jeton-case { position: static !important; width: auto; height: auto; clip: auto; opacity: 1; }
+    .jeton-inspiration { display: none !important; }
+}
+
+/* ---------- LOT 5 — BOURSE, ACHAT / VENTE, MACROS ---------- */
+@media print {
+    .bourse-historique, .currency-libelle-row, .macro-poignee, .macro-edit { display: none !important; }
+}
+
+/* ---------- LOT 5 — COMPAGNONS DU BESTIAIRE, QUÊTES TERMINÉES ---------- */
+@media print {
+    .comp-source { display: none !important; }
+    .qnote-terminees > .qnote-terminees-liste[hidden] { display: flex !important; }
+    .qnote-terminees-fleche { display: none; }
+}
+
+/* ---------- LOT 5 — CARNET : PNJ, LIEUX, MENTIONS ---------- */
+@media print {
+    .mention-pop, .qnote-plier, .carnet-astuce { display: none !important; }
+    .qnote-card.is-plie .qnote-corps { display: block !important; }
+}
+
+/* ---------- LOT 6 — DÉMARRAGE : CHARGEMENT, LIVRE, THÈME, CONFORT DE LECTURE ---------- */
+@media print {
+    #loading-screen { display: none !important; }
+}
+
+/* ---------- Vitrine — la page d'accueil publique (vitrine.js, LOT 9.3) ---------- */
+@media print {
+    #vitrine-screen { display: none !important; }
+}

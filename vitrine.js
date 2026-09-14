@@ -123,7 +123,14 @@
     /** Le style de la saison en cours : celui que le défi du mois fait gagner (exploits-suivi.js). */
     function montrerSaison() {
         const li = document.querySelector('#vitrine-screen .vit-saison');
-        if (!li || !window.Defis || typeof window.Defis.saisonDe !== 'function') return;
+        if (!li) return;
+        // exploits-suivi.js arrive après le premier affichage (charger.js, LOT 10).
+        if (!window.Defis && window.charger) {
+            const attendre = window.charger.apresAffichage || ((fn) => fn());
+            attendre(() => window.charger('secrets').then(() => { if (window.Defis) montrerSaison(); }).catch(() => {}));
+            return;
+        }
+        if (!window.Defis || typeof window.Defis.saisonDe !== 'function') return;
         const saison = window.Defis.saisonDe(new Date().getMonth() + 1);
         if (!NOMS_SAISON[saison]) return;
         const img = li.querySelector('img');

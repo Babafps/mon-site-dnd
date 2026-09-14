@@ -1331,24 +1331,25 @@
         bar.querySelector('[data-resume-off]').addEventListener('click', dismissResume);
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        // Le bouton du menu ☰ vit dans index.html, présent aussi hors fiche.
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('#btn-pj-wizard-replay')) return;
-            $('settings-dropdown')?.classList.add('hidden');
-            startWizard();
-        });
-        setTimeout(() => {
-            if (!onSheet()) return;
-            let pending = false;
-            try { pending = !!localStorage.getItem(WIZ_FLAG); if (pending) localStorage.removeItem(WIZ_FLAG); } catch (e) {}
-            if (pending) startWizard(true);             // fiche fraîchement créée → assistant
-            else offerResume();                         // fiche inachevée → reprise proposée
-        }, 900);
+    // Chargé à la demande (charger.js, LOT 10) : le bouton du menu ☰, présent
+    // aussi hors fiche, passe par la porte d'entrée de charger.js tant que ce
+    // module n'est pas là ; ensuite, c'est lui qui l'écoute.
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#btn-pj-wizard-replay')) return;
+        $('settings-dropdown')?.classList.add('hidden');
+        startWizard();
     });
+    /** À l'ouverture de la fiche (charger.js attend 900 ms) : l'assistant ou la reprise. */
+    function demarrer() {
+        if (!onSheet()) return;
+        let pending = false;
+        try { pending = !!localStorage.getItem(WIZ_FLAG); if (pending) localStorage.removeItem(WIZ_FLAG); } catch (e) {}
+        if (pending) startWizard(true);             // fiche fraîchement créée → assistant
+        else offerResume();                         // fiche inachevée → reprise proposée
+    }
 
     window.PjTutorial = {
-        startWizard, completion,
+        startWizard, completion, demarrer,
         // Compatibilité : l'ancienne visite guidée est devenue « Découvrir la fiche » (help.js).
         startTutorial: () => { if (window.Discover) window.Discover.open(); }
     };

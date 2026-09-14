@@ -52,12 +52,14 @@
     // =====================================================
     // INITIALISATION
     // =====================================================
-    document.addEventListener('DOMContentLoaded', () => {
-        // Inject HTML into page
+    // Chargé à la demande (charger.js, LOT 10) : la page est souvent déjà prête.
+    function demarrer() {
         injectHTML();
         // Small delay to ensure DOM is ready
         setTimeout(initRefs, 50);
-    });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
+    else demarrer();
 
     function injectHTML() {
         const container = document.createElement('div');

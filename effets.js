@@ -86,7 +86,12 @@
 
     function jet(nat) {
         vibrer(nat);
-        try { if (window.Secrets && window.Secrets.d20(nat)) return; } catch (err) {}
+        try {
+            if (window.Secrets) { if (window.Secrets.d20(nat)) return; }
+            // Les secrets arrivent après le premier affichage (LOT 10) : ce 20 ou ce 1
+            // leur est remis à leur arrivée, dans l'ordre, pour ne casser aucune série.
+            else if (window.charger && window.charger.plusTard) window.charger.plusTard('secrets', () => window.Secrets && window.Secrets.d20(nat));
+        } catch (err) {}
         if (nat === 20) crit(); else if (nat === 1) fumble();
     }
 

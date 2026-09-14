@@ -1,0 +1,92 @@
+/* =====================================================
+   style-legal.css — chargée avec le module « legal » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- Pages légales (legal.js) ---------- */
+.legal-top {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding-bottom: 12px; margin-bottom: 14px;
+    border-bottom: 1px solid var(--soft-border);
+}
+.legal-top h1 {
+    flex: 1 1 auto; margin: 0;
+    font-family: 'Cinzel', serif; font-size: 1.25rem; font-weight: 600;
+    color: var(--primary-color);
+}
+body.theme-dark .legal-top h1 { color: var(--accent-color); }
+.legal-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.legal-tab:hover { border-color: var(--accent-color); }
+.legal-tab.is-on {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    border-color: rgba(196,155,53,0.8); font-weight: 600;
+}
+.legal-doc {
+    font-family: 'Lora', serif; font-size: 0.88rem; line-height: 1.65;
+}
+.legal-title {
+    font-family: 'Cinzel', serif; font-size: 1.45rem; font-weight: 600;
+    margin: 0 0 6px; color: var(--primary-color);
+}
+.legal-h {
+    font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+    margin: 26px 0 8px; padding-bottom: 5px;
+    border-bottom: 1px solid var(--soft-border);
+    color: var(--primary-color);
+}
+.legal-doc p { margin: 0 0 10px; }
+.legal-ul { margin: 0 0 12px; padding-left: 22px; }
+.legal-ul li { margin-bottom: 5px; }
+.legal-dl { margin: 0 0 14px; display: flex; flex-direction: column; gap: 7px; }
+.legal-dl > div {
+    display: grid; grid-template-columns: minmax(140px, 210px) 1fr; gap: 4px 14px;
+    padding: 7px 11px; border-radius: var(--radius-sm);
+    background: var(--panel-1); border: 1px solid var(--soft-border);
+}
+.legal-dl dt { font-family: 'Cinzel', serif; font-size: 0.76rem; opacity: 0.85; }
+.legal-dl dd { margin: 0; }
+.legal-note {
+    margin: 0 0 14px; padding: 11px 14px; border-radius: var(--radius-sm);
+    background: rgba(196,155,53,0.13); border: 1px solid rgba(196,155,53,0.45);
+    border-left-width: 4px;
+}
+.legal-action {
+    margin: 14px 0 18px; padding: 13px 15px; border-radius: var(--radius-sm);
+    background: var(--panel-1); border: 1px solid rgba(61,122,61,0.4);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+}
+.legal-btn:hover { filter: brightness(1.08); }
+.legal-btn:disabled { opacity: 0.6; cursor: default; filter: none; }
+.legal-out { flex-basis: 100%; font-size: 0.79rem; }
+.legal-out:empty { display: none; }
+.legal-out.is-ok { color: #2e7d4f; }
+body.theme-dark .legal-out.is-ok { color: #7fc47f; }
+.legal-out.is-err { color: #a53024; }
+body.theme-dark .legal-out.is-err { color: #ff9c8f; }
+.legal-back-top { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--soft-border); }
+.legal-link {
+    font-family: 'Cinzel', serif; font-size: 0.78rem; cursor: pointer;
+    background: none; border: none; padding: 0; text-decoration: underline;
+    color: var(--primary-color);
+}
+.legal-foot {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+    gap: 4px 8px; margin-top: 18px; padding: 12px 6px 4px;
+}
+#login-screen .legal-foot { margin-top: 14px; }
+.legal-foot-link:hover { opacity: 1; color: var(--accent-color); }
+@media (max-width: 620px) {
+    .legal-wrap { padding: 16px 14px 22px; border-radius: var(--radius-sm); }
+    .legal-dl > div { grid-template-columns: 1fr; }
+    .legal-tabs { gap: 5px; }
+    .legal-tab { flex: 1 1 auto; text-align: center; }
+}
+@media print {
+    body.legal-active #legal-screen { display: block !important; }
+    .legal-doc { color: #000; font-size: 11pt; line-height: 1.5; }
+    .legal-title, .legal-h { color: #000; }
+    .legal-h { page-break-after: avoid; break-after: avoid; }
+    .legal-dl > div, .legal-note { background: none; border: 1px solid #999; }
+    .legal-dl > div, .legal-note, .legal-ul li { page-break-inside: avoid; break-inside: avoid; }
+}

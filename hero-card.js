@@ -1560,6 +1560,8 @@
         collection: () => STYLES.map(x => ({ id: x.id, nom: x.nom, rarete: x.rarete || 'rare', gagne: disponible(x) })),
         formatVideo,
         /** Le style qu'un exploit débloque, ou null : exploits.js s'en sert pour l'annoncer. */
-        styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; }
+        styleDe: (exploit) => { const x = STYLES.find(y => y.exploit === exploit); return x ? { id: x.id, nom: x.nom } : null; },
+        /** Tous les exploits qui font gagner un style (sans doublon). */
+        exploits: () => [...new Set(STYLES.map(x => x.exploit).filter(Boolean))]
     };
 })();

@@ -32,11 +32,9 @@
     <meta name="apple-mobile-web-app-title" content="Bones &amp; Blades">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="music-player.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+    <!-- (Quill, l'éditeur du journal, et les modules secondaires se chargent à la demande : charger.js, LOT 10) -->
     <!-- (Three.js retiré le 14 juil. 2026 : il ne servait qu'à l'Atelier de dés, supprimé — ~600 Ko économisés au chargement) -->
     <script type="application/ld+json">
     {
@@ -389,7 +387,7 @@
     </div>
 </div>
 <script>window.Demarrage && window.Demarrage.montrerVitrine();</script>
-<script async src="vitrine.js"></script>
+<!-- vitrine.js ne vient que pour un visiteur : charger.js le demande (LOT 10). -->
 
 <div id="login-screen" class="auth-fullscreen hidden">
     <div class="auth-card">
@@ -812,11 +810,15 @@
     </div>
 </div>
 
+<!-- Le premier chargement ne porte que la fiche et l'accueil. Le reste arrive
+     à la demande (charger.js, LOT 10) : carte de héros, musique, impression,
+     export/import, contenu perso, Règles, aide, assistant, mentions légales,
+     tarifs, vitrine ; les exploits, les secrets et leur suivi juste après le
+     premier affichage. -->
 <script src="toasts.js"></script>
 <script src="charger.js"></script>
 <script src="auth.js"></script>
 <script src="effets.js"></script>
-<script src="pj-tutorial.js"></script>
 <script src="srd-data.js"></script>
 <script src="edition.js"></script>
 <script src="srd-autocomplete.js"></script>
@@ -824,26 +826,9 @@
 <script src="script.js"></script>
 <script src="armor.js"></script>
 <script src="etats.js"></script>
-<script src="hero-card.js"></script>
-<script src="hero-card-styles.js"></script>
-<script src="exploits.js"></script>
-<script src="secrets.js"></script>
-<script src="secrets-monde.js"></script>
-<script src="exploits-suivi.js"></script>
-<script src="secrets-plus.js"></script>
-<script src="secrets-absurdes.js"></script>
-<script src="sheet-io.js"></script>
-<script src="music-player.js"></script>
-<script src="fiche-layout.js"></script>
-<script src="print-sheet.js"></script>
-<script src="rules-page.js"></script>
-<script src="homebrew.js"></script>
-<script src="help.js"></script>
 <script src="menu.js"></script>
 <script src="entitlements.js"></script>
 <script src="cosmetics.js"></script>
-<script src="pricing.js"></script>
-<script src="legal.js"></script>
 <script>
 // PWA : service worker « réseau d'abord » (jamais de version périmée en ligne, hors-ligne de secours).
 // Une nouvelle version ne s'installe jamais en douce : elle attend derrière, et

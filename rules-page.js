@@ -631,8 +631,5 @@
 
     window.RulesPage = { open, ouvrirListe };
 
-    // Bouton d'accueil (l'écran existe déjà dans index.html)
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('btn-open-rules')?.addEventListener('click', () => open('home-screen'));
-    });
+    // Le bouton « Règles du jeu » de l'accueil passe par charger.js, qui charge ce module (LOT 10).
 })();

@@ -252,6 +252,44 @@
         if (frappe === 'iddqd') { frappe = ''; toast('🛡️ Mode dieu refusé. Ceci est un jeu de rôle, pas un jeu de tir.'); trouver('iddqd'); }
     });
 
+    // ---------- La forge ----------
+    // Une arme au nom connu du seul créateur ouvre toute la salle des trophées :
+    // chaque exploit et chaque secret du registre. Seule l'empreinte du nom est ici.
+    const EMPREINTE_FORGE = 'a264314fcddfaaf8f4b76b4e67ae8fd0a1fd165fde25bd2cb3f6615de7af852a';
+    const compact = (s) => normal(s).replace(/[^a-z0-9]/g, '');
+    async function empreinte(txt) {
+        const o = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
+        return [...new Uint8Array(o)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    document.addEventListener('fiche:ecrite', async (e) => {
+        if (!e.detail || e.detail.key !== 'dnd-attacks' || forgee || !(window.crypto && window.crypto.subtle)) return;
+        let armes = [];
+        try { armes = JSON.parse(localStorage.getItem(idPerso() + '_dnd-attacks') || '[]'); } catch (err) { return; }
+        if (!Array.isArray(armes)) return;
+        for (const a of armes) {
+            const nom = compact(a && a.name);
+            if (!nom || nom.length > 60) continue;
+            try { if (await empreinte(nom) === EMPREINTE_FORGE) { forge(); return; } } catch (err) { return; }
+        }
+    });
+    let forgee = false;
+    async function forge() {
+        if (forgee || !window.Exploits || !window.charger) return;
+        forgee = true;
+        try { await Promise.all([window.charger('carte-heros'), window.charger('trophees')]); }
+        catch (e) { forgee = false; return; }
+        const E = window.Exploits;
+        const catalogue = window.Trophees && window.Trophees.catalogue ? (await window.Trophees.catalogue()) || [] : [];
+        const exploits = new Set(window.HeroCard && window.HeroCard.exploits ? window.HeroCard.exploits() : []);
+        catalogue.forEach(s => { if (s.exploit) exploits.add(s.exploit); });
+        let neufs = 0;
+        exploits.forEach(id => { if (!E.a(id)) { E.debloquer(id, { silencieux: true }); neufs++; } });
+        catalogue.forEach(s => { if (!s.exploit) (s.variantes || [s.id]).forEach(id => { if (E.trouver(id)) neufs++; }); });
+        try { document.dispatchEvent(new CustomEvent('exploits:maj')); } catch (e) {}
+        toast(neufs ? `🗝️ La forge a parlé : ${neufs} trophées s’ouvrent d’un coup.` : '🗝️ La forge a parlé, mais tout était déjà à toi.',
+            { titre: 'Forge du créateur', humeur: 'or' });
+    }
+
     // ---------- La Mimique, cachée dans la recherche des Règles ----------
     let minuteurCoffre = null;
     document.addEventListener('input', (e) => {

@@ -487,7 +487,8 @@
         e.preventDefault();
         open();
     });
-    document.addEventListener('DOMContentLoaded', () => { setTimeout(offer, 1800); });
+    // L'invitation part de charger.js, 1,8 s après l'ouverture de la fiche : ce
+    // module n'est chargé que s'il y a quelque chose à proposer (LOT 10).
 
     window.Discover = { open, close, start, offer, THEMES, REWARDS };
     // Compatibilité : d'anciens liens appelaient window.Help.open(sujet).

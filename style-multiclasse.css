@@ -1,0 +1,333 @@
+/* =====================================================
+   style-multiclasse.css — chargée avec le module « multiclasse » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- Registre de progression — la montée de niveau en double page ---------- */
+#levelup-plan {
+    position: fixed; inset: 0; z-index: 9100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    background: radial-gradient(circle at 50% 40%, rgba(60,38,10,0.55), rgba(8,5,3,0.86) 72%);
+    backdrop-filter: blur(3px);
+    animation: fadeIn .3s ease;
+}
+#levelup-plan.is-closing { animation: fadeIn .22s ease reverse; }
+.lvup-head { text-align: center; }
+.lvup-kicker {
+    font-family: 'Cinzel', serif; font-size: 0.66rem; letter-spacing: 0.34em;
+    text-transform: uppercase; color: var(--accent-color); text-indent: 0.34em;
+}
+.lvup-big {
+    font-family: 'Cinzel', serif; font-weight: bold; line-height: 1;
+    font-size: clamp(2.4rem, 7vw, 3.4rem); margin: 2px 0;
+    background: linear-gradient(175deg, #fff3c4 5%, #e8c25a 42%, #b8862a 88%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 14px rgba(196,155,53,0.42));
+}
+.lvup-rail { display: flex; flex-direction: column; gap: 2px; }
+.lvup-step:hover { background: rgba(196,155,53,0.12); }
+.lvup-step[data-state="done"] .lvup-step-mark { color: var(--accent-color); opacity: 1; }
+.lvup-step[data-state="done"] .lvup-step-name { opacity: 0.85; }
+.lvup-step[data-state="cur"] {
+    background: rgba(196,155,53,0.14); border-color: rgba(196,155,53,0.4);
+}
+.lvup-step[data-state="cur"] .lvup-step-mark { color: var(--primary-color); opacity: 1; }
+body.theme-dark .lvup-step[data-state="cur"] .lvup-step-mark { color: var(--accent-color); }
+.lvup-step[data-state="cur"] .lvup-step-name { opacity: 1; font-weight: 600; }
+.lvup-step[data-state="warn"] .lvup-step-mark { color: var(--accent-color); opacity: 1; }
+.lvup-step[data-state="warn"] .lvup-step-name { opacity: 1; }
+.lvup-step[data-state="warn"] { border-color: rgba(196,155,53,0.55); }
+/* Où l'on est se voit toujours, même quand l'étape porte un ⚠. */
+.lvup-step.is-cur { background: rgba(196,155,53,0.14); border-color: rgba(196,155,53,0.45); }
+.lvup-step.is-cur .lvup-step-name { opacity: 1; font-weight: 600; }
+.lvup-step:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+.lvup-gains { min-height: 0; overflow-y: auto; }
+.lvup-gains-head {
+    font-family: 'Cinzel', serif; font-size: 0.68rem; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--accent-color);
+    margin-bottom: 7px;
+}
+.lvup-gains-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.lvup-gain {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.38);
+    font-family: 'Lora', serif; font-size: 0.72rem; line-height: 1.35;
+}
+/* Sur écran étroit, le récapitulatif se replie en bas de la page unique.
+   Il coule dans la page — pas de second défilement. */
+.lvup-gains-fold { display: none; overflow: visible; }
+.lvup-gains-fold > summary::-webkit-details-marker { display: none; }
+.lvup-gains-fold > summary::after { content: ' ▾'; }
+.lvup-gains-fold[open] > summary::after { content: ' ▴'; }
+.lvup-page-r {
+    grid-area: right; min-width: 0;
+    overflow-y: auto; padding: 18px 20px 20px;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.lvup-step-panel { display: none; flex-direction: column; gap: 7px; }
+.lvup-step-panel.is-on { display: flex; }
+.lvup-step-panel.is-shaking { animation: lvupShake .32s ease; }
+@keyframes lvupShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-7px); }
+    75% { transform: translateX(7px); }
+}
+.lvup-step-title {
+    font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+    color: var(--primary-color); margin: 0 0 2px;
+}
+body.theme-dark .lvup-step-title { color: var(--accent-color); }
+.lvup-warns {
+    padding: 9px 12px; border-radius: var(--radius-sm);
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.45);
+    font-family: 'Lora', serif; font-size: 0.8rem;
+}
+.lvup-warns p + p { margin-top: 5px; }
+.lvup-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 11px; border-radius: var(--radius-sm);
+    background: var(--panel-1); border: 1px solid var(--soft-border);
+}
+.lvup-row.is-info { opacity: 0.82; border-style: dashed; }
+.lvup-ck, .lvup-ck-fix { flex: 0 0 auto; margin-top: 2px; width: 17px; text-align: center; }
+.lvup-ck-fix { color: var(--accent-color); font-size: 0.9rem; line-height: 1.3; }
+.lvup-ck-fix.is-info { color: var(--primary-color); opacity: 0.7; }
+body.theme-dark .lvup-ck-fix.is-info { color: var(--accent-color); }
+.lvup-ico { flex: 0 0 auto; font-size: 1rem; line-height: 1.35; }
+.lvup-txt { flex: 1 1 auto; min-width: 0; display: block; }
+.lvup-txt b {
+    display: block; font-family: 'Cinzel', serif;
+    font-size: 0.87rem; font-weight: 600; line-height: 1.35;
+}
+.lvup-txt i {
+    display: block; font-family: 'Lora', serif; font-style: normal;
+    font-size: 0.78rem; opacity: 0.72; margin-top: 2px;
+}
+.lvup-arrow { color: var(--accent-color); font-weight: bold; padding: 0 2px; }
+.lvup-feat { margin-top: 5px; font-family: 'Lora', serif; font-size: 0.79rem; }
+body.theme-dark .lvup-feat > summary { color: var(--accent-color); }
+.lvup-feat p { margin-top: 5px; line-height: 1.45; opacity: 0.88; }
+.lvup-ctl { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; padding-top: 1px; }
+.lvup-ctl input { width: 48px; text-align: center; }
+.lvup-ctl input:disabled { opacity: 0.6; }
+.lvup-mini {
+    border: 1px solid rgba(196,155,53,0.55); border-radius: 6px; cursor: pointer;
+    background: rgba(196,155,53,0.3); color: var(--text-color);
+    padding: 3px 8px; font-size: 0.78rem; line-height: 1.4;
+    font-family: 'Lora', serif;
+}
+.lvup-mini:hover { background: rgba(196,155,53,0.45); }
+.lvup-cards {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.lvup-card:hover { border-color: rgba(196,155,53,0.6); transform: translateY(-1px); }
+.lvup-card.is-on {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.14);
+    box-shadow: var(--glow-gold);
+}
+.lvup-card.is-taken, .lvup-card:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.lvup-card-name {
+    font-family: 'Cinzel', serif; font-size: 0.86rem; font-weight: 600;
+    color: var(--primary-color);
+}
+body.theme-dark .lvup-card-name { color: var(--accent-color); }
+.lvup-card-more {
+    display: flex; flex-direction: column; gap: 2px; margin-top: 3px;
+    padding-top: 6px; border-top: 1px dashed var(--soft-border);
+}
+.lvup-card-feat b { color: var(--accent-color); font-weight: 600; margin-right: 4px; }
+.lvup-choice {
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(196,155,53,0.45); background: rgba(196,155,53,0.07);
+}
+.lvup-choice-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.lvup-choice-head b { font-family: 'Cinzel', serif; font-size: 0.86rem; }
+.lvup-choice-count {
+    font-family: 'Cinzel', serif; font-size: 0.74rem; color: var(--primary-color);
+}
+body.theme-dark .lvup-choice-count { color: var(--accent-color); }
+.lvup-choice-count.is-done::after { content: ' ✓'; color: #3d7a3d; }
+body.theme-dark .lvup-choice-count.is-done::after { color: #7fc47f; }
+.lvup-asi {
+    padding: 11px 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(196,155,53,0.45); background: rgba(196,155,53,0.07);
+}
+
+/* ---------- Etape « Classe » : qui monte ? ---------- */
+.lvup-cl-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 0; }
+.lvup-cl-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.lvup-cl-carte b { font-family: 'Cinzel', Georgia, serif; font-size: .95rem; color: var(--primary-color); }
+.lvup-cl-carte i { font-style: normal; font-size: .82rem; opacity: .78; }
+.lvup-cl-carte.is-new b { color: var(--accent-color); }
+.lvup-cl-opt input:checked + .lvup-cl-carte {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.15);
+    box-shadow: inset 0 0 0 1px rgba(196,155,53,0.45);
+}
+.lvup-cl-opt input:focus-visible + .lvup-cl-carte { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.lvup-cl-new { margin: 4px 0 0; padding: 11px 14px; border-radius: 10px;
+    border: 1px dashed rgba(196,155,53,0.5); background: rgba(196,155,53,0.07); }
+.lvup-cl-nom { width: 100%; box-sizing: border-box; font: inherit; font-size: .95rem;
+    padding: 8px 11px; border-radius: 8px; border: 1px solid var(--soft-border);
+    background: rgba(255,255,255,0.75); color: inherit; }
+.lvup-cl-nom:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+.lvup-cl-prereq { margin-top: 7px; font-size: .84rem; line-height: 1.45; }
+.lvup-cl-prereq p { margin: 0 0 3px; }
+.lvup-cl-warn { color: #9b1c1c; }
+.lvup-cl-ok { color: #2e6b35; }
+.lvup-skip[hidden] { display: none !important; }
+/* Le de de PV qui roule : le bouton attend son resultat sans clignoter. */
+.lvup-hp-roll.is-rolling { opacity: .6; cursor: progress; }
+body.theme-dark .lvup-cl-carte { background: rgba(255,255,255,0.05); }
+body.theme-dark .lvup-cl-opt input:checked + .lvup-cl-carte { background: rgba(196,155,53,0.18); }
+body.theme-dark .lvup-cl-carte b { color: var(--accent-color); }
+body.theme-dark .lvup-cl-nom { background: rgba(255,255,255,0.07); }
+body.theme-dark .lvup-cl-warn { color: #ff9b8f; }
+body.theme-dark .lvup-cl-ok { color: #8fd79a; }
+.lvup-asi-modes {
+    display: flex; flex-wrap: wrap; gap: 5px 16px;
+    font-family: 'Lora', serif; font-size: 0.79rem;
+}
+.lvup-asi-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.lvup-asi-picks select {
+    font-family: 'Lora', serif; font-size: 0.78rem; padding: 5px 8px;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color); max-width: 100%;
+}
+.lvup-asi-picks[data-mode="two"] .lvup-asi-one,
+.lvup-asi-picks[data-mode="one"] .lvup-asi-a,
+.lvup-asi-picks[data-mode="one"] .lvup-asi-b,
+.lvup-asi-picks[data-mode="later"] select,
+.lvup-asi-picks[data-mode="feat"] select { display: none; }
+.lvup-asi-preview {
+    margin-top: 8px; font-family: 'Cinzel', serif; font-size: 0.78rem;
+    color: var(--primary-color); min-height: 1em;
+}
+body.theme-dark .lvup-asi-preview { color: var(--accent-color); }
+.lvup-asi-preview.is-capped b { color: #b06a1e; }
+body.theme-dark .lvup-asi-preview.is-capped b { color: #e8a94c; }
+.lvup-feat-pick { display: none; margin-top: 9px; }
+.lvup-asi-picks[data-mode="feat"] ~ .lvup-feat-pick { display: block; }
+.lvup-feat-pick textarea { margin-top: 6px; resize: vertical; line-height: 1.4; }
+.lvup-sp-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+}
+.lvup-sp-count {
+    font-family: 'Cinzel', serif; font-size: 0.8rem; color: var(--primary-color);
+}
+body.theme-dark .lvup-sp-count { color: var(--accent-color); }
+.lvup-sp-count.is-done::after { content: ' ✓'; color: #3d7a3d; }
+body.theme-dark .lvup-sp-count.is-done::after { color: #7fc47f; }
+.lvup-sp-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
+.lvup-sp-tab:hover { border-color: var(--accent-color); }
+.lvup-sp-tab.is-on {
+    background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08;
+    border-color: rgba(196,155,53,0.8); font-weight: 600;
+}
+.lvup-sp-search {
+    width: 100%; padding: 7px 9px;
+    font-family: 'Lora', serif; font-size: 0.8rem;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+}
+.lvup-sp-grid {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+}
+.lvup-tile:hover { border-color: rgba(196,155,53,0.6); transform: translateY(-1px); }
+.lvup-tile.is-open { border-color: var(--accent-color); }
+.lvup-tile.is-on {
+    border-color: var(--accent-color); background: rgba(196,155,53,0.16);
+    box-shadow: var(--glow-gold);
+}
+.lvup-tile.is-known { opacity: 0.42; cursor: default; }
+.lvup-tile.is-known:hover { transform: none; border-color: var(--soft-border); }
+/* Quota atteint : encore lisible, plus prenable. */
+.lvup-tile.is-locked { opacity: 0.55; }
+.lvup-tile.is-locked:hover { transform: none; }
+.lvup-tile-bot { justify-content: flex-start; min-height: 0.9em; }
+.lvup-tile-school { font-style: italic; }
+.lvup-tile-lv { flex: 0 0 auto; }
+.lvup-tile-name {
+    font-family: 'Cinzel', serif; font-size: 0.84rem; font-weight: 600;
+    line-height: 1.3; color: var(--primary-color);
+}
+body.theme-dark .lvup-tile-name { color: var(--accent-color); }
+.lvup-tile-known { font-style: italic; }
+.lvup-sp-read[hidden] { display: none; }
+.lvup-read-head {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    padding-bottom: 7px; margin-bottom: 7px;
+    border-bottom: 1px solid var(--soft-border);
+}
+.lvup-read-head b { font-family: 'Cinzel', serif; font-size: 0.95rem; }
+.lvup-read-act { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.lvup-read-body { font-family: 'Lora', serif; font-size: 0.8rem; line-height: 1.55; }
+.lvup-read-body p { margin: 0 0 6px; }
+.lvup-sp-swap {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+    font-family: 'Lora', serif; font-size: 0.78rem;
+}
+.lvup-sp-swap select {
+    font-family: 'Lora', serif; font-size: 0.76rem; padding: 4px 6px; max-width: 100%;
+    border-radius: 6px; border: 1px solid var(--soft-border);
+    background: var(--widget-bg); color: var(--text-color);
+}
+/* Le sort rendu ne se choisit que si l'échange est demandé. */
+.lvup-sp-swap:not(:has(.lvup-sp-swap-on:checked)) select { display: none; }
+.lvup-foot {
+    grid-area: foot;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 11px 16px;
+    border-top: 1px solid var(--soft-border);
+    background: var(--panel-1);
+}
+.lvup-foot-nav { display: flex; gap: 5px; }
+.lvup-foot-end { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.lvup-btn-alt { background: var(--primary-color); color: #fdf6e6; border-color: rgba(0,0,0,0.15); }
+.lvup-arrow-btn { padding: 9px 12px; }
+.lvup-btn:hover { filter: brightness(1.09); }
+.lvup-btn-ghost:hover { background: var(--widget-bg); filter: none; opacity: 1; }
+.lvup-btn:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+.lvup-btn:disabled { opacity: 0.32; cursor: default; filter: none; }
+/* Grisé mais pas mort : cliquer emmène à l'étape qui bloque. */
+.lvup-btn.is-blocked { filter: grayscale(0.75); opacity: 0.55; }
+.lvup-btn.is-blocked:hover { filter: grayscale(0.55); opacity: 0.7; }
+@media (max-width: 720px) {
+    #levelup-plan { padding: 0; }
+    .lvup-book {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        grid-template-areas: "left" "right" "foot";
+        max-height: 100vh; height: 100%; max-width: none; border-radius: 0;
+        border-left: none; border-right: none;
+    }
+    .lvup-page-l .lvup-rule,
+    .lvup-page-l .lvup-gains { display: none; }
+    .lvup-head { display: flex; align-items: baseline; gap: 7px; flex: 0 0 auto; }
+    .lvup-kicker { display: none; }
+    .lvup-big { font-size: 1.9rem; margin: 0; }
+    .lvup-sub { font-size: 0.74rem; white-space: nowrap; }
+    .lvup-rail { flex-direction: row; gap: 4px; flex: 1 1 auto; }
+    .lvup-step { width: auto; white-space: nowrap; }
+    .lvup-gains-fold { display: block; margin-top: 6px; }
+    .lvup-foot { padding: 9px 12px; }
+    .lvup-foot-end { width: 100%; margin-left: 0; }
+    .lvup-foot-end .lvup-btn { flex: 1 1 auto; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #levelup-plan, .lvup-book, .lvup-step-panel { animation: none !important; }
+}
+@media print {
+    #levelup-plan { display: none !important; }
+}
+@media print {
+    #levelup-plan { display: none !important; }
+}

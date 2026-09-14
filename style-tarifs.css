@@ -1,0 +1,97 @@
+/* =====================================================
+   style-tarifs.css — chargée avec le module « tarifs » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- Page tarifs (pricing.js) ---------- */
+.pr-top {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding-bottom: 12px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--soft-border);
+}
+.pr-top h1 {
+    flex: 1 1 auto; margin: 0;
+    font-family: 'Cinzel', serif; font-size: 1.25rem; font-weight: 600;
+    color: var(--primary-color);
+}
+body.theme-dark .pr-top h1 { color: var(--accent-color); }
+.pr-h {
+    font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+    margin: 24px 0 6px; padding-bottom: 5px;
+    border-bottom: 1px solid var(--soft-border);
+    color: var(--primary-color);
+}
+.pr-free {
+    padding: 14px 16px; border-radius: var(--radius-sm);
+    background: rgba(61,122,61,0.1); border: 1px solid rgba(61,122,61,0.4);
+}
+.pr-free .pr-h { margin-top: 0; border-bottom-color: rgba(61,122,61,0.3); }
+.pr-free-list {
+    margin: 0 0 10px; padding-left: 20px;
+    font-family: 'Lora', serif; font-size: 0.82rem; line-height: 1.6;
+}
+.pr-free-list li { margin-bottom: 3px; }
+.pr-free-note { margin: 0; font-style: italic; }
+.pr-warn, .pr-quota {
+    margin: 14px 0 0; padding: 10px 13px; border-radius: var(--radius-sm);
+    font-family: 'Lora', serif; font-size: 0.79rem; line-height: 1.5;
+    background: rgba(196,155,53,0.14); border: 1px solid rgba(196,155,53,0.45);
+}
+.pr-quota { background: var(--panel-1); border-color: var(--soft-border); }
+.pr-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.pr-card:hover { border-color: rgba(196,155,53,0.55); }
+.pr-card.is-owned { border-color: rgba(61,122,61,0.5); background: rgba(61,122,61,0.08); }
+.pr-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pr-name {
+    font-family: 'Cinzel', serif; font-size: 0.9rem; font-weight: 600;
+    color: var(--primary-color);
+}
+.pr-card-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pr-owned {
+    font-family: 'Cinzel', serif; font-size: 0.78rem; color: #2e7d4f;
+}
+.pr-btn:hover:not(:disabled) { filter: brightness(1.09); }
+.pr-btn:disabled, .pr-btn.is-off {
+    background: var(--widget-bg); color: var(--text-color);
+    border-color: var(--soft-border); box-shadow: none;
+    opacity: 0.55; cursor: not-allowed; filter: none;
+}
+.pr-btn-ghost:hover { background: var(--widget-bg); opacity: 1; }
+.pr-link {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-family: 'Cinzel', serif; font-size: 0.76rem;
+    color: var(--primary-color); text-decoration: underline; text-underline-offset: 2px;
+}
+#pr-modal {
+    position: fixed; inset: 0; z-index: 9300;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: radial-gradient(circle at 50% 40%, rgba(60,38,10,0.5), rgba(8,5,3,0.85) 72%);
+    backdrop-filter: blur(3px);
+    animation: fadeIn .22s ease;
+}
+.pr-modal-title {
+    margin: 0; font-family: 'Cinzel', serif; font-size: 1.1rem; font-weight: 600;
+    color: var(--primary-color);
+}
+.pr-consent {
+    display: flex; flex-direction: column; gap: 9px;
+    padding: 12px 14px; border-radius: var(--radius-sm);
+    background: rgba(196,155,53,0.1); border: 1px solid rgba(196,155,53,0.45);
+}
+.pr-modal-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 620px) {
+    .pr-wrap { padding: 16px 14px 22px; border-radius: var(--radius-sm); }
+    .pr-modal-foot .pr-btn, .pr-modal-foot .pr-btn-ghost { flex: 1 1 auto; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #pr-modal { animation: none !important; }
+}
+
+/* ---------- Tarifs — le bandeau du mode test (pricing.js, LOT 9.1) ---------- */
+.pr-test {
+    margin: 0 0 14px; padding: 10px 13px; border-radius: var(--radius-sm);
+    font-family: 'Lora', serif; font-size: 0.8rem; line-height: 1.5;
+    background: rgba(37,99,201,0.09); border: 1px dashed rgba(37,99,201,0.55);
+}
+body.theme-dark .pr-test { background: rgba(96,145,230,0.12); border-color: rgba(120,160,235,0.5); }

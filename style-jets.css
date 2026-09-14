@@ -1,0 +1,132 @@
+/* =====================================================
+   style-jets.css — chargée avec le module « jets » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- HISTORIQUE DES JETS (tiroir de dés) ---------- */
+.rh-filtre {
+    padding: 3px 9px; border-radius: 999px; border: 1px solid rgba(196,155,53,0.4); background: transparent;
+    color: inherit; font: inherit; font-size: 0.7rem; line-height: 1.3; cursor: pointer;
+}
+.rh-filtre:hover { background: rgba(196,155,53,0.14); }
+.rh-filtre.is-on { background: rgba(196,155,53,0.3); border-color: rgba(196,155,53,0.8); font-weight: 700; }
+.roll-history-item .rh-relancer:hover { background: rgba(196,155,53,0.22); }
+
+/* ---------- CARTE DE RÉSULTAT DES JETS (jets.js) — LOT 4.1 ---------- */
+.cj[hidden] { display: none !important; }
+.cj.cj-entre { animation: cjEntre .34s cubic-bezier(.2,.9,.3,1.15) both; }
+@keyframes cjEntre { from { opacity: 0; transform: translate(-50%, 16px) scale(.96); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+.cj-fermer:hover { filter: brightness(1.08); }
+.cj-sur {
+    margin: 0 36px 2px 0; font-family: 'Cinzel', Georgia, serif; font-size: .64rem; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--cj-doux);
+}
+.cj-titre {
+    margin: 0 36px 8px 0; padding: 0; border: 0; font-family: 'Cinzel', Georgia, serif; font-size: 1.12rem;
+    line-height: 1.25; color: var(--cj-accent); overflow-wrap: anywhere; text-align: left;
+}
+.cj-jet, .cj-lancer { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.cj-lancer { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--cj-de-bord); }
+.cj-lancer.is-principal { margin-top: 0; padding-top: 0; border-top: 0; }
+.cj-des { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+/* Le d20 : un hexagone, cerné de sa couleur ; le dé gardé est plein, l'écarté barré. */
+.cj-d20 {
+    min-width: 42px; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 0; font-size: 1.12rem;
+    background: var(--cj-de-bord); clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
+}
+.cj-d20 > span {
+    position: absolute; inset: 2px; display: grid; place-items: center; background: var(--cj-de);
+    clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
+}
+.cj-d20.is-garde { background: var(--cj-accent); }
+.cj-d20.is-garde > span { color: var(--cj-accent); }
+.cj-de.is-ecarte { opacity: .55; }
+.cj-de.is-ecarte > span { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--cj-doux); }
+.cj-signe, .cj-fixe { font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cj-reste { font-size: .78rem; color: var(--cj-doux); }
+.cj-sources {
+    display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 0; list-style: none;
+    flex: 1 1 110px; min-width: 0; font-size: .86rem; color: var(--cj-doux);
+}
+.cj-sources b { color: var(--cj-encre); font-variant-numeric: tabular-nums; }
+.cj-src.o-etat b, .cj-src.o-effet b { color: var(--cj-alerte); }
+.cj-total {
+    margin-left: auto; min-width: 1.6em; text-align: right;
+    font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 2.3rem; line-height: 1;
+    color: var(--cj-accent); font-variant-numeric: tabular-nums;
+}
+.cj-total-lancer { font-size: 1.55rem; }
+.cj-etiquette {
+    flex: 0 0 100%; font-family: 'Cinzel', Georgia, serif; font-size: .62rem; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--cj-doux);
+}
+.cj-lignes { display: flex; flex-direction: column; gap: 5px; flex: 1 1 180px; min-width: 0; }
+.cj-ligne { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 7px; font-size: .86rem; }
+.cj-lib { font-weight: 600; }
+.cj-type { color: var(--cj-doux); font-style: italic; }
+.cj-sous-total { margin-left: auto; font-family: 'Cinzel', Georgia, serif; }
+.cj-ligne.is-erreur { color: var(--cj-alerte); font-style: italic; }
+.cj-notes {
+    display: flex; flex-direction: column; gap: 3px; margin: 10px 0 0; padding: 8px 0 0;
+    border-top: 1px dashed var(--cj-de-bord); list-style: none; font-size: .82rem; color: var(--cj-doux);
+}
+.cj-notes .cj-avert { color: var(--cj-alerte); font-style: italic; }
+/* Le bandeau du 20 et du 1 naturels */
+.cj-bandeau { margin: -2px 0 10px; text-align: center; }
+.cj-bandeau span {
+    display: inline-block; padding: 4px 24px; font-family: 'Cinzel', Georgia, serif; font-size: .74rem; font-weight: 700;
+    letter-spacing: .22em; text-transform: uppercase;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%, 10px 50%);
+}
+/* Critique : double filet d'or, bandeau doré qui chatoie, total doré */
+.cj.is-critique {
+    --cj-accent: #83540f; --cj-de-bord: rgba(160,114,28,.7);
+    border: 2px solid #c49b35;
+    box-shadow: inset 0 0 0 1px rgba(255,236,170,.65), 0 18px 44px rgba(20,12,6,.45), 0 0 34px rgba(212,164,58,.5);
+}
+.cj.is-critique::before {
+    content: ''; position: absolute; inset: 5px; border: 1px solid rgba(196,155,53,.75); border-radius: 6px; pointer-events: none;
+}
+.cj.is-critique .cj-bandeau span {
+    color: #2a1a06; background: linear-gradient(100deg, #b8862a, #f3d68a 45%, #c49b35 55%, #a8761e);
+    background-size: 220% 100%; animation: cjOr 2.4s ease-in-out infinite;
+}
+@keyframes cjOr { 0%, 100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
+.cj.is-critique .cj-total { color: #8a5a0c; text-shadow: 0 0 14px rgba(230,180,70,.6); }
+.cj.is-critique .cj-d20.is-garde { background: #c49b35; }
+.cj.is-critique .cj-d20.is-garde > span { background: #fff3cf; color: #7a4d0c; }
+/* Échec : encre de sang, parchemin fendu, une secousse */
+.cj.is-echec {
+    --cj-p1: #f2ded2; --cj-p2: #dbb9a5; --cj-accent: #7a1620; --cj-de-bord: rgba(122,22,32,.55);
+    border: 2px solid #8a1c26; box-shadow: 0 18px 44px rgba(20,6,6,.5), inset 0 0 30px rgba(110,20,20,.22);
+}
+.cj.is-echec::before {
+    content: ''; position: absolute; top: 0; right: 46px; width: 54px; height: 82px; pointer-events: none; opacity: .5;
+    background: no-repeat top center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 54 82'%3E%3Cpath d='M30 0 L24 16 L33 25 L20 43 L27 52 L15 70 L19 82' fill='none' stroke='%237a1620' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M24 16 L13 21 M20 43 L9 45 M27 52 L39 60' fill='none' stroke='%237a1620' stroke-width='1.1'/%3E%3C/svg%3E");
+}
+.cj.is-echec .cj-bandeau span { color: #fbe9e2; background: linear-gradient(180deg, #8a1c26, #58101a); }
+.cj.is-echec .cj-total { color: #7a1620; }
+.cj.is-echec.cj-entre { animation: cjEntre .34s cubic-bezier(.2,.9,.3,1.15) both, cjSecousse .42s .3s ease-in-out; }
+@keyframes cjSecousse {
+    0%, 100% { transform: translate(-50%, 0); } 25% { transform: translate(calc(-50% - 5px), 1px); }
+    50% { transform: translate(calc(-50% + 4px), -1px); } 75% { transform: translate(calc(-50% - 3px), 0); }
+}
+body.theme-dark .cj-fermer { background: rgba(0,0,0,.2); }
+body.theme-dark .cj.is-critique { --cj-accent: #f3d68a; }
+body.theme-dark .cj.is-critique .cj-total { color: #f6dc92; }
+body.theme-dark .cj.is-critique .cj-d20.is-garde > span { background: #4a3a1c; color: #f6dc92; }
+body.theme-dark .cj.is-echec { --cj-p1: #4c1f1f; --cj-p2: #2a0e10; --cj-accent: #f39a9a; --cj-de-bord: rgba(243,154,154,.5); border-color: #c24a54; }
+body.theme-dark .cj.is-echec::before { filter: invert(1) hue-rotate(180deg) brightness(1.4); }
+body.theme-dark .cj.is-echec .cj-total { color: #f39a9a; }
+@media (max-width: 760px) {
+    .cj { padding: 12px 14px; }
+    .cj-total { font-size: 2rem; }
+    body.mobile-sheet:has(#app-screen:not(.hidden)) .cj { bottom: calc(118px + env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cj.cj-entre, .cj.is-echec.cj-entre, .cj.is-critique .cj-bandeau span { animation: none !important; }
+}
+@media print {
+    .cj, .cj-annonce { display: none !important; }
+}

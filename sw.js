@@ -15,22 +15,33 @@
 // `srd-data-v1` appartient à srd-data.js (les règles hors connexion) : on n'y
 // touche jamais, ni pour écrire ni pour purger.
 // =====================================================
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = 'dnd-companion-' + VERSION;
 const DELAI_RESEAU = 2500;
 
 // L'essentiel : de quoi afficher l'accueil et ouvrir une fiche sans réseau.
-// Le reste (secrets, impression, cartes…) entre dans le cache à la première
-// visite, puisque chaque réponse reçue y est recopiée.
+// Les modules chargés à la demande (charger.js, LOT 10) y sont aussi : la page
+// ne les demande qu'au premier usage, et ce premier usage peut être hors ligne.
+// Le reste (cartes de sorts, cimetière, images…) entre dans le cache à la
+// première visite, puisque chaque réponse reçue y est recopiée.
 const ESSENTIEL = [
     './', './index.html',
-    './style.css', './themes.css', './music-player.css',
+    './style.css', './themes.css',
     './toasts.js', './charger.js', './dialogues.js', './auth.js', './effets.js',
     './srd-data.js', './edition.js', './srd-autocomplete.js', './calcul.js', './script.js', './jets.js',
-    './armor.js', './etats.js', './fiche-layout.js', './menu.js',
+    './armor.js', './etats.js', './exploits.js', './menu.js', './entitlements.js', './cosmetics.js', './pricing.js',
     './multiclasse.js', './lancer-sort.js', './effets-actifs.js', './formes.js', './stats-des.js',
     './bourse.js', './macros.js', './bestiaire.js', './carnet.js',
     './confort.js', './coffre.js', './seance.js', './vitrine.js', './des3d.js',
+    // À la demande (LOT 10)
+    './secrets.js', './secrets-monde.js', './exploits-suivi.js', './secrets-plus.js', './secrets-absurdes.js',
+    './hero-card.js', './hero-card-styles.js', './music-player.js', './music-player.css',
+    './fiche-layout.js', './print-sheet.js', './sheet-io.js', './homebrew.js', './rules-page.js',
+    './help.js', './pj-tutorial.js', './legal.js',
+    './style-carte-heros.css', './style-regles.css', './style-contenu-perso.css', './style-export-import.css',
+    './style-legal.css', './style-aide.css', './style-assistant.css', './style-multiclasse.css', './style-jets.css',
+    './style-effets-actifs.css', './style-formes.css', './style-stats-des.css', './style-admin.css',
+    './style-tarifs.css', './style-imprimer.css',
     './manifest.webmanifest', './IMG/logo-192.png', './favicon-32.png'
 ];
 

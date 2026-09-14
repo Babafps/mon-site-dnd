@@ -1,0 +1,33 @@
+/* =====================================================
+   style-formes.css — chargée avec le module « formes » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- LOT 4B · 4C · 4D — repos, PV, mort, inspiration, effets, formes, plateau, statistiques ---------- */
+.forme-banniere {
+    display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 12px; border-radius: 12px;
+    border: 1px solid rgba(58,110,60,.45); background: linear-gradient(135deg, #eef6e8, #d8e8cd); color: #233a1e;
+}
+.forme-ico { font-size: 1.6rem; line-height: 1; }
+.forme-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: .82rem; }
+.forme-txt b { font-family: 'Cinzel', Georgia, serif; font-size: .95rem; }
+.forme-txt details { font-size: .78rem; }
+.forme-txt details p { margin: 4px 0; }
+body.theme-dark .forme-banniere { background: linear-gradient(135deg, #243222, #1a2618); color: #dcecd2; border-color: rgba(140,200,120,.35); }
+input.forme-remplace { box-shadow: inset 0 0 0 2px rgba(58,110,60,.55) !important; background-color: rgba(58,110,60,.12) !important; cursor: not-allowed; }
+.forme-attaques { margin: 6px 0 8px; padding: 6px 8px; border: 1px dashed rgba(58,110,60,.55); border-radius: 10px; }
+.forme-att-titre { margin: 0 0 4px; font-size: .82rem; font-weight: 700; }
+.forme-att { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+.forme-att-nom { font-weight: 700; font-size: .85rem; }
+.forme-att-deg { font-size: .8rem; opacity: .85; }
+.forme-att-texte { margin: 2px 0; font-size: .76rem; opacity: .85; }
+.formes-cherche { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: .82rem; }
+.formes-cherche input { flex: 1; min-width: 0; font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid rgba(122,40,40,.3); background: rgba(255,255,255,.7); color: inherit; }
+body.theme-dark .formes-cherche input { background: rgba(0,0,0,.25); border-color: rgba(201,162,39,.35); }
+.formes-fenetre .formes-liste { max-height: 46vh; overflow: auto; padding-right: 2px; }
+.formes-liste > label[hidden] { display: none !important; }
+@media (max-width: 600px) {
+    .forme-banniere { flex-wrap: wrap; }
+    .forme-banniere .forme-reprendre { width: 100%; }
+}

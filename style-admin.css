@@ -1,0 +1,31 @@
+/* =====================================================
+   style-admin.css — chargée avec le module « admin » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- ADMINISTRATION DES DROITS (admin.js, docs/admin.sql) ---------- */
+.adm { display: flex; flex-direction: column; gap: 10px; }
+.adm-recherche { display: flex; align-items: flex-end; gap: 8px; }
+.adm-recherche .adm-champ { flex: 1 1 auto; }
+.adm-champ { display: flex; flex-direction: column; gap: 4px; }
+.adm-champ > span, .adm-produits legend { font-family: 'Cinzel', Georgia, serif; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.adm-produits { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 12px; margin: 0; padding: 8px 12px; border: 1px solid rgba(122,40,40,.25); border-radius: 10px; }
+.adm-produits legend { padding: 0 4px; }
+.adm-produits label { display: flex; align-items: center; gap: 8px; min-height: 34px; cursor: pointer; }
+.adm-produits .adm-tout { grid-column: 1 / -1; font-weight: 700; }
+.adm-actions { display: flex; justify-content: flex-end; }
+.adm-statut { margin: 0; min-height: 1.3em; font-size: .9rem; }
+.adm-statut[data-type="erreur"] { color: #9b1c1c; }
+.adm-statut[data-type="reussite"] { color: #2f6b3f; }
+.adm-droits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: .85rem; }
+.adm-droits li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; padding: 6px 9px; border-radius: 8px; background: rgba(0,0,0,.04); }
+.adm-droits li.est-inactif { opacity: .55; }
+.adm-droits li.adm-vide { font-style: italic; }
+body.theme-dark .adm-produits { border-color: rgba(196,155,53,.3); }
+body.theme-dark .adm-droits li { background: rgba(255,255,255,.05); }
+body.theme-dark .adm-statut[data-type="erreur"] { color: #ff9b8f; }
+body.theme-dark .adm-statut[data-type="reussite"] { color: #8fd1a1; }
+@media (max-width: 480px) {
+    .adm-recherche { flex-direction: column; align-items: stretch; }
+}

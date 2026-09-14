@@ -1,0 +1,34 @@
+/* =====================================================
+   style-stats-des.css — chargée avec le module « stats-des » (charger.js)
+   Ces règles viennent de style.css (LOT 10.2) : elles ne visent que des
+   éléments fabriqués par ce module, et ne pèsent donc rien tant qu'il
+   n'est pas ouvert. L'ordre d'origine est conservé.
+   ===================================================== */
+/* ---------- LOT 4B · 4C · 4D — repos, PV, mort, inspiration, effets, formes, plateau, statistiques ---------- */
+.dlg .stats-chiffres dt { text-transform: none; letter-spacing: .02em; font-weight: 700; }
+.stats-legende { margin: 0 0 10px; font-size: .72rem; font-style: italic; opacity: .8; }
+.stats-total { margin: 0 0 6px; }
+.stats-avert { margin: 0 0 8px; font-size: .8rem; font-style: italic; color: #8a1c26; }
+body.theme-dark .stats-avert { color: #f3a3a3; }
+.stats-graphe {
+    position: relative; display: flex; align-items: flex-end; gap: 3px; height: 150px;
+    margin: 18px 0 22px; border-bottom: 1px solid rgba(122,40,40,.35);
+}
+.stats-col { position: relative; flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.stats-barre { position: relative; width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #b8862a, #7a2828); }
+.stats-barre em { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: .58rem; font-style: normal; font-variant-numeric: tabular-nums; }
+.stats-face { position: absolute; bottom: -17px; font-size: .6rem; font-variant-numeric: tabular-nums; }
+.stats-col.is-20 .stats-barre { background: linear-gradient(180deg, #f3d68a, #c49b35); }
+.stats-col.is-1 .stats-barre { background: linear-gradient(180deg, #e07a7a, #8a1c26); }
+.stats-attendu { position: absolute; left: 0; right: 0; z-index: 1; border-top: 1px dashed rgba(58,38,18,.6); pointer-events: none; }
+.stats-attendu span { position: absolute; right: 0; top: -14px; font-size: .6rem; }
+body.theme-dark .stats-attendu { border-color: rgba(242,232,210,.55); }
+.stats-chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin: 0 0 8px; }
+.stats-chiffres > div { padding: 6px 8px; border-radius: 8px; background: rgba(122,40,40,.06); }
+.stats-chiffres dt { font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+.stats-chiffres dd { margin: 0; font-weight: 700; }
+body.theme-dark .stats-chiffres > div { background: rgba(255,255,255,.06); }
+.stats-phrase { margin: 0 0 10px; font-size: .88rem; }
+@media (max-width: 420px) {
+    .stats-barre em { display: none; }
+}

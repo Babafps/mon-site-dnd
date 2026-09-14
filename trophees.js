@@ -260,8 +260,11 @@
 
     const ficheOuverte = () => { const a = $('app-screen'); let id = ''; try { id = localStorage.getItem('dnd-active-char') || ''; } catch (e) {} return !!(a && !a.classList.contains('hidden') && id); };
 
-    function ouvrir() {
-        if (!window.Dialogue) return Promise.resolve();
+    async function ouvrir() {
+        if (!window.Dialogue) return;
+        // La collection de styles (carte de héros) et les compteurs (suivi des
+        // exploits) se chargent à la demande (LOT 10) : on les attend.
+        try { await Promise.all([window.charger('carte-heros'), window.charger('secrets')]); } catch (e) {}
         poserStyles();
         const e = etat();
         const resume = [`${e.trouves} secret${e.trouves > 1 ? 's' : ''} sur ${e.total}`];
@@ -310,7 +313,9 @@
     // =====================================================
     function accueil() {
         const panneau = $('home-panel-player');
-        if (!panneau || !window.Defis) return;
+        if (!panneau) return;
+        // Le défi du mois vit dans exploits-suivi.js, chargé après le premier affichage.
+        if (!window.Defis) { if (window.charger) window.charger('secrets').then(() => { if (window.Defis) accueil(); }).catch(() => {}); return; }
         poserStyles();
         let carte = $('home-defi');
         if (!carte) {
