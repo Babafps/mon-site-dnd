@@ -124,6 +124,9 @@
                 { ul: [
                     'votre adresse e-mail et un mot de passe, jamais conservé en clair (Supabase le '
                     + 'remplace par une empreinte cryptographique) ;',
+                    'si vous vous connectez avec Discord ou Google : l’identifiant de votre compte chez ce '
+                    + 'service, et l’adresse e-mail, le nom et l’image de profil qu’il transmet. Aucun mot de '
+                    + 'passe n’est alors créé sur le site ;',
                     'le contenu de vos fiches de personnage : nom, caractéristiques, sorts, inventaire, '
                     + 'journal de bord, notes, image de portrait si vous en ajoutez une ;',
                     'votre contenu personnel (classes, sorts, monstres que vous créez) si vous choisissez '
@@ -141,9 +144,11 @@
                     + '(adresse IP, horodatage des connexions), conservées par Supabase selon ses propres '
                     + 'durées.'
                 ] },
-                { p: 'Aucune donnée bancaire n’est traitée ni stockée par le site. Le jour où des options '
-                   + 'payantes existeront, le paiement sera confié à un prestataire spécialisé qui recevra '
-                   + 'directement vos coordonnées bancaires : elles ne transiteront pas par ce site.' },
+                { p: 'Aucune donnée bancaire n’est traitée ni stockée par le site. Les options payantes se '
+                   + 'règlent chez Stripe, sur ses propres pages : Stripe reçoit directement vos coordonnées '
+                   + 'bancaires, qui ne transitent pas par ce site. Le site ne conserve que le droit acheté, sa '
+                   + 'date de fin s’il s’agit d’un abonnement, et les identifiants de client et d’abonnement que '
+                   + 'Stripe lui transmet.' },
 
                 { h: 'Pourquoi, et sur quelle base légale' },
                 { dl: [
@@ -168,7 +173,9 @@
                     'les administrateurs du site, pour examiner les tombes signalées ;',
                     'Supabase, en qualité de sous-traitant, pour héberger la base et gérer les comptes ;',
                     '[À COMPLÉTER : l’hébergeur du site, si différent] ;',
-                    '[À COMPLÉTER : le prestataire de paiement, quand les options payantes existeront] ;',
+                    'Stripe, qui traite le paiement des options payantes ;',
+                    'Discord ou Google, seulement si vous choisissez de vous connecter avec l’un d’eux : ce '
+                    + 'service sait alors que vous utilisez le site, mais ne reçoit rien de vos fiches ;',
                     'les autorités, uniquement sur réquisition légale.'
                 ] },
                 { p: 'Si vous partagez une fiche — un export, une carte de héros —, les informations que vous '
@@ -227,6 +234,8 @@
                     + 'Strictement nécessaire au fonctionnement, jamais transmis à un tiers ;',
                     'jeton de session déposé par Supabase quand vous êtes connecté, pour vous garder '
                     + 'authentifié. Strictement nécessaire lui aussi ;',
+                    'si vous vous connectez avec Discord ou Google, leur page de connexion applique ses propres '
+                    + 'cookies et sa propre politique de confidentialité ;',
                     'aucun traceur tiers.'
                 ] },
 
@@ -277,6 +286,8 @@
                     'les informations que vous donnez à l’inscription doivent être exactes ;',
                     'votre mot de passe est personnel : vous êtes responsable de ce qui se fait depuis '
                     + 'votre compte ;',
+                    'si vous vous connectez avec Discord ou Google, c’est la sécurité de ce compte-là qui '
+                    + 'protège aussi le vôtre ;',
                     'prévenez [À COMPLÉTER : adresse de contact] si vous soupçonnez un accès non autorisé ;',
                     'un compte est ouvert à une personne : ne le partagez pas.'
                 ] },
@@ -366,8 +377,10 @@
             id: 'cgv', tab: '💳 CGV', title: 'Conditions générales de vente',
             intro: 'Les règles applicables aux options payantes : prix, paiement, rétractation, remboursement, résiliation.',
             blocks: [
+                // Tant qu'aucun lien de paiement n'est renseigné (pricing.js), rien n'est en vente.
+                ...((window.Pricing && window.Pricing.etat && window.Pricing.etat().enVente) ? [] : [
                 { note: 'Aucune option payante n’est encore en vente. Ce document est publié à l’avance, '
-                      + 'pour que rien ne soit vendu avant que les règles ne soient écrites et lisibles.' },
+                      + 'pour que rien ne soit vendu avant que les règles ne soient écrites et lisibles.' }]),
 
                 { h: 'Vendeur' },
                 { p: 'Les produits sont vendus par [À COMPLÉTER : nom ou raison sociale], '
@@ -382,8 +395,8 @@
                     + 'de page, palettes de couleurs, cadres) : payés une fois, acquis sans limite de '
                     + 'durée ;',
                     'un abonnement donnant accès à des services consommant des ressources '
-                    + '(fiches synchronisées en nombre illimité, synchronisation du contenu personnel, '
-                    + 'quota d’images, sauvegardes automatiques).'
+                    + '(fiches synchronisées en nombre illimité, corbeille de 30 jours pour les personnages '
+                    + 'supprimés, synchronisation du contenu personnel, quota d’images, sauvegardes automatiques).'
                 ] },
                 { p: 'Ne seront jamais payants : les règles, les sorts, la fiche de personnage, les dés de '
                    + 'base, l’usage hors connexion, l’export et l’import de vos fiches.' },
@@ -399,7 +412,7 @@
 
                 { h: 'Commande et paiement' },
                 { p: 'La commande est validée lorsque le paiement est confirmé. Le paiement est traité par '
-                   + '[À COMPLÉTER : nom du prestataire de paiement, Stripe par exemple] : vos coordonnées '
+                   + 'Stripe : vos coordonnées '
                    + 'bancaires sont transmises directement à ce prestataire et ne sont ni vues ni '
                    + 'conservées par le site.' },
                 { p: 'Un récapitulatif de commande vous est adressé par courriel. '
@@ -600,7 +613,8 @@
         // enfant partirait se poser à côté.
         const spots = [
             document.querySelector('#home-screen .home-container'),
-            document.querySelector('#login-screen .auth-card')
+            document.querySelector('#login-screen .auth-card'),
+            document.querySelector('#vitrine-screen .vit-pied')
         ];
         spots.forEach(el => {
             if (!el || el.querySelector(':scope > .legal-foot')) return;
@@ -628,7 +642,7 @@
     /** Ouvre la page depuis n'importe où. */
     function open(docId, from) {
         build();
-        const visible = ['home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'login-screen']
+        const visible = ['home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'login-screen', 'vitrine-screen']
             .find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
         lastScreen = from || (visible && visible !== 'legal-screen' ? visible : 'home-screen');
         show(docId || current);
@@ -666,7 +680,10 @@
         mountMenu();
         // Lien direct : /#legal-cgv ouvre les CGV.
         const m = /^#legal-([a-z]+)$/.exec(location.hash || '');
-        if (m && BY_ID[m[1]]) setTimeout(() => open(m[1], 'home-screen'), 0);
+        // Un visiteur (vitrine, LOT 9.3) revient là d'où il vient, pas sur un accueil vide.
+        const retour = (document.body.classList.contains('est-visiteur') && window.Demarrage && window.Demarrage.ecranVisiteur)
+            ? window.Demarrage.ecranVisiteur() : 'home-screen';
+        if (m && BY_ID[m[1]]) setTimeout(() => open(m[1], retour), 0);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

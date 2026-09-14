@@ -2396,18 +2396,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                // dice-box est hébergé EN LOCAL (un Web Worker ne peut pas venir d'un autre domaine)
-                const libUrl = new URL('lib/dice-box/', document.baseURI);
-                const mod = await import(libUrl.href + 'dice-box.es.min.js');
-                const DiceBox = mod.default;
-                let overlay = document.getElementById('dice-box-overlay');
-                if (!overlay) { overlay = document.createElement('div'); overlay.id = 'dice-box-overlay'; overlay.className = 'no-print'; document.body.appendChild(overlay); }
-                const box = new DiceBox({
-                    container: '#dice-box-overlay',
-                    assetPath: new URL('lib/dice-box/assets/', document.baseURI).pathname,
-                    theme: 'default', scale: 7, gravity: 2, throwForce: 6
-                });
-                await box.init();
+                // Le moteur et ses réglages vivent dans des3d.js, partagé avec la vitrine (LOT 9.3).
+                await window.charger('des3d');
+                const box = await window.MoteurDes.creer();
                 diceBox = box;
                 diceBoxReady = true;
                 console.info('🎲 Plateau de dés 3D prêt.');

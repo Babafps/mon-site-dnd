@@ -20,6 +20,7 @@
         multiclasse: 'multiclasse.js',
         'lancer-sort': 'lancer-sort.js',
         jets: 'jets.js',
+        des3d: 'des3d.js',
         'effets-actifs': 'effets-actifs.js',
         formes: 'formes.js',
         'stats-des': 'stats-des.js',

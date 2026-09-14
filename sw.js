@@ -15,7 +15,7 @@
 // `srd-data-v1` appartient à srd-data.js (les règles hors connexion) : on n'y
 // touche jamais, ni pour écrire ni pour purger.
 // =====================================================
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = 'dnd-companion-' + VERSION;
 const DELAI_RESEAU = 2500;
 
@@ -30,7 +30,7 @@ const ESSENTIEL = [
     './armor.js', './etats.js', './fiche-layout.js', './menu.js',
     './multiclasse.js', './lancer-sort.js', './effets-actifs.js', './formes.js', './stats-des.js',
     './bourse.js', './macros.js', './bestiaire.js', './carnet.js',
-    './confort.js', './coffre.js', './seance.js',
+    './confort.js', './coffre.js', './seance.js', './vitrine.js', './des3d.js',
     './manifest.webmanifest', './IMG/logo-192.png', './favicon-32.png'
 ];
 

@@ -30,6 +30,16 @@
     //
     // Le prix affiché ici n'est qu'un texte : celui qui fait foi est celui de
     // Stripe. Garder les deux d'accord.
+    //
+    // Commencer en MODE TEST : un lien de paiement de test commence par
+    // https://buy.stripe.com/test_ (le portail de test par
+    // https://billing.stripe.com/p/login/test_). La page l'annonce alors en tête,
+    // et signale aussi un mélange de liens de test et de liens réels. Un lien qui
+    // n'est pas une adresse https laisse le bouton sur « Bientôt ».
+    // Pas à pas : docs/boutique-stripe.md.
+    //
+    // La corbeille des personnages n'est pas un article : elle est comprise dans
+    // l'abonnement (entitlements.js, INCLUS).
     // =====================================================
     const PORTAL_URL = '';   // [À COMPLÉTER : lien du portail client Stripe, pour résilier]
 
@@ -64,8 +74,8 @@
                 { key: 'abonnement', nom: 'Abonnement', prix: '[À COMPLÉTER : prix par mois]', lien: '',
                   abo: true,
                   texte: 'Fiches synchronisées en nombre illimité (3 sans abonnement, et le LOCAL '
-                       + 'reste illimité), synchronisation de ton contenu perso, quota d’images, '
-                       + 'sauvegardes automatiques et synchro VTT continue.' }
+                       + 'reste illimité), corbeille de 30 jours pour tes personnages supprimés, '
+                       + 'synchronisation de ton contenu perso, quota d’images et sauvegardes automatiques.' }
             ]
         }
     ];
@@ -86,6 +96,24 @@
     const txt = (s) => esc(s).replace(/\[À COMPLÉTER[^\]]*\]/g,
         (m) => `<mark class="legal-todo">${m}</mark>`);
 
+    // ---------- Les liens : prêts, de test, ou mélangés ----------
+    const LIEN_TEST = /^https:\/\/[^/]+\/(p\/login\/)?test_/;
+    /** Un lien utilisable : une adresse https bien formée. */
+    function lienPret(lien) {
+        if (!lien) return false;
+        try { return new URL(lien).protocol === 'https:'; } catch (e) { return false; }
+    }
+    /** { enVente, test, melange } : ce que la page doit dire des liens renseignés. */
+    function etat() {
+        const liens = allArticles().map(a => a.lien).concat(PORTAL_URL).filter(lienPret);
+        const test = liens.filter(l => LIEN_TEST.test(l)).length;
+        return {
+            enVente: allArticles().some(a => lienPret(a.lien)),
+            test: test > 0,
+            melange: test > 0 && test < liens.length
+        };
+    }
+
     let built = false;
     let lastScreen = 'home-screen';
     let pending = null;              // l'article en cours d'achat
@@ -96,7 +124,7 @@
 
     function articleHtml(a) {
         const owned = window.Ent ? window.Ent.has(a.key) : false;
-        const ready = !!a.lien;
+        const ready = lienPret(a.lien);
         const exp = owned && window.Ent ? window.Ent.expiresAt(a.key) : null;
         return `<div class="pr-card${owned ? ' is-owned' : ''}">
             <div class="pr-card-head">
@@ -117,6 +145,15 @@
         </div>`;
     }
 
+    /** Tant qu'un lien est de test, la page le dit : personne ne croit acheter pour de vrai. */
+    function bandeauTest() {
+        const e = etat();
+        if (!e.test) return '';
+        return `<div class="pr-test" role="note"><b>Mode test.</b> ${e.melange
+            ? 'Attention : des liens de test et des liens réels sont mélangés. Certains articles se paient pour de vrai.'
+            : 'Les paiements passent par Stripe en mode test : aucune carte n’est débitée, rien n’est réellement vendu.'}</div>`;
+    }
+
     function markup() {
         const q = window.Ent ? window.Ent.characterQuota() : null;
         const connecte = !!window.SupaAuth?.currentUser;
@@ -125,6 +162,8 @@
                 <button type="button" class="legal-back" data-pr-act="back">← Retour</button>
                 <h1>Tarifs</h1>
             </header>
+
+            ${bandeauTest()}
 
             <section class="pr-free">
                 <h2 class="pr-h">Gratuit, définitivement</h2>
@@ -215,7 +254,7 @@
     }
 
     function openPortal() {
-        if (!PORTAL_URL) {
+        if (!lienPret(PORTAL_URL)) {
             window.Dialogue.informer({
                 titre: 'Portail pas encore ouvert',
                 message: 'Le portail de gestion d’abonnement n’est pas encore configuré.\n\n'
@@ -280,7 +319,7 @@
      *  `client_reference_id` : c'est ce que la fonction Edge relira pour savoir
      *  à qui accorder le droit. */
     function go(a, user) {
-        if (!a.lien) return;
+        if (!lienPret(a.lien)) return;
         let url;
         try { url = new URL(a.lien); }
         catch (e) {
@@ -303,7 +342,7 @@
 
     function open(from) {
         build();
-        const visible = ['home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'legal-screen']
+        const visible = ['home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'legal-screen', 'vitrine-screen', 'login-screen']
             .find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
         lastScreen = from || (visible || 'home-screen');
         render();
@@ -367,11 +406,19 @@
         build();
         mountMenu();
         mountHome();
-        if (/^#tarifs$/.test(location.hash || '')) setTimeout(() => open('home-screen'), 0);
+        // Un visiteur (vitrine, LOT 9.3) revient là d'où il vient, pas sur un accueil vide.
+        const retour = () => (document.body.classList.contains('est-visiteur') && window.Demarrage && window.Demarrage.ecranVisiteur)
+            ? window.Demarrage.ecranVisiteur() : 'home-screen';
+        if (/^#tarifs$/.test(location.hash || '')) setTimeout(() => open(retour()), 0);
+        // Ce qui cloche dans les liens se voit dans la console, avant qu'un joueur ne clique.
+        const malformes = allArticles().filter(a => a.lien && !lienPret(a.lien)).map(a => a.key);
+        if (PORTAL_URL && !lienPret(PORTAL_URL)) malformes.push('PORTAL_URL');
+        if (malformes.length) console.warn('[tarifs] liens de paiement mal formés, boutons laissés sur « Bientôt » :', malformes.join(', '));
+        if (etat().melange) console.warn('[tarifs] liens de test et liens réels mélangés : à corriger avant d’ouvrir la boutique.');
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    window.Pricing = { open, CATALOGUE, PORTAL_URL };
+    window.Pricing = { open, etat, CATALOGUE, PORTAL_URL, GRATUIT };
 })();

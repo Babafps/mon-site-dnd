@@ -7,6 +7,31 @@ const SUPABASE_ANON_KEY = 'sb_publishable_B1wwPg-kHhoknMbla9-FEA_MlnJNUHJ';
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Retour d'une connexion Discord ou Google (LOT 9.2). Le fournisseur est noté
+// juste avant de partir (`bnb-oauth`, propre à l'onglet). S'il revient avec une
+// erreur (refus, annulation, mauvaise configuration), on la lit puis on la
+// retire de l'adresse : un rechargement ne la répète pas, et elle ne passe pas
+// pour un lien de mot de passe expiré. Un succès, lui, est lu et nettoyé par
+// supabase-js.
+const AUTH_OAUTH = (function lireRetourOAuth() {
+    let parti = null;
+    try {
+        parti = JSON.parse(sessionStorage.getItem('bnb-oauth') || 'null');
+        sessionStorage.removeItem('bnb-oauth');
+    } catch (e) {}
+    const retour = { fournisseur: (parti && parti.fournisseur) || null, erreur: null };
+    if (!parti) return retour;
+    const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const u = new URL(location.href);
+    const lire = (k) => hash.get(k) || u.searchParams.get(k);
+    if (!lire('error')) return retour;
+    retour.erreur = { code: lire('error'), sousCode: lire('error_code') || '', description: lire('error_description') || '' };
+    ['error', 'error_code', 'error_description'].forEach(k => { hash.delete(k); u.searchParams.delete(k); });
+    const reste = hash.toString();
+    try { history.replaceState(history.state, '', u.pathname + u.search + (reste ? '#' + reste : '')); } catch (e) {}
+    return retour;
+})();
+
 // Lien « mot de passe oublié » : on lit le hash AVANT que supabase-js ne le consomme.
 const AUTH_RECOVERY   = location.hash.includes('type=recovery');
 const AUTH_LINK_ERROR = /error_code=otp_expired|error=access_denied/.test(location.hash);
@@ -35,7 +60,7 @@ const AUTH_LINK_ERROR = /error_code=otp_expired|error=access_denied/.test(locati
 // Tous les écrans plein page sont des .screen-view ; on bascule
 // .hidden.
 // =====================================================
-const APP_SCREENS = ['loading-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'legal-screen', 'pricing-screen'];
+const APP_SCREENS = ['loading-screen', 'vitrine-screen', 'login-screen', 'home-screen', 'app-screen', 'rules-screen', 'homebrew-screen', 'legal-screen', 'pricing-screen'];
 window.navTo = function (id) {
     APP_SCREENS.forEach(s => {
         const el = document.getElementById(s);
@@ -43,6 +68,25 @@ window.navTo = function (id) {
     });
     document.body.classList.toggle('rules-active', id === 'rules-screen');
     try { document.dispatchEvent(new CustomEvent('screen:change', { detail: { id } })); } catch (e) {}
+};
+
+// L'écran de connexion et ses deux onglets. Défini tôt, hors du démarrage
+// asynchrone plus bas : la vitrine (vitrine.js) y envoie le visiteur sans
+// attendre que Supabase ait répondu.
+window.AuthEcran = {
+    /** 'connexion' ou 'inscription'. */
+    onglet(nom) {
+        const inscription = nom === 'inscription';
+        const $ = (id) => document.getElementById(id);
+        $('auth-tab-login')?.classList.toggle('active', !inscription);
+        $('auth-tab-register')?.classList.toggle('active', inscription);
+        $('auth-form-login')?.classList.toggle('hidden', inscription);
+        $('auth-form-register')?.classList.toggle('hidden', !inscription);
+        $('auth-form-forgot')?.classList.add('hidden');
+        $('auth-oauth')?.classList.remove('hidden');
+        const msg = $('auth-message');
+        if (msg) { msg.textContent = ''; msg.classList.add('hidden'); }
+    }
 };
 
 window.SupaAuth = {
@@ -70,17 +114,73 @@ window.SupaAuth = {
         return data;
     },
 
+    /** Le code du lien de parrainage suivi sur cet appareil, ou null. */
+    parrainEnAttente() {
+        try {
+            const o = JSON.parse(localStorage.getItem('dnd-parrain') || 'null');
+            return o && /^[A-HJ-NP-Z2-9]{8}$/.test(o.code) ? o.code : null;
+        } catch (e) { return null; }
+    },
+
     async signUpEmail(email, password) {
         // Le code d'un lien de parrainage voyage avec l'inscription (LOT 8.4) : dans les
         // métadonnées du compte, et dans l'adresse de retour du mail de confirmation.
-        let parrain = null;
-        try { const o = JSON.parse(localStorage.getItem('dnd-parrain') || 'null'); if (o && /^[A-HJ-NP-Z2-9]{8}$/.test(o.code)) parrain = o.code; } catch (e) {}
+        const parrain = this.parrainEnAttente();
         const { data, error } = await _supabase.auth.signUp(parrain
             ? { email, password, options: { data: { parrain }, emailRedirectTo: location.origin + location.pathname + '?parrain=' + parrain } }
             : { email, password });
         if (error) throw error;
         this.currentUser = data.user;
         return data;
+    },
+
+    // ---------- Discord et Google (LOT 9.2, docs/connexion-oauth.md) ----------
+    // Un bouton n'apparaît que si son fournisseur est ACTIVÉ dans Supabase : avant
+    // la configuration, rien ne change à l'écran, et personne ne tombe sur une page
+    // d'erreur brute. La réponse est gardée sur l'appareil (préfixe `dnd-theme-`,
+    // qui survit à la déconnexion) pour montrer les boutons sans attendre.
+    FOURNISSEURS: { discord: 'Discord', google: 'Google' },
+
+    fournisseursConnus() {
+        try { return JSON.parse(localStorage.getItem('dnd-theme-oauth') || 'null'); } catch (e) { return null; }
+    },
+
+    /** { discord: true, google: false } d'après Supabase ; hors ligne, le dernier état connu. */
+    async fournisseurs() {
+        try {
+            const r = await fetch(SUPABASE_URL + '/auth/v1/settings', { headers: { apikey: SUPABASE_ANON_KEY } });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const externes = ((await r.json()) || {}).external || {};
+            const actifs = {};
+            Object.keys(this.FOURNISSEURS).forEach(f => { actifs[f] = externes[f] === true; });
+            try { localStorage.setItem('dnd-theme-oauth', JSON.stringify(actifs)); } catch (e) {}
+            return actifs;
+        } catch (e) {
+            return this.fournisseursConnus();
+        }
+    },
+
+    /** Où revenir : la page du site, sans personnage ouvert, avec le parrainage en
+     *  cours. Cette adresse doit être permise dans les « Redirect URLs » de Supabase. */
+    adresseRetour() {
+        const u = new URL(location.origin + location.pathname);
+        const parrain = this.parrainEnAttente();
+        if (parrain) u.searchParams.set('parrain', parrain);
+        return u.toString();
+    },
+
+    /** Part chez Discord ou Google : la page s'en va, la suite se joue au retour. */
+    async signInOAuth(fournisseur) {
+        if (!this.FOURNISSEURS[fournisseur]) throw new Error('Fournisseur inconnu : ' + fournisseur);
+        try { sessionStorage.setItem('bnb-oauth', JSON.stringify({ fournisseur, date: Date.now() })); } catch (e) {}
+        const options = { redirectTo: this.adresseRetour() };
+        // Google laisse choisir le compte : utile sur un appareil partagé.
+        if (fournisseur === 'google') options.queryParams = { prompt: 'select_account' };
+        const { error } = await _supabase.auth.signInWithOAuth({ provider: fournisseur, options });
+        if (error) {
+            try { sessionStorage.removeItem('bnb-oauth'); } catch (e) {}
+            throw error;
+        }
     },
 
     async signOut() {
@@ -501,8 +601,33 @@ async function loadCharacterDataIntoLocalStorage(charId) {
 window.loadUserDataIntoLocalStorage      = loadUserDataIntoLocalStorage;
 window.loadCharacterDataIntoLocalStorage = loadCharacterDataIntoLocalStorage;
 
+/** Ce joueur a un compte sur cet appareil : la vitrine ne s'imposera plus à lui
+ *  (préfixe `dnd-theme-` : la marque survit à la déconnexion). */
+function retenirCompte() {
+    try { localStorage.setItem('dnd-theme-deja-connecte', '1'); } catch (e) {}
+}
+function marquerConnecte() {
+    retenirCompte();
+    document.body.classList.remove('est-visiteur');
+}
+function lienTombeEnAttente() {
+    try { return !!localStorage.getItem('dnd-tombe-lien'); } catch (e) { return false; }
+}
+/** Le message d'un retour Discord ou Google qui n'a pas abouti. */
+function messageOAuth(retour) {
+    const nom = (window.SupaAuth.FOURNISSEURS || {})[retour && retour.fournisseur] || 'ce service';
+    const e = (retour && retour.erreur) || {};
+    if (e.code === 'access_denied') {
+        return `Connexion avec ${nom} annulée. Tu peux réessayer, ou te connecter avec ton adresse e-mail.`;
+    }
+    const detail = e.description ? ' : ' + translateAuthError(e.description).replace(/\.$/, '') : '';
+    return `La connexion avec ${nom} n’a pas abouti${detail}. Réessaie, ou connecte-toi avec ton adresse e-mail.`;
+}
+
 function translateAuthError(msg) {
     if (!msg) return 'Une erreur est survenue.';
+    if (/unverified email/i.test(msg)) return 'Ton adresse e-mail n’est pas vérifiée chez ce service : vérifie-la d’abord chez lui.';
+    if (/email from external provider/i.test(msg)) return 'Le service n’a transmis aucune adresse e-mail : il en faut une, vérifiée, pour se connecter.';
     if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) return 'Email ou mot de passe incorrect.';
     if (msg.includes('already registered')) return 'Cet email est déjà utilisé.';
     if (msg.includes('Email not confirmed')) return 'Confirme ton email avant de te connecter.';
@@ -554,13 +679,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     function showRecoveryUI() {
         window.navTo('login-screen'); // direct : showScreen redirigerait vers la fiche si un perso est actif
         const tabs = document.querySelector('.auth-tabs'); if (tabs) tabs.classList.add('hidden');
-        ['auth-form-login', 'auth-form-register', 'auth-form-forgot'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+        ['auth-form-login', 'auth-form-register', 'auth-form-forgot', 'auth-oauth', 'btn-decouvrir'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
         const fr = document.getElementById('auth-form-reset'); if (fr) fr.classList.remove('hidden');
         const sub = document.querySelector('.auth-subtitle'); if (sub) sub.textContent = 'Choisis ton nouveau mot de passe';
         authBootMsg('🔐 Lien vérifié — saisis ton nouveau mot de passe.', 'success');
     }
 
-    showScreen('loading-screen');
+    // Un visiteur voit déjà la vitrine (script de démarrage, index.html) : pas
+    // d'écran de chargement par-dessus pendant que Supabase répond.
+    if (!document.body.classList.contains('est-visiteur')) showScreen('loading-screen');
 
     const user = await SupaAuth.getUser();
     if (AUTH_RECOVERY && user) {
@@ -568,6 +695,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // on demande le nouveau mot de passe au lieu d'entrer dans l'app.
         showRecoveryUI();
     } else if (user) {
+        marquerConnecte();
         const emailEl = document.getElementById('auth-user-display');
         if (emailEl) emailEl.textContent = user.email;
 
@@ -576,9 +704,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.Ent?.attach(user);
         apresConnexion(user);
     } else {
-        showScreen('login-screen');
-        if (AUTH_LINK_ERROR) authBootMsg('Lien invalide ou expiré. Clique sur « Mot de passe oublié ? » pour en recevoir un nouveau.', 'error');
+        // Le visiteur (LOT 9.3) : la vitrine pour qui découvre le site, la connexion
+        // pour qui revient ou arrive par un lien qui exige un compte — même avis que
+        // le script de démarrage (Demarrage.ecranVisiteur). Un visiteur déjà parti
+        // lire les règles, les tarifs ou les mentions légales y reste.
+        document.body.classList.add('est-visiteur');
+        const surLien = !!(AUTH_LINK_ERROR || AUTH_RECOVERY || AUTH_OAUTH.erreur);
+        const ouvert = APP_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
+        const lecture = ['rules-screen', 'legal-screen', 'pricing-screen'].includes(ouvert);
+        if (surLien || !lecture) {
+            showScreen(surLien || !(window.Demarrage && window.Demarrage.ecranVisiteur) ? 'login-screen' : window.Demarrage.ecranVisiteur());
+        }
+        if (AUTH_OAUTH.erreur) authBootMsg(messageOAuth(AUTH_OAUTH), 'error');
+        else if (AUTH_LINK_ERROR) authBootMsg('Lien invalide ou expiré. Clique sur « Mot de passe oublié ? » pour en recevoir un nouveau.', 'error');
         else if (AUTH_RECOVERY) authBootMsg("Le lien n'a pas pu être vérifié. Redemande un lien via « Mot de passe oublié ? ».", 'error');
+        else if (lienTombeEnAttente()) authBootMsg('Connecte-toi pour voir la tombe qu’on t’a confiée.', 'success');
+        brancherFournisseurs();
     }
 
     _supabase.auth.onAuthStateChange(async (event, session) => {
@@ -596,9 +737,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             // d'écraser des modifications locales non sauvegardées).
             const loginVisible = !document.getElementById('login-screen').classList.contains('hidden');
             const loadingVisible = !document.getElementById('loading-screen').classList.contains('hidden');
+            const vitrine = document.getElementById('vitrine-screen');
+            const vitrineVisible = !!vitrine && !vitrine.classList.contains('hidden');
+            marquerConnecte();
             window.Ent?.attach(session.user);
             apresConnexion(session.user);
-            if (loginVisible || loadingVisible) {
+            if (loginVisible || loadingVisible || vitrineVisible) {
                 showScreen('home-screen');
                 loadUserDataIntoLocalStorage(session.user.id);
             }
@@ -627,23 +771,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const formForgot = document.getElementById('auth-form-forgot');
 
-    if (tabLogin) tabLogin.addEventListener('click', () => {
-        tabLogin.classList.add('active'); tabRegister.classList.remove('active');
-        formLogin.classList.remove('hidden'); formRegister.classList.add('hidden');
-        if (formForgot) formForgot.classList.add('hidden');
-        clearMsg();
-    });
-    if (tabRegister) tabRegister.addEventListener('click', () => {
-        tabRegister.classList.add('active'); tabLogin.classList.remove('active');
-        formRegister.classList.remove('hidden'); formLogin.classList.add('hidden');
-        if (formForgot) formForgot.classList.add('hidden');
-        clearMsg();
-    });
+    if (tabLogin) tabLogin.addEventListener('click', () => window.AuthEcran.onglet('connexion'));
+    if (tabRegister) tabRegister.addEventListener('click', () => window.AuthEcran.onglet('inscription'));
 
     // --- Mot de passe oublié : demande d'envoi du lien ---
     const btnShowForgot = document.getElementById('btn-show-forgot');
     if (btnShowForgot) btnShowForgot.addEventListener('click', () => {
         formLogin.classList.add('hidden');
+        document.getElementById('auth-oauth')?.classList.add('hidden');
         if (formForgot) formForgot.classList.remove('hidden');
         const fe = document.getElementById('forgot-email');
         const se = document.getElementById('signin-email');
@@ -655,6 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnBackLogin) btnBackLogin.addEventListener('click', () => {
         if (formForgot) formForgot.classList.add('hidden');
         formLogin.classList.remove('hidden');
+        document.getElementById('auth-oauth')?.classList.remove('hidden');
         clearMsg();
     });
     const btnSendReset = document.getElementById('btn-send-reset');
@@ -708,6 +844,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnSignIn.disabled = true; btnSignIn.textContent = 'Connexion…';
         try {
             await SupaAuth.signInEmail(email, password);
+            marquerConnecte();
             const emailEl = document.getElementById('auth-user-display');
             if (emailEl) emailEl.textContent = SupaAuth.currentUser.email;
             showScreen('home-screen');
@@ -736,8 +873,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const data = await SupaAuth.signUpEmail(email, password);
             if (data.user && !data.session) {
+                retenirCompte();
                 showMsg('✅ Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse.', 'success');
             } else if (data.user) {
+                marquerConnecte();
                 const emailEl = document.getElementById('auth-user-display');
                 if (emailEl) emailEl.textContent = data.user.email;
                 showScreen('home-screen');
@@ -805,9 +944,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         wrap.appendChild(eye);
     });
+    // --- Connexion Discord et Google (LOT 9.2) ---
+    // Appelée pour un visiteur, avant que le reste de ce démarrage ne soit prêt :
+    // elle ne touche qu'au DOM, à SupaAuth et à des fonctions déjà définies.
+    function brancherFournisseurs() {
+        const bloc = document.getElementById('auth-oauth');
+        if (!bloc || bloc.dataset.branche) return;
+        bloc.dataset.branche = '1';
+        const boutons = () => bloc.querySelectorAll('[data-oauth]');
+        const montrer = (actifs) => {
+            let n = 0;
+            boutons().forEach(b => {
+                const on = !!(actifs && actifs[b.dataset.oauth]);
+                b.hidden = !on;
+                if (on) n++;
+            });
+            bloc.hidden = !n;
+        };
+        const liberer = () => boutons().forEach(b => { b.disabled = false; b.removeAttribute('aria-busy'); });
+        montrer(SupaAuth.fournisseursConnus());
+        SupaAuth.fournisseurs().then(montrer);
+        bloc.addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-oauth]');
+            if (!b || b.disabled) return;
+            boutons().forEach(x => { x.disabled = true; });
+            b.setAttribute('aria-busy', 'true');
+            try {
+                await SupaAuth.signInOAuth(b.dataset.oauth);
+            } catch (err) {
+                liberer();
+                authBootMsg(messageOAuth({ fournisseur: b.dataset.oauth, erreur: { code: 'depart', description: (err && err.message) || '' } }), 'error');
+            }
+        });
+        // Retour arrière depuis Discord ou Google : la page revient du cache, boutons figés.
+        window.addEventListener('pageshow', (e) => { if (e.persisted) liberer(); });
+    }
+
     // L'icône d'état vit dans la fiche : on la branche une fois la page prête.
     // Les envois, eux, sont déclenchés plus haut par `online`, `visibilitychange`
     // et `pagehide`.
     window.SyncEtat.brancher();
     SyncQueue.flush();   // ce qui restait d'une session précédente part maintenant
+
+    // Les formulaires de connexion répondent : la vitrine, qui a pu les montrer plus
+    // tôt, libère leurs boutons (vitrine.js).
+    window.AuthEcran.pret = true;
+    try { document.dispatchEvent(new CustomEvent('auth:pret')); } catch (e) {}
 });

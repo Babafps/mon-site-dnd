@@ -24,7 +24,10 @@
     const FRESH_MS = 5 * 60 * 1000;        // au-delà, on retente le réseau
     const PRODUCTS = {
         // clé technique  →  ce qu'on en dit à l'écran
+        // (la même liste vit dans supabase/functions/stripe-webhook, PRODUITS_CONNUS :
+        //  tests/essai-webhook.js vérifie qu'elles restent d'accord)
         'abonnement':      'Abonnement',
+        'corbeille':       'Corbeille des personnages',
         'des-obsidienne':  'Dés d’obsidienne',
         'des-os':          'Dés en os',
         'des-laiton':      'Dés de laiton',
@@ -33,6 +36,10 @@
         'palette-libre':   'Palette de couleurs libre',
         'cadres':          'Cadres de portrait'
     };
+    // Ce qu'un droit apporte avec lui. La corbeille est comprise dans l'abonnement :
+    // la base accepte l'un OU l'autre (docs/corbeille.sql), donc `has('corbeille')`
+    // répond oui à un abonné, sans qu'aucune ligne de plus soit écrite.
+    const INCLUS = { 'abonnement': ['corbeille'] };
 
     let userId = null;
     let items = [];              // [{product, expires_at}]
@@ -73,13 +80,19 @@
         try { document.dispatchEvent(new CustomEvent('entitlements:change', { detail })); } catch (e) {}
     }
 
-    function has(product) {
-        if (!product) return false;
+    /** Le droit lui-même, sans ce qu'un autre droit inclut. */
+    function possede(product) {
         const it = items.find(i => i.product === product);
         if (!it) return false;
         // Hors connexion, on ne coupe rien : le dernier état connu vaut accord.
         if (stale) return true;
         return !it.expires_at || new Date(it.expires_at).getTime() > Date.now();
+    }
+
+    function has(product) {
+        if (!product) return false;
+        if (possede(product)) return true;
+        return Object.keys(INCLUS).some(p => INCLUS[p].includes(product) && possede(p));
     }
 
     /** Va chercher la vérité au serveur. Jamais bloquant pour l'affichage. */
@@ -166,6 +179,8 @@
         list: () => items.slice(),
         label: (p) => PRODUCTS[p] || p,
         products: PRODUCTS,
+        /** Ce que ce droit inclut : `inclus('abonnement')` → ['corbeille']. */
+        inclus: (p) => (INCLUS[p] || []).slice(),
         isSubscriber: () => has('abonnement'),
         expiresAt: (p) => (items.find(i => i.product === p) || {}).expires_at || null,
         isStale: () => stale,

@@ -22,10 +22,11 @@ inertes.
 
 | Dossier | Contenu |
 |---|---|
-| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `calcul.js` (moteur de calcul : chaque total en sources nommées), `toasts.js` (messages sur parchemin), `charger.js` (modules chargés à la demande) + `dialogues.js` (confirmer, demander, informer), `confort.js` (mode nuit et confort de lecture), `coffre.js` (cache IndexedDB propre à l'appareil), `seance.js` (prochaine séance d'un personnage), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles, en image ou en vidéo), `print-sheet.js` + `impression-suite.js` (fiche officielle imprimée et ses pages de suite), `cartes-sorts.js` (cartes de sorts à imprimer), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` + `secrets-plus.js` + `secrets-absurdes.js` (trophées du compte, défi du mois et petits secrets), `trophees.js` (salle des trophées), `parrainage.js` (inviter un ami), `cimetiere.js` (cimetière des héros)… |
+| *(racine)* | L'application : `index.html`, `script.js` (fiche + accueil), `auth.js` (Supabase), `calcul.js` (moteur de calcul : chaque total en sources nommées), `toasts.js` (messages sur parchemin), `charger.js` (modules chargés à la demande) + `dialogues.js` (confirmer, demander, informer), `confort.js` (mode nuit et confort de lecture), `coffre.js` (cache IndexedDB propre à l'appareil), `seance.js` (prochaine séance d'un personnage), `srd-data.js` (accès aux règles + contenu personnel), `rules-page.js` (écran Règles), `homebrew.js` (éditeur de contenu personnel), `pj-tutorial.js` (assistant de création), `hero-card.js` + `hero-card-styles.js` (carte de héros à partager et ses styles, en image ou en vidéo), `print-sheet.js` + `impression-suite.js` (fiche officielle imprimée et ses pages de suite), `cartes-sorts.js` (cartes de sorts à imprimer), `effets.js` (effets de dés et voiles d'état), `exploits.js` + `exploits-suivi.js` + `secrets.js` + `secrets-monde.js` + `secrets-plus.js` + `secrets-absurdes.js` (trophées du compte, défi du mois et petits secrets), `trophees.js` (salle des trophées), `parrainage.js` (inviter un ami), `cimetiere.js` (cimetière des héros), `vitrine.js` (page d'accueil publique des visiteurs), `des3d.js` (moteur de dés 3D, partagé par la fiche et la vitrine)… |
 | `data/srd/` | La base de règles générée — sorts, monstres, objets, équipement, classes, races, états. Voir son `README.md`. |
 | `tools/srd/` | Les scripts Python qui régénèrent `data/srd/` depuis le PDF officiel. |
-| `docs/` | Migration Supabase et cahier des charges en cours. |
+| `docs/` | Migrations Supabase, guides de configuration (`boutique-stripe.md`, `connexion-oauth.md`) et requêtes de vérification. |
+| `IMG/vitrine/` | Les images de la vitrine et de l'aperçu de partage, générées par `tests/outils/vitrine-images.js` (`npm run vitrine:images`). |
 | `lib/dice-box/` | Moteur de dés 3D, servi en local (un Web Worker ne peut pas venir d'un autre domaine). |
 | `fonts/` | La police OpenDyslexic (option « Police adaptée à la dyslexie » du menu), servie en local avec sa licence (`fonts/OFL.txt`), et la police manuscrite Caveat de la fiche imprimée, avec la sienne (`fonts/Caveat-OFL.txt`). |
 | `tests/` | Tests de bout en bout (Playwright), isolés : leur propre `package.json`, Supabase simulé, rien de chargé par le site. Voir `tests/LISEZMOI.md`. |
@@ -61,6 +62,21 @@ tombes, leur lien secret, les signalements et la modération, et le seau de
 stockage `tombes` pour les portraits (privé, 200 Ko par portrait). À exécuter
 après `docs/admin.sql`. Sans ces deux migrations, les écrans correspondants
 affichent simplement « pas encore ouvert ».
+
+**Boutique** — les prix, les liens de paiement Stripe et le lien du portail client
+se collent dans `pricing.js` (`CATALOGUE`, `PORTAL_URL`) ; tant qu'un lien manque,
+son bouton reste sur « Bientôt ». Chaque produit Stripe porte la métadonnée
+`product_key`, seule chose que lit la fonction `stripe-webhook`. Pas à pas, du mode
+test au réel : `docs/boutique-stripe.md`. La corbeille est comprise dans
+l'abonnement ; `docs/verifications-lot9.sql` (lecture seule) le vérifie dans la base.
+
+**Connexion Discord et Google** — chaque bouton n'apparaît que si son fournisseur
+est activé dans Supabase. Configuration : `docs/connexion-oauth.md`.
+
+**Vitrine et référencement** — un visiteur qui n'a jamais eu de compte sur
+l'appareil voit d'abord la vitrine ; un joueur déjà venu va droit à la connexion.
+Les balises de référencement et d'aperçu de partage (`index.html`) sont écrites pour
+`https://babafps.github.io/mon-site-dnd/` : à changer si le site change de domaine.
 
 ## Régénérer la base de règles
 

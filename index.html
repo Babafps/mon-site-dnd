@@ -3,7 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bones &amp; Blades</title>
+    <title>Bones &amp; Blades — fiche de personnage D&amp;D 5e en français</title>
+    <!-- Référencement et aperçu de partage (LOT 9.3). L'adresse est celle de GitHub Pages :
+         à changer ici (canonical, og:url, og:image, JSON-LD) si le site change de domaine. -->
+    <meta name="description" content="Fiche de personnage D&amp;D 5e en français qui calcule pour toi : dés 3D, règles 2014 et 2024, sorts, sac, carte de héros. Gratuite, même hors ligne.">
+    <link rel="canonical" href="https://babafps.github.io/mon-site-dnd/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Bones &amp; Blades">
+    <meta property="og:locale" content="fr_FR">
+    <meta property="og:url" content="https://babafps.github.io/mon-site-dnd/">
+    <meta property="og:title" content="Bones &amp; Blades — ta fiche de personnage D&amp;D 5e">
+    <meta property="og:description" content="Une fiche qui calcule pour toi, des dés en 3D, les règles 2014 et 2024 en français et une carte de héros à partager. Gratuite, même hors ligne.">
+    <meta property="og:image" content="https://babafps.github.io/mon-site-dnd/IMG/vitrine/partage.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Bones &amp; Blades : une fiche de personnage D&amp;D 5e, ses dés et sa carte de héros">
+    <meta name="twitter:card" content="summary_large_image">
     <!-- PWA : installable sur mobile / bureau (manifest + service worker « réseau d'abord ») -->
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#7A2828">
@@ -23,6 +38,22 @@
     <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
     <!-- (Three.js retiré le 14 juil. 2026 : il ne servait qu'à l'Atelier de dés, supprimé — ~600 Ko économisés au chargement) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Bones & Blades",
+        "url": "https://babafps.github.io/mon-site-dnd/",
+        "description": "Fiche de personnage D&D 5e en français qui calcule pour toi : dés 3D, règles 2014 et 2024, sorts, sac, carte de héros.",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Web",
+        "inLanguage": "fr",
+        "isAccessibleForFree": true,
+        "image": "https://babafps.github.io/mon-site-dnd/IMG/vitrine/partage.jpg"
+    }
+    </script>
+    <!-- Sans JavaScript, la vitrine reste lisible (le site, lui, en a besoin). -->
+    <noscript><style>#vitrine-screen { display: block !important; } #loading-screen { display: none !important; }</style></noscript>
 </head>
 <body>
 <script>
@@ -194,6 +225,32 @@
         Promise.all([pause, travail]).then(() => location.assign(cible));
     }
 
+    // ---------- Le visiteur (LOT 9.3) ----------
+    // Aucune session gardée sur l'appareil, et pas de retour de connexion dans
+    // l'adresse (lien de mot de passe, Discord, Google) : c'est un visiteur. Qui
+    // découvre le site voit la vitrine ; qui a déjà un compte ici, ou arrive par
+    // le lien d'une tombe, va droit à la connexion. auth.js suit le même avis
+    // quand Supabase a répondu.
+    function aSession() {
+        try { return Object.keys(localStorage).some(k => /^sb-.+-auth-token$/.test(k)); } catch (e) { return false; }
+    }
+    const retourConnexion = /(^|[#&?])(access_token|refresh_token|error|error_code|code|type)=/.test(location.hash + '&' + location.search);
+    const visiteur = !aSession() && !retourConnexion;
+    function ecranVisiteur() {
+        let tombe = !!ls.get('dnd-tombe-lien');
+        try { tombe = tombe || new URLSearchParams(location.search).has('tombe'); } catch (e) {}
+        const vitrine = document.getElementById('vitrine-screen');
+        return (!vitrine || tombe || ls.get('dnd-theme-deja-connecte') === '1') ? 'login-screen' : 'vitrine-screen';
+    }
+    /** Appelé juste après le balisage de la vitrine : elle s'affiche avant les scripts de la page. */
+    function montrerVitrine() {
+        if (!visiteur || ecranVisiteur() !== 'vitrine-screen') return;
+        const chargement = document.getElementById('loading-screen');
+        if (chargement) chargement.classList.add('hidden');
+        document.getElementById('vitrine-screen').classList.remove('hidden');
+    }
+    if (visiteur) body.classList.add('est-visiteur');
+
     appliquerTheme();
     appliquerConfort();
     let arrivee = null;
@@ -222,7 +279,9 @@
         modeTheme, estSombre, definirTheme, appliquerTheme,
         tailleTexte, dyslexie, definirTexte, definirDyslexie,
         adresse, aller, phrase,
-        phrases: () => PHRASES.slice()
+        phrases: () => PHRASES.slice(),
+        ecranVisiteur, montrerVitrine,
+        visiteur: () => visiteur
     };
 })();
 </script>
@@ -240,6 +299,88 @@
 </div>
 <script>window.Demarrage && window.Demarrage.phrase();</script>
 
+<!-- =====================================================
+     Vitrine — la page d'accueil publique (LOT 9.3, vitrine.js)
+     Pour qui découvre le site sans compte. Tout est dans la page : lisible par
+     les moteurs de recherche, et affiché avant les scripts. Aucune condition de
+     style ou de secret n'y figure.
+     ===================================================== -->
+<div id="vitrine-screen" class="screen-view vitrine no-print hidden">
+    <div class="vit-page">
+        <header class="vit-haut">
+            <img class="vit-logo" src="IMG/logo-192.png" alt="" width="192" height="192">
+            <span class="vit-marque">Bones &amp; Blades</span>
+            <button type="button" class="vit-lien" data-vitrine="connexion">Se connecter</button>
+        </header>
+
+        <section class="vit-une" aria-labelledby="vit-titre">
+            <div class="vit-une-texte">
+                <p id="vit-invitation" class="vit-invitation" hidden><span aria-hidden="true">🤝</span> Tu as reçu une invitation : crée ton compte pour rejoindre l’aventure.</p>
+                <h1 id="vit-titre" tabindex="-1">Ta fiche de personnage D&amp;D&nbsp;5e, qui fait les calculs pour toi</h1>
+                <p class="vit-accroche">Caractéristiques, compétences, sorts, sac, jets de dés : Bones &amp; Blades tient les comptes pendant que tu joues. En français, avec les règles de 2014 et de 2024, de vrais dés en 3D, et même sans réseau.</p>
+                <div class="vit-actions">
+                    <button type="button" class="vit-btn vit-btn-plein" data-vitrine="inscription">Créer mon compte</button>
+                    <button type="button" class="vit-btn vit-btn-creux" data-vitrine="connexion">J’ai déjà un compte</button>
+                </div>
+                <p class="vit-rassure">Gratuit, sans publicité. Aucune carte bancaire demandée.</p>
+            </div>
+            <picture class="vit-fiche">
+                <source media="(max-width: 700px) and (prefers-color-scheme: dark)" srcset="IMG/vitrine/fiche-mobile-sombre.webp" width="750" height="1200">
+                <source media="(max-width: 700px)" srcset="IMG/vitrine/fiche-mobile-clair.webp" width="750" height="1200">
+                <source media="(prefers-color-scheme: dark)" srcset="IMG/vitrine/fiche-bureau-sombre.webp" width="1200" height="800">
+                <img src="IMG/vitrine/fiche-bureau-clair.webp" width="1200" height="800" decoding="async" alt="Une fiche de personnage ouverte : caractéristiques, compétences, combat et sorts.">
+            </picture>
+        </section>
+
+        <div class="vit-blocs">
+            <section class="vit-bloc" aria-labelledby="vit-des-titre">
+                <h2 id="vit-des-titre"><span aria-hidden="true">🎲</span> Des dés qui roulent vraiment</h2>
+                <p>Un plateau en 3D, l’avantage et le désavantage, et l’historique de chaque jet, qu’on peut relancer. Essaie :</p>
+                <div class="vit-de">
+                    <button type="button" class="vit-btn vit-btn-plein" data-vitrine="d20">Lancer un d20</button>
+                    <p id="vit-d20-resultat" class="vit-resultat" role="status"></p>
+                </div>
+                <p class="vit-note">Le plateau 3D ne se charge qu’à ton premier lancer.</p>
+            </section>
+
+            <section class="vit-bloc" aria-labelledby="vit-regles-titre">
+                <h2 id="vit-regles-titre"><span aria-hidden="true">📖</span> Les règles, en français</h2>
+                <p>Sorts, monstres, objets, classes, espèces et états, tirés des documents de référence officiels en français : le SRD 5.1 pour les règles de 2014, le SRD 5.2.1 pour celles de 2024. Tout se consulte sans compte.</p>
+                <button type="button" class="vit-btn vit-btn-creux" data-vitrine="regles">Parcourir les règles</button>
+            </section>
+
+            <section class="vit-bloc vit-bloc-large" aria-labelledby="vit-cartes-titre">
+                <h2 id="vit-cartes-titre"><span aria-hidden="true">🃏</span> Une carte de héros à partager</h2>
+                <p>Ta fiche devient une carte illustrée, en image ou en courte vidéo holographique, au format portrait, story ou avatar. Des dizaines de styles se gagnent en jouant ; en voici quelques-uns.</p>
+                <ul class="vit-galerie">
+                    <li><figure><img src="IMG/vitrine/style-nuit.webp" width="432" height="540" loading="lazy" decoding="async" alt="Carte de héros au style Nuit"><figcaption>Nuit <small>offert</small></figcaption></figure></li>
+                    <li><figure><img src="IMG/vitrine/style-parchemin.webp" width="432" height="540" loading="lazy" decoding="async" alt="Carte de héros au style Parchemin"><figcaption>Parchemin <small>offert</small></figcaption></figure></li>
+                    <li class="vit-saison" hidden><figure><img width="432" height="540" loading="lazy" decoding="async" alt=""><figcaption><span class="vit-saison-nom"></span> <small>défi du mois</small></figcaption></figure></li>
+                </ul>
+            </section>
+
+            <section class="vit-bloc" aria-labelledby="vit-hl-titre">
+                <h2 id="vit-hl-titre"><span aria-hidden="true">📶</span> Même sans réseau</h2>
+                <p>Installe le site sur ton téléphone ou ton ordinateur, comme une application. Tes fiches s’ouvrent hors ligne, et tes modifications partent au cloud dès que le réseau revient.</p>
+            </section>
+
+            <section class="vit-bloc" aria-labelledby="vit-prix-titre">
+                <h2 id="vit-prix-titre"><span aria-hidden="true">✨</span> Gratuit, pour de bon</h2>
+                <p>La fiche entière, les règles, les dés de base, le hors-ligne, l’export et l’import restent gratuits. Les options payantes sont facultatives : du décor, et un abonnement pour ce qui coûte des serveurs.</p>
+                <button type="button" class="vit-btn vit-btn-creux" data-vitrine="tarifs">Voir les tarifs</button>
+            </section>
+        </div>
+
+        <footer class="vit-pied">
+            <p class="vit-pied-appel">Ton aventure commence ici.</p>
+            <button type="button" class="vit-btn vit-btn-plein" data-vitrine="inscription">Créer mon compte</button>
+            <p class="vit-marques">Bones &amp; Blades n’est ni édité, ni approuvé par Wizards of the Coast. Dungeons &amp; Dragons et D&amp;D sont des marques de Wizards of the Coast LLC.</p>
+        </footer>
+    </div>
+</div>
+<script>window.Demarrage && window.Demarrage.montrerVitrine();</script>
+<script async src="vitrine.js"></script>
+
 <div id="login-screen" class="auth-fullscreen hidden">
     <div class="auth-card">
         <div class="auth-logo"><img src="IMG/logo-192.png" alt="Bones &amp; Blades" width="192" height="192"></div>
@@ -249,6 +390,18 @@
         <div class="auth-tabs">
             <button id="auth-tab-login" class="auth-tab active">Se connecter</button>
             <button id="auth-tab-register" class="auth-tab">S'inscrire</button>
+        </div>
+        <!-- Discord et Google (LOT 9.2) : chaque bouton n'apparaît qu'une fois son fournisseur activé dans Supabase (auth.js). -->
+        <div id="auth-oauth" class="auth-oauth" hidden>
+            <button type="button" class="auth-oauth-btn auth-oauth-discord" data-oauth="discord" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+                <span>Continuer avec Discord</span>
+            </button>
+            <button type="button" class="auth-oauth-btn auth-oauth-google" data-oauth="google" hidden>
+                <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                <span>Continuer avec Google</span>
+            </button>
+            <p class="auth-ou" aria-hidden="true">ou avec ton adresse e-mail</p>
         </div>
         <div id="auth-form-login">
             <div class="auth-field"><label>Email</label><input type="email" id="signin-email" placeholder="ton@email.com" autocomplete="email"></div>
@@ -273,6 +426,7 @@
             <div class="auth-field"><label>Confirmer le mot de passe</label><input type="password" id="signup-password2" placeholder="••••••••" autocomplete="new-password"></div>
             <button id="btn-signup" class="auth-btn-primary">S'inscrire</button>
         </div>
+        <button type="button" id="btn-decouvrir" class="auth-link auth-decouvrir" data-vitrine="decouvrir">Découvrir Bones &amp; Blades</button>
     </div>
 </div>
 

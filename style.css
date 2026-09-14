@@ -4326,7 +4326,9 @@ body.theme-dark #rules-search { background: #2a2118; }
     background: #2c3e50; color: #f4ecd8;
     font-family: 'Lora', serif; font-size: 0.88rem;
     box-shadow: 0 6px 24px rgba(0,0,0,0.4);
-    opacity: 0; pointer-events: none; z-index: 8000;
+    /* Au-dessus des fenêtres de la fiche (le panneau des états couvre tout l'écran d'un
+       téléphone) : un « Annuler » que le doigt ne peut pas atteindre n'annule rien. */
+    opacity: 0; pointer-events: none; z-index: 100019;
     transition: opacity .22s ease, transform .22s ease;
     max-width: min(92vw, 460px);
 }
@@ -8168,6 +8170,8 @@ body.hc2-ouvert { overflow: hidden; }
 .hc-annonce.entre { opacity: 1; transform: none; }
 /* Une fenêtre ouverte (dialogues.js) passe devant l'annonce : ses boutons restent à portée, même sur téléphone. */
 body:has(.dlg-voile) .hc-annonce { z-index: 100005; }
+/* L'annonce se pose au-dessus du toast « Annuler » au lieu de le couvrir. */
+body.undo-visible .hc-annonce { bottom: 150px; }
 .hc-annonce.entre.r-legendaire, .hc-annonce.entre.r-epique { animation: hcAnnonceLueur 2.6s ease-in-out .9s infinite; }
 @keyframes hcAnnonceLueur { 50% { box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 80px rgba(var(--a-or), .65); } }
 .hc-annonce.sort { opacity: 0; transform: translateY(22px) scale(.97); transition: opacity .35s ease, transform .4s ease; }
@@ -10151,3 +10155,192 @@ body.theme-dark .adm-droits li { background: rgba(255,255,255,.05); }
 body.theme-dark .adm-statut[data-type="erreur"] { color: #ff9b8f; }
 body.theme-dark .adm-statut[data-type="reussite"] { color: #8fd1a1; }
 @media (max-width: 480px) { .adm-recherche { flex-direction: column; align-items: stretch; } }
+
+/* ============================================================
+   Tarifs — le bandeau du mode test (pricing.js, LOT 9.1)
+   ============================================================ */
+.pr-test {
+    margin: 0 0 14px; padding: 10px 13px; border-radius: var(--radius-sm);
+    font-family: 'Lora', serif; font-size: 0.8rem; line-height: 1.5;
+    background: rgba(37,99,201,0.09); border: 1px dashed rgba(37,99,201,0.55);
+}
+body.theme-dark .pr-test { background: rgba(96,145,230,0.12); border-color: rgba(120,160,235,0.5); }
+
+/* ============================================================
+   Connexion — Discord et Google (auth.js, LOT 9.2)
+   Couleurs des fournisseurs, comme leurs chartes le demandent :
+   Discord « blurple » ; Google blanc cerclé de gris, sombre en mode nuit.
+   ============================================================ */
+#login-screen { overflow-y: auto; align-items: flex-start; padding: 16px 0; }
+#login-screen > .auth-card { margin-top: auto; margin-bottom: auto; }
+.auth-oauth { display: flex; flex-direction: column; gap: 9px; margin: 0 0 14px; }
+.auth-oauth[hidden], .auth-oauth-btn[hidden] { display: none; }
+.auth-oauth-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; min-height: 46px; padding: 10px 16px;
+    border-radius: var(--radius-sm); border: 1px solid transparent;
+    font-family: Roboto, 'Segoe UI', Arial, sans-serif; font-size: 0.95rem; font-weight: 500;
+    cursor: pointer; transition: filter 0.15s, box-shadow 0.15s;
+}
+.auth-oauth-btn svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.auth-oauth-discord { background: #5865F2; color: #fff; }
+.auth-oauth-google { background: #fff; color: #1f1f1f; border-color: #747775; }
+body.theme-dark .auth-oauth-google { background: #131314; color: #e3e3e3; border-color: #8e918f; }
+.auth-oauth-btn:hover:not(:disabled) { filter: brightness(1.06); box-shadow: var(--shadow-sm); }
+.auth-oauth-btn:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 2px; }
+.auth-oauth-btn:disabled { opacity: 0.6; cursor: progress; }
+.auth-ou {
+    display: flex; align-items: center; gap: 10px; margin: 2px 0 0;
+    font-size: 0.78rem; font-style: italic; color: #7a6855;
+}
+.auth-ou::before, .auth-ou::after { content: ''; flex: 1 1 auto; height: 1px; background: rgba(122,40,40,0.18); }
+body.theme-dark .auth-ou { color: #b6a484; }
+body.theme-dark .auth-ou::before, body.theme-dark .auth-ou::after { background: rgba(196,155,53,0.25); }
+.auth-decouvrir { margin-top: 16px; }
+@media (prefers-reduced-motion: reduce) { .auth-oauth-btn { transition: none; } }
+
+/* ============================================================
+   Vitrine — la page d'accueil publique (vitrine.js, LOT 9.3)
+   Même parchemin que les pages Tarifs et Informations légales.
+   Un visiteur n'a ni menu ☰ ni contenu perso à éditer.
+   ============================================================ */
+body.est-visiteur .settings-container,
+body.est-visiteur #rules-homebrew { display: none !important; }
+/* Ni accueil ni fiche derrière la vitrine : script.js montre l'accueil au démarrage,
+   avant qu'auth.js ait constaté qu'il n'y a personne (l'écran de chargement le
+   recouvrait jusqu'ici). */
+body.est-visiteur #home-screen,
+body.est-visiteur #app-screen { display: none !important; }
+
+#vitrine-screen { position: relative; z-index: 1; padding-bottom: 24px; }
+.vit-page {
+    max-width: 1080px; margin: 0 auto;
+    padding: 18px clamp(16px, 4vw, 44px) 26px;
+    color: var(--text-color);
+    background: linear-gradient(158deg, rgba(255,253,244,0.98) 0%, rgba(242,232,206,0.97) 100%);
+    border: 1.5px solid rgba(122,40,40,0.35); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(196,155,53,0.25);
+}
+body.theme-dark .vit-page {
+    background: linear-gradient(158deg, #261e18 0%, #1d1712 100%);
+    border-color: rgba(196,155,53,0.3);
+}
+.vit-haut { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--soft-border); }
+.vit-logo { width: 44px; height: 44px; }
+.vit-marque {
+    flex: 1 1 auto; font-family: 'Cinzel', serif; font-weight: 700;
+    font-size: 1.05rem; letter-spacing: 0.05em; color: var(--primary-color);
+}
+body.theme-dark .vit-marque { color: var(--accent-color); }
+.vit-lien {
+    min-height: 40px; padding: 7px 16px; border-radius: 999px; cursor: pointer;
+    background: transparent; border: 1px solid var(--soft-border); color: var(--primary-color);
+    font-family: 'Cinzel', serif; font-size: 0.82rem; font-weight: 600;
+}
+.vit-lien:hover { background: rgba(122,40,40,0.06); }
+body.theme-dark .vit-lien { color: var(--accent-color); border-color: rgba(196,155,53,0.4); }
+body.theme-dark .vit-lien:hover { background: rgba(196,155,53,0.08); }
+
+.vit-une {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: clamp(20px, 4vw, 48px); align-items: center;
+    padding: clamp(24px, 5vw, 56px) 0 clamp(24px, 4vw, 44px);
+}
+.vit-une h1 {
+    margin: 0 0 14px; font-family: 'Cinzel', serif; font-weight: 700;
+    font-size: clamp(1.5rem, 1rem + 2.2vw, 2.45rem); line-height: 1.16;
+    color: var(--primary-color); outline: none;
+    text-align: left; letter-spacing: 0.02em; text-indent: 0;
+}
+/* Les fleurons des titres du site encadrent un titre centré : ici, le texte est aligné à gauche. */
+.vit-une h1::before, .vit-une h1::after { content: none; }
+body.theme-dark .vit-une h1 { color: var(--accent-color); }
+.vit-accroche { margin: 0 0 22px; font-size: clamp(0.95rem, 0.88rem + 0.3vw, 1.08rem); line-height: 1.62; }
+.vit-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.vit-rassure { margin: 12px 0 0; font-size: 0.82rem; font-style: italic; opacity: 0.8; }
+.vit-invitation {
+    margin: 0 0 14px; padding: 9px 13px; border-radius: var(--radius-sm);
+    font-size: 0.86rem; line-height: 1.45;
+    background: rgba(196,155,53,0.16); border: 1px solid rgba(196,155,53,0.5);
+}
+.vit-invitation[hidden], .vit-saison[hidden] { display: none; }
+.vit-fiche { display: block; }
+.vit-fiche img {
+    display: block; width: 100%; height: auto;
+    border-radius: var(--radius-md); border: 1px solid var(--soft-border); box-shadow: var(--shadow-lg);
+}
+
+.vit-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    min-height: 46px; padding: 11px 22px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1.5px solid transparent;
+    font-family: 'Cinzel', serif; font-size: 0.92rem; font-weight: 700; letter-spacing: 0.03em;
+    transition: var(--transition-smooth);
+}
+.vit-btn-plein {
+    background: linear-gradient(160deg, var(--primary-hover) 0%, var(--primary-color) 100%);
+    color: #fff; box-shadow: var(--shadow-crimson), var(--inner-highlight);
+}
+.vit-btn-plein:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+.vit-btn-creux { background: transparent; color: var(--primary-color); border-color: rgba(122,40,40,0.45); }
+.vit-btn-creux:hover { background: rgba(122,40,40,0.06); }
+body.theme-dark .vit-btn-creux { color: var(--accent-color); border-color: rgba(196,155,53,0.5); }
+body.theme-dark .vit-btn-creux:hover { background: rgba(196,155,53,0.08); }
+.vit-btn:disabled { opacity: 0.65; cursor: progress; }
+.vit-btn:focus-visible, .vit-lien:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 2px; }
+
+.vit-blocs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.vit-bloc { padding: 18px 18px 20px; border-radius: var(--radius-md); background: var(--panel-1); border: 1px solid var(--soft-border); }
+.vit-bloc-large { grid-column: 1 / -1; }
+.vit-bloc h2 { margin: 0 0 8px; font-family: 'Cinzel', serif; font-size: 1.08rem; font-weight: 700; color: var(--primary-color); }
+body.theme-dark .vit-bloc h2 { color: var(--accent-color); }
+.vit-bloc p { margin: 0 0 12px; font-size: 0.9rem; line-height: 1.58; }
+.vit-bloc .vit-note { margin: 10px 0 0; font-size: 0.78rem; font-style: italic; opacity: 0.75; }
+
+.vit-de { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
+.vit-bloc .vit-resultat {
+    margin: 0; min-height: 2.4em; display: flex; align-items: center; gap: 10px;
+    font-family: 'Cinzel', serif; font-size: 0.9rem;
+}
+.vit-resultat b {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 2.2em; height: 2.2em; border-radius: 50%;
+    font-size: 1.35rem; color: #fff; background: var(--primary-color); box-shadow: var(--shadow-sm);
+    animation: vitPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.vit-resultat.est-critique b { background: linear-gradient(160deg, #e8c25a, #b8862a); color: #2a1c08; box-shadow: var(--glow-gold); }
+.vit-resultat.est-echec b { background: #4a4440; }
+@keyframes vitPop { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.vit-galerie {
+    list-style: none; margin: 6px 0 0; padding: 0; max-width: 640px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+}
+.vit-galerie figure { margin: 0; text-align: center; }
+.vit-galerie img { display: block; width: 100%; height: auto; border-radius: 10px; box-shadow: var(--shadow-md); background: rgba(0,0,0,0.08); }
+.vit-galerie figcaption { margin-top: 7px; font-family: 'Cinzel', serif; font-size: 0.8rem; font-weight: 600; }
+.vit-galerie small { display: block; font-family: 'Lora', serif; font-weight: 400; font-style: italic; font-size: 0.72rem; opacity: 0.75; }
+
+.vit-pied {
+    margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--soft-border);
+    display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+}
+.vit-pied-appel { margin: 0; font-family: 'Cinzel', serif; font-size: 1.05rem; }
+.vit-marques { margin: 4px 0 0; max-width: 60ch; font-size: 0.72rem; line-height: 1.5; opacity: 0.7; }
+
+@media (max-width: 760px) {
+    .vit-une, .vit-blocs { grid-template-columns: minmax(0, 1fr); }
+    .vit-actions .vit-btn { flex: 1 1 100%; }
+}
+@media (max-width: 480px) {
+    body.est-visiteur { padding: 10px; }
+    .vit-page { padding: 12px 14px 22px; border-radius: var(--radius-sm); }
+    .vit-marque { font-size: 0.95rem; }
+    .vit-galerie { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .vit-btn { transition: none; }
+    .vit-btn-plein:hover:not(:disabled) { transform: none; }
+    .vit-resultat b { animation: none; }
+}
+@media print { #vitrine-screen { display: none !important; } }
