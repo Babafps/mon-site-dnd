@@ -10264,6 +10264,10 @@ body.theme-dark .vit-une h1 { color: var(--accent-color); }
     background: rgba(196,155,53,0.16); border: 1px solid rgba(196,155,53,0.5);
 }
 .vit-invitation[hidden], .vit-saison[hidden] { display: none; }
+/* Une image absente (hors ligne, fichier manquant) ne laisse pas de cadre vide. */
+.vit-fiche.est-absente, .vit-galerie li.est-absente { display: none; }
+.vit-une:has(.vit-fiche.est-absente) { grid-template-columns: minmax(0, 1fr); }
+.vit-galerie:not(:has(li:not(.est-absente):not([hidden]))) { display: none; }
 .vit-fiche { display: block; }
 .vit-fiche img {
     display: block; width: 100%; height: auto;

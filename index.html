@@ -251,6 +251,16 @@
     }
     if (visiteur) body.classList.add('est-visiteur');
 
+    // Une image de la vitrine qui ne vient pas (hors ligne sans cache, fichier absent
+    // du serveur) ne laisse pas de cadre vide : sa place s'efface. L'écouteur est posé
+    // ici, avant la vitrine elle-même, pour n'en manquer aucune.
+    document.addEventListener('error', (e) => {
+        const img = e.target;
+        if (!img || img.tagName !== 'IMG' || !img.closest) return;
+        const place = img.closest('#vitrine-screen .vit-fiche, #vitrine-screen .vit-galerie li');
+        if (place) place.classList.add('est-absente');
+    }, true);
+
     appliquerTheme();
     appliquerConfort();
     let arrivee = null;

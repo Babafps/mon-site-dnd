@@ -16,7 +16,7 @@ Write-Host "Bones & Blades sur http://localhost:$port/  (Ctrl+C pour arrêter)"
 $mime = @{
   ".html"="text/html"; ".js"="text/javascript"; ".mjs"="text/javascript";
   ".css"="text/css"; ".json"="application/json"; ".webmanifest"="application/manifest+json";
-  ".png"="image/png"; ".jpg"="image/jpeg"; ".jpeg"="image/jpeg"; ".svg"="image/svg+xml";
+  ".png"="image/png"; ".jpg"="image/jpeg"; ".jpeg"="image/jpeg"; ".svg"="image/svg+xml"; ".webp"="image/webp";
   ".woff"="font/woff"; ".woff2"="font/woff2"; ".wasm"="application/wasm"
 }
 
